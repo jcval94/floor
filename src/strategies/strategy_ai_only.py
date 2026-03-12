@@ -20,7 +20,6 @@ def generate_ai_only_orders(rows: list[dict], global_cfg: dict, strategy_cfg: di
         ok, reason = common_entry_guards(row, side, global_cfg, strategy_cfg)
         if not ok:
             continue
-        close = _safe_float(row.get("close"))
         qty = position_size_from_risk(row, strategy_cfg, global_cfg)
         if qty <= 0:
             continue

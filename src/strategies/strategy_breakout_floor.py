@@ -29,7 +29,6 @@ def generate_breakout_floor_orders(rows: list[dict], global_cfg: dict, strategy_
             continue
 
         floor = _safe_float(row.get("floor_d1"))
-        close = _safe_float(row.get("close"))
         stop_buffer = _safe_float(strategy_cfg["risk"]["floor_buffer_pct"])
         stop = floor * (1 - stop_buffer)
         score = 0.5 * conf + 0.5 * momentum

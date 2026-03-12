@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Model competition design for floor/ceiling forecasting.
 
 This module defines model families that compete for each horizon (d1, w1, q1):
@@ -8,6 +6,8 @@ This module defines model families that compete for each horizon (d1, w1, q1):
 3) LSTM Sequence Model (temporal sequence representation)
 4) Quantile Elastic Net (interpretable linear baseline)
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 
