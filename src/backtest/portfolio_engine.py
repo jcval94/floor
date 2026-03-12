@@ -51,9 +51,9 @@ class PortfolioEngine:
         equity_curve: list[dict] = []
         trades: list[dict] = []
         closed_trade_pnls: list[float] = []
-        ticker_pnl = defaultdict(float)
-        ticker_turnover = defaultdict(float)
-        strategy_contrib = defaultdict(float)
+        ticker_pnl: defaultdict[str, float] = defaultdict(float)
+        ticker_turnover: defaultdict[str, float] = defaultdict(float)
+        strategy_contrib: defaultdict[str, float] = defaultdict(float)
         partial_fill_count = 0
         total_order_count = 0
 
@@ -194,7 +194,7 @@ class PortfolioEngine:
         }
 
     def _combine_targets(self, strategy_targets: dict[str, dict[str, dict[str, float]]], date: str) -> dict[str, float]:
-        combined = defaultdict(float)
+        combined: defaultdict[str, float] = defaultdict(float)
         for strategy, by_date in strategy_targets.items():
             weight = self.strategy_weights.get(strategy, 1.0)
             for ticker, target in by_date.get(date, {}).items():

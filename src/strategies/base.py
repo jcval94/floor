@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -22,7 +23,7 @@ class StrategyDecision:
     blocked_reason: str = ""
 
 
-def _safe_float(v: object, default: float = 0.0) -> float:
+def _safe_float(v: Any, default: float = 0.0) -> float:
     try:
         return float(v)
     except (TypeError, ValueError):

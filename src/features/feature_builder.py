@@ -119,7 +119,8 @@ def build_features(rows: list[dict]) -> list[dict]:
             for high_price, low_price in zip(_rolling(highs, idx, 20), _rolling(lows, idx, 20)):
                 if low_price > 0:
                     hl_ratios.append((high_price / low_price) ** 2)
-            row["parkinson_vol_20"] = None if len(hl_ratios) < 2 else (_safe_mean(hl_ratios) ** 0.5)
+            parkinson_mean = _safe_mean(hl_ratios)
+            row["parkinson_vol_20"] = None if parkinson_mean is None or len(hl_ratios) < 2 else parkinson_mean ** 0.5
 
             if current_day != day:
                 row["gap_open_to_prev_close"] = None if prev_day_last_close is None else open_ / prev_day_last_close - 1.0
@@ -135,7 +136,10 @@ def build_features(rows: list[dict]) -> list[dict]:
                     prev_day_last_close = close
 
             vol20 = _safe_mean(_rolling(volumes, idx, 20))
-            row["relative_volume_20"] = None if vol20 in (None, 0) else volume / vol20
+            if vol20 is None or vol20 == 0:
+                row["relative_volume_20"] = None
+            else:
+                row["relative_volume_20"] = volume / vol20
 
             low20 = min(_rolling(lows, idx, 20))
             high20 = max(_rolling(highs, idx, 20))
@@ -184,12 +188,12 @@ def build_features(rows: list[dict]) -> list[dict]:
             max_close20 = max(_rolling(closes, idx, 20))
             row["recent_drawdown_20"] = None if max_close20 == 0 else close / max_close20 - 1.0
 
-            range_5 = _rolling(
-                [None if close_price == 0 else (high_price - low_price) / close_price for high_price, low_price, close_price in zip(highs, lows, closes)],
-                idx,
-                5,
-            )
-            row["intraday_range_5"] = _safe_mean([x for x in range_5 if x is not None])
+            valid_ranges = [
+                (high_price - low_price) / close_price
+                for high_price, low_price, close_price in zip(highs, lows, closes)
+                if close_price != 0
+            ]
+            row["intraday_range_5"] = _safe_mean(_rolling(valid_ranges, len(valid_ranges) - 1, 5)) if valid_ranges else None
             row["range_width_5"] = None if close == 0 else (max(_rolling(highs, idx, 5)) - min(_rolling(lows, idx, 5))) / close
             row["range_width_20"] = None if close == 0 else (max(_rolling(highs, idx, 20)) - min(_rolling(lows, idx, 20))) / close
             row["range_width_60"] = None if close == 0 else (max(_rolling(highs, idx, 60)) - min(_rolling(lows, idx, 60))) / close
@@ -211,12 +215,18 @@ def build_features(rows: list[dict]) -> list[dict]:
 
             mid20 = _safe_mean(_rolling(closes, idx, 20))
             std20 = None if len(_rolling(closes, idx, 20)) < 2 else pstdev(_rolling(closes, idx, 20))
-            row["bollinger_width_20"] = None if mid20 in (None, 0) or std20 is None else (4 * std20) / mid20
+            if mid20 is None or mid20 == 0 or std20 is None:
+                row["bollinger_width_20"] = None
+            else:
+                row["bollinger_width_20"] = (4 * std20) / mid20
 
             day_vwap_num += typical_price * volume
             day_vwap_den += volume
             day_vwap = None if day_vwap_den == 0 else day_vwap_num / day_vwap_den
-            row["vwap_distance"] = None if day_vwap in (None, 0) else close / day_vwap - 1.0
+            if day_vwap is None or day_vwap == 0:
+                row["vwap_distance"] = None
+            else:
+                row["vwap_distance"] = close / day_vwap - 1.0
 
             # AI-derived features are point-in-time columns. Preserve supplied values and derive recency if possible.
             row["ai_action"] = row.get("ai_action")
