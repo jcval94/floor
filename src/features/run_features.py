@@ -51,6 +51,9 @@ def _coerce_numeric(rows: list[dict]) -> list[dict]:
         "ai_ceiling_w1",
         "ai_floor_q1",
         "ai_ceiling_q1",
+        "ai_floor_m3",
+        "ai_conviction_long",
+        "ai_recency_long",
         "ai_consensus_score",
     }
     for row in rows:
@@ -106,6 +109,15 @@ def assign_split(rows: list[dict], train_ratio: float = 0.7, valid_ratio: float 
     return rows
 
 
+def _horizon_coverage(rows: list[dict], horizon: str, columns: list[str]) -> dict:
+    total = max(1, len(rows))
+    return {
+        "horizon": horizon,
+        "rows": len(rows),
+        "coverage": {c: sum(1 for r in rows if r.get(c) is not None) / total for c in columns},
+    }
+
+
 def build_modelable_dataset(rows: list[dict]) -> dict:
     rows = _coerce_numeric(rows)
     feat_rows = build_features(rows)
@@ -119,8 +131,21 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
     missingness = build_missingness_report(labeled_rows, final_columns)
 
     target_definitions = {
-        "floor_targets": "floor_h = min(low) in forward horizon h where h in {d1,w1,q1}.",
+        "floor_targets": "floor_h = min(low) in forward horizon h where h in {d1,w1,q1,m3}.",
         "ceiling_targets": "ceiling_h = max(high) in forward horizon h where h in {d1,w1,q1}.",
+        "m3_target": {
+            "floor_m3": "realized minimum low over next 13 relative market weeks (up to 65 future sessions).",
+            "floor_week_m3": "relative week class 1..13 containing the realized floor_m3.",
+            "week_assignment": "build contiguous future week chunks of up to 5 trading sessions; holidays/incomplete weeks keep available sessions.",
+            "tie_break_rule": "if two weeks share identical floor low, choose earliest relative week index for stability.",
+            "extra_outputs": [
+                "realized_range_m3",
+                "forward_return_m3",
+                "floor_breach_flag_m3",
+                "floor_week_m3_start_date",
+                "floor_week_m3_end_date",
+            ],
+        },
         "temporal_targets": {
             "d1": "Event timestamp is labeled at bar resolution, then mapped to OPEN/OPEN_PLUS_2H/OPEN_PLUS_4H/OPEN_PLUS_6H/CLOSE.",
             "w1": "Relative business day index (1..5) where floor/ceiling occurs within next 5 trading days.",
@@ -128,14 +153,29 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         },
         "calculation_windows": {
             "returns": [1, 2, 5, 10],
-            "volatility": [5, 20],
-            "momentum": [10, 14, 20],
+            "volatility": [5, 20, 60],
+            "momentum": [10, 14, 20, 40, 65],
             "atr": 14,
             "relative_volume": 20,
-            "rolling_extremes": [20, 60],
+            "rolling_extremes": [20, 60, 63, 126, 252],
             "beta_relative_strength": 20,
         },
     }
+
+    m3_coverage = _horizon_coverage(
+        labeled_rows,
+        horizon="m3",
+        columns=[
+            "floor_m3",
+            "realized_floor_m3",
+            "floor_week_m3",
+            "realized_range_m3",
+            "forward_return_m3",
+            "floor_breach_flag_m3",
+            "floor_week_m3_start_date",
+            "floor_week_m3_end_date",
+        ],
+    )
 
     return {
         "rows": labeled_rows,
@@ -145,6 +185,7 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         "target_documentation": target_definitions,
         "final_model_columns": final_columns,
         "model_competition": competition_plan,
+        "horizon_coverage": {"m3": m3_coverage},
     }
 
 

@@ -17,6 +17,9 @@ def _market_rows() -> list[dict]:
             "vol_regime_score": 1.1,
             "rel_strength_20": 0.03,
             "momentum_20": 0.05,
+            "trend_context_m3": 0.04,
+            "drawdown_13w": -0.02,
+            "ai_horizon_alignment": 1.0,
         },
         {
             "symbol": "MSFT",
@@ -27,6 +30,7 @@ def _market_rows() -> list[dict]:
             "vol_regime_score": 0.9,
             "rel_strength_20": -0.01,
             "momentum_20": -0.02,
+            # Missing m3-specific features on purpose -> only m3 output should be blocked.
         },
         {"symbol": "TSLA", "close": None, "high": 200.0, "low": 190.0},
     ]
@@ -40,6 +44,7 @@ def _ai_map() -> dict[str, dict]:
             "ai_conviction": 0.8,
             "ai_consensus_score": 0.7,
             "ai_updated_at": "2024-04-01T12:00:00+00:00",
+            "ai_horizon_alignment": 1.0,
         },
         "MSFT": {
             "symbol": "MSFT",
@@ -67,7 +72,7 @@ def test_merge_ai_signal_builds_effective_score() -> None:
     assert merged["ai_effective_score"] > 0
 
 
-def test_run_forecast_pipeline_outputs_required_shapes() -> None:
+def test_run_forecast_pipeline_outputs_required_shapes_and_m3() -> None:
     out = run_forecast_pipeline(
         market_rows=_market_rows(),
         ai_by_symbol=_ai_map(),
@@ -77,9 +82,11 @@ def test_run_forecast_pipeline_outputs_required_shapes() -> None:
 
     assert len(out["dataset_forecasts"]) == 2
     assert len(out["blocked_list"]) == 1
-    row = out["dataset_forecasts"][0]
 
-    required = [
+    aapl = next(r for r in out["dataset_forecasts"] if r["symbol"] == "AAPL")
+    msft = next(r for r in out["dataset_forecasts"] if r["symbol"] == "MSFT")
+
+    required_base = [
         "floor_d1",
         "ceiling_d1",
         "floor_time_bucket_d1",
@@ -111,10 +118,53 @@ def test_run_forecast_pipeline_outputs_required_shapes() -> None:
         "floor_date_q1",
         "ceiling_day_name_q1",
     ]
-    for c in required:
-        assert c in row
+    for c in required_base:
+        assert c in aapl
+
+    required_m3 = [
+        "floor_m3",
+        "floor_week_m3",
+        "floor_week_m3_confidence",
+        "floor_week_m3_top3",
+        "floor_week_m3_start_date",
+        "floor_week_m3_end_date",
+        "floor_week_m3_label_human",
+        "expected_return_m3",
+        "expected_range_m3",
+    ]
+    for c in required_m3:
+        assert c in aapl
+
+    assert aapl["floor_week_m3"] in set(range(1, 14))
+    assert len(aapl["floor_week_m3_top3"]) == 3
+    assert aapl["m3_status"] == "ok"
+    assert "1..13" in aapl["floor_week_m3_label_human"]
+
+    # MSFT should remain in forecasts, but only m3 should be blocked.
+    assert msft["m3_status"] == "blocked"
+    assert msft["m3_block_reason"] is not None
+    assert msft["floor_d1"] is not None
 
     assert out["top_opportunities"]
     assert isinstance(out["low_confidence_list"], list)
     assert out["canonical_strategy_output"]
     assert out["human_friendly_dashboard"]
+
+
+def test_canonical_and_dashboard_include_m3_fields() -> None:
+    out = run_forecast_pipeline(
+        market_rows=_market_rows(),
+        ai_by_symbol=_ai_map(),
+        session="OPEN_PLUS_2H",
+        as_of=datetime(2024, 4, 2, 14, 0, tzinfo=timezone.utc),
+    )
+
+    can = out["canonical_strategy_output"][0]
+    dash = out["human_friendly_dashboard"][0]
+
+    assert "floor_m3" in can
+    assert "floor_week_m3" in can
+    assert "floor_week_m3_top3" in can
+    assert "m3_week_index" in dash
+    assert "m3_week_start_date" in dash
+    assert "m3_week_end_date" in dash
