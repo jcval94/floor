@@ -1,0 +1,36 @@
+{
+  "prediction_files": 2,
+  "signal_files": 2,
+  "latest_predictions": [
+    {
+      "symbol": "AAPL",
+      "as_of": "2026-03-12T13:48:48.668781-04:00",
+      "event_type": "OPEN",
+      "horizon": "q1",
+      "floor_value": 105.83,
+      "ceiling_value": 112.37,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "10",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
+      "symbol": "MSFT",
+      "as_of": "2026-03-12T13:48:48.669815-04:00",
+      "event_type": "OPEN",
+      "horizon": "q1",
+      "floor_value": 97.0,
+      "ceiling_value": 103.0,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "10",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    }
+  ]
+}

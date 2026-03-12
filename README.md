@@ -1,22 +1,73 @@
 # floor
 
-Repositorio base para convertir conocimiento de PDFs sobre **pisos/techos intradía** en material reutilizable.
+Bootstrap operativo de una plataforma IA/Finanzas para estimar **floor/ceiling probabilísticos** en acciones de EEUU, producir señales accionables y operar ciclos intradía auditables en GitHub Actions.
 
-## Estructura
+## Qué incluye este bootstrap
 
-- `docs/indice-conocimiento.md`: mapa principal.
-- `docs/00_guia/`: guías de consumo.
-- `docs/10_resumenes/`: síntesis curadas.
-- `docs/20_fuentes/`: fuentes extraídas en texto plano + `manifest.json`.
-- `scripts/extract_pdf_text.py`: regeneración de fuentes.
+- Arquitectura modular Python (`src/floor`) lista para iterar en producción ligera.
+- Configuración centralizada en `/config` por dominio (universo, costos, riesgo, horizontes, sheets, notificaciones, pages).
+- Convenciones de nombres y particionado para datasets, modelos, reportes y snapshots.
+- Políticas de versionado de datos (qué sí/no guardar en el repo).
+- Backlog por fases (MVP → robustecimiento → paper trading automatizado → broker real).
+- Capa de visualización estática para GitHub Pages (`site/`, `site/assets/`, `site/data/`).
 
-## Uso
+## Árbol de carpetas objetivo
 
-```bash
-python scripts/extract_pdf_text.py
+```text
+floor/
+├── .github/workflows/
+├── config/
+├── data/
+│   ├── predictions/
+│   ├── signals/
+│   ├── orders/
+│   ├── trades/
+│   ├── metrics/
+│   ├── reports/
+│   ├── snapshots/
+│   └── training/
+├── docs/
+│   ├── 00_guia/
+│   ├── 10_resumenes/
+│   ├── 20_fuentes/
+│   └── 01_bootstrap/
+├── scripts/
+├── site/
+│   ├── assets/
+│   └── data/
+├── src/floor/
+│   ├── external/
+│   ├── modeling/
+│   ├── pipeline/
+│   ├── reporting/
+│   └── training/
+├── tests/
+├── Makefile
+├── pyproject.toml
+└── README.md
 ```
 
-Después, comenzar por:
+## Guía rápida
 
-- `docs/00_guia/README_PARA_FUTURO_YO.md`
+```bash
+make test
+make run-cycle SYMBOLS=AAPL,MSFT EVENT=OPEN
+make review-training
+make build-site
+```
 
+## Documentación de diseño
+
+Ver blueprint detallado en: `docs/01_bootstrap/BOOTSTRAP_PLAN.md`.
+
+
+## Workflows de orquestación
+
+- `ingest.yml`
+- `intraday_engine.yml`
+- `eod.yml`
+- `retrain_assessment.yml`
+- `retrain_execute.yml`
+- `monitoring.yml`
+- `archive.yml`
+- `pages.yml`
