@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Label engineering for floor/ceiling targets.
 
 Target definitions implemented in this module:
@@ -28,6 +26,8 @@ Temporal target definitions:
 - floor_day_q1 / ceiling_day_q1:
   relative business-day index (1..10) inside next 10 trading days where extrema occur.
 """
+
+from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime

@@ -116,9 +116,9 @@ def build_features(rows: list[dict]) -> list[dict]:
             atr_win = _rolling(tr_values, idx, 14)
             row["atr_14"] = _safe_mean(atr_win)
             hl_ratios = []
-            for h, l in zip(_rolling(highs, idx, 20), _rolling(lows, idx, 20)):
-                if l > 0:
-                    hl_ratios.append((h / l) ** 2)
+            for high_price, low_price in zip(_rolling(highs, idx, 20), _rolling(lows, idx, 20)):
+                if low_price > 0:
+                    hl_ratios.append((high_price / low_price) ** 2)
             row["parkinson_vol_20"] = None if len(hl_ratios) < 2 else (_safe_mean(hl_ratios) ** 0.5)
 
             if current_day != day:
@@ -184,7 +184,11 @@ def build_features(rows: list[dict]) -> list[dict]:
             max_close20 = max(_rolling(closes, idx, 20))
             row["recent_drawdown_20"] = None if max_close20 == 0 else close / max_close20 - 1.0
 
-            range_5 = _rolling([None if c == 0 else (h - l) / c for h, l, c in zip(highs, lows, closes)], idx, 5)
+            range_5 = _rolling(
+                [None if close_price == 0 else (high_price - low_price) / close_price for high_price, low_price, close_price in zip(highs, lows, closes)],
+                idx,
+                5,
+            )
             row["intraday_range_5"] = _safe_mean([x for x in range_5 if x is not None])
             row["range_width_5"] = None if close == 0 else (max(_rolling(highs, idx, 5)) - min(_rolling(lows, idx, 5))) / close
             row["range_width_20"] = None if close == 0 else (max(_rolling(highs, idx, 20)) - min(_rolling(lows, idx, 20))) / close
