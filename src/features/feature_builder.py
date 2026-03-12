@@ -221,7 +221,7 @@ def build_features(rows: list[dict]) -> list[dict]:
             row["slope_8w"] = None if idx < 40 or closes[-41] == 0 else close / closes[-41] - 1.0
             row["slope_13w"] = None if idx < 65 or closes[-66] == 0 else close / closes[-66] - 1.0
             sma65 = _safe_mean(_rolling(closes, idx, 65))
-            if sma65 not in (None, 0):
+            if isinstance(sma65, (int, float)) and sma65 != 0:
                 row["trend_context_m3"] = close / sma65 - 1.0
 
             max_close65 = max(_rolling(closes, idx, 65))
@@ -299,11 +299,19 @@ def build_features(rows: list[dict]) -> list[dict]:
                 row["ai_recency"] = max(0, (ts - _to_datetime(ai_updated)).days)
             row["ai_consensus_score"] = row.get("ai_consensus_score")
 
-            floors = [row.get("ai_floor_d1"), row.get("ai_floor_w1"), row.get("ai_floor_q1"), row.get("ai_floor_m3")]
-            if any(v is None for v in floors):
-                row["ai_horizon_alignment"] = None
+            floor_d1 = row.get("ai_floor_d1")
+            floor_w1 = row.get("ai_floor_w1")
+            floor_q1 = row.get("ai_floor_q1")
+            floor_m3 = row.get("ai_floor_m3")
+            if (
+                isinstance(floor_d1, (int, float))
+                and isinstance(floor_w1, (int, float))
+                and isinstance(floor_q1, (int, float))
+                and isinstance(floor_m3, (int, float))
+            ):
+                row["ai_horizon_alignment"] = float(floor_d1 >= floor_w1 >= floor_q1 >= floor_m3)
             else:
-                row["ai_horizon_alignment"] = float(floors[0] >= floors[1] >= floors[2] >= floors[3])
+                row["ai_horizon_alignment"] = None
 
             if row.get("ai_recency_long") is None and row.get("ai_recency") is not None:
                 row["ai_recency_long"] = row["ai_recency"]
