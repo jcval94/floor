@@ -1,0 +1,123 @@
+{
+  "status": "PARTIAL",
+  "date": "2026-03-12",
+  "integrity_check": "WARN",
+  "integrity_details": {
+    "signals": 54,
+    "orders": 0,
+    "fills": 0,
+    "portfolio_snapshots": 0,
+    "workflow_snapshots": 3,
+    "workflow_events": [
+      "ingest:NA",
+      "intraday:CLOSE",
+      "intraday:OPEN_PLUS_6H"
+    ],
+    "reconciliation_clean": false,
+    "history_persisted": true
+  },
+  "strategies_summary": [
+    {
+      "strategy": "consensus",
+      "signals": 0,
+      "orders": 0,
+      "fills": 0,
+      "pnl": 0.0,
+      "status": "sin_datos_estrategia"
+    },
+    {
+      "strategy": "ai_only",
+      "signals": 0,
+      "orders": 0,
+      "fills": 0,
+      "pnl": 0.0,
+      "status": "sin_datos_estrategia"
+    },
+    {
+      "strategy": "model_only",
+      "signals": 0,
+      "orders": 0,
+      "fills": 0,
+      "pnl": 0.0,
+      "status": "sin_datos_estrategia"
+    },
+    {
+      "strategy": "mean_reversion_floor_w1",
+      "signals": 0,
+      "orders": 0,
+      "fills": 0,
+      "pnl": 0.0,
+      "status": "sin_datos_estrategia"
+    },
+    {
+      "strategy": "breakout_protected_by_floor",
+      "signals": 0,
+      "orders": 0,
+      "fills": 0,
+      "pnl": 0.0,
+      "status": "sin_datos_estrategia"
+    }
+  ],
+  "daily_metrics": {
+    "symbols_covered": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "SPY"
+    ],
+    "prediction_count": 54,
+    "signal_count": 54,
+    "hold_rate": 1.0,
+    "buy_count": 0,
+    "sell_count": 0,
+    "orders_count": 0,
+    "fills_count": 0,
+    "realized_pnl": null,
+    "unrealized_pnl": null
+  },
+  "incidents": [
+    {
+      "id": "INC-ORD-001",
+      "severity": "high",
+      "area": "execution",
+      "issue": "No se encontraron órdenes en data/orders; no hubo ejecución operativa."
+    },
+    {
+      "id": "INC-FILL-001",
+      "severity": "high",
+      "area": "execution",
+      "issue": "No se encontraron fills/trades en data/trades; PnL realizado no disponible."
+    },
+    {
+      "id": "INC-PORT-001",
+      "severity": "high",
+      "area": "risk",
+      "issue": "No hay portfolio snapshots persistidos en data/metrics."
+    },
+    {
+      "id": "INC-SIG-001",
+      "severity": "medium",
+      "area": "strategy",
+      "issue": "Todas las señales del día quedaron en HOLD (54/54); posible degradación de sensibilidad o gating excesivo."
+    },
+    {
+      "id": "INC-WF-001",
+      "severity": "medium",
+      "area": "orchestration",
+      "issue": "No existe snapshot intraday OPEN en workflow_runs para el día analizado."
+    }
+  ],
+  "files_updated": [
+    "data/reports/daily_close_2026-03-12.json",
+    "data/reports/daily_close_2026-03-12.md"
+  ],
+  "blockers": [
+    "Falta persistencia de órdenes/fills/snapshots de portfolio para cierre cuantitativo completo.",
+    "No hay desglose de actividad por estrategia en artefactos persistidos del día."
+  ],
+  "tech_debt": [
+    "Persistir portfolio snapshots en data/metrics por ciclo de ejecución.",
+    "Persistir eventos de reconciliación por día en data/reports o data/metrics.",
+    "Etiquetar strategy_id en señales persistidas para trazabilidad EOD."
+  ]
+}
