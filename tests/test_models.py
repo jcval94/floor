@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from models.evaluate import timing_metrics, top3_weeks, value_metrics
+from models.evaluate import top3_weeks
 from models.run_training import run_training
 from models.train_timing_models import train_floor_week_m3_timing_model
 from models.train_value_models import train_floor_m3_value_model
