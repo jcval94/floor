@@ -19,6 +19,8 @@ class StrategyDecision:
     expected_return: float
     expected_range: float
     timing_alignment: float
+    m3_context: dict[str, Any] | None = None
+    priority_adjustment: int = 0
     blocked: bool = False
     blocked_reason: str = ""
 
@@ -84,6 +86,121 @@ def position_size_from_risk(row: dict, strategy_cfg: dict, global_cfg: dict) -> 
     return max(0, qty)
 
 
+def adjusted_position_size_from_risk(row: dict, strategy_cfg: dict, global_cfg: dict, size_multiplier: float) -> int:
+    base_qty = position_size_from_risk(row, strategy_cfg, global_cfg)
+    return int(max(0, base_qty * max(size_multiplier, 0.0)))
+
+
+def m3_context_for_decision(row: dict, side: str, global_cfg: dict, strategy_cfg: dict) -> tuple[bool, str, dict[str, Any]]:
+    cfg = global_cfg.get("m3_context", {})
+    if not cfg.get("enabled", True):
+        return True, "OK", {"enabled": False}
+
+    close = _safe_float(row.get("close"), 0.0)
+    floor_m3 = _safe_float(row.get("floor_m3"), 0.0)
+    week = int(_safe_float(row.get("floor_week_m3"), 0.0))
+    confidence = _safe_float(row.get("floor_week_m3_confidence"), 0.0)
+    rr = _safe_float(row.get("reward_risk_ratio"), 0.0)
+
+    near_weeks = int(cfg.get("near_weeks", 2))
+    imminent_weeks = int(cfg.get("imminent_weeks", 1))
+    far_weeks = int(cfg.get("far_weeks", 6))
+    default_rr = _safe_float(cfg.get("default_min_reward_risk_ratio", 0.0))
+    rr_when_near = _safe_float(cfg.get("min_reward_risk_ratio_when_near", default_rr))
+    rr_when_far = _safe_float(cfg.get("min_reward_risk_ratio_when_far", default_rr))
+    near_size_multiplier = _safe_float(cfg.get("size_multiplier_when_near", 1.0), 1.0)
+    imminent_size_multiplier = _safe_float(cfg.get("size_multiplier_when_imminent", near_size_multiplier), near_size_multiplier)
+    far_size_multiplier = _safe_float(cfg.get("size_multiplier_when_far", 1.0), 1.0)
+    priority_penalty_near = int(_safe_float(cfg.get("priority_penalty_when_near", 0), 0.0))
+    priority_boost_far = int(_safe_float(cfg.get("priority_boost_when_far", 0), 0.0))
+    long_block_dist = _safe_float(cfg.get("tactical_long_block_if_above_floor_m3_pct", 1.0), 1.0)
+    long_block_min_week = int(_safe_float(cfg.get("tactical_long_block_min_week", 1), 1.0))
+
+    above_floor_pct = (close - floor_m3) / max(close, 1e-9) if close > 0 and floor_m3 > 0 else 0.0
+    is_imminent = week > 0 and week <= imminent_weeks
+    is_near = week > 0 and week <= near_weeks
+    is_far_or_passed = week <= 0 or week >= far_weeks
+
+    size_multiplier = 1.0
+    priority_adjustment = 0
+    rr_min = default_rr
+
+    if is_near:
+        size_multiplier = near_size_multiplier
+        priority_adjustment += priority_penalty_near
+        rr_min = max(rr_min, rr_when_near)
+    if is_imminent:
+        size_multiplier = min(size_multiplier, imminent_size_multiplier)
+    if is_far_or_passed:
+        size_multiplier = max(size_multiplier, far_size_multiplier)
+        priority_adjustment -= priority_boost_far
+        rr_min = max(rr_when_far, 0.0)
+
+    contradictory_horizons: list[str] = []
+    d1 = _safe_float(row.get("expected_return_d1"))
+    w1 = _safe_float(row.get("expected_return_w1"))
+    q1 = _safe_float(row.get("expected_return_q1"))
+    m3_ret = _safe_float(row.get("expected_return_m3"))
+    if side == "BUY" and m3_ret < 0:
+        if d1 > 0:
+            contradictory_horizons.append("d1")
+        if w1 > 0:
+            contradictory_horizons.append("w1")
+        if q1 > 0:
+            contradictory_horizons.append("q1")
+    if side == "SELL" and m3_ret > 0:
+        if d1 < 0:
+            contradictory_horizons.append("d1")
+        if w1 < 0:
+            contradictory_horizons.append("w1")
+        if q1 < 0:
+            contradictory_horizons.append("q1")
+
+    if rr < rr_min:
+        return False, f"m3 risk filter: reward/risk {rr:.2f} below required {rr_min:.2f}", {
+            "enabled": True,
+            "floor_m3": floor_m3,
+            "floor_week_m3": week,
+            "floor_week_m3_confidence": confidence,
+            "near_term_floor_week": is_near,
+            "size_multiplier": size_multiplier,
+            "priority_adjustment": priority_adjustment,
+            "reward_risk_ratio": rr,
+            "required_reward_risk": rr_min,
+            "above_floor_m3_pct": above_floor_pct,
+            "contradicts_horizons": contradictory_horizons,
+        }
+
+    if side == "BUY" and week >= long_block_min_week and week <= near_weeks and above_floor_pct >= long_block_dist:
+        return False, "m3 context blocks tactical long: quarterly floor likely ahead while price remains well above floor_m3", {
+            "enabled": True,
+            "floor_m3": floor_m3,
+            "floor_week_m3": week,
+            "floor_week_m3_confidence": confidence,
+            "near_term_floor_week": is_near,
+            "size_multiplier": size_multiplier,
+            "priority_adjustment": priority_adjustment,
+            "reward_risk_ratio": rr,
+            "required_reward_risk": rr_min,
+            "above_floor_m3_pct": above_floor_pct,
+            "contradicts_horizons": contradictory_horizons,
+        }
+
+    return True, "OK", {
+        "enabled": True,
+        "floor_m3": floor_m3,
+        "floor_week_m3": week,
+        "floor_week_m3_confidence": confidence,
+        "near_term_floor_week": is_near,
+        "size_multiplier": size_multiplier,
+        "priority_adjustment": priority_adjustment,
+        "reward_risk_ratio": rr,
+        "required_reward_risk": rr_min,
+        "above_floor_m3_pct": above_floor_pct,
+        "contradicts_horizons": contradictory_horizons,
+    }
+
+
 def liquidity_ok(row: dict, strategy_cfg: dict) -> bool:
     adv = _safe_float(row.get("avg_dollar_volume", row.get("dollar_volume", 0.0)))
     min_adv = _safe_float(strategy_cfg["liquidity"]["min_avg_dollar_volume"])
@@ -120,4 +237,6 @@ def build_order_payload(decision: StrategyDecision, strategy_cfg: dict, global_c
         "cost_assumption_bps": expected_cost_bps(global_cfg),
         "cooldown_cycles": int(strategy_cfg["cooldown_cycles"]),
         "max_rotation_per_cycle": int(strategy_cfg["max_rotation_per_cycle"]),
+        "m3_context": decision.m3_context or {},
+        "priority_adjustment": int(decision.priority_adjustment),
     }

@@ -17,6 +17,7 @@ DATASET_NAMES = [
 _ALLOWED_KEYS = {
     "date",
     "ticker",
+    "symbol",
     "metric",
     "value",
     "status",
@@ -28,6 +29,17 @@ _ALLOWED_KEYS = {
     "severity",
     "retrain",
     "horizon",
+    "floor_m3",
+    "floor_week_m3",
+    "floor_week_m3_start_date",
+    "floor_week_m3_end_date",
+    "floor_week_m3_confidence",
+    "floor_week_m3_top3",
+    "floor_week_m3_label_human",
+    "m3_material_change",
+    "m3_week_proximity",
+    "m3_delta_vs_prev",
+    "m3_stability",
 }
 
 

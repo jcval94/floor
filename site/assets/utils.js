@@ -26,3 +26,17 @@ export function fmt(n) {
   const x = Number(n);
   return Number.isFinite(x) ? x.toFixed(2) : "-";
 }
+
+export function m3WeekHumanLabel(week) {
+  const w = Number(week);
+  if (!Number.isFinite(w) || w < 1 || w > 13) return 'Semana -';
+  return `Semana ${String(w).padStart(2, '0')} (horizonte m3: 1..13 semanas bursátiles relativas)`;
+}
+
+export function m3ProximityLabel(week) {
+  const w = Number(week);
+  if (!Number.isFinite(w) || w <= 0) return 'desconocida';
+  if (w <= 2) return 'cerca';
+  if (w <= 6) return 'media';
+  return 'lejos';
+}

@@ -8,6 +8,22 @@ costs:
   commission_bps: 2.0
   slippage_bps: 3.0
 
+m3_context:
+  enabled: true
+  near_weeks: 2
+  imminent_weeks: 1
+  far_weeks: 6
+  default_min_reward_risk_ratio: 1.2
+  min_reward_risk_ratio_when_near: 1.8
+  min_reward_risk_ratio_when_far: 1.1
+  size_multiplier_when_near: 0.65
+  size_multiplier_when_imminent: 0.5
+  size_multiplier_when_far: 1.1
+  priority_penalty_when_near: 2
+  priority_boost_when_far: 1
+  tactical_long_block_if_above_floor_m3_pct: 0.06
+  tactical_long_block_min_week: 1
+
 guards:
   no_long_if_within_ceiling_pct: 0.005
   no_short_if_within_floor_pct: 0.005

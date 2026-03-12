@@ -6,10 +6,12 @@ def generate_daily_report(
     session_metrics: dict,
     risk_changes: list[dict],
     incidents: list[dict],
+    m3_window: dict | None = None,
 ) -> dict:
     close_metrics = session_metrics.get("CLOSE", {})
     session_count = len(session_metrics)
     incident_count = len(incidents)
+    m3_window = m3_window or {}
 
     return {
         "date": date,
@@ -26,4 +28,13 @@ def generate_daily_report(
         "sessions": session_metrics,
         "risk_changes": risk_changes,
         "incidents": incidents,
+        "3m_downside_window": {
+            "floor_m3": m3_window.get("floor_m3"),
+            "floor_week_m3": m3_window.get("floor_week_m3"),
+            "floor_week_m3_start_date": m3_window.get("floor_week_m3_start_date"),
+            "floor_week_m3_end_date": m3_window.get("floor_week_m3_end_date"),
+            "floor_week_m3_confidence": m3_window.get("floor_week_m3_confidence"),
+            "floor_week_m3_top3": m3_window.get("floor_week_m3_top3", []),
+            "m3_stability_vs_previous": m3_window.get("m3_stability_vs_previous", {}),
+        },
     }
