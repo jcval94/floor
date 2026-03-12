@@ -1,0 +1,84 @@
+{
+  "as_of": "2026-03-12T21:59:42.161612+00:00",
+  "status": "WARN",
+  "decision": "RETRAIN_SOON",
+  "drift_level": "YELLOW",
+  "diagnostico_ejecutivo": "El campeón (champion-v0) no muestra evidencia de drift material en la telemetría disponible, pero la ventana observada es insuficiente (solo actividad del 2026-03-12) y faltan métricas públicas de performance/estrategia. Riesgo operativo medio por baja observabilidad y cobertura temporal incompleta.",
+  "diagnostico_tecnico": {
+    "feature_drift": "No concluyente por ausencia de dataset de features histórico quincenal.",
+    "target_drift": "No concluyente por ausencia de labels realizados en ventana quincenal.",
+    "coverage_drift": "No concluyente para calibración; faltan series en site/data/metrics.json.",
+    "pinball_loss": "No medible; falta serie de evaluación out-of-sample.",
+    "breach_rate": "No medible; falta serie de breach auditada.",
+    "strategy_metrics": "No medible; status=no_strategy_report.",
+    "schema_changes": "Sin evidencia de ruptura de esquema en artifacts de predicción/señales.",
+    "recent_data_quality": "Cobertura temporal insuficiente para revisión quincenal (1 día efectivo).",
+    "champion_stability": "Modelo único champion-v0 consistente en predicciones, pero sin evidencia robusta de estabilidad estadística."
+  },
+  "thresholds_disparados": [
+    {
+      "name": "review_window_days_min",
+      "threshold": 14,
+      "observed": 1,
+      "severity": "YELLOW"
+    },
+    {
+      "name": "public_metrics_status",
+      "threshold": "available",
+      "observed": "no_public_metrics",
+      "severity": "YELLOW"
+    },
+    {
+      "name": "strategy_report_status",
+      "threshold": "available",
+      "observed": "no_strategy_report",
+      "severity": "YELLOW"
+    }
+  ],
+  "metrics": {
+    "prediction_rows": 60,
+    "signal_rows": 60,
+    "symbols_covered": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "SPY"
+    ],
+    "horizon_counts": {
+      "d1": 20,
+      "w1": 20,
+      "q1": 20
+    },
+    "model_versions": {
+      "champion-v0": 60
+    },
+    "actions": {
+      "HOLD": 60
+    },
+    "confidence_min": 0.5,
+    "confidence_max": 0.5,
+    "as_of_min": "2026-03-12T13:48:48.667846-04:00",
+    "as_of_max": "2026-03-12T17:54:43.316831-04:00",
+    "metrics_status": "no_public_metrics",
+    "strategy_status": "no_strategy_report"
+  },
+  "models_affected": [
+    "champion-v0"
+  ],
+  "archivos_a_actualizar": [
+    "data/training/reviews.jsonl",
+    "data/reports/retraining_review_2026-03-12.json",
+    "docs/release_checklist.md"
+  ],
+  "plan_ejecucion_reentrenamiento": [
+    "1) Completar backfill de 14 días de features/labels y validar cobertura por columna >= 90%.",
+    "2) Recalcular pinball loss y breach rate por horizonte (d1, w1, q1) contra baseline champion-v0.",
+    "3) Ejecutar competencia de modelos y seleccionar candidato si mejora pinball >= 2% y breach no empeora.",
+    "4) Correr paper-trading A/B por 10 sesiones con límites de riesgo vigentes.",
+    "5) Promover modelo con acta Go/No-Go y actualizar config/model_version + changelog."
+  ],
+  "siguiente_revision": {
+    "fecha_objetivo": "2026-03-26",
+    "condicion": "Adelantar a RETRAIN_NOW si aparece degradación material: pinball +0.05, breach +0.06, caída Sharpe >=0.50 o ruptura de schema."
+  }
+}

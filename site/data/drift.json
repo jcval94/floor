@@ -1,0 +1,52 @@
+{
+  "status": "WARN",
+  "decision": "RETRAIN_SOON",
+  "drift_level": "YELLOW",
+  "thresholds": [
+    {
+      "name": "review_window_days_min",
+      "threshold": 14,
+      "observed": 1,
+      "severity": "YELLOW"
+    },
+    {
+      "name": "public_metrics_status",
+      "threshold": "available",
+      "observed": "no_public_metrics",
+      "severity": "YELLOW"
+    },
+    {
+      "name": "strategy_report_status",
+      "threshold": "available",
+      "observed": "no_strategy_report",
+      "severity": "YELLOW"
+    }
+  ],
+  "metrics": {
+    "prediction_rows": 60,
+    "signal_rows": 60,
+    "symbols_covered": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "SPY"
+    ],
+    "horizon_counts": {
+      "d1": 20,
+      "w1": 20,
+      "q1": 20
+    },
+    "model_versions": {
+      "champion-v0": 60
+    },
+    "actions": {
+      "HOLD": 60
+    },
+    "confidence_min": 0.5,
+    "confidence_max": 0.5,
+    "as_of_min": "2026-03-12T13:48:48.667846-04:00",
+    "as_of_max": "2026-03-12T17:54:43.316831-04:00",
+    "metrics_status": "no_public_metrics",
+    "strategy_status": "no_strategy_report"
+  }
+}

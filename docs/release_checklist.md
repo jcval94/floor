@@ -24,3 +24,11 @@
 - [ ] Validación funcional por dueño de estrategia.
 - [ ] Rollback plan definido.
 - [ ] Aprobaciones internas completas.
+
+## 5) Respuesta a incidentes (obligatorio para PARTIAL/FAIL)
+- [ ] RCA completado diferenciando síntoma vs causa raíz probable.
+- [ ] Último `run_id` sano identificado en snapshots de workflow.
+- [ ] Impacto evaluado por componente (forecasts, estrategias, paper trading, notificaciones).
+- [ ] Fix inmediato aplicado o planificado con owner y ETA.
+- [ ] Fix estructural registrado con pruebas de no regresión.
+- [ ] Reporte de incidente generado en JSON auditable (`monitoring/incident_commander.py`).
