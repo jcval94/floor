@@ -1,0 +1,14 @@
+risk:
+  trading_mode_default: PAPER
+  allow_live_only_when_env_true: true
+  max_position_notional_usd: 50000
+  max_gross_exposure_usd: 500000
+  max_single_name_weight: 0.08
+  max_sector_weight: 0.25
+  daily_loss_limit_bps: 150
+  kill_switch:
+    enabled: true
+    triggers:
+      - excessive_drawdown
+      - stale_data
+      - order_reject_spike

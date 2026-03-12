@@ -1,0 +1,18 @@
+horizons:
+  d1:
+    sessions_ahead: 1
+    time_target_type: bucket
+    buckets:
+      - OPEN
+      - OPEN_PLUS_2H
+      - OPEN_PLUS_4H
+      - OPEN_PLUS_6H
+      - CLOSE
+  w1:
+    sessions_ahead: 5
+    time_target_type: business_day
+    valid_days: [1, 2, 3, 4, 5]
+  q1:
+    sessions_ahead: 10
+    time_target_type: business_day
+    valid_days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

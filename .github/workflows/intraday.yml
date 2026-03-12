@@ -1,0 +1,13 @@
+name: deprecated_intraday
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deprecated: use intraday_engine workflow"
