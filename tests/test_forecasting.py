@@ -161,6 +161,7 @@ def test_canonical_and_dashboard_include_m3_fields() -> None:
 
     can = out["canonical_strategy_output"][0]
     dash = out["human_friendly_dashboard"][0]
+    top = out["top_opportunities"][0]
 
     assert "floor_m3" in can
     assert "floor_week_m3" in can
@@ -168,3 +169,26 @@ def test_canonical_and_dashboard_include_m3_fields() -> None:
     assert "m3_week_index" in dash
     assert "m3_week_start_date" in dash
     assert "m3_week_end_date" in dash
+    for col in [
+        "floor_m3",
+        "floor_week_m3",
+        "floor_week_m3_confidence",
+        "floor_week_m3_start_date",
+        "floor_week_m3_end_date",
+        "m3_context_note",
+        "m3_warnings",
+    ]:
+        assert col in top
+
+
+def test_top_pick_m3_warning_when_m3_is_missing() -> None:
+    out = run_forecast_pipeline(
+        market_rows=_market_rows(),
+        ai_by_symbol=_ai_map(),
+        session="OPEN_PLUS_2H",
+        as_of=datetime(2024, 4, 2, 14, 0, tzinfo=timezone.utc),
+    )
+
+    msft_top = next(r for r in out["top_opportunities"] if r["symbol"] == "MSFT")
+    assert "m3_missing_for_ticker" in msft_top["m3_warnings"]
+    assert "d1/w1/q1" in msft_top["m3_context_note"]
