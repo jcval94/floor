@@ -28,6 +28,13 @@ class MessageContext:
     reward_risk: str | None = None
     strategy_action: str | None = None
     risk_changes_and_actions: str | None = None
+    floor_m3: str | None = None
+    floor_week_m3: str | None = None
+    floor_week_m3_start_date: str | None = None
+    floor_week_m3_end_date: str | None = None
+    floor_week_m3_confidence: str | None = None
+    m3_material_change: str | None = None
+    m3_week_proximity: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -60,6 +67,13 @@ def build_message(ctx: MessageContext) -> str:
         _format_line("Reward/Risk", ctx.reward_risk),
         _format_line("Acción recomendada por estrategia", ctx.strategy_action),
         _format_line("Cambios de riesgo y acciones tomadas", ctx.risk_changes_and_actions),
+        _format_line("floor_m3", ctx.floor_m3),
+        _format_line("floor_week_m3", ctx.floor_week_m3),
+        _format_line("floor_week_m3_start_date", ctx.floor_week_m3_start_date),
+        _format_line("floor_week_m3_end_date", ctx.floor_week_m3_end_date),
+        _format_line("floor_week_m3_confidence", ctx.floor_week_m3_confidence),
+        _format_line("m3_material_change", ctx.m3_material_change),
+        _format_line("m3_week_proximity", ctx.m3_week_proximity),
     ]
 
     lines.extend([line for line in ordered_lines if line])
