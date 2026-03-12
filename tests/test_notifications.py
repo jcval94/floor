@@ -26,7 +26,7 @@ class _FakeResp:
 
 
 def test_message_builder_for_required_events() -> None:
-    for event in [
+    required_events = [
         "OPEN",
         "OPEN_PLUS_2H",
         "OPEN_PLUS_4H",
@@ -35,8 +35,9 @@ def test_message_builder_for_required_events() -> None:
         "drift_alert",
         "retrain_decision",
         "incident_alert",
-    ]:
-        msg = build_message(
+    ]
+    for event in required_events:
+        message = build_message(
             MessageContext(
                 event=event,
                 date="2026-03-12",
@@ -50,9 +51,15 @@ def test_message_builder_for_required_events() -> None:
                 risk_changes_and_actions="VaR up 10%, de-risked 20%",
             )
         )
-        assert event in msg
-        assert "Top picks" in msg
-        assert "Techo esperado" in msg
+        assert f"[{event}]" in message
+        assert "Top picks" in message
+        assert "Top blocks" in message
+        assert "Piso esperado" in message
+        assert "Techo esperado" in message
+        assert "Bucket/día hábil esperado" in message
+        assert "Reward/Risk" in message
+        assert "Acción recomendada por estrategia" in message
+        assert "Cambios de riesgo y acciones tomadas" in message
 
 
 def test_notifiers_primary_and_secondary_channels(monkeypatch) -> None:
@@ -61,21 +68,21 @@ def test_notifiers_primary_and_secondary_channels(monkeypatch) -> None:
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
 
-    tele = TelegramNotifier("t", "c1", "c2")
-    ntfy = NtfyNotifier("https://ntfy.sh", "main", "backup")
-    resend = ResendNotifier("k", "ops@test.com", "a@test.com", "b@test.com")
+    telegram = TelegramNotifier("token", "main", "secondary")
+    ntfy = NtfyNotifier("https://ntfy.sh", "main", "secondary")
+    resend = ResendNotifier("api-key", "ops@test.com", "main@test.com", "secondary@test.com")
 
-    assert len(tele.send("hello")) == 2
+    assert len(telegram.send("hello")) == 2
     assert len(ntfy.send("hello")) == 2
     assert len(resend.send("subject", "hello")) == 2
 
 
 def test_history_reports_and_pages_export(tmp_path: Path) -> None:
-    hw = HistoryWriter(str(tmp_path / "history"))
+    writer = HistoryWriter(str(tmp_path / "history"))
     payload = {"date": "2026-03-12", "metric": "pnl", "value": 1.23}
 
-    first = hw.write_snapshot("workflow_runs", "2026-03-12", "OPEN", payload)
-    second = hw.write_snapshot("workflow_runs", "2026-03-12", "OPEN", payload)
+    first = writer.write_snapshot("workflow_runs", "2026-03-12", "OPEN", payload)
+    second = writer.write_snapshot("workflow_runs", "2026-03-12", "OPEN", payload)
     assert first["written"] is True
     assert second["written"] is False
 
@@ -88,15 +95,15 @@ def test_history_reports_and_pages_export(tmp_path: Path) -> None:
     weekly = generate_weekly_report("2026-W11", [daily])
     model = generate_model_report("2026-03-12", {"auc": 0.7}, [], [{"retrain": "no"}])
 
-    d_path = hw.write_daily_summary("2026-03-12", daily)
-    w_path = hw.write_weekly_summary("2026-W11", weekly)
-    assert Path(d_path).exists()
-    assert Path(w_path).exists()
+    daily_path = writer.write_daily_summary("2026-03-12", daily)
+    weekly_path = writer.write_weekly_summary("2026-W11", weekly)
+    assert Path(daily_path).exists()
+    assert Path(weekly_path).exists()
     assert model["status"] == "ok"
 
     result = export_pages_data(
         output_dir=str(tmp_path / "pages"),
-        date_partition="2026-03-12",
+        date_partition="2026/03/12",
         datasets={
             "dashboard_overview": [{"date": "2026-03-12", "value": 10, "secret": "x"}],
             "ticker_detail": [{"ticker": "AAA", "metric": "score", "value": 0.8}],
@@ -107,7 +114,7 @@ def test_history_reports_and_pages_export(tmp_path: Path) -> None:
         },
     )
 
-    exported_json = Path(result["datasets"]["dashboard_overview"]["latest_json"])
-    records = json.loads(exported_json.read_text(encoding="utf-8"))
+    latest_dashboard = Path(result["datasets"]["dashboard_overview"]["latest_json"])
+    records = json.loads(latest_dashboard.read_text(encoding="utf-8"))
     assert "secret" not in records[0]
     assert Path(result["datasets"]["ticker_detail"]["historical_csv"]).exists()
