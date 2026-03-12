@@ -2,14 +2,14 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod", "monitoring"]
+    workflows: ["eod", "monitoring", "retrain_assessment"]
     types: [completed]
   workflow_dispatch:
 
 permissions:
+  contents: read
   pages: write
   id-token: write
-  contents: read
 
 concurrency:
   group: pages
@@ -21,9 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build public pages payload from snapshots
-        run: PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data
-      - name: Upload pages artifact
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Build static site data payloads
+        run: |
+          PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data --universe-path config/universe.yaml
+          touch site/.nojekyll
+      - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
