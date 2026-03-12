@@ -30,7 +30,7 @@ Temporal target definitions:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from typing import Iterable
 
 D1_BUCKETS = ("OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE")
@@ -55,8 +55,8 @@ def _bucket_from_event(event_ts: datetime, session_open: datetime) -> str:
     return "CLOSE"
 
 
-def _rows_by_symbol_and_day(rows: list[dict]) -> dict[str, dict[datetime.date, list[dict]]]:
-    grouped: dict[str, dict[datetime.date, list[dict]]] = defaultdict(lambda: defaultdict(list))
+def _rows_by_symbol_and_day(rows: list[dict]) -> dict[str, dict[date, list[dict]]]:
+    grouped: dict[str, dict[date, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for row in rows:
         ts = _to_datetime(row["timestamp"])
         grouped[row["symbol"]][ts.date()].append(row)
@@ -66,11 +66,11 @@ def _rows_by_symbol_and_day(rows: list[dict]) -> dict[str, dict[datetime.date, l
     return grouped
 
 
-def _relative_day_of_extreme(days: list[datetime.date], per_day_rows: dict[datetime.date, list[dict]], kind: str) -> int | None:
+def _relative_day_of_extreme(days: list[date], per_day_rows: dict[date, list[dict]], kind: str) -> int | None:
     if not days:
         return None
     best_value: float | None = None
-    best_day: datetime.date | None = None
+    best_day: date | None = None
     for idx, day in enumerate(days, start=1):
         day_rows = per_day_rows[day]
         if kind == "floor":
@@ -101,7 +101,7 @@ def build_labels(feature_rows: Iterable[dict]) -> list[dict]:
         except ValueError:
             continue
 
-        def future_days(n: int) -> list[datetime.date]:
+        def future_days(n: int) -> list[date]:
             start = day_idx + 1
             end = min(len(days), start + n)
             return days[start:end]
