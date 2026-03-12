@@ -78,10 +78,14 @@ def run_strategies(forecast_rows: list[dict], config: dict, session: str, cooldo
     candidates += generate_breakout_floor_orders(filt("breakout_protected_by_floor"), config, config["strategies"]["breakout_protected_by_floor"], session)
 
     allocation = allocate_orders(candidates, rows_by_symbol, config, cooldown_state=cooldown_state, current_cycle=current_cycle)
+    m3_influenced_candidates = sum(1 for c in candidates if (c.m3_context or {}).get("enabled") is True)
+    m3_priority_adjusted_candidates = sum(1 for c in candidates if int((c.m3_context or {}).get("priority_adjustment", 0) or 0) != 0)
     return {
         "orders": allocation["orders"],
         "blocked": allocation["blocked_collisions"],
         "n_candidates": len(candidates),
+        "n_m3_influenced_candidates": m3_influenced_candidates,
+        "n_m3_priority_adjusted_candidates": m3_priority_adjusted_candidates,
     }
 
 

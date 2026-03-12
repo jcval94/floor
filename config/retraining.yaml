@@ -39,3 +39,22 @@ paper_thresholds:
   drawdown_increase_fail: 0.06
   sharpe_drop_warn: 0.20
   sharpe_drop_fail: 0.50
+
+m3_drift_thresholds:
+  realized_floor_m3_js_warn: 0.06
+  realized_floor_m3_js_fail: 0.12
+  floor_week_m3_js_warn: 0.05
+  floor_week_m3_js_fail: 0.10
+  min_m3_column_coverage: 0.90
+
+m3_performance_thresholds:
+  pinball_loss_m3_warn: 0.02
+  pinball_loss_m3_fail: 0.05
+  top1_accuracy_m3_drop_warn: 0.03
+  top1_accuracy_m3_drop_fail: 0.06
+  top3_accuracy_m3_drop_warn: 0.04
+  top3_accuracy_m3_drop_fail: 0.08
+  week_distance_m3_warn: 0.40
+  week_distance_m3_fail: 0.80
+  champion_flip_rate_m3_warn: 0.10
+  champion_flip_rate_m3_fail: 0.20

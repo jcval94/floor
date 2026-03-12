@@ -22,9 +22,13 @@ def allocate_orders(
     cooldown_state = cooldown_state or {}
     priorities = {k: int(v["priority"]) for k, v in config["strategies"].items()}
 
+    def _effective_priority(decision: StrategyDecision) -> int:
+        base = priorities.get(decision.strategy_id, 999)
+        return int(base + int(decision.priority_adjustment or 0))
+
     ordered = sorted(
         candidates,
-        key=lambda d: (priorities.get(d.strategy_id, 999), -d.score),
+        key=lambda d: (_effective_priority(d), -d.score),
     )
 
     accepted: list[dict] = []
@@ -64,6 +68,7 @@ def allocate_orders(
 
         payload = build_order_payload(d, strategy_cfg, config)
         payload["sector"] = sector
+        payload["effective_priority"] = int(priorities.get(d.strategy_id, 999) + int(d.priority_adjustment or 0))
         accepted.append(payload)
         seen_symbol.add(d.symbol)
         per_ticker_count[d.symbol] += 1

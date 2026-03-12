@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-
-
 from typing import Any
 
 
@@ -14,6 +12,14 @@ def _safe_float(x: Any) -> float | None:
         return float(x)
     except (TypeError, ValueError):
         return None
+
+
+def _state_from_score(score: float, warn: float, fail: float) -> str:
+    if score >= fail:
+        return "RED"
+    if score >= warn:
+        return "YELLOW"
+    return "GREEN"
 
 
 def _quantile_bins(values: list[float], n_bins: int = 10) -> list[float]:
@@ -83,12 +89,10 @@ def evaluate_feature_data_drift(
         ref_vals = [r.get(feat) for r in reference_rows]
         cur_vals = [r.get(feat) for r in current_rows]
         score = psi(ref_vals, cur_vals)
-        state = "GREEN"
-        if score >= psi_fail:
-            state = "RED"
+        state = _state_from_score(score, psi_warn, psi_fail)
+        if state == "RED":
             fail_count += 1
-        elif score >= psi_warn:
-            state = "YELLOW"
+        elif state == "YELLOW":
             warn_count += 1
         per_feature[feat] = {"psi": score, "state": state}
 
@@ -108,17 +112,14 @@ def evaluate_target_value_drift(reference_rows: list[dict], current_rows: list[d
     for col in target_cols:
         ref = [x for x in (_safe_float(r.get(col)) for r in reference_rows) if x is not None]
         cur = [x for x in (_safe_float(r.get(col)) for r in current_rows) if x is not None]
-        # Bin numeric values and compare as categorical.
         cuts = _quantile_bins(ref, 8) if ref else []
         ref_bins = Counter(str(sum(1 for c in cuts if v > c)) for v in ref)
         cur_bins = Counter(str(sum(1 for c in cuts if v > c)) for v in cur)
         score = js_divergence(dict(ref_bins), dict(cur_bins))
-        state = "GREEN"
-        if score >= js_fail:
-            state = "RED"
+        state = _state_from_score(score, js_warn, js_fail)
+        if state == "RED":
             red += 1
-        elif score >= js_warn:
-            state = "YELLOW"
+        elif state == "YELLOW":
             yellow += 1
         per_target[col] = {"js_divergence": score, "state": state}
 
@@ -134,12 +135,10 @@ def evaluate_target_temporal_drift(reference_rows: list[dict], current_rows: lis
         ref = Counter(str(r.get(col)) for r in reference_rows if r.get(col) is not None)
         cur = Counter(str(r.get(col)) for r in current_rows if r.get(col) is not None)
         score = js_divergence(dict(ref), dict(cur))
-        state = "GREEN"
-        if score >= js_fail:
-            state = "RED"
+        state = _state_from_score(score, js_warn, js_fail)
+        if state == "RED":
             red += 1
-        elif score >= js_warn:
-            state = "YELLOW"
+        elif state == "YELLOW":
             yellow += 1
         per_target[col] = {"js_divergence": score, "state": state}
 
@@ -151,11 +150,7 @@ def evaluate_coverage_calibration_drift(reference_metrics: dict, current_metrics
     keys = ["coverage_error", "calibration_error"]
     deltas = {k: abs(float(current_metrics.get(k, 0.0)) - float(reference_metrics.get(k, 0.0))) for k in keys}
     max_delta = max(deltas.values()) if deltas else 0.0
-    state = "GREEN"
-    if max_delta >= fail:
-        state = "RED"
-    elif max_delta >= warn:
-        state = "YELLOW"
+    state = _state_from_score(max_delta, warn, fail)
     return {"state": state, "deltas": deltas, "max_delta": max_delta}
 
 
@@ -169,9 +164,9 @@ def evaluate_schema_and_coverage(reference_schema: dict, current_schema: dict, m
     low_coverage = sorted([k for k, v in coverage.items() if float(v) < min_coverage])
 
     state = "GREEN"
-    if removed:
+    if removed or low_coverage:
         state = "RED"
-    elif low_coverage or added:
+    elif added:
         state = "YELLOW"
 
     return {
@@ -179,4 +174,59 @@ def evaluate_schema_and_coverage(reference_schema: dict, current_schema: dict, m
         "removed_columns": removed,
         "added_columns": added,
         "low_coverage_columns": low_coverage,
+    }
+
+
+def evaluate_m3_data_quality(reference_rows: list[dict], current_rows: list[dict], required_cols: list[str], min_coverage: float) -> dict:
+    def _coverage(rows: list[dict], col: str) -> float:
+        if not rows:
+            return 0.0
+        non_null = sum(1 for r in rows if r.get(col) is not None)
+        return non_null / max(len(rows), 1)
+
+    columns: dict[str, dict] = {}
+    worst = "GREEN"
+    for col in required_cols:
+        ref_cov = _coverage(reference_rows, col)
+        cur_cov = _coverage(current_rows, col)
+        delta = cur_cov - ref_cov
+        state = "GREEN" if cur_cov >= min_coverage else "RED"
+        if state == "RED":
+            worst = "RED"
+        columns[col] = {
+            "reference_coverage": ref_cov,
+            "current_coverage": cur_cov,
+            "coverage_delta": delta,
+            "state": state,
+        }
+
+    return {"state": worst, "columns": columns}
+
+
+def evaluate_m3_value_and_timing_drift(reference_rows: list[dict], current_rows: list[dict], thresholds: dict) -> dict:
+    value_drift = evaluate_target_value_drift(
+        reference_rows,
+        current_rows,
+        target_cols=["realized_floor_m3"],
+        js_warn=float(thresholds["realized_floor_m3_js_warn"]),
+        js_fail=float(thresholds["realized_floor_m3_js_fail"]),
+    )
+    timing_drift = evaluate_target_temporal_drift(
+        reference_rows,
+        current_rows,
+        temporal_cols=["floor_week_m3"],
+        js_warn=float(thresholds["floor_week_m3_js_warn"]),
+        js_fail=float(thresholds["floor_week_m3_js_fail"]),
+    )
+
+    target_states = {
+        "realized_floor_m3": value_drift["targets"].get("realized_floor_m3", {"state": "GREEN"}),
+        "floor_week_m3": timing_drift["targets"].get("floor_week_m3", {"state": "GREEN"}),
+    }
+    overall = "RED" if any(v.get("state") == "RED" for v in target_states.values()) else "YELLOW" if any(v.get("state") == "YELLOW" for v in target_states.values()) else "GREEN"
+    return {
+        "state": overall,
+        "value_drift": value_drift,
+        "timing_drift": timing_drift,
+        "target_traffic_lights": target_states,
     }

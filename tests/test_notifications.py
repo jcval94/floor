@@ -49,6 +49,13 @@ def test_message_builder_for_required_events() -> None:
                 reward_risk="2.1",
                 strategy_action="reduce exposure",
                 risk_changes_and_actions="VaR up 10%, de-risked 20%",
+                floor_m3="170.5",
+                floor_week_m3="2",
+                floor_week_m3_start_date="2026-03-23",
+                floor_week_m3_end_date="2026-03-27",
+                floor_week_m3_confidence="0.62",
+                m3_material_change="yes",
+                m3_week_proximity="cerca",
             )
         )
         assert f"[{event}]" in message
@@ -60,6 +67,13 @@ def test_message_builder_for_required_events() -> None:
         assert "Reward/Risk" in message
         assert "Acción recomendada por estrategia" in message
         assert "Cambios de riesgo y acciones tomadas" in message
+        assert "floor_m3" in message
+        assert "floor_week_m3" in message
+        assert "floor_week_m3_start_date" in message
+        assert "floor_week_m3_end_date" in message
+        assert "floor_week_m3_confidence" in message
+        assert "m3_material_change" in message
+        assert "m3_week_proximity" in message
 
 
 def test_notifiers_primary_and_secondary_channels(monkeypatch) -> None:
@@ -106,7 +120,7 @@ def test_history_reports_and_pages_export(tmp_path: Path) -> None:
         date_partition="2026/03/12",
         datasets={
             "dashboard_overview": [{"date": "2026-03-12", "value": 10, "secret": "x"}],
-            "ticker_detail": [{"ticker": "AAA", "metric": "score", "value": 0.8}],
+            "ticker_detail": [{"ticker": "AAA", "metric": "score", "value": 0.8, "floor_m3": 170.5, "floor_week_m3": 2, "floor_week_m3_confidence": 0.62, "floor_week_m3_top3": [{"week":2,"probability":0.62}], "secret": "y"}],
             "model_health": [{"metric": "auc", "value": 0.7}],
             "strategy_performance": [{"strategy": "s1", "pnl": 2.0}],
             "retrain_history": [{"date": "2026-03-12", "retrain": "no"}],
@@ -117,4 +131,8 @@ def test_history_reports_and_pages_export(tmp_path: Path) -> None:
     latest_dashboard = Path(result["datasets"]["dashboard_overview"]["latest_json"])
     records = json.loads(latest_dashboard.read_text(encoding="utf-8"))
     assert "secret" not in records[0]
+    ticker_records = json.loads(Path(result["datasets"]["ticker_detail"]["latest_json"]).read_text(encoding="utf-8"))
+    assert "floor_m3" in ticker_records[0]
+    assert "floor_week_m3_top3" in ticker_records[0]
+    assert "secret" not in ticker_records[0]
     assert Path(result["datasets"]["ticker_detail"]["historical_csv"]).exists()
