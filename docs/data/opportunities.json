@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "AAPL",
+    "horizon": "q1",
+    "floor": 105.83,
+    "ceiling": 112.37,
+    "spread": 6.54,
+    "event_type": "OPEN",
+    "as_of": "2026-03-12T13:48:48.668781-04:00"
+  },
+  {
+    "symbol": "MSFT",
+    "horizon": "q1",
+    "floor": 97.0,
+    "ceiling": 103.0,
+    "spread": 6.0,
+    "event_type": "OPEN",
+    "as_of": "2026-03-12T13:48:48.669815-04:00"
+  }
+]

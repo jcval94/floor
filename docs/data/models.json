@@ -1,0 +1,23 @@
+{
+  "champion": "champion-v0",
+  "timeline": [
+    {
+      "as_of": "2026-03-12T13:48:49.509989-04:00",
+      "model_name": "champion-v0",
+      "action": "SKIP",
+      "status": "OK",
+      "drift_level": "GREEN"
+    },
+    {
+      "as_of": "2026-03-12T21:59:42.161612+00:00",
+      "model_name": "champion-v0",
+      "action": "RETRAIN_SOON",
+      "status": "WARN",
+      "drift_level": "YELLOW"
+    }
+  ],
+  "health": {
+    "status": "no_public_metrics",
+    "series": []
+  }
+}
