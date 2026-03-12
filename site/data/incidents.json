@@ -1,0 +1,52 @@
+{
+  "status": "ESCALATE",
+  "severity": "SEV2",
+  "summary": {
+    "date": "2026-03-12",
+    "latest_healthy_run_id": "UNKNOWN",
+    "symptom": "No existe snapshot intraday OPEN y faltan eventos de checkpoint en workflow_runs.",
+    "root_cause_hypothesis": "El orquestador no garantiza cobertura de todos los checkpoints intrad\u00eda; se ejecut\u00f3 solo una parte de eventos y no existe control de completitud por sesi\u00f3n."
+  },
+  "root_cause_analysis": {
+    "symptom": "No existe snapshot intraday OPEN y faltan eventos de checkpoint en workflow_runs.",
+    "cause": "El orquestador no garantiza cobertura de todos los checkpoints intrad\u00eda; se ejecut\u00f3 solo una parte de eventos y no existe control de completitud por sesi\u00f3n.",
+    "missing_intraday_events": [
+      "OPEN",
+      "OPEN_PLUS_2H",
+      "OPEN_PLUS_4H"
+    ],
+    "workflow_events_seen": [
+      "CLOSE",
+      "OPEN_PLUS_6H"
+    ],
+    "repo_dirty": true
+  },
+  "impact": {
+    "forecasts": "PARCIAL",
+    "strategies": "AFECTADO",
+    "paper_trading": "AFECTADO",
+    "notifications": "RIESGO_DE_ALERTA_TARDIA",
+    "risk_controls": "AFECTADO"
+  },
+  "immediate_fix": [
+    "Forzar corrida manual de checkpoints intrad\u00eda faltantes para la fecha afectada.",
+    "Bloquear publicaci\u00f3n de m\u00e9tricas EOD como completas cuando falten snapshots cr\u00edticos.",
+    "Notificar incidente a on-call con severidad y alcance por componente."
+  ],
+  "permanent_fix": [
+    "Registrar run_id/workflow en cada marker de workflow para trazabilidad y \u00faltimo run sano.",
+    "Agregar chequeo autom\u00e1tico de completitud intrad\u00eda (OPEN, OPEN+2H, OPEN+4H, OPEN+6H, CLOSE) antes de EOD.",
+    "Agregar comando de incident review reproducible con RCA estructurado y salida JSON auditada."
+  ],
+  "tests_to_add": [
+    "Test para validar que mark_run persiste run_id/workflow en snapshots.",
+    "Test para validar clasificaci\u00f3n de severidad y estado de escalamiento.",
+    "Test para validar identificaci\u00f3n de eventos intrad\u00eda faltantes y root cause asociado."
+  ],
+  "files_updated": [
+    "src/utils/workflow_guards.py",
+    "src/monitoring/incident_commander.py",
+    "tests/test_incident_commander.py",
+    "docs/release_checklist.md"
+  ]
+}

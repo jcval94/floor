@@ -97,7 +97,15 @@ def mark_run(kind: str, data_dir: Path, event: str | None) -> Path:
     key = f"{kind}_{day}{suffix}"
     marker = _marker_path(data_dir, key)
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"kind": kind, "day": day, "event": event, "ts": now.isoformat()}), encoding="utf-8")
+    payload = {
+        "kind": kind,
+        "day": day,
+        "event": event,
+        "ts": now.isoformat(),
+        "run_id": os.getenv("GITHUB_RUN_ID", "local"),
+        "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
+    }
+    marker.write_text(json.dumps(payload), encoding="utf-8")
     return marker
 
 
