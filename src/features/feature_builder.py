@@ -221,8 +221,9 @@ def build_features(rows: list[dict]) -> list[dict]:
             row["slope_8w"] = None if idx < 40 or closes[-41] == 0 else close / closes[-41] - 1.0
             row["slope_13w"] = None if idx < 65 or closes[-66] == 0 else close / closes[-66] - 1.0
             sma65 = _safe_mean(_rolling(closes, idx, 65))
-            if isinstance(sma65, (int, float)) and sma65 != 0:
-                row["trend_context_m3"] = close / sma65 - 1.0
+            if sma65 is not None and sma65 != 0:
+                sma65_value = float(sma65)
+                row["trend_context_m3"] = close / sma65_value - 1.0
 
             max_close65 = max(_rolling(closes, idx, 65))
             row["drawdown_13w"] = None if max_close65 == 0 else close / max_close65 - 1.0
@@ -309,7 +310,13 @@ def build_features(rows: list[dict]) -> list[dict]:
                 and isinstance(floor_q1, (int, float))
                 and isinstance(floor_m3, (int, float))
             ):
-                row["ai_horizon_alignment"] = float(floor_d1 >= floor_w1 >= floor_q1 >= floor_m3)
+                floor_d1_value = float(floor_d1)
+                floor_w1_value = float(floor_w1)
+                floor_q1_value = float(floor_q1)
+                floor_m3_value = float(floor_m3)
+                row["ai_horizon_alignment"] = float(
+                    floor_d1_value >= floor_w1_value >= floor_q1_value >= floor_m3_value
+                )
             else:
                 row["ai_horizon_alignment"] = None
 
