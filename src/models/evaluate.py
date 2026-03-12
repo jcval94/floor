@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from typing import Iterable
 
 from models.calibration import expected_calibration_error
