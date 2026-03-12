@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import floor
+from typing import cast
 
 from backtest.cost_model import CostModel, CostModelConfig
 from execution.order_models import Fill, Order, OrderSide, OrderStatus, PortfolioSnapshot, Trade
@@ -56,14 +57,14 @@ class PaperExecutor:
             snapshot_id=self._next_snapshot_id(),
             cycle_id=cycle_id,
             timestamp=timestamp,
-            cash=float(snap_data["cash"]),
-            market_value=float(snap_data["market_value"]),
-            equity=float(snap_data["equity"]),
-            realized_pnl=float(snap_data["realized_pnl"]),
-            unrealized_pnl=float(snap_data["unrealized_pnl"]),
-            gross_exposure=float(snap_data["gross_exposure"]),
-            net_exposure=float(snap_data["net_exposure"]),
-            positions=snap_data["positions"],
+            cash=cast(float, snap_data["cash"]),
+            market_value=cast(float, snap_data["market_value"]),
+            equity=cast(float, snap_data["equity"]),
+            realized_pnl=cast(float, snap_data["realized_pnl"]),
+            unrealized_pnl=cast(float, snap_data["unrealized_pnl"]),
+            gross_exposure=cast(float, snap_data["gross_exposure"]),
+            net_exposure=cast(float, snap_data["net_exposure"]),
+            positions=cast(dict[str, dict[str, float]], snap_data["positions"]),
         )
         self.snapshots.append(snapshot)
 

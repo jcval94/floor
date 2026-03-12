@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 
 def _last_jsonl_row(path: Path) -> dict | None:
@@ -20,7 +21,7 @@ def build_dashboard_snapshot(data_dir: Path, output_path: Path) -> None:
     pred_files = sorted((data_dir / "predictions").glob("*.jsonl"))
     signal_files = sorted((data_dir / "signals").glob("*.jsonl"))
 
-    payload = {
+    payload: dict[str, Any] = {
         "prediction_files": len(pred_files),
         "signal_files": len(signal_files),
         "latest_predictions": [],
