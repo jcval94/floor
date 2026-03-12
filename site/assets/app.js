@@ -8,21 +8,8 @@ function setNav(page) {
   });
 }
 
-function _extractM3(rows = []) {
-  const row = rows.find((r) => r.horizon === 'm3') || rows[0] || {};
-  const week = Number(row.floor_week_m3 ?? row.floor_time_bucket ?? 0);
-  return {
-    floor: row.floor_m3 ?? row.floor_value,
-    week,
-    start: row.floor_week_m3_start_date,
-    end: row.floor_week_m3_end_date,
-    conf: row.floor_week_m3_confidence ?? row.floor_time_probability,
-    top3: row.floor_week_m3_top3 || [],
-    delta: row.m3_delta_vs_prev,
-    material: row.m3_material_change,
-    labelHuman: row.floor_week_m3_label_human || m3WeekHumanLabel(week),
-    proximity: row.m3_week_proximity || m3ProximityLabel(week),
-  };
+function emptyState(message, colspan = 1) {
+  return `<tr><td colspan="${colspan}" class="small">${message}</td></tr>`;
 }
 
 async function home() {
@@ -50,10 +37,9 @@ async function forecasts() {
   const data = await loadJSON('data/forecasts.json', { rows: [], top_opportunities: [] });
   const grouped = bySymbol(data.rows);
   const root = document.getElementById('forecastCards');
-  root.innerHTML = Object.entries(grouped).map(([symbol, rows]) => {
-    const d1 = rows.find((r) => r.horizon === 'd1') || rows[0] || {};
-    const current = (Number(d1.floor_value || 0) + Number(d1.ceiling_value || 0)) / 2;
-    const m3 = _extractM3(rows);
+  const cards = Object.entries(grouped).map(([symbol, rows]) => {
+    const d1 = rows.find((r) => r.horizon === 'd1') || rows[0];
+    const current = (Number(d1.floor_value) + Number(d1.ceiling_value)) / 2;
     return `<div class="card"><h3>${symbol}</h3>
       <div class="small">D1 ${badge(d1.floor_time_bucket || '-')} / ${badge(d1.ceiling_time_bucket || '-')}</div>
       ${rangeSvg(Number(d1.floor_value), current, Number(d1.ceiling_value))}
@@ -62,19 +48,14 @@ async function forecasts() {
       <div class="small">Δ vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
       ${m3WeekBarsSvg(m3.top3)}
       <a href="tickers.html?ticker=${symbol}">Detalle ticker</a></div>`;
-  }).join('');
+  });
+  root.innerHTML = cards.length
+    ? cards.join('')
+    : '<div class="card"><h3>Sin pronósticos</h3><div class="small">No se encontraron filas en data/forecasts.json.</div></div>';
 
-  document.getElementById('opps').innerHTML = data.top_opportunities.slice(0, 10).map((x) =>
+  const opportunities = data.top_opportunities.slice(0, 10).map((x) =>
     `<tr><td>${x.symbol}</td><td>${x.horizon}</td><td>${fmt(x.floor)}</td><td>${fmt(x.ceiling)}</td><td>${fmt(x.spread)}</td></tr>`).join('');
-
-  const m3Table = document.getElementById('m3TopWeeks');
-  if (m3Table) {
-    m3Table.innerHTML = Object.entries(grouped).map(([symbol, rows]) => {
-      const m3 = _extractM3(rows);
-      const top3 = (m3.top3 || []).slice(0, 3).map((w) => `W${String(w.week || '-').padStart(2, '0')} ${(100 * Number(w.probability || w.prob || 0)).toFixed(1)}%`).join(' · ');
-      return `<tr><td>${symbol}</td><td>${fmt(m3.floor)}</td><td>${m3.labelHuman}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${top3 || '-'}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`;
-    }).join('');
-  }
+  document.getElementById('opps').innerHTML = opportunities || emptyState('No hay oportunidades para mostrar.', 5);
 }
 
 async function tickers() {
@@ -94,16 +75,9 @@ async function tickers() {
 
   if (route.ticker) {
     const rows = grouped[route.ticker] || [];
-    const m3 = _extractM3(rows);
-    document.getElementById('tickerDetail').innerHTML = `<div class="card"><h3>${route.ticker}</h3>${rows.map((r) =>
+    document.getElementById('tickerDetail').innerHTML = `<div class="card"><h3>${route.ticker}</h3>${rows.length ? rows.map((r) =>
       `<div>${r.horizon.toUpperCase()}: floor ${fmt(r.floor_value)} · ceiling ${fmt(r.ceiling_value)} · floor_t ${badge(String(r.floor_time_bucket || '-'))} · ceiling_t ${badge(String(r.ceiling_time_bucket || '-'))}</div>`
-    ).join('')}
-      <hr/><div><strong>3M Downside Window</strong></div>
-      <div>${m3WeekHumanLabel(m3.week)} · floor_m3 ${fmt(m3.floor)} · conf ${fmt(m3.conf)}</div>
-      <div>Rango de fechas: ${m3.start || '-'} → ${m3.end || '-'} · proximidad: ${m3.proximity}</div>
-      <div>Δ forecast m3 vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
-      ${m3WeekBarsSvg(m3.top3)}
-    </div>`;
+    ).join('') : '<div class="small">Ticker sin pronóstico disponible en el dataset actual.</div>'}</div>`;
   }
 
   document.querySelectorAll('th.sortable').forEach((th) => {
@@ -130,33 +104,27 @@ async function models() {
     loadJSON('data/forecasts.json', { rows: [] }),
   ]);
   document.getElementById('champion').textContent = models.champion;
-  document.getElementById('calibration').textContent = JSON.stringify(models.health).slice(0, 220);
-  document.getElementById('timeline').innerHTML = (models.timeline || []).map((x) =>
+  document.getElementById('calibration').innerHTML = `<pre>${JSON.stringify(models.health || {}, null, 2)}</pre>`;
+  const timeline = (models.timeline || []).map((x) =>
     `<tr><td>${x.as_of || '-'}</td><td>${x.model_name || '-'}</td><td>${x.action || '-'}</td><td>${x.drift_level || '-'}</td></tr>`).join('');
-
-  const grouped = bySymbol(forecasts.rows || []);
-  const m3Stability = document.getElementById('m3Stability');
-  if (m3Stability) {
-    m3Stability.innerHTML = Object.entries(grouped).map(([symbol, rows]) => {
-      const m3 = _extractM3(rows);
-      return `<tr><td>${symbol}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${fmt(m3.delta)}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`;
-    }).join('');
-  }
+  document.getElementById('timeline').innerHTML = timeline || emptyState('Sin eventos de timeline.', 4);
 }
 
 async function drift() {
   const d = await loadJSON('data/drift.json', { drift_level: 'GREEN', decision: '-', thresholds: [] });
   document.getElementById('driftLight').innerHTML = badge(d.drift_level || 'GREEN');
   document.getElementById('decision').textContent = d.decision || '-';
-  document.getElementById('thresholds').innerHTML = (d.thresholds || []).map((t) =>
+  const thresholds = (d.thresholds || []).map((t) =>
     `<tr><td>${t.name}</td><td>${t.observed}</td><td>${t.threshold}</td><td>${t.severity}</td></tr>`).join('');
+  document.getElementById('thresholds').innerHTML = thresholds || emptyState('Sin umbrales reportados.', 4);
 }
 
 async function incidents() {
   const i = await loadJSON('data/incidents.json', { status: 'OK', severity: 'SEV4', summary: {}, impact: {} });
   document.getElementById('status').innerHTML = `${badge(i.status || 'OK')} ${badge(i.severity || 'SEV4')}`;
   document.getElementById('symptom').textContent = i.summary?.symptom || '-';
-  document.getElementById('impact').innerHTML = Object.entries(i.impact || {}).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const impact = Object.entries(i.impact || {}).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  document.getElementById('impact').innerHTML = impact || emptyState('Sin impacto reportado.', 2);
 }
 
 const page = document.body.dataset.page;
