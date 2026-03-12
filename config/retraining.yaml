@@ -1,0 +1,41 @@
+review:
+  cadence_days: 14
+  policy: quincenal
+
+important_features:
+  columns: ret_lag_1,rolling_vol_20,atr_14,relative_volume_20,beta_20,vol_regime_score,rsi_14,macd_histogram,vwap_distance,ai_consensus_score
+
+thresholds:
+  feature_psi_warn: 0.12
+  feature_psi_fail: 0.25
+  target_js_warn: 0.06
+  target_js_fail: 0.12
+  temporal_js_warn: 0.05
+  temporal_js_fail: 0.10
+  coverage_calibration_warn: 0.03
+  coverage_calibration_fail: 0.06
+  min_column_coverage: 0.90
+
+performance_thresholds:
+  pinball_loss_warn: 0.02
+  pinball_loss_fail: 0.05
+  breach_rate_warn: 0.03
+  breach_rate_fail: 0.06
+
+timing_thresholds:
+  accuracy_drop_warn: 0.03
+  accuracy_drop_fail: 0.06
+  log_loss_warn: 0.04
+  log_loss_fail: 0.08
+  brier_warn: 0.02
+  brier_fail: 0.05
+  timing_distance_warn: 0.40
+  timing_distance_fail: 0.80
+
+paper_thresholds:
+  return_drop_warn: 0.02
+  return_drop_fail: 0.05
+  drawdown_increase_warn: 0.03
+  drawdown_increase_fail: 0.06
+  sharpe_drop_warn: 0.20
+  sharpe_drop_fail: 0.50

@@ -1,0 +1,143 @@
+portfolio:
+  nav_usd: 1000000
+  max_orders_per_cycle: 8
+  max_orders_per_ticker: 1
+  max_orders_per_sector: 3
+
+costs:
+  commission_bps: 2.0
+  slippage_bps: 3.0
+
+guards:
+  no_long_if_within_ceiling_pct: 0.005
+  no_short_if_within_floor_pct: 0.005
+  min_range_vs_cost_multiple: 3.0
+
+strategies:
+  ai_only:
+    priority: 1
+    horizon: d1
+    universe:
+      min_price: 5
+      max_price: 2000
+      excluded_sectors: 
+    entry:
+      min_ai_alignment_score: 0.08
+    position_sizing:
+      risk_budget_pct_nav: 0.01
+      max_notional_usd: 50000
+    risk:
+      stop_type: expected_floor_or_ceiling
+    exits:
+      take_profit_anchor: expected_ceiling_or_floor
+      temporal_exit_session: CLOSE
+    cooldown_cycles: 1
+    max_rotation_per_cycle: 3
+    liquidity:
+      min_avg_dollar_volume: 5000000
+    preferred_d1_buckets: OPEN_PLUS_2H,OPEN_PLUS_4H
+    timing_base_score: 0.5
+    timing_match_bonus: 0.2
+
+  model_only:
+    priority: 2
+    horizon: d1
+    universe:
+      min_price: 5
+      max_price: 2000
+      excluded_sectors: 
+    entry:
+      min_expected_return_d1: 0.002
+      max_breach_prob_d1: 0.70
+    position_sizing:
+      risk_budget_pct_nav: 0.012
+      max_notional_usd: 60000
+    risk:
+      stop_type: expected_floor_or_ceiling
+    exits:
+      take_profit_anchor: expected_ceiling_or_floor
+      temporal_exit_session: CLOSE
+    cooldown_cycles: 1
+    max_rotation_per_cycle: 3
+    liquidity:
+      min_avg_dollar_volume: 7000000
+    preferred_d1_buckets: OPEN_PLUS_2H,OPEN_PLUS_4H,OPEN_PLUS_6H
+    timing_base_score: 0.5
+    timing_match_bonus: 0.2
+
+  consensus:
+    priority: 0
+    horizon: d1
+    universe:
+      min_price: 5
+      max_price: 2000
+      excluded_sectors: 
+    entry:
+      min_consensus_score: 0.06
+    position_sizing:
+      risk_budget_pct_nav: 0.015
+      max_notional_usd: 80000
+    risk:
+      stop_type: expected_floor_or_ceiling
+    exits:
+      take_profit_anchor: expected_ceiling_or_floor
+      temporal_exit_session: CLOSE
+    cooldown_cycles: 1
+    max_rotation_per_cycle: 4
+    liquidity:
+      min_avg_dollar_volume: 8000000
+    preferred_d1_buckets: OPEN_PLUS_2H,OPEN_PLUS_4H
+    timing_base_score: 0.5
+    timing_match_bonus: 0.25
+
+  mean_reversion_floor_w1:
+    priority: 3
+    horizon: w1
+    universe:
+      min_price: 5
+      max_price: 2000
+      excluded_sectors: Energy
+    entry:
+      near_floor_w1_pct: 0.02
+    position_sizing:
+      risk_budget_pct_nav: 0.01
+      max_notional_usd: 45000
+    risk:
+      stop_type: weekly_floor_invalidation
+    exits:
+      take_profit_anchor: weekly_ceiling
+      temporal_exit_business_days: 5
+    cooldown_cycles: 2
+    max_rotation_per_cycle: 2
+    liquidity:
+      min_avg_dollar_volume: 6000000
+    preferred_d1_buckets: OPEN_PLUS_2H,OPEN_PLUS_4H
+    timing_base_score: 0.45
+    timing_match_bonus: 0.2
+
+  breakout_protected_by_floor:
+    priority: 4
+    horizon: d1
+    universe:
+      min_price: 5
+      max_price: 2000
+      excluded_sectors: Utilities
+    entry:
+      min_momentum_20: 0.01
+      min_confidence_score: 0.55
+    position_sizing:
+      risk_budget_pct_nav: 0.008
+      max_notional_usd: 40000
+    risk:
+      stop_type: floor_buffer
+      floor_buffer_pct: 0.003
+    exits:
+      take_profit_anchor: expected_ceiling
+      temporal_exit_session: CLOSE
+    cooldown_cycles: 1
+    max_rotation_per_cycle: 2
+    liquidity:
+      min_avg_dollar_volume: 9000000
+    preferred_d1_buckets: OPEN_PLUS_2H,OPEN_PLUS_4H,OPEN_PLUS_6H
+    timing_base_score: 0.5
+    timing_match_bonus: 0.15
