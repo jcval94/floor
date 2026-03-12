@@ -1,0 +1,12 @@
+notifications:
+  slack:
+    enabled: true
+    webhook_env: SLACK_WEBHOOK_URL
+  email:
+    enabled: false
+    smtp_user_env: EMAIL_SMTP_USER
+    smtp_password_env: EMAIL_SMTP_PASSWORD
+  alert_levels:
+    - INFO
+    - WARNING
+    - CRITICAL

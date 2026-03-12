@@ -1,0 +1,59 @@
+name: ingest
+
+on:
+  schedule:
+    - cron: "*/30 * * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.guard.outputs.run }}
+      reason: ${{ steps.guard.outputs.reason }}
+      session_day: ${{ steps.guard.outputs.session_day }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check market gate
+        id: guard
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind always_open_day --data-dir data
+
+  ingest_critical:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ingest data (idempotent retry)
+        run: |
+          for i in 1 2 3; do
+            PYTHONPATH=src python -m floor.main run-cycle --event OPEN --symbols AAPL,MSFT && break || sleep $((i*20))
+          done
+      - name: Mark run
+        run: PYTHONPATH=src python -m utils.workflow_guards mark --kind ingest --data-dir data
+      - name: Commit changed history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "chore: ingest artifacts"
+          git push
+
+  ingest_info:
+    needs: [gate, ingest_critical]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Summary
+        run: echo "ingest status=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"

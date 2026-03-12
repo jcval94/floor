@@ -1,0 +1,8 @@
+cost_model:
+  currency: USD
+  commission_bps: 0.5
+  spread_bps: 1.0
+  slippage_bps_open: 3.0
+  slippage_bps_intraday: 1.5
+  min_ticket_fee_usd: 0.0
+  latency_ms_assumed: 250

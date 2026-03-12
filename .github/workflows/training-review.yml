@@ -1,0 +1,13 @@
+name: deprecated_training_review
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deprecated: use retrain_assessment workflow"

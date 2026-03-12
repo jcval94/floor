@@ -1,0 +1,12 @@
+google_sheets:
+  enabled: true
+  csv_url_env: GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL
+  required_columns:
+    - symbol
+    - action
+    - confidence
+    - note
+  allowed_actions:
+    - BUY
+    - SELL
+    - HOLD
