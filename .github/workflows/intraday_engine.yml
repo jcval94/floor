@@ -1,0 +1,67 @@
+name: intraday_engine
+
+on:
+  schedule:
+    - cron: "*/15 * * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intraday-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.guard.outputs.run }}
+      reason: ${{ steps.guard.outputs.reason }}
+      event: ${{ steps.guard.outputs.event }}
+      session_day: ${{ steps.guard.outputs.session_day }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect market checkpoint
+        id: guard
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
+
+  engine_critical:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run intraday engine (idempotent retry)
+        env:
+          LIVE_TRADING_ENABLED: "false"
+          GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
+        run: |
+          for i in 1 2 3; do
+            PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" --symbols AAPL,MSFT,NVDA,SPY && break || sleep $((i*30))
+          done
+      - name: Mark run
+        run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
+      - name: Commit auditable outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/predictions data/signals data/orders data/snapshots
+          git diff --cached --quiet || git commit -m "chore: intraday ${{ needs.gate.outputs.event }} artifacts"
+          git push
+
+  engine_info:
+    needs: [gate, engine_critical]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Emit decision
+        run: |
+          echo "run=${{ needs.gate.outputs.run }}"
+          echo "event=${{ needs.gate.outputs.event }}"
+          echo "reason=${{ needs.gate.outputs.reason }}"

@@ -1,0 +1,61 @@
+name: retrain_execute
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force retrain even if no drift"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retrain-execute-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  retrain_critical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decide retrain gate
+        id: gate
+        run: |
+          FORCE="${{ github.event.inputs.force }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ -f data/training/reviews.jsonl ] && tail -n 1 data/training/reviews.jsonl | grep -q '"action": "RETRAIN"'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Execute retrain placeholder (idempotent)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p data/training
+          python - <<'PY'
+from datetime import datetime
+from pathlib import Path
+p = Path('data/training/retrain_runs.jsonl')
+p.parent.mkdir(parents=True, exist_ok=True)
+p.open('a', encoding='utf-8').write('{"ts":"%s","status":"executed"}\n' % datetime.utcnow().isoformat())
+PY
+      - name: Commit retrain artifacts
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/training
+          git diff --cached --quiet || git commit -m "chore: retrain execute artifact"
+          git push
+
+  retrain_info:
+    needs: retrain_critical
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo "retrain_execute finished"

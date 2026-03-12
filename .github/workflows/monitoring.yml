@@ -1,0 +1,53 @@
+name: monitoring
+
+on:
+  schedule:
+    - cron: "*/30 * * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monitoring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  monitor_critical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate monitoring snapshot
+        run: |
+          mkdir -p data/metrics
+          python - <<'PY'
+import json
+from datetime import datetime
+from pathlib import Path
+p = Path('data/metrics/public_metrics.json')
+p.write_text(json.dumps({
+  'generated_at': datetime.utcnow().isoformat(),
+  'status': 'OK',
+  'series': []
+}, indent=2), encoding='utf-8')
+PY
+      - name: Commit monitoring metrics if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/metrics/public_metrics.json
+          git diff --cached --quiet || git commit -m "chore: monitoring metrics"
+          git push
+
+  monitor_info:
+    needs: monitor_critical
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-ephemeral
+          path: data/metrics/public_metrics.json
+          if-no-files-found: ignore

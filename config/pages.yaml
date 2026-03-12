@@ -1,0 +1,10 @@
+pages:
+  site_dir: site
+  data_dir: site/data
+  refresh_policy:
+    intraday_minutes: 120
+    end_of_day: true
+  feeds:
+    - dashboard.json
+    - metrics.json
+    - strategy.json

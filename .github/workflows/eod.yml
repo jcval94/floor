@@ -1,0 +1,56 @@
+name: eod
+
+on:
+  schedule:
+    - cron: "*/15 * * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: eod-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.guard.outputs.run }}
+      reason: ${{ steps.guard.outputs.reason }}
+      event: ${{ steps.guard.outputs.event }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect close window
+        id: guard
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
+
+  eod_critical:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site snapshot
+        run: |
+          PYTHONPATH=src python -m floor.main build-site
+          PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data
+      - name: Mark run
+        run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
+      - name: Commit eod history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/reports data/snapshots site/data
+          git diff --cached --quiet || git commit -m "chore: eod artifacts"
+          git push
+
+  eod_info:
+    needs: [gate, eod_critical]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"

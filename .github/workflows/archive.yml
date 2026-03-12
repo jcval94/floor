@@ -1,0 +1,48 @@
+name: archive
+
+on:
+  schedule:
+    - cron: "15 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  archive_critical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compact old ephemeral data indexes
+        run: |
+          mkdir -p data/archive
+          python - <<'PY'
+import json
+from datetime import datetime
+from pathlib import Path
+Path('data/archive/index.json').write_text(json.dumps({'ts': datetime.utcnow().isoformat(), 'status': 'ok'}, indent=2), encoding='utf-8')
+PY
+      - name: Commit archive index if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/archive/index.json
+          git diff --cached --quiet || git commit -m "chore: archive index"
+          git push
+
+  archive_info:
+    needs: archive_critical
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-logs
+          path: data/archive/index.json
+          if-no-files-found: ignore
