@@ -16,3 +16,14 @@ horizons:
     sessions_ahead: 10
     time_target_type: business_day
     valid_days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  m3:
+    sessions_ahead: 65
+    time_target_type: business_week
+    valid_weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    definition: relative_market_weeks
+    labels:
+      floor_value: floor_m3
+      floor_time_index: floor_week_m3
+      floor_time_start_date: floor_week_m3_start_date
+      floor_time_end_date: floor_week_m3_end_date
+      floor_time_confidence: floor_week_m3_confidence
