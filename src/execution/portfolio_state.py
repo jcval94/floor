@@ -42,7 +42,7 @@ class PortfolioState:
             self.positions[symbol] = pos
         return realized
 
-    def mark_to_market(self, prices: dict[str, float]) -> dict[str, float]:
+    def mark_to_market(self, prices: dict[str, float]) -> dict[str, object]:
         market_value = 0.0
         unrealized = 0.0
         gross = 0.0

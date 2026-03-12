@@ -4,7 +4,10 @@ import math
 from collections import Counter
 
 
-def _safe_float(x: object) -> float | None:
+from typing import Any
+
+
+def _safe_float(x: Any) -> float | None:
     try:
         if x is None:
             return None
@@ -37,7 +40,7 @@ def _hist(values: list[float], cuts: list[float]) -> list[float]:
     return [c / total for c in counts]
 
 
-def psi(reference: list[float], current: list[float], n_bins: int = 10) -> float:
+def psi(reference: list[Any], current: list[Any], n_bins: int = 10) -> float:
     ref = [x for x in (_safe_float(v) for v in reference) if x is not None]
     cur = [x for x in (_safe_float(v) for v in current) if x is not None]
     if len(ref) < 5 or len(cur) < 5:

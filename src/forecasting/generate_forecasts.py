@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from forecasting.load_models import load_champion_models
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
@@ -16,7 +17,7 @@ def _blocked_reason(row: dict) -> str | None:
     return None
 
 
-def _safe_float(x: object, default: float = 0.0) -> float:
+def _safe_float(x: Any, default: float = 0.0) -> float:
     try:
         return float(x)
     except (TypeError, ValueError):

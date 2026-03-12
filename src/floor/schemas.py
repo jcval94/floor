@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal, cast
+
 
 Horizon = Literal["d1", "w1", "q1"]
 EventType = Literal["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"]
@@ -58,8 +59,8 @@ class TrainingReviewRecord:
     reason: str = ""
 
 
-def record_to_dict(record: object) -> dict:
-    payload = asdict(record)
+def record_to_dict(record: object) -> dict[str, object]:
+    payload = asdict(cast(Any, record))
     for k, v in payload.items():
         if isinstance(v, datetime):
             payload[k] = v.isoformat()
