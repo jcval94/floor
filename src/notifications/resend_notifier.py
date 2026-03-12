@@ -2,20 +2,24 @@ from __future__ import annotations
 
 import json
 import urllib.request
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ResendTarget:
+    email: str
 
 
 class ResendNotifier:
     def __init__(self, api_key: str, sender: str, primary_email: str, secondary_email: str | None = None) -> None:
         self.api_key = api_key
         self.sender = sender
-        self.primary_email = primary_email
-        self.secondary_email = secondary_email
+        self.targets = [ResendTarget(primary_email)]
+        if secondary_email:
+            self.targets.append(ResendTarget(secondary_email))
 
     def send(self, subject: str, message: str) -> list[dict]:
-        outputs = [self._send(self.primary_email, subject, message)]
-        if self.secondary_email:
-            outputs.append(self._send(self.secondary_email, subject, message))
-        return outputs
+        return [self._send(target.email, subject, message) for target in self.targets]
 
     def _send(self, recipient: str, subject: str, message: str) -> dict:
         payload = {
@@ -33,6 +37,6 @@ class ResendNotifier:
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read().decode("utf-8")
-        return {"channel": "resend", "recipient": recipient, "response": body}
+        with urllib.request.urlopen(req, timeout=10) as response:
+            body = response.read().decode("utf-8")
+        return {"channel": "resend", "target": recipient, "response": body}
