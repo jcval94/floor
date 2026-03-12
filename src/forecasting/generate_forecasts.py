@@ -8,6 +8,7 @@ from forecasting.merge_ai_signal import merge_market_with_ai_signal
 from forecasting.render_time_labels import render_horizon_time_labels
 
 REQUIRED_MARKET_COLUMNS = ["symbol", "close", "high", "low"]
+REQUIRED_M3_COLUMNS = ["close", "atr_14", "trend_context_m3", "drawdown_13w", "ai_horizon_alignment"]
 
 
 def _blocked_reason(row: dict) -> str | None:
@@ -22,6 +23,13 @@ def _safe_float(x: Any, default: float = 0.0) -> float:
         return float(x)
     except (TypeError, ValueError):
         return default
+
+
+def _m3_block_reason(row: dict) -> str | None:
+    missing = [c for c in REQUIRED_M3_COLUMNS if row.get(c) in (None, "")]
+    if missing:
+        return f"Missing m3 fields: {','.join(missing)}"
+    return None
 
 
 def generate_forecasts(market_rows: list[dict], ai_by_symbol: dict[str, dict], session: str, as_of: datetime | None = None) -> dict:
@@ -85,11 +93,45 @@ def generate_forecasts(market_rows: list[dict], ai_by_symbol: dict[str, dict], s
             "reward_risk_ratio": round(rr, 6),
             "ai_weight": round(ai_weight, 4),
             "expected_range_avg": round(expected_range_avg, 6),
+            "m3_status": "ok",
+            "m3_block_reason": None,
         }
+
+        m3_reason = _m3_block_reason(row)
+        if m3_reason is None:
+            m3 = model.predict_m3(row)
+        else:
+            m3 = None
+
+        if m3 is None:
+            out.update(
+                {
+                    "floor_m3": None,
+                    "floor_week_m3": None,
+                    "floor_week_m3_confidence": None,
+                    "floor_week_m3_top3": [],
+                    "expected_return_m3": None,
+                    "expected_range_m3": None,
+                    "m3_status": "blocked",
+                    "m3_block_reason": m3_reason or "Champion m3 model unavailable for ticker features",
+                }
+            )
+        else:
+            out.update(
+                {
+                    "floor_m3": m3.floor_m3,
+                    "floor_week_m3": m3.floor_week_m3,
+                    "floor_week_m3_confidence": m3.floor_week_m3_confidence,
+                    "floor_week_m3_top3": m3.floor_week_m3_top3,
+                    "expected_return_m3": m3.expected_return_m3,
+                    "expected_range_m3": m3.expected_range_m3,
+                }
+            )
 
         out["explanation_compact"] = (
             f"{symbol}: signal={out['composite_signal_score']:.3f}, conf={out['confidence_score']:.2f}, "
-            f"ai_w={out['ai_weight']:.2f}, d1_range={out['expected_range_d1']:.2f}, rr={out['reward_risk_ratio']:.2f}"
+            f"ai_w={out['ai_weight']:.2f}, d1_range={out['expected_range_d1']:.2f}, rr={out['reward_risk_ratio']:.2f}. "
+            f"m3 week 1..13 = semanas bursátiles relativas hacia adelante."
         )
         forecasts.append(render_horizon_time_labels(out, as_of=as_of))
 

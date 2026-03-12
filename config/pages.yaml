@@ -8,3 +8,19 @@ pages:
     - dashboard.json
     - metrics.json
     - strategy.json
+    - forecasts.json
+  horizons:
+    enabled: [d1, w1, q1, m3]
+    forecast_human_required_fields:
+      - floor_m3
+      - floor_week_m3
+      - floor_week_m3_start_date
+      - floor_week_m3_end_date
+      - floor_week_m3_confidence
+    render:
+      m3:
+        week_index_field: floor_week_m3
+        start_date_field: floor_week_m3_start_date
+        end_date_field: floor_week_m3_end_date
+        confidence_field: floor_week_m3_confidence
+        label_template: "Semana {week:02d} ({start_date} → {end_date})"
