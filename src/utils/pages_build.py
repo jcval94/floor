@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 ALLOWED_KEYS = {
     "prediction_files",
@@ -30,7 +31,7 @@ DEFAULT_UNIVERSE_50 = [
 ]
 
 
-def _sanitize(obj):
+def _sanitize(obj: Any) -> Any:
     if isinstance(obj, dict):
         clean = {}
         for k, v in obj.items():
@@ -44,7 +45,7 @@ def _sanitize(obj):
     return obj
 
 
-def _read_json(path: Path, default):
+def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
@@ -106,7 +107,8 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
 
-    latest_predictions = list(dashboard_payload.get("latest_predictions", []))
+    latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
+    latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
     opportunities = sorted(
         [
             {
