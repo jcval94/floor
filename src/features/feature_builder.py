@@ -65,6 +65,9 @@ def build_features(rows: list[dict]) -> list[dict]:
         rets: list[float] = []
         bench_rets: list[float] = []
         tr_values: list[float] = []
+        day_closes: list[float] = []
+        day_bench_closes: list[float] = []
+        day_ranges: list[float] = []
         prev_day_last_close: float | None = None
         current_day = None
         day_vwap_num = 0.0
@@ -110,6 +113,8 @@ def build_features(rows: list[dict]) -> list[dict]:
             win_20_rets = _rolling(rets, idx, 20)
             row["rolling_vol_5"] = None if len(win_5_rets) < 2 else pstdev(win_5_rets)
             row["rolling_vol_20"] = None if len(win_20_rets) < 2 else pstdev(win_20_rets)
+            win_60_rets = _rolling(rets, idx, 60)
+            row["rolling_vol_60"] = None if len(win_60_rets) < 2 else pstdev(win_60_rets)
             downside_20 = [r for r in win_20_rets if r < 0]
             row["downside_vol_20"] = None if len(downside_20) < 2 else pstdev(downside_20)
 
@@ -134,6 +139,17 @@ def build_features(rows: list[dict]) -> list[dict]:
                 next_day = _to_datetime(symbol_rows[idx + 1]["timestamp"]).date()
                 if next_day != day:
                     prev_day_last_close = close
+                    day_closes.append(close)
+                    day_bench_closes.append(bench_close)
+                    day_high = max(_rolling(highs, idx, 5))
+                    day_low = min(_rolling(lows, idx, 5))
+                    day_ranges.append((day_high - day_low) / close if close else 0.0)
+            elif idx == len(symbol_rows) - 1:
+                day_closes.append(close)
+                day_bench_closes.append(bench_close)
+                day_high = max(_rolling(highs, idx, 5))
+                day_low = min(_rolling(lows, idx, 5))
+                day_ranges.append((day_high - day_low) / close if close else 0.0)
 
             vol20 = _safe_mean(_rolling(volumes, idx, 20))
             if vol20 is None or vol20 == 0:
@@ -200,6 +216,42 @@ def build_features(rows: list[dict]) -> list[dict]:
             denom = high20 - low20
             row["price_position_in_range_20"] = None if denom == 0 else (close - low20) / denom
 
+            row["trend_context_m3"] = None
+            row["slope_4w"] = None if idx < 20 or closes[-21] == 0 else close / closes[-21] - 1.0
+            row["slope_8w"] = None if idx < 40 or closes[-41] == 0 else close / closes[-41] - 1.0
+            row["slope_13w"] = None if idx < 65 or closes[-66] == 0 else close / closes[-66] - 1.0
+            sma65 = _safe_mean(_rolling(closes, idx, 65))
+            if sma65 not in (None, 0):
+                row["trend_context_m3"] = close / sma65 - 1.0
+
+            max_close65 = max(_rolling(closes, idx, 65))
+            row["drawdown_13w"] = None if max_close65 == 0 else close / max_close65 - 1.0
+            if row.get("range_width_20") in (None, 0) or row.get("range_width_60") is None:
+                row["range_compression_20_60"] = None
+            else:
+                row["range_compression_20_60"] = row["range_width_20"] / row["range_width_60"] if row["range_width_60"] != 0 else None
+
+            row["rel_strength_4w"] = None if idx < 20 else row.get("rel_strength_20")
+            row["rel_strength_8w"] = None if idx < 40 else (close / closes[-41] - 1.0) - (bench_close / bench_closes[-41] - 1.0)
+            row["rel_strength_13w"] = None if idx < 65 else (close / closes[-66] - 1.0) - (bench_close / bench_closes[-66] - 1.0)
+
+            row["month_of_year"] = ts.month
+            row["relative_week_of_month"] = ((ts.day - 1) // 7) + 1
+
+            low63 = min(_rolling(lows, idx, 63))
+            low126 = min(_rolling(lows, idx, 126))
+            low252 = min(_rolling(lows, idx, 252))
+            row["dist_to_low_3m"] = None if low63 == 0 else close / low63 - 1.0
+            row["dist_to_low_6m"] = None if low126 == 0 else close / low126 - 1.0
+            row["dist_to_low_12m"] = None if low252 == 0 else close / low252 - 1.0
+
+            vol60 = row.get("rolling_vol_60")
+            vol20_now = row.get("rolling_vol_20")
+            row["vol_persistence_20_60"] = None if vol20_now in (None, 0) or vol60 is None else vol20_now / vol60
+
+            row["range_amp_daily_5"] = _safe_mean(_rolling(day_ranges, len(day_ranges) - 1, 5)) if day_ranges else None
+            row["range_amp_daily_13"] = _safe_mean(_rolling(day_ranges, len(day_ranges) - 1, 13)) if day_ranges else None
+
             row["rsi_14"] = _rsi(closes, idx, 14)
             ema12 = _ema(_rolling(closes, idx, 40), 12)
             ema26 = _ema(_rolling(closes, idx, 40), 26)
@@ -237,12 +289,24 @@ def build_features(rows: list[dict]) -> list[dict]:
             row["ai_ceiling_w1"] = row.get("ai_ceiling_w1")
             row["ai_floor_q1"] = row.get("ai_floor_q1")
             row["ai_ceiling_q1"] = row.get("ai_ceiling_q1")
+            row["ai_floor_m3"] = row.get("ai_floor_m3")
+            row["ai_conviction_long"] = row.get("ai_conviction_long", row.get("ai_conviction"))
+            row["ai_recency_long"] = row.get("ai_recency_long")
             ai_updated = row.get("ai_updated_at")
             if ai_updated is None:
                 row["ai_recency"] = row.get("ai_recency")
             else:
                 row["ai_recency"] = max(0, (ts - _to_datetime(ai_updated)).days)
             row["ai_consensus_score"] = row.get("ai_consensus_score")
+
+            floors = [row.get("ai_floor_d1"), row.get("ai_floor_w1"), row.get("ai_floor_q1"), row.get("ai_floor_m3")]
+            if any(v is None for v in floors):
+                row["ai_horizon_alignment"] = None
+            else:
+                row["ai_horizon_alignment"] = float(floors[0] >= floors[1] >= floors[2] >= floors[3])
+
+            if row.get("ai_recency_long") is None and row.get("ai_recency") is not None:
+                row["ai_recency_long"] = row["ai_recency"]
 
             output.append(row)
 
