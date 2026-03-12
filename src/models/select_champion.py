@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 def _to_dict(obj: object) -> dict:
-    if is_dataclass(obj) and not isinstance(obj, type):
+    if is_dataclass(obj):
+        if isinstance(obj, type):
+            raise TypeError("Unsupported artifact type")
         return asdict(obj)
     if isinstance(obj, dict):
         return obj
