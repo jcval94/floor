@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 
 def _safe_float(value: object, default: float = 0.0) -> float:
     try:
-        return float(value)
+        return float(cast(Any, value))
     except (TypeError, ValueError):
         return default
 
@@ -59,15 +61,15 @@ def rank_opportunities(forecasts: list[dict], blocked: list[dict], top_k: int = 
     ordered = sorted(
         forecasts,
         key=lambda r: (
-            float(r.get("composite_signal_score", 0.0)),
-            float(r.get("reward_risk_ratio", 0.0)),
-            float(r.get("confidence_score", 0.0)),
+            _safe_float(r.get("composite_signal_score"), 0.0),
+            _safe_float(r.get("reward_risk_ratio"), 0.0),
+            _safe_float(r.get("confidence_score"), 0.0),
         ),
         reverse=True,
     )
 
     top = [_top_pick_payload(row) for row in ordered[:top_k]]
-    low_conf = [r for r in forecasts if float(r.get("confidence_score", 0.0)) < low_conf_threshold]
+    low_conf = [r for r in forecasts if _safe_float(r.get("confidence_score"), 0.0) < low_conf_threshold]
 
     canonical = [
         {
