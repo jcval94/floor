@@ -19,7 +19,7 @@ lint:
 
 
 retrain-models:
-	bash scripts/retrain_models.sh $${DATASET:-data/training/modelable_dataset.json} data/training $${VERSION:-local}
+	bash scripts/retrain_models.sh $${DATASET:-data/training/modelable_dataset.json} data/training $${VERSION:-local} $${TASKS:-value,timing}
 
 
 yahoo-ingest:

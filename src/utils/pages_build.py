@@ -72,8 +72,6 @@ def _opportunity_row(row: dict) -> dict | None:
     ceiling_prob = float(row.get("ceiling_time_probability", 0.5) or 0.5)
     confidence = max(min((floor_prob + ceiling_prob) / 2.0, 1.0), 0.0)
 
-    # Objetivo: combinar amplitud absoluta, amplitud relativa y probabilidad temporal.
-    # Favorece oportunidades amplias, proporcionales al precio y con mejor soporte probabilístico.
     score = spread_abs * spread_rel * confidence
 
     return {
@@ -152,24 +150,29 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     })
     (site_data_dir / "incidents.json").write_text(json.dumps(_sanitize(incident_payload), indent=2), encoding="utf-8")
 
+    review_summary = _read_json(data_dir / "training" / "review_summary_latest.json", {"suite_version": "", "models": {}})
     model_timeline = []
     for row in _read_jsonl(data_dir / "training" / "reviews.jsonl")[-30:]:
         model_timeline.append(
             {
                 "as_of": row.get("as_of"),
-                "model_name": row.get("model_name", "champion-v0"),
-                "action": row.get("action"),
+                "model_name": row.get("model_name", "unknown"),
+                "model_key": row.get("model_key", "unknown"),
+                "action": row.get("recommendation", row.get("action")),
                 "status": row.get("status", "OK"),
                 "drift_level": row.get("drift_level", "GREEN"),
+                "current_version": row.get("current_version", "unknown"),
             }
         )
 
     models = {
-        "champion": latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown",
+        "champion": review_summary.get("suite_version") or (latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown"),
         "timeline": model_timeline,
         "health": metrics_payload,
+        "champions": review_summary.get("models", {}),
     }
     (site_data_dir / "models.json").write_text(json.dumps(_sanitize(models), indent=2), encoding="utf-8")
+
 
 
 def main() -> None:

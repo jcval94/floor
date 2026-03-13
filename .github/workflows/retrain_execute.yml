@@ -15,6 +15,13 @@ on:
         description: "Version tag for metrics artifact (optional)"
         required: false
         default: ""
+      tasks:
+        description: "Comma-separated model tasks for manual force runs"
+        required: false
+        default: "value,timing"
+  workflow_run:
+    workflows: ["retrain_assessment"]
+    types: [completed]
 
 permissions:
   contents: write
@@ -25,6 +32,7 @@ concurrency:
 
 jobs:
   retrain_critical:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,15 +44,43 @@ jobs:
 
       - name: Decide retrain gate
         id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE: ${{ github.event.inputs.force }}
+          INPUT_TASKS: ${{ github.event.inputs.tasks }}
+          INPUT_DATASET_PATH: ${{ github.event.inputs.dataset_path }}
         run: |
-          FORCE="${{ github.event.inputs.force }}"
-          if [ "$FORCE" = "true" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          elif [ -f data/training/reviews.jsonl ] && tail -n 1 data/training/reviews.jsonl | grep -q '"action": "RETRAIN"'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          event_name = os.environ.get('EVENT_NAME', 'workflow_dispatch')
+          force = os.environ.get('FORCE', 'false').lower() == 'true'
+          requested_tasks = [x.strip() for x in os.environ.get('INPUT_TASKS', 'value,timing').split(',') if x.strip()]
+          dataset_path = os.environ.get('INPUT_DATASET_PATH', '').strip() or 'data/training/modelable_dataset.json'
+          summary_path = Path('data/training/review_summary_latest.json')
+
+          tasks: list[str] = []
+          reason = 'no_summary'
+          if event_name == 'workflow_dispatch' and force:
+              tasks = requested_tasks or ['value', 'timing']
+              reason = 'manual_force'
+          elif summary_path.exists():
+              payload = json.loads(summary_path.read_text(encoding='utf-8'))
+              tasks = [str(task).strip() for task in payload.get('tasks_for_auto_retrain', []) if str(task).strip()]
+              reason = 'summary_tasks' if tasks else 'summary_no_retrain_now'
+          elif event_name == 'workflow_dispatch':
+              reason = 'manual_without_force_or_summary'
+          else:
+              reason = 'workflow_run_without_summary'
+
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as fh:
+              fh.write(f"run={'true' if bool(tasks) else 'false'}\n")
+              fh.write(f"tasks={','.join(tasks)}\n")
+              fh.write(f"reason={reason}\n")
+              fh.write(f"dataset_path={dataset_path}\n")
+          PY
 
       - name: Refresh in-repo market DB from Yahoo (responsible polling)
         if: steps.gate.outputs.run == 'true'
@@ -53,7 +89,7 @@ jobs:
       - name: Build modelable dataset from in-repo DB
         if: steps.gate.outputs.run == 'true'
         env:
-          DATASET_PATH: ${{ github.event.inputs.dataset_path }}
+          DATASET_PATH: ${{ steps.gate.outputs.dataset_path }}
         run: |
           PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
           PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output "$DATASET_PATH"
@@ -61,14 +97,15 @@ jobs:
       - name: Run model retraining (replace in-repo model artifacts)
         if: steps.gate.outputs.run == 'true'
         env:
-          DATASET_PATH: ${{ github.event.inputs.dataset_path }}
+          DATASET_PATH: ${{ steps.gate.outputs.dataset_path }}
+          TASKS_TO_RUN: ${{ steps.gate.outputs.tasks }}
           VERSION_INPUT: ${{ github.event.inputs.version }}
         run: |
           VERSION_TAG="$VERSION_INPUT"
           if [ -z "$VERSION_TAG" ]; then
             VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
           fi
-          bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG"
+          bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN"
 
       - name: Commit retrain artifacts
         if: steps.gate.outputs.run == 'true'
@@ -76,8 +113,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/training data/market data/persistence
-          git diff --cached --quiet || git commit -m "chore: retrain and replace in-repo model artifacts"
+          git diff --cached --quiet || git commit -m "chore: retrain selected model artifacts"
           git push
+
+      - name: Upload retrain artifacts
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-execute-artifacts
+          path: |
+            data/training
+            data/market/market_data.sqlite
+            data/persistence/app.sqlite
+          if-no-files-found: ignore
 
   retrain_info:
     needs: retrain_critical

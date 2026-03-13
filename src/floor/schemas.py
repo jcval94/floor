@@ -50,13 +50,22 @@ class OrderRecord:
 class TrainingReviewRecord:
     as_of: datetime
     model_name: str
-    data_drift: float
-    concept_drift: float
-    calibration_drift: float
-    performance_decay: float
-    thresholds: dict[str, float] = field(default_factory=dict)
-    action: Literal["RETRAIN", "SKIP"] = "SKIP"
+    data_drift: float = 0.0
+    concept_drift: float = 0.0
+    calibration_drift: float = 0.0
+    performance_decay: float = 0.0
+    thresholds: dict[str, Any] = field(default_factory=dict)
+    action: str = "SKIP_RETRAIN"
     reason: str = ""
+    model_key: str = ""
+    champion_path: str = ""
+    current_version: str = ""
+    status: str = "OK"
+    recommendation: str = "SKIP_RETRAIN"
+    auto_retrain: bool = False
+    drift_level: str = "GREEN"
+    summary: dict[str, Any] = field(default_factory=dict)
+
 
 
 def record_to_dict(record: object) -> dict[str, object]:

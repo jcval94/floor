@@ -24,7 +24,7 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
                         "horizon": "d1",
                         "floor_value": 100,
                         "ceiling_value": 110,
-                        "model_version": "champion-v1",
+                        "model_version": "value:m3_value_linear@v2|timing:m3_timing_multiclass@v1",
                     }
                 ],
                 "api_key": "SHOULD_NOT_LEAK",
@@ -34,7 +34,19 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     )
     (data_dir / "metrics" / "public_metrics.json").write_text(json.dumps({"status": "ok", "series": []}), encoding="utf-8")
     (data_dir / "training" / "reviews.jsonl").write_text(
-        json.dumps({"as_of": "2026-01-01", "model_name": "champion-v1", "action": "SKIP"}) + "\n",
+        json.dumps({"as_of": "2026-01-01", "model_name": "m3_value_linear", "model_key": "value", "recommendation": "SKIP_RETRAIN", "current_version": "v2"}) + "\n",
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps(
+            {
+                "suite_version": "value:m3_value_linear@v2|timing:m3_timing_multiclass@v1",
+                "models": {
+                    "value": {"current_version": "v2"},
+                    "timing": {"current_version": "v1"},
+                },
+            }
+        ),
         encoding="utf-8",
     )
     universe = tmp_path / "universe.yaml"
@@ -46,7 +58,8 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert (site_data / "forecasts.json").exists()
     assert (site_data / "universe.json").exists()
     models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
-    assert models["champion"] == "champion-v1"
+    assert models["champion"] == "value:m3_value_linear@v2|timing:m3_timing_multiclass@v1"
+    assert set(models["champions"].keys()) == {"value", "timing"}
     dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
     assert "api_key" not in json.dumps(dashboard)
 

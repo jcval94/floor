@@ -49,6 +49,14 @@ jobs:
           git add data/
           git diff --cached --quiet || git commit -m "chore: ingest artifacts"
           git push
+      - name: Upload sqlite artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingest-sqlite
+          path: |
+            data/market/market_data.sqlite
+            data/persistence/app.sqlite
+          if-no-files-found: ignore
 
   ingest_info:
     needs: [gate, ingest_critical]

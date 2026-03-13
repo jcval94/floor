@@ -43,8 +43,10 @@ def main() -> None:
         elif args.cmd == "review-training":
             logger.info("[main] running review-training")
             run_training_review(
-                metrics_path=cfg.data_dir / "metrics" / "model_metrics.jsonl",
+                data_dir=cfg.data_dir,
                 output_path=cfg.data_dir / "training" / "reviews.jsonl",
+                summary_path=cfg.data_dir / "training" / "review_summary_latest.json",
+                config_path=cfg.root_dir / "config" / "retraining.yaml",
             )
         elif args.cmd == "build-site":
             logger.info("[main] running build-site")

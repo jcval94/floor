@@ -69,5 +69,15 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: bootstrap sqlite databases"
           git push
 
+      - name: Upload sqlite artifacts
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-bootstrap-sqlite
+          path: |
+            data/market/market_data.sqlite
+            data/persistence/app.sqlite
+          if-no-files-found: ignore
+
       - name: Summary
         run: echo "db_bootstrap run=${{ steps.gate.outputs.run }} reason=${{ steps.gate.outputs.reason }}"
