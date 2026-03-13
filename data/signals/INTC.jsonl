@@ -16,3 +16,6 @@
 {"symbol": "INTC", "as_of": "2026-03-13T04:02:27.594790-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "INTC", "as_of": "2026-03-13T04:02:27.596275-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "INTC", "as_of": "2026-03-13T04:02:27.597767-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTC", "as_of": "2026-03-13T05:04:45.024443-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTC", "as_of": "2026-03-13T05:04:45.025732-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTC", "as_of": "2026-03-13T05:04:45.026990-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

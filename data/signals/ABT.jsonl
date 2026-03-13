@@ -16,3 +16,6 @@
 {"symbol": "ABT", "as_of": "2026-03-13T04:02:27.676525-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "ABT", "as_of": "2026-03-13T04:02:27.678027-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "ABT", "as_of": "2026-03-13T04:02:27.679495-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ABT", "as_of": "2026-03-13T05:04:45.095981-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ABT", "as_of": "2026-03-13T05:04:45.097234-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ABT", "as_of": "2026-03-13T05:04:45.098496-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

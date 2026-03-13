@@ -16,3 +16,6 @@
 {"symbol": "WFC", "as_of": "2026-03-13T04:02:27.623773-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "WFC", "as_of": "2026-03-13T04:02:27.625239-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "WFC", "as_of": "2026-03-13T04:02:27.626715-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "WFC", "as_of": "2026-03-13T05:04:45.049827-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "WFC", "as_of": "2026-03-13T05:04:45.051094-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "WFC", "as_of": "2026-03-13T05:04:45.052365-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

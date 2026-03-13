@@ -16,3 +16,6 @@
 {"symbol": "XOM", "as_of": "2026-03-13T04:02:27.685575-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "XOM", "as_of": "2026-03-13T04:02:27.688046-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "XOM", "as_of": "2026-03-13T04:02:27.689550-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "XOM", "as_of": "2026-03-13T05:04:45.103676-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "XOM", "as_of": "2026-03-13T05:04:45.106137-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "XOM", "as_of": "2026-03-13T05:04:45.107448-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
