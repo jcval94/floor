@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from floor.persistence_db import latest_predictions
+
 
 def _last_jsonl_row(path: Path) -> dict | None:
     if not path.exists():
@@ -21,16 +23,20 @@ def build_dashboard_snapshot(data_dir: Path, output_path: Path) -> None:
     pred_files = sorted((data_dir / "predictions").glob("*.jsonl"))
     signal_files = sorted((data_dir / "signals").glob("*.jsonl"))
 
+    db_preds = latest_predictions(data_dir / "persistence" / "app.sqlite")
+
     payload: dict[str, Any] = {
         "prediction_files": len(pred_files),
         "signal_files": len(signal_files),
-        "latest_predictions": [],
+        "latest_predictions": db_preds,
+        "latest_predictions_source": "sqlite" if db_preds else "jsonl",
     }
 
-    for f in pred_files:
-        row = _last_jsonl_row(f)
-        if row:
-            payload["latest_predictions"].append(row)
+    if not db_preds:
+        for f in pred_files:
+            row = _last_jsonl_row(f)
+            if row:
+                payload["latest_predictions"].append(row)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

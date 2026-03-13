@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from features.feature_builder import build_features
 from features.feature_registry import build_missingness_report, get_feature_registry
 from features.labels import build_labels
 from features.model_competition import build_model_competition_plan
+
+logger = logging.getLogger(__name__)
 
 
 def _to_datetime(value: str | datetime) -> datetime:
@@ -19,6 +22,7 @@ def _to_datetime(value: str | datetime) -> datetime:
 
 
 def _load_rows(path: Path) -> list[dict]:
+    logger.info("[etl:features] loading input path=%s", path)
     if path.suffix == ".json" or path.suffix == ".jsonl":
         rows = []
         with path.open("r", encoding="utf-8") as f:
@@ -27,11 +31,14 @@ def _load_rows(path: Path) -> list[dict]:
                 if not line:
                     continue
                 rows.append(json.loads(line))
+        logger.info("[etl:features] loaded json/jsonl rows=%s", len(rows))
         return rows
 
     if path.suffix == ".csv":
         with path.open("r", encoding="utf-8") as f:
-            return list(csv.DictReader(f))
+            rows = list(csv.DictReader(f))
+        logger.info("[etl:features] loaded csv rows=%s", len(rows))
+        return rows
 
     raise ValueError(f"Unsupported input format: {path}")
 
@@ -56,12 +63,16 @@ def _coerce_numeric(rows: list[dict]) -> list[dict]:
         "ai_recency_long",
         "ai_consensus_score",
     }
-    for row in rows:
+    for idx, row in enumerate(rows):
         for col in num_cols:
-            if row.get(col) in (None, ""):
+            try:
+                if row.get(col) in (None, ""):
+                    row[col] = None
+                elif col in row:
+                    row[col] = float(row[col])
+            except (TypeError, ValueError) as exc:
+                logger.warning("[etl:features] numeric cast failed row=%s col=%s value=%s error=%s", idx, col, row.get(col), exc)
                 row[col] = None
-            elif col in row:
-                row[col] = float(row[col])
     return rows
 
 
@@ -119,11 +130,23 @@ def _horizon_coverage(rows: list[dict], horizon: str, columns: list[str]) -> dic
 
 
 def build_modelable_dataset(rows: list[dict]) -> dict:
+    logger.info("[etl:features] building modelable dataset input_rows=%s", len(rows))
     rows = _coerce_numeric(rows)
-    feat_rows = build_features(rows)
-    labeled_rows = build_labels(feat_rows)
-    labeled_rows = assign_split(labeled_rows)
-    wf = build_walk_forward_splits(labeled_rows)
+
+    try:
+        feat_rows = build_features(rows)
+        logger.info("[etl:features] feature rows=%s", len(feat_rows))
+    except Exception as exc:
+        logger.exception("[etl:features] build_features failed: %s", exc)
+        raise
+
+    try:
+        labeled_rows = build_labels(feat_rows)
+        labeled_rows = assign_split(labeled_rows)
+        wf = build_walk_forward_splits(labeled_rows)
+    except Exception as exc:
+        logger.exception("[etl:features] labeling/splitting failed: %s", exc)
+        raise
 
     registry = [spec.__dict__ for spec in get_feature_registry()]
     competition_plan = build_model_competition_plan()
@@ -177,7 +200,7 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         ],
     )
 
-    return {
+    artifact = {
         "rows": labeled_rows,
         "feature_registry": registry,
         "walk_forward_folds": wf,
@@ -187,17 +210,27 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         "model_competition": competition_plan,
         "horizon_coverage": {"m3": m3_coverage},
     }
+    logger.info("[etl:features] artifact ready rows=%s folds=%s columns=%s", len(labeled_rows), len(wf), len(final_columns))
+    if labeled_rows:
+        logger.info("[etl:features] sample labeled row=%s", labeled_rows[0])
+    return artifact
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
     parser = argparse.ArgumentParser(description="Build floor/ceiling modelable dataset")
     parser.add_argument("--input", required=True, help="Input path (.csv|.jsonl)")
     parser.add_argument("--output", required=True, help="Output JSON path")
     args = parser.parse_args()
 
-    rows = _load_rows(Path(args.input))
-    artifact = build_modelable_dataset(rows)
-    Path(args.output).write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        rows = _load_rows(Path(args.input))
+        artifact = build_modelable_dataset(rows)
+        Path(args.output).write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("[etl:features] wrote modelable dataset path=%s", args.output)
+    except Exception as exc:
+        logger.exception("[etl:features] CLI failed: %s", exc)
+        raise
 
 
 if __name__ == "__main__":
