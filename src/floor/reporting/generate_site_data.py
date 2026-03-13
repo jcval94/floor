@@ -27,7 +27,7 @@ def build_dashboard_snapshot(data_dir: Path, output_path: Path) -> None:
         "latest_predictions": [],
     }
 
-    for f in pred_files[:20]:
+    for f in pred_files:
         row = _last_jsonl_row(f)
         if row:
             payload["latest_predictions"].append(row)
