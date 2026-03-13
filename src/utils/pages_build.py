@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from floor.universe import parse_universe_yaml
+
 ALLOWED_KEYS = {
     "prediction_files",
     "signal_files",
@@ -21,14 +23,6 @@ SENSITIVE_KEYS = {
     "authorization",
 }
 
-
-DEFAULT_UNIVERSE_50 = [
-    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "AMD", "ORCL",
-    "CRM", "ADBE", "CSCO", "QCOM", "AMAT", "TXN", "NFLX", "INTC", "IBM", "INTU",
-    "PLTR", "JPM", "BAC", "WFC", "GS", "MS", "V", "MA", "AXP", "BRK.B",
-    "LLY", "ABBV", "UNH", "MRK", "ABT", "TMO", "XOM", "CVX", "CAT", "GE",
-    "RTX", "BA", "WMT", "COST", "HD", "PG", "KO", "MCD", "DIS", "UBER",
-]
 
 
 def _sanitize(obj: Any) -> Any:
@@ -62,23 +56,6 @@ def _read_jsonl(path: Path) -> list[dict]:
     return out
 
 
-def _parse_universe_yaml(path: Path) -> list[str]:
-    if not path.exists():
-        return DEFAULT_UNIVERSE_50
-    symbols: list[str] = []
-    in_symbols = False
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line.startswith("symbols:"):
-            in_symbols = True
-            continue
-        if in_symbols and line.startswith("-"):
-            symbols.append(line[1:].strip())
-        elif in_symbols and line and not line.startswith("#"):
-            break
-    return symbols or DEFAULT_UNIVERSE_50
-
-
 def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -> None:
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -103,7 +80,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
 
     universe = {
         "name": "us_top50_liquid_v1",
-        "symbols": _parse_universe_yaml(universe_path),
+        "symbols": parse_universe_yaml(universe_path),
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
 
