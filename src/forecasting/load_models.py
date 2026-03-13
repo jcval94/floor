@@ -36,6 +36,11 @@ class ChampionModelSet:
         self._value_champion = self._load_json(self._registry / "value_champion.json")
         self._timing_champion = self._load_json(self._registry / "timing_champion.json")
 
+    @property
+    def is_available(self) -> bool:
+        """Only publish forecasts when both trained artifacts are available."""
+        return self._value_champion is not None and self._timing_champion is not None
+
     @staticmethod
     def _load_json(path: Path) -> dict | None:
         if not path.exists():
