@@ -6,7 +6,7 @@ test:
 	PYTHONPATH=src $(PYTHON) -m pytest
 
 run-cycle:
-	PYTHONPATH=src $(PYTHON) -m floor.main run-cycle --symbols $${SYMBOLS:-AAPL,MSFT,SPY} --event $${EVENT:-OPEN}
+	PYTHONPATH=src $(PYTHON) -m floor.main run-cycle --symbols $${SYMBOLS:-} --event $${EVENT:-OPEN}
 
 review-training:
 	PYTHONPATH=src $(PYTHON) -m floor.main review-training

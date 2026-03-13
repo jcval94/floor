@@ -12,6 +12,10 @@ function emptyState(message, colspan = 1) {
   return `<tr><td colspan="${colspan}" class="small">${message}</td></tr>`;
 }
 
+function primaryForecast(rows = []) {
+  return rows.find((r) => r.horizon === 'd1') || rows.find((r) => r.horizon === 'q1') || rows[0] || null;
+}
+
 async function home() {
   const [dashboard, drift, incidents] = await Promise.all([
     loadJSON('data/dashboard.json', {}),
@@ -31,11 +35,11 @@ async function forecasts() {
   const grouped = bySymbol(data.rows);
   const root = document.getElementById('forecastCards');
   const cards = Object.entries(grouped).map(([symbol, rows]) => {
-    const d1 = rows.find((r) => r.horizon === 'd1') || rows[0];
-    const current = (Number(d1.floor_value) + Number(d1.ceiling_value)) / 2;
+    const forecast = primaryForecast(rows);
+    const current = (Number(forecast.floor_value) + Number(forecast.ceiling_value)) / 2;
     return `<div class="card"><h3>${symbol}</h3>
-      <div class="small">D1 ${badge(d1.floor_time_bucket || '-')} / ${badge(d1.ceiling_time_bucket || '-')}</div>
-      ${rangeSvg(Number(d1.floor_value), current, Number(d1.ceiling_value))}
+      <div class="small">${String(forecast.horizon || '-').toUpperCase()} ${badge(forecast.floor_time_bucket || '-')} / ${badge(forecast.ceiling_time_bucket || '-')}</div>
+      ${rangeSvg(Number(forecast.floor_value), current, Number(forecast.ceiling_value))}
       <a href="tickers.html?ticker=${symbol}">Detalle ticker</a></div>`;
   });
   root.innerHTML = cards.length
@@ -55,11 +59,21 @@ async function tickers() {
   const route = initRouter();
   const grouped = bySymbol(forecasts.rows);
   const table = document.getElementById('tickersTable');
+
   table.innerHTML = universe.symbols.map((s) => {
     const rows = grouped[s] || [];
-    const d1 = rows.find((r) => r.horizon === 'd1') || {};
-    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(d1.floor_value)}</td><td>${fmt(d1.ceiling_value)}</td><td>${d1.floor_time_bucket || '-'}</td><td>${d1.ceiling_time_bucket || '-'}</td></tr>`;
+    const forecast = primaryForecast(rows) || {};
+    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(forecast.floor_value)}</td><td>${fmt(forecast.ceiling_value)}</td><td>${forecast.floor_time_bucket || '-'}</td><td>${forecast.ceiling_time_bucket || '-'}</td></tr>`;
   }).join('');
+
+  const covered = universe.symbols.filter((s) => (grouped[s] || []).length > 0);
+  const missing = universe.symbols.filter((s) => (grouped[s] || []).length === 0);
+  const coverage = document.getElementById('tickerCoverage');
+  if (coverage) {
+    const missingPreview = missing.slice(0, 12).join(', ');
+    const suffix = missing.length > 12 ? '…' : '';
+    coverage.innerHTML = `Cobertura de pronósticos: <strong>${covered.length}/${universe.symbols.length}</strong> tickers con datos (${missing.length} faltantes).${missing.length ? ` Faltan: ${missingPreview}${suffix}` : ''}`;
+  }
 
   if (route.ticker) {
     const rows = grouped[route.ticker] || [];
