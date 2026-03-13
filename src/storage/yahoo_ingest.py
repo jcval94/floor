@@ -48,10 +48,10 @@ def parse_daily_bars(symbol: str, payload: dict) -> list[DailyBar]:
         try:
             o = opens[idx] if idx < len(opens) else None
             h = highs[idx] if idx < len(highs) else None
-            l = lows[idx] if idx < len(lows) else None
+            low_value = lows[idx] if idx < len(lows) else None
             c = closes[idx] if idx < len(closes) else None
             v = volumes[idx] if idx < len(volumes) else None
-            if None in (o, h, l, c, v):
+            if None in (o, h, low_value, c, v):
                 continue
             bars.append(
                 DailyBar(
@@ -59,7 +59,7 @@ def parse_daily_bars(symbol: str, payload: dict) -> list[DailyBar]:
                     ts_utc=_to_iso_utc(int(ts)),
                     open=float(o),
                     high=float(h),
-                    low=float(l),
+                    low=float(low_value),
                     close=float(c),
                     volume=float(v),
                 )
