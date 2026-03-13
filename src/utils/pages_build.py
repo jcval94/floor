@@ -56,6 +56,41 @@ def _read_jsonl(path: Path) -> list[dict]:
     return out
 
 
+def _opportunity_row(row: dict) -> dict | None:
+    floor_raw = row.get("floor_value")
+    ceiling_raw = row.get("ceiling_value")
+    if floor_raw is None or ceiling_raw is None:
+        return None
+
+    floor = float(floor_raw)
+    ceiling = float(ceiling_raw)
+    spread_abs = max(ceiling - floor, 0.0)
+    midpoint = (ceiling + floor) / 2.0
+    spread_rel = spread_abs / max(abs(midpoint), 1e-6)
+
+    floor_prob = float(row.get("floor_time_probability", 0.5) or 0.5)
+    ceiling_prob = float(row.get("ceiling_time_probability", 0.5) or 0.5)
+    confidence = max(min((floor_prob + ceiling_prob) / 2.0, 1.0), 0.0)
+
+    # Objetivo: combinar amplitud absoluta, amplitud relativa y probabilidad temporal.
+    # Favorece oportunidades amplias, proporcionales al precio y con mejor soporte probabilístico.
+    score = spread_abs * spread_rel * confidence
+
+    return {
+        "symbol": row.get("symbol"),
+        "horizon": row.get("horizon"),
+        "floor": round(floor, 4),
+        "ceiling": round(ceiling, 4),
+        "spread": round(spread_abs, 4),
+        "spread_relative": round(spread_rel, 6),
+        "spread_relative_pct": round(spread_rel * 100.0, 2),
+        "confidence": round(confidence, 4),
+        "opportunity_score": round(score, 6),
+        "event_type": row.get("event_type"),
+        "as_of": row.get("as_of"),
+    }
+
+
 def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -> None:
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,30 +122,18 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
     opportunities = sorted(
-        [
-            {
-                "symbol": row.get("symbol"),
-                "horizon": row.get("horizon"),
-                "floor": row.get("floor_value"),
-                "ceiling": row.get("ceiling_value"),
-                "spread": round(float(row.get("ceiling_value", 0.0)) - float(row.get("floor_value", 0.0)), 4),
-                "event_type": row.get("event_type"),
-                "as_of": row.get("as_of"),
-            }
-            for row in latest_predictions
-            if row.get("floor_value") is not None and row.get("ceiling_value") is not None
-        ],
-        key=lambda x: x["spread"],
+        [opp for row in latest_predictions if (opp := _opportunity_row(row)) is not None],
+        key=lambda x: (x["opportunity_score"], x["spread_relative"], x["spread"]),
         reverse=True,
     )
 
     forecasts = {
         "as_of": latest_predictions[0].get("as_of") if latest_predictions else None,
         "rows": latest_predictions,
-        "top_opportunities": opportunities[:20],
+        "top_opportunities": opportunities[:10],
     }
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
-    (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:20]), indent=2), encoding="utf-8")
+    (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:10]), indent=2), encoding="utf-8")
 
     retraining = _read_json(data_dir / "reports" / "retraining_review_2026-03-12.json", {
         "status": "UNKNOWN", "decision": "PENDING", "drift_level": "GREEN", "thresholds_disparados": []
