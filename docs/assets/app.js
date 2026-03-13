@@ -12,21 +12,29 @@ function emptyState(message, colspan = 1) {
   return `<tr><td colspan="${colspan}" class="small">${message}</td></tr>`;
 }
 
+function _selectPrimaryForecast(rows) {
+  const safeRows = rows || [];
+  return safeRows.find((r) => r.horizon === 'd1')
+    || safeRows.find((r) => r.horizon === 'q1')
+    || safeRows[0]
+    || {};
+}
+
 function _extractM3(rows) {
-  const d1 = (rows || []).find((r) => r.horizon === 'd1') || (rows || [])[0] || {};
-  const week = Number(d1.floor_week_m3 || 0);
-  const top3 = Array.isArray(d1.floor_week_m3_top3) ? d1.floor_week_m3_top3 : [];
+  const primaryForecast = _selectPrimaryForecast(rows);
+  const week = Number(primaryForecast.floor_week_m3 || 0);
+  const top3 = Array.isArray(primaryForecast.floor_week_m3_top3) ? primaryForecast.floor_week_m3_top3 : [];
   return {
-    floor: Number(d1.floor_m3),
+    floor: Number(primaryForecast.floor_m3),
     week,
-    conf: Number(d1.floor_week_m3_confidence || 0),
-    start: d1.floor_week_m3_start_date || '',
-    end: d1.floor_week_m3_end_date || '',
-    labelHuman: d1.floor_week_m3_label_human || m3WeekHumanLabel(week),
+    conf: Number(primaryForecast.floor_week_m3_confidence || 0),
+    start: primaryForecast.floor_week_m3_start_date || '',
+    end: primaryForecast.floor_week_m3_end_date || '',
+    labelHuman: primaryForecast.floor_week_m3_label_human || m3WeekHumanLabel(week),
     top3,
-    delta: Number(d1.m3_delta_vs_prev || 0),
-    material: String(d1.m3_material_change || '').toLowerCase() === 'yes',
-    proximity: d1.m3_week_proximity || m3ProximityLabel(week),
+    delta: Number(primaryForecast.m3_delta_vs_prev || 0),
+    material: String(primaryForecast.m3_material_change || '').toLowerCase() === 'yes',
+    proximity: primaryForecast.m3_week_proximity || m3ProximityLabel(week),
   };
 }
 
@@ -56,12 +64,13 @@ async function forecasts() {
   const grouped = bySymbol(data.rows);
   const root = document.getElementById('forecastCards');
   const cards = Object.entries(grouped).map(([symbol, rows]) => {
-    const d1 = rows.find((r) => r.horizon === 'd1') || rows[0];
+    const primaryForecast = _selectPrimaryForecast(rows);
     const m3 = _extractM3(rows);
-    const current = (Number(d1.floor_value) + Number(d1.ceiling_value)) / 2;
+    const current = (Number(primaryForecast.floor_value) + Number(primaryForecast.ceiling_value)) / 2;
+    const horizon = String(primaryForecast.horizon || '-').toUpperCase();
     return `<div class="card"><h3>${symbol}</h3>
-      <div class="small">D1 ${badge(d1.floor_time_bucket || '-')} / ${badge(d1.ceiling_time_bucket || '-')}</div>
-      ${rangeSvg(Number(d1.floor_value), current, Number(d1.ceiling_value))}
+      <div class="small">${horizon} ${badge(primaryForecast.floor_time_bucket || '-')} / ${badge(primaryForecast.ceiling_time_bucket || '-')}</div>
+      ${rangeSvg(Number(primaryForecast.floor_value), current, Number(primaryForecast.ceiling_value))}
       <div class="small"><strong>3M Downside Window:</strong> floor_m3=${fmt(m3.floor)} · ${m3.labelHuman}</div>
       <div class="small">Rango semana prevista: ${m3.start || '-'} → ${m3.end || '-'} · conf=${fmt(m3.conf)} · ${m3.proximity}</div>
       <div class="small">Δ vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
@@ -94,9 +103,9 @@ async function tickers() {
   const table = document.getElementById('tickersTable');
   table.innerHTML = universe.symbols.map((s) => {
     const rows = grouped[s] || [];
-    const d1 = rows.find((r) => r.horizon === 'd1') || {};
+    const primaryForecast = _selectPrimaryForecast(rows);
     const m3 = _extractM3(rows);
-    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(d1.floor_value)}</td><td>${fmt(d1.ceiling_value)}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td></tr>`;
+    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(primaryForecast.floor_value)}</td><td>${fmt(primaryForecast.ceiling_value)}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td></tr>`;
   }).join('');
 
   if (route.ticker) {
