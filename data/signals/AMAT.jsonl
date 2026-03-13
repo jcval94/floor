@@ -34,3 +34,6 @@
 {"symbol": "AMAT", "as_of": "2026-03-13T09:56:16.014506-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AMAT", "as_of": "2026-03-13T09:56:16.015993-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AMAT", "as_of": "2026-03-13T09:56:16.017516-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMAT", "as_of": "2026-03-13T10:39:45.350697-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMAT", "as_of": "2026-03-13T10:39:45.352184-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMAT", "as_of": "2026-03-13T10:39:45.353697-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

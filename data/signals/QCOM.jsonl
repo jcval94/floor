@@ -34,3 +34,6 @@
 {"symbol": "QCOM", "as_of": "2026-03-13T09:56:16.009904-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "QCOM", "as_of": "2026-03-13T09:56:16.011433-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "QCOM", "as_of": "2026-03-13T09:56:16.012906-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "QCOM", "as_of": "2026-03-13T10:39:45.346138-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "QCOM", "as_of": "2026-03-13T10:39:45.347623-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "QCOM", "as_of": "2026-03-13T10:39:45.349109-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
