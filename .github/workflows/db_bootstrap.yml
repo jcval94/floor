@@ -1,0 +1,73 @@
+name: db_bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: db-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap_db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide if bootstrap should run (one-time only)
+        id: gate
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          marker = Path('data/snapshots/workflow_runs/db_bootstrap.json')
+          should_run = not marker.exists()
+          reason = 'first_run' if should_run else 'already_bootstrapped'
+
+          github_output = Path(os.environ['GITHUB_OUTPUT'])
+          with github_output.open('a', encoding='utf-8') as fh:
+              fh.write(f"run={'true' if should_run else 'false'}\n")
+              fh.write(f"reason={reason}\n")
+          PY
+
+      - name: Initialize sqlite databases
+        if: steps.gate.outputs.run == 'true'
+        run: make init-dbs
+
+      - name: Update bootstrap marker
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p data/snapshots/workflow_runs
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          marker = Path('data/snapshots/workflow_runs/db_bootstrap.json')
+          market_db = Path('data/market/market_data.sqlite')
+          persistence_db = Path('data/persistence/app.sqlite')
+
+          payload = {
+            'ran_at_utc': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+            'market_db_exists': market_db.exists(),
+            'persistence_db_exists': persistence_db.exists(),
+            'market_db_size': market_db.stat().st_size if market_db.exists() else 0,
+            'persistence_db_size': persistence_db.stat().st_size if persistence_db.exists() else 0,
+          }
+          marker.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          PY
+
+      - name: Commit bootstrap artifacts
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/market data/persistence data/snapshots/workflow_runs/db_bootstrap.json
+          git diff --cached --quiet || git commit -m "chore: bootstrap sqlite databases"
+          git push
+
+      - name: Summary
+        run: echo "db_bootstrap run=${{ steps.gate.outputs.run }} reason=${{ steps.gate.outputs.reason }}"

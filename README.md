@@ -82,8 +82,13 @@ PYTHONPATH=src python -m features.run_features --input data/training/yahoo_marke
 Ver blueprint detallado en: `docs/01_bootstrap/BOOTSTRAP_PLAN.md`.
 
 
+## Playbook operativo recomendado
+
+Ver `docs/00_guia/WORKFLOW_BOOTSTRAP.md` para checklist de alistamiento (DB + dataset + modelos) y orden recomendado de ejecución de workflows.
+
 ## Workflows de orquestación
 
+- `db_bootstrap.yml` (manual, ejecución única)
 - `ingest.yml`
 - `intraday_engine.yml`
 - `eod.yml`
