@@ -7,6 +7,14 @@ on:
         description: "Force retrain even if no drift"
         required: false
         default: "false"
+      dataset_path:
+        description: "Path to modelable dataset JSON committed in the repo"
+        required: false
+        default: "data/training/modelable_dataset.json"
+      version:
+        description: "Version tag for metrics artifact (optional)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -20,6 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Decide retrain gate
         id: gate
         run: |
@@ -31,24 +45,26 @@ jobs:
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Execute retrain placeholder (idempotent)
+
+      - name: Run model retraining (replace in-repo model artifacts)
         if: steps.gate.outputs.run == 'true'
+        env:
+          DATASET_PATH: ${{ github.event.inputs.dataset_path }}
+          VERSION_INPUT: ${{ github.event.inputs.version }}
         run: |
-          mkdir -p data/training
-          python - <<'PY'
-from datetime import datetime
-from pathlib import Path
-p = Path('data/training/retrain_runs.jsonl')
-p.parent.mkdir(parents=True, exist_ok=True)
-p.open('a', encoding='utf-8').write('{"ts":"%s","status":"executed"}\n' % datetime.utcnow().isoformat())
-PY
+          VERSION_TAG="$VERSION_INPUT"
+          if [ -z "$VERSION_TAG" ]; then
+            VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
+          fi
+          bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG"
+
       - name: Commit retrain artifacts
         if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/training
-          git diff --cached --quiet || git commit -m "chore: retrain execute artifact"
+          git diff --cached --quiet || git commit -m "chore: retrain and replace in-repo model artifacts"
           git push
 
   retrain_info:

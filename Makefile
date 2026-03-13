@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: test run-cycle review-training build-site lint
+.PHONY: test run-cycle review-training build-site lint retrain-models
 
 test:
 	PYTHONPATH=src $(PYTHON) -m pytest
@@ -16,3 +16,7 @@ build-site:
 
 lint:
 	@echo "ruff no configurado en entorno actual"
+
+
+retrain-models:
+	bash scripts/retrain_models.sh $${DATASET:-data/training/modelable_dataset.json} data/training $${VERSION:-local}
