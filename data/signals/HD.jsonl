@@ -4,3 +4,6 @@
 {"symbol": "HD", "as_of": "2026-03-12T23:42:17.740390-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "HD", "as_of": "2026-03-12T23:42:17.741883-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "HD", "as_of": "2026-03-12T23:42:17.743384-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "HD", "as_of": "2026-03-13T01:10:42.098624-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "HD", "as_of": "2026-03-13T01:10:42.100076-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "HD", "as_of": "2026-03-13T01:10:42.101530-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
