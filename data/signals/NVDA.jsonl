@@ -13,3 +13,6 @@
 {"symbol": "NVDA", "as_of": "2026-03-13T01:10:41.901142-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "NVDA", "as_of": "2026-03-13T01:10:41.903240-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "NVDA", "as_of": "2026-03-13T01:10:41.905336-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "NVDA", "as_of": "2026-03-13T02:08:13.156626-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "NVDA", "as_of": "2026-03-13T02:08:13.158164-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "NVDA", "as_of": "2026-03-13T02:08:13.159673-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
