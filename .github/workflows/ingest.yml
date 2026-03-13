@@ -33,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Refresh in-repo market DB from Yahoo (responsible polling)
+        run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
       - name: Ingest data (idempotent retry)
         run: |
           for i in 1 2 3; do

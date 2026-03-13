@@ -1,3 +1,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+data/market/*.sqlite
+data/market/*.sqlite-wal
+data/market/*.sqlite-shm
+data/persistence/*.sqlite
+data/persistence/*.sqlite-wal
+data/persistence/*.sqlite-shm

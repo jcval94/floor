@@ -51,9 +51,30 @@ floor/
 
 ```bash
 make test
+make init-dbs
+make yahoo-ingest
+make build-training-from-db
 make run-cycle SYMBOLS=AAPL,MSFT EVENT=OPEN
 make review-training
 make build-site
+```
+
+
+## Dataset + BBDD local (Yahoo)
+
+- Base SQLite de mercado (se **genera automáticamente**, no se versiona): `data/market/market_data.sqlite`.
+- Base SQLite de persistencia operativa (se **genera automáticamente**, no se versiona): `data/persistence/app.sqlite`.
+- Ingesta responsable desde Yahoo Finance (con pausas entre requests):
+
+```bash
+PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+```
+
+- Construcción de insumos de entrenamiento desde la BBDD y generación de dataset modelable:
+
+```bash
+PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
+PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output data/training/modelable_dataset.json
 ```
 
 ## Documentación de diseño
