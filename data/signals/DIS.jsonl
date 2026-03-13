@@ -10,3 +10,6 @@
 {"symbol": "DIS", "as_of": "2026-03-13T02:08:13.370075-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "DIS", "as_of": "2026-03-13T02:08:13.371576-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "DIS", "as_of": "2026-03-13T02:08:13.373097-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "DIS", "as_of": "2026-03-13T03:27:31.809562-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "DIS", "as_of": "2026-03-13T03:27:31.811549-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "DIS", "as_of": "2026-03-13T03:27:31.813415-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
