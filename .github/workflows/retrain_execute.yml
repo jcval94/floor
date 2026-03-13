@@ -131,6 +131,49 @@ jobs:
           fi
           bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN"
 
+      - name: Validate champion artifacts and publish summary
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          value_champion="data/training/models/value_champion.json"
+          timing_champion="data/training/models/timing_champion.json"
+
+          missing=0
+          for champion in "$value_champion" "$timing_champion"; do
+            if [ ! -f "$champion" ]; then
+              echo "::error::Missing champion artifact after retraining: $champion"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Champion artifacts were not created. Failing retrain_execute explicitly."
+            exit 1
+          fi
+
+          value_decision=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data/training/models/value_champion.json')
+          payload = json.loads(p.read_text(encoding='utf-8'))
+          print(payload.get('selection', {}).get('decision', 'unknown'))
+          PY
+          )
+          timing_decision=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data/training/models/timing_champion.json')
+          payload = json.loads(p.read_text(encoding='utf-8'))
+          print(payload.get('selection', {}).get('decision', 'unknown'))
+          PY
+          )
+
+          {
+            echo "## retrain_execute champion artifacts"
+            echo ""
+            echo "- \`$value_champion\`: selection.decision=\`$value_decision\`"
+            echo "- \`$timing_champion\`: selection.decision=\`$timing_decision\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Commit retrain artifacts
         if: steps.gate.outputs.run == 'true'
         run: |
