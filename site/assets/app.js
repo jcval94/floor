@@ -94,6 +94,12 @@ async function strategies() {
   const strategy = await loadJSON('data/strategy.json', { status: 'no_strategy_report', equity_curve: [] });
   document.getElementById('strategyStatus').innerHTML = badge(strategy.status || 'UNKNOWN');
   const curve = strategy.equity_curve || [];
+  const hint = document.getElementById('strategyHint');
+  if (hint) {
+    hint.textContent = curve.length
+      ? ''
+      : 'Sin datos: este panel requiere data/reports/strategy.json con una curva de equity (se genera al correr backtest/estrategias y publicar ese reporte).';
+  }
   document.getElementById('equityCurve').innerHTML = lineSvg(curve.map((x) => ({ value: x.equity ?? x.value ?? 0 })));
   document.getElementById('drawdownCurve').innerHTML = lineSvg(curve.map((x) => ({ value: x.drawdown ?? 0 })));
 }
@@ -104,7 +110,15 @@ async function models() {
     loadJSON('data/forecasts.json', { rows: [] }),
   ]);
   document.getElementById('champion').textContent = models.champion;
-  document.getElementById('calibration').innerHTML = `<pre>${JSON.stringify(models.health || {}, null, 2)}</pre>`;
+  const health = models.health || {};
+  document.getElementById('calibration').textContent = JSON.stringify(health, null, 2);
+  const hint = document.getElementById('modelsHint');
+  const hasSeries = Array.isArray(health.series) && health.series.length > 0;
+  if (hint) {
+    hint.textContent = hasSeries
+      ? ''
+      : 'Sin métricas públicas todavía: falta generar data/metrics/public_metrics.json y reconstruir los datos del sitio.';
+  }
   const timeline = (models.timeline || []).map((x) =>
     `<tr><td>${x.as_of || '-'}</td><td>${x.model_name || '-'}</td><td>${x.action || '-'}</td><td>${x.drift_level || '-'}</td></tr>`).join('');
   document.getElementById('timeline').innerHTML = timeline || emptyState('Sin eventos de timeline.', 4);
