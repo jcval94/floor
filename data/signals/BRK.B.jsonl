@@ -13,3 +13,6 @@
 {"symbol": "BRK.B", "as_of": "2026-03-13T03:27:31.709341-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "BRK.B", "as_of": "2026-03-13T03:27:31.711376-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "BRK.B", "as_of": "2026-03-13T03:27:31.712632-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "BRK.B", "as_of": "2026-03-13T04:02:27.651920-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "BRK.B", "as_of": "2026-03-13T04:02:27.654255-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "BRK.B", "as_of": "2026-03-13T04:02:27.655752-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
