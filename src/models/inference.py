@@ -43,3 +43,65 @@ def predict_timing_week_probabilities(row: dict, artifact: dict | None) -> list[
 
 
 def format_champion_version(value_artifact: dict | None, timing_artifact: dict | None) -> str:
+    """Build a stable and storage-safe champion suite version label.
+
+    Preference order for each artifact:
+    1) explicit `version`
+    2) version-like suffix derived from `model_name`
+    3) `unknown`
+
+    The final format is always: `value:<id>|timing:<id>`.
+    """
+
+    def _sanitize_identifier(raw: object) -> str:
+        token = "" if raw is None else str(raw).strip()
+        if not token:
+            return "unknown"
+
+        normalized = []
+        for ch in token:
+            if ch.isalnum() or ch in {"-", "_", "."}:
+                normalized.append(ch)
+            else:
+                normalized.append("-")
+
+        compact = "".join(normalized).strip("-_.")
+        while "--" in compact:
+            compact = compact.replace("--", "-")
+
+        return compact or "unknown"
+
+    def _extract_identifier(artifact: dict | None) -> str:
+        if not isinstance(artifact, dict) or not artifact:
+            return "unknown"
+
+        version = artifact.get("version")
+        if version not in (None, ""):
+            return _sanitize_identifier(version)
+
+        model_name = artifact.get("model_name")
+        if model_name in (None, ""):
+            return "unknown"
+
+        model_name_str = str(model_name).strip()
+
+        for separator in ("@", ":"):
+            if separator in model_name_str:
+                suffix = model_name_str.rsplit(separator, 1)[-1].strip()
+                cleaned = _sanitize_identifier(suffix)
+                if cleaned != "unknown":
+                    return cleaned
+
+        chunks = [chunk for chunk in model_name_str.replace("_", "-").split("-") if chunk]
+        for chunk in reversed(chunks):
+            if chunk.lower().startswith("v") and any(ch.isdigit() for ch in chunk):
+                cleaned = _sanitize_identifier(chunk)
+                if cleaned != "unknown":
+                    return cleaned
+
+        return "unknown"
+
+    value_version = _extract_identifier(value_artifact)
+    timing_version = _extract_identifier(timing_artifact)
+    return f"value:{value_version}|timing:{timing_version}"
+
