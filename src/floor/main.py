@@ -7,6 +7,7 @@ from floor.config import RuntimeConfig
 from floor.pipeline.intraday_cycle import run_intraday_cycle
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.training.review import run_training_review
+from floor.universe import parse_universe_yaml
 
 
 def main() -> None:
@@ -15,7 +16,7 @@ def main() -> None:
 
     run_cycle = sub.add_parser("run-cycle")
     run_cycle.add_argument("--event", default=None)
-    run_cycle.add_argument("--symbols", default="AAPL,MSFT,SPY")
+    run_cycle.add_argument("--symbols", default=None)
 
     sub.add_parser("review-training")
     sub.add_parser("build-site")
@@ -28,7 +29,10 @@ def main() -> None:
         if event is None:
             print("No market session today; skipping run-cycle")
             return
-        symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+        if args.symbols:
+            symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+        else:
+            symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
         run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
     elif args.cmd == "review-training":
         run_training_review(

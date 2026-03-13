@@ -12,6 +12,32 @@ function emptyState(message, colspan = 1) {
   return `<tr><td colspan="${colspan}" class="small">${message}</td></tr>`;
 }
 
+function _selectPrimaryForecast(rows) {
+  const safeRows = rows || [];
+  return safeRows.find((r) => r.horizon === 'd1')
+    || safeRows.find((r) => r.horizon === 'q1')
+    || safeRows[0]
+    || {};
+}
+
+function _extractM3(rows) {
+  const primaryForecast = _selectPrimaryForecast(rows);
+  const week = Number(primaryForecast.floor_week_m3 || 0);
+  const top3 = Array.isArray(primaryForecast.floor_week_m3_top3) ? primaryForecast.floor_week_m3_top3 : [];
+  return {
+    floor: Number(primaryForecast.floor_m3),
+    week,
+    conf: Number(primaryForecast.floor_week_m3_confidence || 0),
+    start: primaryForecast.floor_week_m3_start_date || '',
+    end: primaryForecast.floor_week_m3_end_date || '',
+    labelHuman: primaryForecast.floor_week_m3_label_human || m3WeekHumanLabel(week),
+    top3,
+    delta: Number(primaryForecast.m3_delta_vs_prev || 0),
+    material: String(primaryForecast.m3_material_change || '').toLowerCase() === 'yes',
+    proximity: primaryForecast.m3_week_proximity || m3ProximityLabel(week),
+  };
+}
+
 async function home() {
   const [dashboard, drift, incidents, forecasts] = await Promise.all([
     loadJSON('data/dashboard.json', {}),
@@ -38,11 +64,13 @@ async function forecasts() {
   const grouped = bySymbol(data.rows);
   const root = document.getElementById('forecastCards');
   const cards = Object.entries(grouped).map(([symbol, rows]) => {
-    const d1 = rows.find((r) => r.horizon === 'd1') || rows[0];
-    const current = (Number(d1.floor_value) + Number(d1.ceiling_value)) / 2;
+    const primaryForecast = _selectPrimaryForecast(rows);
+    const m3 = _extractM3(rows);
+    const current = (Number(primaryForecast.floor_value) + Number(primaryForecast.ceiling_value)) / 2;
+    const horizon = String(primaryForecast.horizon || '-').toUpperCase();
     return `<div class="card"><h3>${symbol}</h3>
-      <div class="small">D1 ${badge(d1.floor_time_bucket || '-')} / ${badge(d1.ceiling_time_bucket || '-')}</div>
-      ${rangeSvg(Number(d1.floor_value), current, Number(d1.ceiling_value))}
+      <div class="small">${horizon} ${badge(primaryForecast.floor_time_bucket || '-')} / ${badge(primaryForecast.ceiling_time_bucket || '-')}</div>
+      ${rangeSvg(Number(primaryForecast.floor_value), current, Number(primaryForecast.ceiling_value))}
       <div class="small"><strong>3M Downside Window:</strong> floor_m3=${fmt(m3.floor)} · ${m3.labelHuman}</div>
       <div class="small">Rango semana prevista: ${m3.start || '-'} → ${m3.end || '-'} · conf=${fmt(m3.conf)} · ${m3.proximity}</div>
       <div class="small">Δ vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
@@ -56,6 +84,13 @@ async function forecasts() {
   const opportunities = data.top_opportunities.slice(0, 10).map((x) =>
     `<tr><td>${x.symbol}</td><td>${x.horizon}</td><td>${fmt(x.floor)}</td><td>${fmt(x.ceiling)}</td><td>${fmt(x.spread)}</td></tr>`).join('');
   document.getElementById('opps').innerHTML = opportunities || emptyState('No hay oportunidades para mostrar.', 5);
+
+  const m3Rows = Object.entries(grouped).map(([symbol, rows]) => ({ symbol, m3: _extractM3(rows) }));
+  const m3Table = m3Rows.map(({ symbol, m3 }) =>
+    `<tr><td>${symbol}</td><td>${fmt(m3.floor)}</td><td>${m3.labelHuman}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${m3WeekBarsSvg(m3.top3)}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`
+  ).join('');
+  const m3Root = document.getElementById('m3TopWeeks');
+  if (m3Root) m3Root.innerHTML = m3Table || emptyState('No hay datos m3 para mostrar.', 6);
 }
 
 async function tickers() {
@@ -68,9 +103,9 @@ async function tickers() {
   const table = document.getElementById('tickersTable');
   table.innerHTML = universe.symbols.map((s) => {
     const rows = grouped[s] || [];
-    const d1 = rows.find((r) => r.horizon === 'd1') || {};
+    const primaryForecast = _selectPrimaryForecast(rows);
     const m3 = _extractM3(rows);
-    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(d1.floor_value)}</td><td>${fmt(d1.ceiling_value)}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td></tr>`;
+    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(primaryForecast.floor_value)}</td><td>${fmt(primaryForecast.ceiling_value)}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td></tr>`;
   }).join('');
 
   if (route.ticker) {

@@ -41,7 +41,7 @@ jobs:
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
         run: |
           for i in 1 2 3; do
-            PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" --symbols AAPL,MSFT,NVDA,SPY && break || sleep $((i*30))
+            PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" && break || sleep $((i*30))
           done
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data

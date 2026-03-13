@@ -49,3 +49,32 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert models["champion"] == "champion-v1"
     dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
     assert "api_key" not in json.dumps(dashboard)
+
+
+def test_build_pages_data_parses_nested_universe_yaml(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text(
+        """
+universe:
+  name: us_top50_liquid_v1
+  symbols:
+    - aapl
+    - msft
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    payload = json.loads((site_data / "universe.json").read_text(encoding="utf-8"))
+    assert payload["symbols"] == ["AAPL", "MSFT"]
