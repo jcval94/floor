@@ -78,3 +78,42 @@ universe:
 
     payload = json.loads((site_data / "universe.json").read_text(encoding="utf-8"))
     assert payload["symbols"] == ["AAPL", "MSFT"]
+
+
+def test_build_pages_data_limits_top_opportunities_and_adds_relative_fields(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+
+    latest_predictions = []
+    for i in range(12):
+        latest_predictions.append(
+            {
+                "symbol": f"SYM{i}",
+                "horizon": "d1",
+                "floor_value": 100 + i,
+                "ceiling_value": 110 + (2 * i),
+                "floor_time_probability": 0.6,
+                "ceiling_time_probability": 0.7,
+            }
+        )
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": latest_predictions}),
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("""symbols:
+  - AAPL
+""", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    forecasts = json.loads((site_data / "forecasts.json").read_text(encoding="utf-8"))
+    opps = forecasts["top_opportunities"]
+    assert len(opps) == 10
+    assert "spread_relative" in opps[0]
+    assert "spread_relative_pct" in opps[0]
+    assert "opportunity_score" in opps[0]
+    assert opps[0]["opportunity_score"] >= opps[-1]["opportunity_score"]
