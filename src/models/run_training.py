@@ -41,7 +41,12 @@ def _split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return train, valid
 
 
-def run_training(dataset_path: Path, output_dir: Path, version: str = "v1", tasks: str | list[str] | None = None) -> dict:
+def run_training(
+    dataset_path: Path,
+    output_dir: Path,
+    version: str = "v1",
+    tasks: str | list[str] | tuple[str, ...] | None = None,
+) -> dict:
     try:
         rows = _load_dataset(dataset_path)
         dataset_summary = summarize_modelable_rows(rows)
