@@ -19,3 +19,6 @@
 {"symbol": "IBM", "as_of": "2026-03-13T05:04:45.028322-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "IBM", "as_of": "2026-03-13T05:04:45.029703-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "IBM", "as_of": "2026-03-13T05:04:45.031871-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "IBM", "as_of": "2026-03-13T06:01:56.129663-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "IBM", "as_of": "2026-03-13T06:01:56.131023-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "IBM", "as_of": "2026-03-13T06:01:56.133116-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

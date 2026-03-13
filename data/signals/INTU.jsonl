@@ -19,3 +19,6 @@
 {"symbol": "INTU", "as_of": "2026-03-13T05:04:45.033241-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "INTU", "as_of": "2026-03-13T05:04:45.034502-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "INTU", "as_of": "2026-03-13T05:04:45.035977-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTU", "as_of": "2026-03-13T06:01:56.134466-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTU", "as_of": "2026-03-13T06:01:56.135767-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "INTU", "as_of": "2026-03-13T06:01:56.137093-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

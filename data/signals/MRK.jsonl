@@ -19,3 +19,6 @@
 {"symbol": "MRK", "as_of": "2026-03-13T05:04:45.092052-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "MRK", "as_of": "2026-03-13T05:04:45.093372-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "MRK", "as_of": "2026-03-13T05:04:45.094682-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "MRK", "as_of": "2026-03-13T06:01:56.199330-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "MRK", "as_of": "2026-03-13T06:01:56.200921-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "MRK", "as_of": "2026-03-13T06:01:56.202464-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
