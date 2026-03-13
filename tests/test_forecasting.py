@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
+from forecasting.load_models import ChampionModelSet
 from forecasting.merge_ai_signal import ai_recency_weight, merge_market_with_ai_signal
 from forecasting.run_forecast import run_forecast_pipeline
 
@@ -56,6 +58,15 @@ def _ai_map() -> dict[str, dict]:
     }
 
 
+def _enable_trained_champion(monkeypatch, tmp_path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    (models_dir / "value_champion.json").write_text(json.dumps({"params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
+    (models_dir / "timing_champion.json").write_text(json.dumps({"params": {"calibrator_reliability": {}}}), encoding="utf-8")
+    model = ChampionModelSet(model_registry_dir=models_dir)
+    monkeypatch.setattr("forecasting.generate_forecasts.load_champion_models", lambda: model)
+
+
 def test_ai_recency_weight_decreases_when_stale() -> None:
     assert ai_recency_weight(1) > ai_recency_weight(6)
     assert ai_recency_weight(10) <= 0.35
@@ -72,7 +83,8 @@ def test_merge_ai_signal_builds_effective_score() -> None:
     assert merged["ai_effective_score"] > 0
 
 
-def test_run_forecast_pipeline_outputs_required_shapes_and_m3() -> None:
+def test_run_forecast_pipeline_outputs_required_shapes_and_m3(monkeypatch, tmp_path) -> None:
+    _enable_trained_champion(monkeypatch, tmp_path)
     out = run_forecast_pipeline(
         market_rows=_market_rows(),
         ai_by_symbol=_ai_map(),
@@ -151,7 +163,8 @@ def test_run_forecast_pipeline_outputs_required_shapes_and_m3() -> None:
     assert out["human_friendly_dashboard"]
 
 
-def test_canonical_and_dashboard_include_m3_fields() -> None:
+def test_canonical_and_dashboard_include_m3_fields(monkeypatch, tmp_path) -> None:
+    _enable_trained_champion(monkeypatch, tmp_path)
     out = run_forecast_pipeline(
         market_rows=_market_rows(),
         ai_by_symbol=_ai_map(),
@@ -181,7 +194,8 @@ def test_canonical_and_dashboard_include_m3_fields() -> None:
         assert col in top
 
 
-def test_top_pick_m3_warning_when_m3_is_missing() -> None:
+def test_top_pick_m3_warning_when_m3_is_missing(monkeypatch, tmp_path) -> None:
+    _enable_trained_champion(monkeypatch, tmp_path)
     out = run_forecast_pipeline(
         market_rows=_market_rows(),
         ai_by_symbol=_ai_map(),
@@ -192,3 +206,16 @@ def test_top_pick_m3_warning_when_m3_is_missing() -> None:
     msft_top = next(r for r in out["top_opportunities"] if r["symbol"] == "MSFT")
     assert "m3_missing_for_ticker" in msft_top["m3_warnings"]
     assert "d1/w1/q1" in msft_top["m3_context_note"]
+
+
+def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable() -> None:
+    out = run_forecast_pipeline(
+        market_rows=_market_rows(),
+        ai_by_symbol=_ai_map(),
+        session="OPEN_PLUS_2H",
+        as_of=datetime(2024, 4, 2, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert out["dataset_forecasts"] == []
+    assert len(out["blocked_list"]) == len(_market_rows())
+    assert all("Pronóstico no disponible" in row["reason"] for row in out["blocked_list"])

@@ -39,6 +39,17 @@ def generate_forecasts(market_rows: list[dict], ai_by_symbol: dict[str, dict], s
     forecasts: list[dict] = []
     blocked: list[dict] = []
 
+    if not model.is_available:
+        for raw in market_rows:
+            symbol = str(raw.get("symbol", "")).upper()
+            blocked.append(
+                {
+                    "symbol": symbol,
+                    "reason": "Pronóstico no disponible: faltan artefactos entrenados (value_champion.json y timing_champion.json)",
+                }
+            )
+        return {"forecasts": forecasts, "blocked": blocked}
+
     for raw in market_rows:
         symbol = str(raw.get("symbol", "")).upper()
         reason = _blocked_reason(raw)
