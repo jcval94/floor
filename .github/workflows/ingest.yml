@@ -36,7 +36,7 @@ jobs:
       - name: Ingest data (idempotent retry)
         run: |
           for i in 1 2 3; do
-            PYTHONPATH=src python -m floor.main run-cycle --event OPEN --symbols AAPL,MSFT && break || sleep $((i*20))
+            PYTHONPATH=src python -m floor.main run-cycle --event OPEN && break || sleep $((i*20))
           done
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind ingest --data-dir data
