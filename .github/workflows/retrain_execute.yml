@@ -82,6 +82,30 @@ jobs:
               fh.write(f"dataset_path={dataset_path}\n")
           PY
 
+
+      - name: Initialize DBs
+        run: make init-dbs
+
+      - name: Normalize DB permissions
+        run: |
+          find data/market data/persistence -type d -exec chmod u+rwx {} +
+          find data/market data/persistence -type f -exec chmod u+rw {} +
+
+      - name: Validate SQLite bootstrap
+        run: |
+          sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
+          for table in predictions signals orders training_reviews; do
+            sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
+          done
+
+      - name: Ensure market data is populated before retraining
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          market_rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
+          if [ "${market_rows:-0}" = "0" ]; then
+            echo "::warning::Market DB daily_bars is empty (COUNT(*)=0). Triggering Yahoo ingest preflight."
+            PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+          fi
       - name: Refresh in-repo market DB from Yahoo (responsible polling)
         if: steps.gate.outputs.run == 'true'
         run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
