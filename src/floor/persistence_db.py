@@ -1,0 +1,166 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+
+
+def _connect(db_path: Path) -> sqlite3.Connection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
+
+def init_persistence_db(db_path: Path) -> None:
+    with _connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS predictions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT,
+                as_of TEXT,
+                event_type TEXT,
+                horizon TEXT,
+                floor_value REAL,
+                ceiling_value REAL,
+                model_version TEXT,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT,
+                as_of TEXT,
+                horizon TEXT,
+                action TEXT,
+                confidence REAL,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT,
+                as_of TEXT,
+                action TEXT,
+                qty INTEGER,
+                order_type TEXT,
+                mode TEXT,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS training_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                as_of TEXT,
+                model_name TEXT,
+                action TEXT,
+                reason TEXT,
+                data_drift REAL,
+                concept_drift REAL,
+                calibration_drift REAL,
+                performance_decay REAL,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+
+
+def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
+    init_persistence_db(db_path)
+    raw = json.dumps(payload, ensure_ascii=False)
+
+    with _connect(db_path) as conn:
+        if stream == "predictions":
+            conn.execute(
+                """
+                INSERT INTO predictions(symbol, as_of, event_type, horizon, floor_value, ceiling_value, model_version, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("symbol"),
+                    payload.get("as_of"),
+                    payload.get("event_type"),
+                    payload.get("horizon"),
+                    payload.get("floor_value"),
+                    payload.get("ceiling_value"),
+                    payload.get("model_version"),
+                    raw,
+                ),
+            )
+        elif stream == "signals":
+            conn.execute(
+                """
+                INSERT INTO signals(symbol, as_of, horizon, action, confidence, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("symbol"),
+                    payload.get("as_of"),
+                    payload.get("horizon"),
+                    payload.get("action"),
+                    payload.get("confidence"),
+                    raw,
+                ),
+            )
+        elif stream == "orders":
+            conn.execute(
+                """
+                INSERT INTO orders(symbol, as_of, action, qty, order_type, mode, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("symbol"),
+                    payload.get("as_of"),
+                    payload.get("action"),
+                    payload.get("qty"),
+                    payload.get("order_type"),
+                    payload.get("mode"),
+                    raw,
+                ),
+            )
+        elif stream == "training" and str(payload.get("model_name", "")):
+            conn.execute(
+                """
+                INSERT INTO training_reviews(as_of, model_name, action, reason, data_drift, concept_drift, calibration_drift, performance_decay, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("as_of"),
+                    payload.get("model_name"),
+                    payload.get("action"),
+                    payload.get("reason"),
+                    payload.get("data_drift"),
+                    payload.get("concept_drift"),
+                    payload.get("calibration_drift"),
+                    payload.get("performance_decay"),
+                    raw,
+                ),
+            )
+
+
+def latest_predictions(db_path: Path) -> list[dict]:
+    if not db_path.exists():
+        return []
+    query = """
+      SELECT p.payload_json
+      FROM predictions p
+      JOIN (
+        SELECT symbol, horizon, MAX(id) AS max_id
+        FROM predictions
+        GROUP BY symbol, horizon
+      ) x ON p.id = x.max_id
+      ORDER BY p.symbol, p.horizon
+    """
+    with _connect(db_path) as conn:
+        rows = conn.execute(query).fetchall()
+    return [json.loads(r[0]) for r in rows]
