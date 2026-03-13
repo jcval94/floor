@@ -1,0 +1,3 @@
+{"symbol": "RTX", "as_of": "2026-03-12T21:23:21.735788-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "RTX", "as_of": "2026-03-12T21:23:21.736010-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "RTX", "as_of": "2026-03-12T21:23:21.736192-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
