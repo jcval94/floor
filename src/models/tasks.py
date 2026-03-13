@@ -27,3 +27,4 @@ def normalize_model_tasks(tasks: str | list[str] | tuple[str, ...] | None) -> li
     if invalid:
         raise ValueError(f"Unsupported model tasks: {', '.join(invalid)}")
 
+    return normalized
