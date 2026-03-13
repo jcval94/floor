@@ -17,15 +17,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Build current modelable dataset from in-repo DB
+        run: |
+          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output data/training/modelable_dataset.json
       - name: Run retrain assessment
         run: PYTHONPATH=src python -m floor.main review-training
       - name: Commit assessment history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/training data/persistence
+          git add data/training data/persistence data/market
           git diff --cached --quiet || git commit -m "chore: retrain assessment"
           git push
+      - name: Upload assessment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-assessment-artifacts
+          path: |
+            data/training/reviews.jsonl
+            data/training/review_summary_latest.json
+            data/training/modelable_dataset.json
+            data/market/market_data.sqlite
+            data/persistence/app.sqlite
+          if-no-files-found: ignore
 
   assess_info:
     needs: assess_critical
@@ -37,5 +52,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: retrain-assessment-meta
-          path: data/training/reviews.jsonl
+          path: |
+            data/training/reviews.jsonl
+            data/training/review_summary_latest.json
           if-no-files-found: ignore

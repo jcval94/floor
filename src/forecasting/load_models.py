@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
+
 
 @dataclass(frozen=True)
 class HorizonForecast:
@@ -29,12 +31,11 @@ class M3Forecast:
 class ChampionModelSet:
     """Champion forecaster with d1/w1/q1 compatibility and m3 extension."""
 
-    version = "champion-suite-v2-m3"
-
     def __init__(self, model_registry_dir: Path | None = None) -> None:
         self._registry = model_registry_dir or Path("data/training/models")
         self._value_champion = self._load_json(self._registry / "value_champion.json")
         self._timing_champion = self._load_json(self._registry / "timing_champion.json")
+        self.version = format_champion_version(self._value_champion, self._timing_champion)
 
     @property
     def is_available(self) -> bool:
@@ -102,7 +103,7 @@ class ChampionModelSet:
 
     def predict_m3(self, row: dict) -> M3Forecast | None:
         required = ["close", "atr_14", "trend_context_m3", "drawdown_13w", "ai_horizon_alignment"]
-        if any(row.get(k) in (None, "") for k in required):
+        if any(row.get(key) in (None, "") for key in required):
             return None
 
         close = float(row["close"])
@@ -111,35 +112,12 @@ class ChampionModelSet:
         dd = float(row.get("drawdown_13w") or 0.0)
         align = float(row.get("ai_horizon_alignment") or 0.0)
 
-        if self._value_champion:
-            params = self._value_champion.get("params", {})
-            w = params.get("weights", {})
-            bias = float(params.get("bias", close * 0.95))
-            floor_raw = bias + sum(float(row.get(k, 0.0) or 0.0) * float(v) for k, v in w.items())
-            floor = float(params.get("calibration_scale", 1.0)) * floor_raw
-        else:
-            floor = close - atr * (8.0 + 2.5 * max(0.0, 1 - trend))
+        floor = predict_value_floor_m3(row, self._value_champion)
+        probs = predict_timing_week_probabilities(row, self._timing_champion)
 
-        center = 7 - int(max(-3, min(3, dd * 10)))
-        center = max(1, min(13, center))
-        scores = [1.8 - 0.25 * abs(w - center) + 0.35 * align + 0.15 * trend for w in range(1, 14)]
-        exps = [pow(2.718281828, s) for s in scores]
-        denom = sum(exps) or 1.0
-        probs = [x / denom for x in exps]
-
-        if self._timing_champion:
-            reliability = self._timing_champion.get("params", {}).get("calibrator_reliability", {})
-            if reliability:
-                calibrated = []
-                for p in probs:
-                    idx = min(9, int(max(0.0, min(1.0, p)) * 10))
-                    calibrated.append(float(reliability.get(str(idx), reliability.get(idx, p))))
-                s = sum(calibrated)
-                probs = [p / s for p in calibrated] if s > 0 else probs
-
-        best_idx = max(range(13), key=lambda i: probs[i])
-        top3_idx = sorted(range(13), key=lambda i: probs[i], reverse=True)[:3]
-        top3 = [{"week": i + 1, "probability": round(probs[i], 6)} for i in top3_idx]
+        best_idx = max(range(13), key=lambda idx: probs[idx])
+        top3_idx = sorted(range(13), key=lambda idx: probs[idx], reverse=True)[:3]
+        top3 = [{"week": idx + 1, "probability": round(probs[idx], 6)} for idx in top3_idx]
 
         expected_return = round(0.5 * trend + 0.2 * align - 0.15 * abs(dd), 6)
         expected_range = round(max(0.01, atr * (10 + 2 * (1 + abs(dd)))), 4)

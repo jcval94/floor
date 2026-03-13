@@ -4,6 +4,7 @@ set -euo pipefail
 DATASET_PATH="${1:-data/training/modelable_dataset.json}"
 OUTPUT_DIR="${2:-data/training}"
 VERSION_TAG="${3:-$(date -u +%Y%m%dT%H%M%SZ)}"
+TASKS_ARG="${4:-${TASKS:-value,timing}}"
 
 if [[ ! -f "$DATASET_PATH" ]]; then
   echo "Dataset not found: $DATASET_PATH" >&2
@@ -14,11 +15,10 @@ fi
 MODELS_DIR="$OUTPUT_DIR/models"
 METRICS_DIR="$OUTPUT_DIR/metrics"
 
-# Replace model artifacts in-place on each retrain run.
-rm -rf "$MODELS_DIR"
 mkdir -p "$MODELS_DIR" "$METRICS_DIR"
 
 PYTHONPATH=src python -m models.run_training \
   --dataset "$DATASET_PATH" \
   --output-dir "$OUTPUT_DIR" \
-  --version "$VERSION_TAG"
+  --version "$VERSION_TAG" \
+  --tasks "$TASKS_ARG"
