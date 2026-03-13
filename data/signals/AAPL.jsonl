@@ -67,3 +67,6 @@
 {"symbol": "AAPL", "as_of": "2026-03-13T08:41:29.730563-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AAPL", "as_of": "2026-03-13T08:41:29.731988-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AAPL", "as_of": "2026-03-13T08:41:29.733290-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AAPL", "as_of": "2026-03-13T09:56:15.939246-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AAPL", "as_of": "2026-03-13T09:56:15.940950-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AAPL", "as_of": "2026-03-13T09:56:15.942660-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
