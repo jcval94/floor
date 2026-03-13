@@ -43,3 +43,14 @@ def summarize_modelable_rows(rows: list[dict]) -> dict:
             if raw in (None, ""):
                 continue
             key = str(raw)
+            counts[key] = counts.get(key, 0) + 1
+        if counts:
+            categorical_counts[column] = counts
+
+    return {
+        "rows": len(rows),
+        "columns": columns,
+        "coverage_by_column": coverage_by_column,
+        "numeric_stats": numeric_stats,
+        "categorical_counts": categorical_counts,
+    }
