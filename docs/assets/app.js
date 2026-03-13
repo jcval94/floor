@@ -20,6 +20,19 @@ function _selectPrimaryForecast(rows) {
     || {};
 }
 
+function _opportunityMetrics(primaryForecast) {
+  const floor = Number(primaryForecast.floor_value);
+  const ceiling = Number(primaryForecast.ceiling_value);
+  const spreadAbs = Math.max(ceiling - floor, 0);
+  const midpoint = (ceiling + floor) / 2;
+  const spreadRel = spreadAbs / Math.max(Math.abs(midpoint), 1e-6);
+  const floorProb = Number(primaryForecast.floor_time_probability || 0.5);
+  const ceilingProb = Number(primaryForecast.ceiling_time_probability || 0.5);
+  const confidence = Math.max(0, Math.min(1, (floorProb + ceilingProb) / 2));
+  const score = spreadAbs * spreadRel * confidence;
+  return { spreadAbs, spreadRel, confidence, score };
+}
+
 function _extractM3(rows) {
   const primaryForecast = _selectPrimaryForecast(rows);
   const week = Number(primaryForecast.floor_week_m3 || 0);
@@ -63,27 +76,37 @@ async function forecasts() {
   const data = await loadJSON('data/forecasts.json', { rows: [], top_opportunities: [] });
   const grouped = bySymbol(data.rows);
   const root = document.getElementById('forecastCards');
-  const cards = Object.entries(grouped).map(([symbol, rows]) => {
-    const primaryForecast = _selectPrimaryForecast(rows);
-    const m3 = _extractM3(rows);
-    const current = (Number(primaryForecast.floor_value) + Number(primaryForecast.ceiling_value)) / 2;
-    const horizon = String(primaryForecast.horizon || '-').toUpperCase();
-    return `<div class="card"><h3>${symbol}</h3>
-      <div class="small">${horizon} ${badge(primaryForecast.floor_time_bucket || '-')} / ${badge(primaryForecast.ceiling_time_bucket || '-')}</div>
+  const cards = Object.entries(grouped)
+    .map(([symbol, rows]) => {
+      const primaryForecast = _selectPrimaryForecast(rows);
+      const m3 = _extractM3(rows);
+      const metrics = _opportunityMetrics(primaryForecast);
+      const current = (Number(primaryForecast.floor_value) + Number(primaryForecast.ceiling_value)) / 2;
+      const horizon = String(primaryForecast.horizon || '-').toUpperCase();
+      return {
+        score: metrics.score,
+        html: `<div class=\"card\"><h3>${symbol}</h3>
+      <div class=\"small\">${horizon} ${badge(primaryForecast.floor_time_bucket || '-')} / ${badge(primaryForecast.ceiling_time_bucket || '-')}</div>
       ${rangeSvg(Number(primaryForecast.floor_value), current, Number(primaryForecast.ceiling_value))}
-      <div class="small"><strong>3M Downside Window:</strong> floor_m3=${fmt(m3.floor)} · ${m3.labelHuman}</div>
-      <div class="small">Rango semana prevista: ${m3.start || '-'} → ${m3.end || '-'} · conf=${fmt(m3.conf)} · ${m3.proximity}</div>
-      <div class="small">Δ vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
+      <div class=\"small\"><strong>Oportunidad:</strong> abs=${fmt(metrics.spreadAbs)} · rel=${fmt(metrics.spreadRel * 100)}%</div>
+      <div class=\"small\">Score objetivo=${fmt(metrics.score)} · confianza temporal=${fmt(metrics.confidence)}</div>
+      <div class=\"small\"><strong>3M Downside Window:</strong> floor_m3=${fmt(m3.floor)} · ${m3.labelHuman}</div>
+      <div class=\"small\">Rango semana prevista: ${m3.start || '-'} → ${m3.end || '-'} · conf=${fmt(m3.conf)} · ${m3.proximity}</div>
+      <div class=\"small\">Δ vs snapshot previo: ${fmt(m3.delta)} ${m3.material ? '(material)' : ''}</div>
       ${m3WeekBarsSvg(m3.top3)}
-      <a href="tickers.html?ticker=${symbol}">Detalle ticker</a></div>`;
-  });
+      <a href=\"tickers.html?ticker=${symbol}\">Detalle ticker</a></div>`,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((x) => x.html);
   root.innerHTML = cards.length
     ? cards.join('')
     : '<div class="card"><h3>Sin pronósticos</h3><div class="small">No se encontraron filas en data/forecasts.json.</div></div>';
 
   const opportunities = data.top_opportunities.slice(0, 10).map((x) =>
-    `<tr><td>${x.symbol}</td><td>${x.horizon}</td><td>${fmt(x.floor)}</td><td>${fmt(x.ceiling)}</td><td>${fmt(x.spread)}</td></tr>`).join('');
-  document.getElementById('opps').innerHTML = opportunities || emptyState('No hay oportunidades para mostrar.', 5);
+    `<tr><td>${x.symbol}</td><td>${x.horizon}</td><td>${fmt(x.floor)}</td><td>${fmt(x.ceiling)}</td><td>${fmt(x.spread)}</td><td>${fmt((x.spread_relative_pct ?? 0))}%</td><td>${fmt(x.opportunity_score)}</td></tr>`).join('');
+  document.getElementById('opps').innerHTML = opportunities || emptyState('No hay oportunidades para mostrar.', 7);
 
   const m3Rows = Object.entries(grouped).map(([symbol, rows]) => ({ symbol, m3: _extractM3(rows) }));
   const m3Table = m3Rows.map(({ symbol, m3 }) =>
