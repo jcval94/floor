@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Literal, cast
 from zoneinfo import ZoneInfo
@@ -10,6 +11,7 @@ from floor.modeling.contracts import ChampionModel
 from floor.schemas import OrderRecord, PredictionRecord, SignalRecord
 from floor.storage import append_jsonl
 
+logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 
@@ -50,34 +52,59 @@ def run_intraday_cycle(
     symbols: list[str],
     cfg: RuntimeConfig,
 ) -> None:
+    logger.info("[predictions] start intraday cycle event=%s symbols=%s", event_type, len(symbols))
     model = ChampionModel()
-    external = {r.symbol: r for r in fetch_recommendations(cfg.recommendations_csv_url)}
+    try:
+        external = {r.symbol: r for r in fetch_recommendations(cfg.recommendations_csv_url)}
+        logger.info("[predictions] loaded external recommendations count=%s", len(external))
+    except Exception as exc:
+        logger.exception("[predictions] failed to fetch external recommendations: %s", exc)
+        external = {}
 
     for symbol in symbols:
+        logger.info("[predictions] processing symbol=%s", symbol)
         for horizon in ["d1", "w1", "q1"]:
             horizon_literal = cast(Literal["d1", "w1", "q1"], horizon)
-            pred = model.predict(symbol=symbol, horizon=horizon_literal, event_type=event_type)
-            prediction = PredictionRecord(
-                symbol=symbol,
-                as_of=datetime.now(tz=ET),
-                event_type=event_type,
-                horizon=horizon_literal,
-                floor_value=pred.floor_value,
-                ceiling_value=pred.ceiling_value,
-                floor_time_bucket=pred.floor_bucket,
-                ceiling_time_bucket=pred.ceiling_bucket,
-                floor_time_probability=pred.floor_bucket_prob,
-                ceiling_time_probability=pred.ceiling_bucket_prob,
-                model_version=model.version,
-            )
-            append_jsonl(cfg.data_dir / "predictions" / f"{symbol}.jsonl", prediction)
+            try:
+                pred = model.predict(symbol=symbol, horizon=horizon_literal, event_type=event_type)
+                prediction = PredictionRecord(
+                    symbol=symbol,
+                    as_of=datetime.now(tz=ET),
+                    event_type=event_type,
+                    horizon=horizon_literal,
+                    floor_value=pred.floor_value,
+                    ceiling_value=pred.ceiling_value,
+                    floor_time_bucket=pred.floor_bucket,
+                    ceiling_time_bucket=pred.ceiling_bucket,
+                    floor_time_probability=pred.floor_bucket_prob,
+                    ceiling_time_probability=pred.ceiling_bucket_prob,
+                    model_version=model.version,
+                )
+                append_jsonl(cfg.data_dir / "predictions" / f"{symbol}.jsonl", prediction)
+                logger.info("[predictions] wrote prediction symbol=%s horizon=%s", symbol, horizon_literal)
+                logger.info("[predictions] prediction sample=%s", prediction)
+            except Exception as exc:
+                logger.exception(
+                    "[predictions] failed prediction symbol=%s horizon=%s error=%s", symbol, horizon_literal, exc
+                )
+                continue
 
-            signal = _signal_from_prediction(symbol, horizon_literal, pred.floor_value, pred.ceiling_value)
-            if symbol in external and external[symbol].action in {"BUY", "SELL", "HOLD"}:
-                signal.action = cast(Literal["BUY", "SELL", "HOLD"], external[symbol].action)
-                signal.rationale += f" | external={external[symbol].note}"
-            append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
+            try:
+                signal = _signal_from_prediction(symbol, horizon_literal, pred.floor_value, pred.ceiling_value)
+                if symbol in external and external[symbol].action in {"BUY", "SELL", "HOLD"}:
+                    signal.action = cast(Literal["BUY", "SELL", "HOLD"], external[symbol].action)
+                    signal.rationale += f" | external={external[symbol].note}"
+                append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
+                logger.info("[predictions] wrote signal symbol=%s horizon=%s action=%s", symbol, horizon_literal, signal.action)
+            except Exception as exc:
+                logger.exception("[predictions] failed signal symbol=%s horizon=%s error=%s", symbol, horizon_literal, exc)
+                continue
 
-            order = maybe_build_order(signal, cfg)
-            if order:
-                append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
+            try:
+                order = maybe_build_order(signal, cfg)
+                if order:
+                    append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
+                    logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon_literal)
+            except Exception as exc:
+                logger.exception("[predictions] failed order symbol=%s horizon=%s error=%s", symbol, horizon_literal, exc)
+    logger.info("[predictions] finished intraday cycle event=%s", event_type)

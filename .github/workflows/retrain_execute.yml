@@ -46,6 +46,18 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Refresh in-repo market DB from Yahoo (responsible polling)
+        if: steps.gate.outputs.run == 'true'
+        run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+
+      - name: Build modelable dataset from in-repo DB
+        if: steps.gate.outputs.run == 'true'
+        env:
+          DATASET_PATH: ${{ github.event.inputs.dataset_path }}
+        run: |
+          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output "$DATASET_PATH"
+
       - name: Run model retraining (replace in-repo model artifacts)
         if: steps.gate.outputs.run == 'true'
         env:
@@ -63,7 +75,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/training
+          git add data/training data/market data/persistence
           git diff --cached --quiet || git commit -m "chore: retrain and replace in-repo model artifacts"
           git push
 
