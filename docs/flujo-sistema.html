@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>floor - Flujo del sistema</title>
+  <style>
+    :root {
+      --bg: #f4efe8;
+      --panel: #fffaf4;
+      --panel-strong: #f0e4d5;
+      --ink: #1f2b2d;
+      --muted: #5d6868;
+      --line: #cbbda9;
+      --teal: #1f5c57;
+      --teal-soft: #d8ece9;
+      --amber: #b7751f;
+      --amber-soft: #f6e3bf;
+      --red: #9b3d2f;
+      --red-soft: #f5d8d1;
+      --slate: #2f3d45;
+      --slate-soft: #dfe8ec;
+      --shadow: 0 18px 45px rgba(31, 43, 45, 0.10);
+      --mono: "Cascadia Code", "Consolas", monospace;
+      --sans: "Segoe UI Variable Display", "Aptos", "Trebuchet MS", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(31, 92, 87, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(183, 117, 31, 0.14), transparent 30%),
+        linear-gradient(180deg, #f8f4ee 0%, var(--bg) 100%);
+      line-height: 1.55;
+    }
+    a { color: var(--teal); text-decoration: none; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.93em;
+      background: #f2ebe1;
+      padding: 0.15rem 0.35rem;
+      border-radius: 8px;
+    }
+    .wrap {
+      width: min(1400px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 60px;
+    }
+    .hero {
+      background: linear-gradient(145deg, rgba(31, 92, 87, 0.95), rgba(31, 43, 45, 0.96));
+      color: #f8fbfb;
+      border-radius: 28px;
+      padding: 34px 34px 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -80px auto;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(255, 211, 141, 0.30), transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 0.78rem;
+      opacity: 0.85;
+      margin-bottom: 12px;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      line-height: 1.15;
+    }
+    h1 { font-size: clamp(2rem, 4vw, 3.2rem); max-width: 900px; }
+    h2 { font-size: clamp(1.5rem, 2.3vw, 2rem); }
+    h3 { font-size: 1.08rem; }
+    p { margin: 0 0 10px; }
+    .lede {
+      max-width: 920px;
+      font-size: 1.02rem;
+      color: rgba(248, 251, 251, 0.90);
+    }
+    .hero-grid, .stat-grid, .stage-grid, .side-grid, .lookup-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .hero-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 22px;
+    }
+    .hero-card, .card, .stage, .lookup, .side {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 16px 18px;
+      backdrop-filter: blur(6px);
+    }
+    .hero-card strong {
+      display: block;
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+    .section {
+      margin-top: 26px;
+      background: rgba(255, 255, 255, 0.42);
+      border: 1px solid rgba(203, 189, 169, 0.55);
+      border-radius: 26px;
+      padding: 26px;
+      box-shadow: var(--shadow);
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .subtle { color: var(--muted); }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .pill {
+      border-radius: 999px;
+      padding: 0.42rem 0.78rem;
+      font-size: 0.83rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid transparent;
+    }
+    .ok { background: var(--teal-soft); color: var(--teal); border-color: rgba(31, 92, 87, 0.2); }
+    .partial { background: var(--amber-soft); color: #8f5d16; border-color: rgba(183, 117, 31, 0.22); }
+    .broken { background: var(--red-soft); color: var(--red); border-color: rgba(155, 61, 47, 0.22); }
+    .stale { background: var(--slate-soft); color: var(--slate); border-color: rgba(47, 61, 69, 0.20); }
+    .stat-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 10px;
+    }
+    .card, .side, .lookup {
+      background: var(--panel);
+      border: 1px solid rgba(203, 189, 169, 0.7);
+    }
+    .card .value {
+      font-size: 1.9rem;
+      font-weight: 800;
+      margin: 8px 0 6px;
+      color: var(--teal);
+    }
+    .shell {
+      font-family: var(--mono);
+      background: #1f2b2d;
+      color: #eef4f3;
+      padding: 1rem 1.2rem;
+      border-radius: 16px;
+      overflow-x: auto;
+      font-size: 0.92rem;
+      white-space: pre-wrap;
+    }
+    .flow-box {
+      background: linear-gradient(180deg, var(--panel) 0%, #f9f1e7 100%);
+      border: 1px solid rgba(203, 189, 169, 0.7);
+      border-radius: 22px;
+      padding: 18px;
+      overflow-x: auto;
+    }
+    svg text { font-family: var(--sans); fill: var(--ink); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(203, 189, 169, 0.7);
+      vertical-align: top;
+    }
+    th {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .stage-grid, .side-grid, .lookup-grid {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .stage {
+      background: linear-gradient(180deg, var(--panel) 0%, #fff7ee 100%);
+      border: 1px solid rgba(203, 189, 169, 0.7);
+      position: relative;
+      overflow: hidden;
+    }
+    .stage::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--teal), #7ea08e, #d8a354);
+      opacity: 0.85;
+    }
+    .stage-number {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-top: 12px;
+    }
+    .stage-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .detail {
+      margin: 10px 0 0;
+      padding: 12px 14px;
+      background: rgba(240, 228, 213, 0.42);
+      border: 1px solid rgba(203, 189, 169, 0.52);
+      border-radius: 14px;
+    }
+    .detail strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--slate);
+    }
+    ul { padding-left: 18px; margin: 10px 0 0; }
+    li { margin-bottom: 8px; }
+    .footer-note {
+      margin-top: 22px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+    @media (max-width: 860px) {
+      .wrap {
+        width: min(100vw - 18px, 1400px);
+        padding-top: 12px;
+      }
+      .hero, .section {
+        border-radius: 22px;
+        padding: 20px;
+      }
+      th, td { padding: 10px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">floor / flujo de punta a punta</div>
+      <h1>Como viaja la informacion desde Yahoo Finance hasta el dashboard estatico</h1>
+      <p class="lede">
+        Este documento resume solo lo que existe hoy en el repositorio. El sistema tiene una columna vertebral clara:
+        Yahoo -> SQLite -> features -> forecasting -> JSONL/SQLite -> snapshot -> <code>site/data</code> -> UI.
+        Tambien tiene varios cortes reales en estado actual: champions ausentes, forecasting roto por un archivo truncado,
+        dashboard stale y ramas auxiliares no conectadas a la publicacion final.
+      </p>
+      <div class="pill-row">
+        <span class="pill partial">inspeccionado el 2026-03-13</span>
+        <span class="pill broken">forecasting roto hoy</span>
+        <span class="pill stale">dashboard versionado stale</span>
+        <span class="pill partial">site funcional con fallbacks</span>
+      </div>
+      <div class="hero-grid">
+        <div class="hero-card">
+          <strong>Camino principal</strong>
+          <div>Workflows -> Yahoo ingest -> DB -> features -> run-cycle -> snapshot -> <code>site/</code>.</div>
+        </div>
+        <div class="hero-card">
+          <strong>Visualizacion final</strong>
+          <div>Sin backend server-side. La UI en <code>site/*.html</code> solo consume <code>site/data/*.json</code>.</div>
+        </div>
+        <div class="hero-card">
+          <strong>Ramas paralelas</strong>
+          <div><code>strategies/</code>, <code>execution/</code>, <code>reporting/</code> y <code>notifications/</code> existen, pero no cierran el loop al dashboard principal.</div>
+        </div>
+        <div class="hero-card">
+          <strong>Foco de debugging</strong>
+          <div><code>src/models/inference.py</code>, <code>src/models/tasks.py</code>, <code>src/utils/pages_build.py</code> y el contrato m3 entre forecasting y UI.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Mapa corto del flujo</h2>
+          <p class="subtle">Resumen ejecutivo para ubicarse antes de entrar al detalle de cada etapa.</p>
+        </div>
+      </div>
+      <div class="shell">config/universe.yaml
+  -> src/storage/yahoo_ingest.py::ingest_yahoo_to_db
+  -> src/storage/market_db.py::daily_bars
+  -> src/features/build_training_from_db.py::build_rows_from_db
+  -> src/features/feature_builder.py::build_features
+  -> src/features/labels.py::build_labels
+  -> data/training/modelable_dataset.json
+  -> src/models/run_training.py (branch training)
+  -> src/floor/pipeline/intraday_cycle.py::_latest_feature_rows (branch online)
+  -> src/forecasting/run_forecast.py::run_forecast_pipeline
+  -> src/floor/storage.py::append_jsonl
+  -> data/predictions + data/signals + data/orders + data/persistence/app.sqlite
+  -> src/floor/reporting/generate_site_data.py::build_dashboard_snapshot
+  -> data/reports/dashboard.json
+  -> src/utils/pages_build.py::build_pages_data
+  -> site/data/*.json
+  -> site/assets/app.js + site/*.html</div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Snapshot actual del repo</h2>
+          <p class="subtle">Estado observado al inspeccionar artefactos versionados y al ejecutar validaciones locales.</p>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="card"><div class="subtle">prediction files</div><div class="value">51</div><div>Hay 51 <code>JSONL</code> en <code>data/predictions/</code>.</div></div>
+        <div class="card"><div class="subtle">signal files</div><div class="value">51</div><div>Hay 51 <code>JSONL</code> en <code>data/signals/</code>.</div></div>
+        <div class="card"><div class="subtle">signals HOLD</div><div class="value">2334</div><div>Todo el historico versionado de senales quedo en <code>HOLD</code>.</div></div>
+        <div class="card"><div class="subtle">orders files</div><div class="value">0</div><div><code>data/orders/</code> solo tiene <code>.gitkeep</code>.</div></div>
+        <div class="card"><div class="subtle">dashboard versionado</div><div class="value">2</div><div><code>data/reports/dashboard.json</code> solo refleja 2 predicciones recientes.</div></div>
+        <div class="card"><div class="subtle">dashboard recalculado</div><div class="value">51</div><div>Una regeneracion aislada de <code>build_dashboard_snapshot</code> detecto 51 predicciones recientes.</div></div>
+        <div class="card"><div class="subtle">metrics site status</div><div class="value">fallback</div><div><code>site/data/metrics.json</code> hoy dice <code>no_public_metrics</code>.</div></div>
+        <div class="card"><div class="subtle">strategy site status</div><div class="value">fallback</div><div><code>site/data/strategy.json</code> hoy dice <code>no_strategy_report</code>.</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Diagrama visual del flujo</h2>
+          <p class="subtle">Camino principal y puntos donde hoy se pierde informacion o aparece stale data.</p>
+        </div>
+      </div>
+      <div class="flow-box">
+        <svg viewBox="0 0 1320 680" width="100%" height="auto" aria-label="Diagrama del flujo del sistema">
+          <defs>
+            <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1f5c57"></path></marker>
+            <marker id="arrowWarn" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b7751f"></path></marker>
+            <marker id="arrowBad" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9b3d2f"></path></marker>
+          </defs>
+
+          <rect x="24" y="34" width="220" height="96" rx="18" fill="#d8ece9" stroke="#1f5c57"></rect>
+          <text x="42" y="64" font-size="20" font-weight="700">Yahoo Finance</text>
+          <text x="42" y="92" font-size="14">src/storage/yahoo_ingest.py</text>
+          <text x="42" y="112" font-size="14">fetch_yahoo_chart / parse_daily_bars</text>
+
+          <rect x="304" y="34" width="230" height="96" rx="18" fill="#d8ece9" stroke="#1f5c57"></rect>
+          <text x="322" y="64" font-size="20" font-weight="700">Market DB</text>
+          <text x="322" y="92" font-size="14">src/storage/market_db.py</text>
+          <text x="322" y="112" font-size="14">table daily_bars (SQLite)</text>
+
+          <rect x="594" y="34" width="250" height="96" rx="18" fill="#d8ece9" stroke="#1f5c57"></rect>
+          <text x="612" y="64" font-size="20" font-weight="700">Training rows + features</text>
+          <text x="612" y="92" font-size="14">build_rows_from_db / build_features / build_labels</text>
+          <text x="612" y="112" font-size="14">data/training/modelable_dataset.json</text>
+
+          <rect x="904" y="34" width="260" height="96" rx="18" fill="#f5d8d1" stroke="#9b3d2f"></rect>
+          <text x="922" y="64" font-size="20" font-weight="700">Training / champions</text>
+          <text x="922" y="92" font-size="14">src/models/run_training.py</text>
+          <text x="922" y="112" font-size="14">CLI roto por src/models/tasks.py</text>
+
+          <line x1="244" y1="82" x2="304" y2="82" stroke="#1f5c57" stroke-width="3" marker-end="url(#arrow)"></line>
+          <line x1="534" y1="82" x2="594" y2="82" stroke="#1f5c57" stroke-width="3" marker-end="url(#arrow)"></line>
+          <line x1="844" y1="82" x2="904" y2="82" stroke="#9b3d2f" stroke-width="3" marker-end="url(#arrowBad)"></line>
+
+          <rect x="594" y="196" width="250" height="104" rx="18" fill="#f2ebe1" stroke="#92785b"></rect>
+          <text x="612" y="226" font-size="20" font-weight="700">Latest feature rows</text>
+          <text x="612" y="252" font-size="14">src/floor/pipeline/intraday_cycle.py</text>
+          <text x="612" y="272" font-size="14">_latest_feature_rows</text>
+
+          <rect x="904" y="196" width="260" height="104" rx="18" fill="#f2ebe1" stroke="#92785b"></rect>
+          <text x="922" y="226" font-size="20" font-weight="700">External AI sheet</text>
+          <text x="922" y="252" font-size="14">src/floor/external/google_sheets.py</text>
+          <text x="922" y="272" font-size="14">optional merge by symbol</text>
+
+          <line x1="719" y1="130" x2="719" y2="196" stroke="#1f5c57" stroke-width="3" marker-end="url(#arrow)"></line>
+          <line x1="844" y1="248" x2="904" y2="248" stroke="#1f5c57" stroke-width="3" marker-end="url(#arrow)"></line>
+
+          <rect x="594" y="366" width="250" height="112" rx="18" fill="#f5d8d1" stroke="#9b3d2f"></rect>
+          <text x="612" y="396" font-size="20" font-weight="700">Forecasting</text>
+          <text x="612" y="422" font-size="14">run_forecast_pipeline / generate_forecasts</text>
+          <text x="612" y="442" font-size="14">bloqueado por src/models/inference.py</text>
+          <text x="612" y="462" font-size="14">m3 se calcula aqui pero no viaja completo</text>
+
+          <line x1="719" y1="300" x2="719" y2="366" stroke="#9b3d2f" stroke-width="3" marker-end="url(#arrowBad)"></line>
+
+          <rect x="304" y="366" width="230" height="112" rx="18" fill="#fff4e0" stroke="#b7751f"></rect>
+          <text x="322" y="396" font-size="20" font-weight="700">Predictions / signals</text>
+          <text x="322" y="422" font-size="14">append_jsonl</text>
+          <text x="322" y="442" font-size="14">data/predictions + data/signals + data/orders</text>
+          <text x="322" y="462" font-size="14">app.sqlite preferido, JSONL fallback</text>
+
+          <line x1="594" y1="422" x2="534" y2="422" stroke="#b7751f" stroke-width="3" marker-end="url(#arrowWarn)"></line>
+
+          <rect x="24" y="366" width="220" height="112" rx="18" fill="#fff4e0" stroke="#b7751f"></rect>
+          <text x="42" y="396" font-size="20" font-weight="700">Dashboard snapshot</text>
+          <text x="42" y="422" font-size="14">build_dashboard_snapshot</text>
+          <text x="42" y="442" font-size="14">data/reports/dashboard.json</text>
+          <text x="42" y="462" font-size="14">versionado hoy: stale (2 vs 51)</text>
+
+          <line x1="304" y1="422" x2="244" y2="422" stroke="#b7751f" stroke-width="3" marker-end="url(#arrowWarn)"></line>
+
+          <rect x="304" y="550" width="230" height="104" rx="18" fill="#fff4e0" stroke="#b7751f"></rect>
+          <text x="322" y="580" font-size="20" font-weight="700">Site payload builder</text>
+          <text x="322" y="606" font-size="14">src/utils/pages_build.py</text>
+          <text x="322" y="626" font-size="14">usa archivos fijos de drift/incidents</text>
+
+          <line x1="244" y1="478" x2="304" y2="602" stroke="#b7751f" stroke-width="3" marker-end="url(#arrowWarn)"></line>
+
+          <rect x="594" y="550" width="250" height="104" rx="18" fill="#fff4e0" stroke="#b7751f"></rect>
+          <text x="612" y="580" font-size="20" font-weight="700">site/data/*.json</text>
+          <text x="612" y="606" font-size="14">dashboard, forecasts, opportunities, models...</text>
+          <text x="612" y="626" font-size="14">metrics y strategy estan en fallback</text>
+
+          <line x1="534" y1="602" x2="594" y2="602" stroke="#b7751f" stroke-width="3" marker-end="url(#arrowWarn)"></line>
+
+          <rect x="904" y="550" width="260" height="104" rx="18" fill="#fff4e0" stroke="#b7751f"></rect>
+          <text x="922" y="580" font-size="20" font-weight="700">Frontend estatico</text>
+          <text x="922" y="606" font-size="14">site/index.html + site/assets/app.js</text>
+          <text x="922" y="626" font-size="14">consume JSON, no backend</text>
+
+          <line x1="844" y1="602" x2="904" y2="602" stroke="#b7751f" stroke-width="3" marker-end="url(#arrowWarn)"></line>
+
+          <rect x="1130" y="340" width="158" height="152" rx="18" fill="#dfe8ec" stroke="#2f3d45"></rect>
+          <text x="1148" y="370" font-size="19" font-weight="700">Ramas auxiliares</text>
+          <text x="1148" y="398" font-size="14">strategies/</text>
+          <text x="1148" y="418" font-size="14">execution/</text>
+          <text x="1148" y="438" font-size="14">reporting/</text>
+          <text x="1148" y="458" font-size="14">notifications/</text>
+          <text x="1148" y="480" font-size="14">No alimentan</text>
+          <text x="1148" y="500" font-size="14">directamente el site</text>
+
+          <line x1="1164" y1="492" x2="1164" y2="550" stroke="#2f3d45" stroke-width="3" marker-end="url(#arrow)"></line>
+        </svg>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Status actual por etapa</h2>
+          <p class="subtle">Diagnostico basado en codigo, artefactos presentes y validaciones ejecutadas durante esta documentacion.</p>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Etapa</th><th>Status</th><th>Evidencia</th><th>Consecuencia operativa</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Orquestacion y gating</td><td><span class="pill partial">PARTIAL</span></td><td>Hay workflows y markers, pero el incidente del 2026-03-12 reporta checkpoints faltantes.</td><td>El dia puede quedar incompleto aunque la automatizacion exista.</td></tr>
+          <tr><td>Yahoo ingest</td><td><span class="pill partial">PARTIAL</span></td><td>El codigo existe y el parser esta validado, pero no se probo una descarga real a Yahoo en esta inspeccion.</td><td>No hay confirmacion end-to-end contra el proveedor externo desde este entorno.</td></tr>
+          <tr><td>Market DB</td><td><span class="pill ok">OK</span></td><td>Se verifico en aislamiento que SQLite se inicializa, hace upsert y devuelve barras.</td><td>La capa funciona, aunque el repo no versiona la DB actual.</td></tr>
+          <tr><td>Features y labels</td><td><span class="pill ok">OK</span></td><td>17 pruebas relacionadas con features, leakage, config y session gating pasaron.</td><td>La parte mas estable del pipeline.</td></tr>
+          <tr><td>Training CLI real</td><td><span class="pill broken">BROKEN</span></td><td><code>python -m models.run_training</code> falla porque <code>normalize_model_tasks()</code> devuelve <code>None</code> para strings.</td><td>El retraining orquestado por shell/workflow queda roto.</td></tr>
+          <tr><td>Training review</td><td><span class="pill broken">BROKEN</span></td><td><code>src/floor/training/review.py</code> no importa por <code>IndentationError</code> en <code>src/models/inference.py</code>.</td><td>No se genera <code>review_summary_latest.json</code> en el flujo actual.</td></tr>
+          <tr><td>Forecasting</td><td><span class="pill broken">BROKEN</span></td><td>El <code>pytest</code> completo falla en recoleccion por <code>src/models/inference.py</code>.</td><td><code>run-cycle</code> y <code>build-site</code> dejan de arrancar desde <code>floor.main</code>.</td></tr>
+          <tr><td>Persistencia operativa</td><td><span class="pill partial">PARTIAL</span></td><td>La escritura a JSONL + SQLite se verifico en aislamiento; el repo actual no trae <code>app.sqlite</code>.</td><td>Los snapshots terminan dependiendo del fallback a JSONL.</td></tr>
+          <tr><td>Dashboard snapshot</td><td><span class="pill stale">STALE</span></td><td>El archivo versionado dice 2 predicciones; una regeneracion aislada desde JSONL encontro 51.</td><td>El dashboard publicado no refleja el historico operativo actual del repo.</td></tr>
+          <tr><td>site/data builder</td><td><span class="pill partial">PARTIAL</span></td><td>La funcion corre, pero toma un dashboard stale y nombres de reporte fijos del 2026-03-12.</td><td>La UI se actualiza con informacion incompleta o congelada en fecha.</td></tr>
+          <tr><td>Frontend</td><td><span class="pill partial">PARTIAL</span></td><td>Las paginas existen, pero <code>metrics.json</code> y <code>strategy.json</code> estan en fallback; la UI espera campos m3 que el flujo principal no persiste.</td><td>El sitio abre, pero no cuenta la historia completa del sistema real.</td></tr>
+          <tr><td>Strategies / execution / backtest</td><td><span class="pill ok">OK</span></td><td>18 pruebas standalone pasaron para estrategias, paper execution, backtest y workflow guards.</td><td>Son modulos viables, pero hoy no alimentan el dashboard principal.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Etapas en detalle</h2>
+          <p class="subtle">Cada tarjeta resume que interviene, que recibe, que produce y como se conecta con la siguiente etapa.</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <article class="stage">
+          <div class="stage-number">Etapa 0</div>
+          <h3>Universo y configuracion</h3>
+          <div class="stage-meta"><span class="pill ok">OK</span><code>config/universe.yaml</code></div>
+          <div class="detail"><strong>Componentes</strong><code>config/universe.yaml</code>, <code>src/floor/universe.py::parse_universe_yaml</code>, <code>src/floor/config.py::RuntimeConfig</code>.</div>
+          <div class="detail"><strong>Recibe</strong>archivos YAML y variables de entorno.</div>
+          <div class="detail"><strong>Produce</strong>lista de simbolos y parametros de runtime.</div>
+          <div class="detail"><strong>Siguiente</strong>ingesta Yahoo, build de training rows y build de <code>site/data/universe.json</code>.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 1</div>
+          <h3>Consulta inicial en Yahoo</h3>
+          <div class="stage-meta"><span class="pill partial">PARTIAL</span><code>src/storage/yahoo_ingest.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>fetch_yahoo_chart</code>, <code>parse_daily_bars</code>, <code>ingest_yahoo_to_db</code>.</div>
+          <div class="detail"><strong>Recibe</strong>simbolo, <code>range</code>, <code>interval</code>, <code>sleep_seconds</code>.</div>
+          <div class="detail"><strong>Produce</strong>listas de <code>DailyBar</code> y un resumen de ingesta.</div>
+          <div class="detail"><strong>Siguiente</strong>persistencia en <code>daily_bars</code> dentro de SQLite.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 2</div>
+          <h3>Persistencia de mercado</h3>
+          <div class="stage-meta"><span class="pill ok">OK</span><code>src/storage/market_db.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>init_market_db</code>, <code>upsert_daily_bars</code>, <code>load_daily_bars</code>.</div>
+          <div class="detail"><strong>Recibe</strong>barras OHLCV diarias por simbolo.</div>
+          <div class="detail"><strong>Produce</strong><code>data/market/market_data.sqlite</code> con tabla <code>daily_bars</code>.</div>
+          <div class="detail"><strong>Siguiente</strong><code>build_rows_from_db</code> lee esta DB para training y online features.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 3</div>
+          <h3>Training rows desde DB</h3>
+          <div class="stage-meta"><span class="pill ok">OK</span><code>src/features/build_training_from_db.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>build_rows_from_db</code>.</div>
+          <div class="detail"><strong>Recibe</strong>DB de mercado, universo y benchmark <code>SPY</code>.</div>
+          <div class="detail"><strong>Produce</strong>filas con OHLCV, <code>benchmark_close</code> y columnas AI vacias.</div>
+          <div class="detail"><strong>Siguiente</strong><code>run_features.py</code> construye el dataset modelable.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 4</div>
+          <h3>Features y labels</h3>
+          <div class="stage-meta"><span class="pill ok">OK</span><code>src/features/feature_builder.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>build_features</code>, <code>build_labels</code>, <code>assign_split</code>, <code>build_walk_forward_splits</code>.</div>
+          <div class="detail"><strong>Recibe</strong>filas crudas con historial y benchmark.</div>
+          <div class="detail"><strong>Produce</strong><code>data/training/modelable_dataset.json</code> con rows, folds, registry y target docs.</div>
+          <div class="detail"><strong>Siguiente</strong>branch training y, por separado, el online cycle recompone la ultima fila por simbolo.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 5</div>
+          <h3>Entrenamiento de champions</h3>
+          <div class="stage-meta"><span class="pill broken">BROKEN</span><code>src/models/run_training.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>train_floor_m3_value_model</code>, <code>train_floor_week_m3_timing_model</code>, <code>select_and_persist_champion</code>.</div>
+          <div class="detail"><strong>Recibe</strong>dataset modelable con splits.</div>
+          <div class="detail"><strong>Produce</strong><code>value_champion.json</code>, <code>timing_champion.json</code>, challengers y metricas.</div>
+          <div class="detail"><strong>Siguiente</strong><code>ChampionModelSet</code> deberia cargar estos artefactos para forecasting.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 6</div>
+          <h3>Review y retraining assessment</h3>
+          <div class="stage-meta"><span class="pill broken">BROKEN</span><code>src/floor/training/review.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>run_training_review</code>, <code>run_retrain_assessment.py</code>, <code>drift_detection.py</code>.</div>
+          <div class="detail"><strong>Recibe</strong>dataset modelable, champions actuales y thresholds en <code>config/retraining.yaml</code>.</div>
+          <div class="detail"><strong>Produce</strong><code>reviews.jsonl</code> y <code>review_summary_latest.json</code>.</div>
+          <div class="detail"><strong>Siguiente</strong><code>retrain_execute.yml</code> deberia leer <code>tasks_for_auto_retrain</code>.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 7</div>
+          <h3>Features online para run-cycle</h3>
+          <div class="stage-meta"><span class="pill partial">IMPLEMENTED</span><code>src/floor/pipeline/intraday_cycle.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>_latest_feature_rows</code>.</div>
+          <div class="detail"><strong>Recibe</strong>la DB de mercado y la lista de simbolos pedida para el evento.</div>
+          <div class="detail"><strong>Produce</strong>una sola fila con features por simbolo, tomada del ultimo timestamp disponible.</div>
+          <div class="detail"><strong>Siguiente</strong>forecasting, junto con recomendaciones externas opcionales.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 8</div>
+          <h3>Integracion AI externa</h3>
+          <div class="stage-meta"><span class="pill partial">OPTIONAL</span><code>src/floor/external/google_sheets.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>fetch_recommendations</code>, <code>merge_market_with_ai_signal</code>.</div>
+          <div class="detail"><strong>Recibe</strong>un CSV publico con <code>symbol</code>, <code>action</code>, <code>confidence</code> y <code>note</code>.</div>
+          <div class="detail"><strong>Produce</strong><code>ai_weight</code>, <code>ai_effective_score</code> y override de accion cuando aplica.</div>
+          <div class="detail"><strong>Siguiente</strong>entra como sesgo en el forecast por simbolo.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 9</div>
+          <h3>Forecasting multi-horizonte</h3>
+          <div class="stage-meta"><span class="pill broken">BROKEN</span><code>src/forecasting/*.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>run_forecast_pipeline</code>, <code>generate_forecasts</code>, <code>ChampionModelSet</code>, <code>rank_opportunities</code>, <code>render_time_labels</code>.</div>
+          <div class="detail"><strong>Recibe</strong>latest feature rows, AI por simbolo y champions m3.</div>
+          <div class="detail"><strong>Produce</strong><code>d1</code>, <code>w1</code>, <code>q1</code>, <code>m3</code>, scores, blocked list y dashboard-friendly rows.</div>
+          <div class="detail"><strong>Siguiente</strong><code>run_intraday_cycle</code> persiste predicciones, senales y ordenes.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 10</div>
+          <h3>Predicciones, senales y ordenes</h3>
+          <div class="stage-meta"><span class="pill partial">PARTIAL</span><code>src/floor/pipeline/intraday_cycle.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>_prediction_payloads</code>, <code>_signal_from_prediction</code>, <code>maybe_build_order</code>.</div>
+          <div class="detail"><strong>Recibe</strong>cada fila de <code>dataset_forecasts</code>.</div>
+          <div class="detail"><strong>Produce</strong><code>PredictionRecord</code>, <code>SignalRecord</code> y opcionalmente <code>OrderRecord</code>.</div>
+          <div class="detail"><strong>Siguiente</strong><code>append_jsonl</code> manda todo a disco y a SQLite operacional.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 11</div>
+          <h3>Persistencia operacional</h3>
+          <div class="stage-meta"><span class="pill partial">PARTIAL</span><code>src/floor/storage.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>append_jsonl</code>, <code>persist_payload</code>, <code>latest_predictions</code>.</div>
+          <div class="detail"><strong>Recibe</strong>payloads de predictions, signals, orders y training reviews.</div>
+          <div class="detail"><strong>Produce</strong><code>data/predictions/*.jsonl</code>, <code>data/signals/*.jsonl</code>, <code>data/orders/*.jsonl</code> y <code>data/persistence/app.sqlite</code>.</div>
+          <div class="detail"><strong>Siguiente</strong><code>build_dashboard_snapshot</code> toma la ultima prediccion por simbolo+horizonte.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 12</div>
+          <h3>Snapshot para dashboard</h3>
+          <div class="stage-meta"><span class="pill stale">STALE</span><code>src/floor/reporting/generate_site_data.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>build_dashboard_snapshot</code>.</div>
+          <div class="detail"><strong>Recibe</strong>predictions, signals y opcionalmente SQLite operacional.</div>
+          <div class="detail"><strong>Produce</strong><code>data/reports/dashboard.json</code>.</div>
+          <div class="detail"><strong>Siguiente</strong><code>utils.pages_build</code> genera los JSON consumidos por la UI final.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 13</div>
+          <h3>Build de site/data</h3>
+          <div class="stage-meta"><span class="pill partial">PARTIAL</span><code>src/utils/pages_build.py</code></div>
+          <div class="detail"><strong>Componentes</strong><code>build_pages_data</code>.</div>
+          <div class="detail"><strong>Recibe</strong><code>dashboard.json</code>, <code>public_metrics.json</code>, <code>strategy.json</code>, review summary, incidents y drift.</div>
+          <div class="detail"><strong>Produce</strong><code>site/data/dashboard.json</code>, <code>forecasts.json</code>, <code>opportunities.json</code>, <code>models.json</code>, <code>drift.json</code>, <code>incidents.json</code>, <code>strategy.json</code>, <code>metrics.json</code>.</div>
+          <div class="detail"><strong>Siguiente</strong>la UI en navegador consume estos payloads sin backend.</div>
+        </article>
+
+        <article class="stage">
+          <div class="stage-number">Etapa 14</div>
+          <h3>Dashboard final</h3>
+          <div class="stage-meta"><span class="pill partial">PARTIAL</span><code>site/assets/app.js</code></div>
+          <div class="detail"><strong>Componentes</strong><code>site/index.html</code>, <code>site/forecasts.html</code>, <code>site/tickers.html</code>, <code>site/models.html</code>, <code>site/strategies.html</code>, <code>site/drift.html</code>, <code>site/incidents.html</code>.</div>
+          <div class="detail"><strong>Recibe</strong>JSON estaticos en <code>site/data/</code>.</div>
+          <div class="detail"><strong>Produce</strong>la visualizacion final publicada en GitHub Pages.</div>
+          <div class="detail"><strong>Siguiente</strong>no hay backend ni otra capa de servicio; este es el punto final de consumo interno.</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Ramas auxiliares no conectadas al dashboard principal</h2>
+          <p class="subtle">Estas piezas existen y varias funcionan, pero no cierran el loop Yahoo -> dashboard publicado.</p>
+        </div>
+      </div>
+      <div class="side-grid">
+        <div class="side">
+          <h3>Strategies</h3>
+          <p><code>src/strategies/run_strategies.py</code> consume forecasts y arma ordenes teoricas con cinco estrategias configuradas en <code>config/strategies.yaml</code>.</p>
+          <div class="pill-row"><span class="pill ok">modulo OK</span><span class="pill stale">not wired</span></div>
+        </div>
+        <div class="side">
+          <h3>Paper execution</h3>
+          <p><code>src/execution/run_paper_trade.py</code> simula ejecucion, fills, trades, snapshots y reconciliacion, pero no aparece conectado al build del sitio principal.</p>
+          <div class="pill-row"><span class="pill ok">modulo OK</span><span class="pill stale">not wired</span></div>
+        </div>
+        <div class="side">
+          <h3>Reporting auxiliar</h3>
+          <p><code>src/reporting/*.py</code>, <code>src/storage/history_writer.py</code> y <code>src/storage/export_pages_data.py</code> aparecen en tests, no como ruta principal de <code>site/data</code>.</p>
+          <div class="pill-row"><span class="pill ok">implementado</span><span class="pill stale">secundario</span></div>
+        </div>
+        <div class="side">
+          <h3>Notifications</h3>
+          <p>Telegram, ntfy y Resend existen en <code>src/notifications/</code>, pero no se encontraron workflows principales que los invoquen dentro del camino Yahoo -> site.</p>
+          <div class="pill-row"><span class="pill ok">implementado</span><span class="pill stale">sin evidencia de uso en el flujo principal</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Pruebas y verificaciones ejecutadas</h2>
+          <p class="subtle">Lo siguiente se corrio o se reprodujo durante la documentacion.</p>
+        </div>
+      </div>
+      <div class="lookup-grid">
+        <div class="lookup">
+          <h3>Pruebas que pasaron</h3>
+          <ul>
+            <li><code>pytest -p no:cacheprovider tests/test_execution.py tests/test_strategies.py tests/test_backtest.py tests/test_calendar.py tests/test_session_gating.py tests/test_workflow_guards.py</code> -> 18 passed.</li>
+            <li><code>pytest -p no:cacheprovider tests/test_features.py tests/test_no_leakage.py tests/test_configs.py tests/test_calendar.py tests/test_session_gating.py tests/test_workflow_guards.py</code> -> 17 passed.</li>
+            <li><code>pytest -p no:cacheprovider tests/test_market_db_pipeline.py::test_parse_daily_bars_filters_missing tests/test_notifications.py::test_message_builder_for_required_events tests/test_notifications.py::test_notifiers_primary_and_secondary_channels</code> -> 3 passed.</li>
+          </ul>
+        </div>
+        <div class="lookup">
+          <h3>Verificaciones manuales</h3>
+          <ul>
+            <li>Simulacion aislada de <code>init_market_db</code>, <code>upsert_daily_bars</code>, <code>load_daily_bars</code> y <code>build_rows_from_db</code> -> correcta.</li>
+            <li>Simulacion aislada de <code>append_jsonl</code> + espejo a SQLite + <code>build_dashboard_snapshot</code> -> correcta.</li>
+            <li>Ejecucion aislada de <code>utils.pages_build.build_pages_data</code> -> correcta.</li>
+          </ul>
+        </div>
+        <div class="lookup">
+          <h3>Fallas reales reproducidas</h3>
+          <ul>
+            <li><code>pytest</code> completo falla en recoleccion por <code>IndentationError</code> en <code>src/models/inference.py</code>.</li>
+            <li><code>PYTHONPATH=src python -m floor.main build-site</code> falla por el mismo error.</li>
+            <li><code>PYTHONPATH=src python -m models.run_training --dataset ... --output-dir ...</code> falla porque <code>normalize_model_tasks()</code> devuelve <code>None</code> para strings.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h2>Huecos y ambiguedades reales</h2>
+          <p class="subtle">Puntos que un desarrollador nuevo deberia saber desde el primer dia.</p>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Hallazgo</th><th>Archivo(s)</th><th>Lectura tecnica</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>No hay writer real de <code>data/reports/strategy.json</code>.</td><td><code>src/utils/pages_build.py</code>, <code>site/assets/app.js</code></td><td>La UI de strategies existe, pero hoy se alimenta de fallback porque no se encontro una generacion automatica del reporte.</td></tr>
+          <tr><td><code>public_metrics.json</code> es placeholder.</td><td><code>.github/workflows/monitoring.yml</code></td><td>El workflow crea un JSON con <code>series: []</code>; no se vio una pipeline real de metricas publicas.</td></tr>
+          <tr><td>Drift e incidents quedan clavados en una fecha fija.</td><td><code>src/utils/pages_build.py</code></td><td>Se leen <code>retraining_review_2026-03-12.json</code> e <code>incident_review_2026-03-12.json</code> con rutas hardcodeadas.</td></tr>
+          <tr><td>Los campos <code>m3</code> se calculan, pero no llegan completos al dashboard principal.</td><td><code>src/forecasting/generate_forecasts.py</code>, <code>src/floor/pipeline/intraday_cycle.py</code>, <code>site/assets/app.js</code></td><td>El forecasting produce <code>m3</code>; <code>run-cycle</code> solo persiste <code>d1/w1/q1</code> en <code>PredictionRecord</code>; la UI si espera <code>m3</code>.</td></tr>
+          <tr><td><code>floor.main build-site</code> no construye el sitio completo.</td><td><code>src/floor/main.py</code>, <code>.github/workflows/eod.yml</code></td><td>Ese subcomando solo genera <code>data/reports/dashboard.json</code>; el workflow hace un segundo paso con <code>utils.pages_build</code> para completar <code>site/data</code>.</td></tr>
+          <tr><td><code>docs/</code> duplica <code>site/</code>.</td><td><code>docs/</code>, <code>site/</code>, <code>.github/workflows/pages.yml</code></td><td>La ruta desplegada por Pages es <code>site/</code>; <code>docs/</code> parece copia espejo y puede quedar stale.</td></tr>
+        </tbody>
+      </table>
+      <p class="footer-note">
+        Conclusiones practicas: la columna vertebral del sistema si esta clara, pero hoy el repo no esta en verde de punta a punta.
+        Lo mas importante para reactivar el flujo completo es reparar <code>src/models/inference.py</code>, corregir
+        <code>src/models/tasks.py</code>, regenerar <code>data/reports/dashboard.json</code>, y cerrar el contrato <code>m3</code>
+        entre forecasting, persistencia y frontend.
+      </p>
+    </section>
+  </div>
+</body>
+</html>
