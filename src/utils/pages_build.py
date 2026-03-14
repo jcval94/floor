@@ -162,7 +162,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     }
     retraining_src = _latest_report_file(reports_dir, "retraining_review_*.json")
     retraining = _read_json(retraining_src, retraining_default) if retraining_src else retraining_default
-    drift = {
+    drift: dict[str, Any] = {
         "status": retraining.get("status", "UNKNOWN"),
         "decision": retraining.get("decision", "PENDING"),
         "drift_level": retraining.get("drift_level", "GREEN"),
@@ -177,7 +177,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "status": "OK", "severity": "SEV4", "summary": {"symptom": "No incidents"}, "impact": {}
     }
     incident_src = _latest_report_file(reports_dir, "incident_review_*.json")
-    incident_payload = _read_json(incident_src, incident_default) if incident_src else incident_default
+    incident_payload: dict[str, Any] = _read_json(incident_src, incident_default) if incident_src else dict(incident_default)
     incident_payload["source_file"] = incident_src.name if incident_src else None
     incident_payload["source_date"] = (
         incident_payload.get("as_of")

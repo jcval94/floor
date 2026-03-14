@@ -7,6 +7,8 @@ def _safe_float(value: object) -> float | None:
     try:
         if value in (None, ""):
             return None
+        if not isinstance(value, (int, float, str)):
+            return None
         return float(value)
     except (TypeError, ValueError):
         return None
@@ -37,15 +39,15 @@ def summarize_modelable_rows(rows: list[dict]) -> dict:
 
     categorical_counts: dict[str, dict[str, int]] = {}
     for column in ["split", "floor_week_m3"]:
-        counts: dict[str, int] = {}
+        column_counts: dict[str, int] = {}
         for row in rows:
             raw = row.get(column)
             if raw in (None, ""):
                 continue
-            key = str(raw)
-            counts[key] = counts.get(key, 0) + 1
-        if counts:
-            categorical_counts[column] = counts
+            category = str(raw)
+            column_counts[category] = column_counts.get(category, 0) + 1
+        if column_counts:
+            categorical_counts[column] = column_counts
 
     return {
         "rows": len(rows),

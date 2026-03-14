@@ -89,7 +89,7 @@ def run_training(
         metrics_path.write_text(json.dumps(metrics_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("[training] metrics saved path=%s", metrics_path)
 
-        result = {"metrics_path": str(metrics_path), "tasks": selected_tasks}
+        result: dict[str, object] = {"metrics_path": str(metrics_path), "tasks": selected_tasks}
         result.update(selection)
         return result
     except Exception as exc:
