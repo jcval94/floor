@@ -79,6 +79,24 @@ Cómo generarlos:
 8. `archive` (opcional diario)  
    Compacta índices de datos efímeros.
 
+
+## Preflight SQLite obligatorio en workflows críticos
+
+Los workflows `ingest`, `intraday_engine` y `retrain_execute` ejecutan un preflight común al inicio del job crítico:
+
+1. `make init-dbs` para asegurar creación de `data/market/market_data.sqlite` y `data/persistence/app.sqlite`.
+2. Saneamiento de permisos para runners:
+   - directorios `data/market` y `data/persistence` con `u+rwx`;
+   - archivos dentro de esas rutas con `u+rw`.
+3. Validación de esquema con `sqlite3`:
+   - en market, existencia de tabla `daily_bars`;
+   - en persistence, existencia de tablas `predictions`, `signals`, `orders`, `training_reviews`.
+4. Preflight de contenido para predicción/retraining (`intraday_engine` y `retrain_execute`):
+   - si `SELECT COUNT(*) FROM daily_bars` devuelve `0`, se registra `::warning::` explícito;
+   - se dispara ingesta Yahoo antes de continuar con ejecución intradía o reentrenamiento.
+
+Este preflight evita fallos por SQLite inexistente/vacía o por permisos insuficientes de escritura en GitHub-hosted runners.
+
 ## Cadencia sugerida después del arranque
 
 - Intradía continuo: `ingest` + `intraday_engine` + `eod` + `monitoring` + `pages` (sin `db_bootstrap`, porque es one-shot).

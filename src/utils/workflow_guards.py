@@ -27,6 +27,21 @@ def _marker_path(base_dir: Path, key: str) -> Path:
     return base_dir / "snapshots" / "workflow_runs" / f"{key}.json"
 
 
+def _marker_key(kind: str, day: str, event: str | None = None) -> str:
+    """Builds marker keys by workflow type.
+
+    Convention:
+    - intraday/event_specific: `<kind>_<YYYY-MM-DD>_<EVENT>`
+    - eod: `eod_<YYYY-MM-DD>_CLOSE` (fixed event suffix for read/write parity)
+    - other workflows without event: `<kind>_<YYYY-MM-DD>`
+    """
+    if kind == "eod":
+        return f"eod_{day}_CLOSE"
+    if event:
+        return f"{kind}_{day}_{event}"
+    return f"{kind}_{day}"
+
+
 def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: Path) -> dict[str, str]:
     now = datetime.now(tz=ET)
     info = get_session_info(now)
@@ -44,7 +59,7 @@ def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: P
         if not detected:
             out["reason"] = "no_checkpoint_window"
             return out
-        key = f"intraday_{info.session_day.isoformat()}_{detected}"
+        key = _marker_key(kind="intraday", day=info.session_day.isoformat(), event=detected)
         marker = _marker_path(data_dir, key)
         if marker.exists():
             out["reason"] = "already_ran"
@@ -58,8 +73,10 @@ def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: P
         if close_event != "CLOSE":
             out["reason"] = "not_close_window"
             return out
-        key = f"eod_{info.session_day.isoformat()}"
-        if _marker_path(data_dir, key).exists():
+        day = info.session_day.isoformat()
+        key = _marker_key(kind="eod", day=day, event="CLOSE")
+        legacy_key = f"eod_{day}"
+        if _marker_path(data_dir, key).exists() or _marker_path(data_dir, legacy_key).exists():
             out["reason"] = "already_ran"
             out["event"] = "CLOSE"
             return out
@@ -93,14 +110,14 @@ def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: P
 def mark_run(kind: str, data_dir: Path, event: str | None) -> Path:
     now = datetime.now(tz=ET)
     day = now.date().isoformat()
-    suffix = f"_{event}" if event else ""
-    key = f"{kind}_{day}{suffix}"
+    marker_event = "CLOSE" if kind == "eod" else event
+    key = _marker_key(kind=kind, day=day, event=marker_event)
     marker = _marker_path(data_dir, key)
     marker.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "kind": kind,
         "day": day,
-        "event": event,
+        "event": marker_event,
         "ts": now.isoformat(),
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "workflow": os.getenv("GITHUB_WORKFLOW", "local"),

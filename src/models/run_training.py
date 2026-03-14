@@ -41,7 +41,12 @@ def _split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return train, valid
 
 
-def run_training(dataset_path: Path, output_dir: Path, version: str = "v1", tasks: str | list[str] | None = None) -> dict:
+def run_training(
+    dataset_path: Path,
+    output_dir: Path,
+    version: str = "v1",
+    tasks: str | list[str] | tuple[str, ...] | None = None,
+) -> dict:
     try:
         rows = _load_dataset(dataset_path)
         dataset_summary = summarize_modelable_rows(rows)
@@ -84,7 +89,7 @@ def run_training(dataset_path: Path, output_dir: Path, version: str = "v1", task
         metrics_path.write_text(json.dumps(metrics_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("[training] metrics saved path=%s", metrics_path)
 
-        result = {"metrics_path": str(metrics_path), "tasks": selected_tasks}
+        result: dict[str, object] = {"metrics_path": str(metrics_path), "tasks": selected_tasks}
         result.update(selection)
         return result
     except Exception as exc:
