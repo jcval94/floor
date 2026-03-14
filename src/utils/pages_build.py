@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
+from datetime import date
 from typing import Any
 
 from floor.universe import parse_universe_yaml
@@ -54,6 +56,26 @@ def _read_jsonl(path: Path) -> list[dict]:
         if line:
             out.append(json.loads(line))
     return out
+
+
+def _latest_report_file(reports_dir: Path, pattern: str) -> Path | None:
+    candidates = list(reports_dir.glob(pattern))
+    if not candidates:
+        return None
+
+    date_re = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+    def _sort_key(path: Path) -> tuple[date, float]:
+        match = date_re.search(path.stem)
+        parsed_date = date.min
+        if match:
+            try:
+                parsed_date = date.fromisoformat(match.group(1))
+            except ValueError:
+                parsed_date = date.min
+        return (parsed_date, path.stat().st_mtime)
+
+    return max(candidates, key=_sort_key)
 
 
 def _opportunity_row(row: dict) -> dict | None:
@@ -133,21 +155,35 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
     (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:10]), indent=2), encoding="utf-8")
 
-    retraining = _read_json(data_dir / "reports" / "retraining_review_2026-03-12.json", {
+    reports_dir = data_dir / "reports"
+
+    retraining_default = {
         "status": "UNKNOWN", "decision": "PENDING", "drift_level": "GREEN", "thresholds_disparados": []
-    })
-    drift = {
+    }
+    retraining_src = _latest_report_file(reports_dir, "retraining_review_*.json")
+    retraining = _read_json(retraining_src, retraining_default) if retraining_src else retraining_default
+    drift: dict[str, Any] = {
         "status": retraining.get("status", "UNKNOWN"),
         "decision": retraining.get("decision", "PENDING"),
         "drift_level": retraining.get("drift_level", "GREEN"),
         "thresholds": retraining.get("thresholds_disparados", []),
         "metrics": retraining.get("metrics", {}),
+        "source_file": retraining_src.name if retraining_src else None,
+        "source_date": retraining.get("as_of") or retraining.get("date") or retraining.get("generated_at"),
     }
     (site_data_dir / "drift.json").write_text(json.dumps(_sanitize(drift), indent=2), encoding="utf-8")
 
-    incident_payload = _read_json(data_dir / "reports" / "incident_review_2026-03-12.json", {
+    incident_default = {
         "status": "OK", "severity": "SEV4", "summary": {"symptom": "No incidents"}, "impact": {}
-    })
+    }
+    incident_src = _latest_report_file(reports_dir, "incident_review_*.json")
+    incident_payload: dict[str, Any] = _read_json(incident_src, incident_default) if incident_src else dict(incident_default)
+    incident_payload["source_file"] = incident_src.name if incident_src else None
+    incident_payload["source_date"] = (
+        incident_payload.get("as_of")
+        or incident_payload.get("date")
+        or incident_payload.get("generated_at")
+    )
     (site_data_dir / "incidents.json").write_text(json.dumps(_sanitize(incident_payload), indent=2), encoding="utf-8")
 
     review_summary = _read_json(data_dir / "training" / "review_summary_latest.json", {"suite_version": "", "models": {}})

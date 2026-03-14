@@ -32,6 +32,19 @@ def fetch_yahoo_chart(symbol: str, range_: str, interval: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+
+
+def _as_float(value: object) -> float | None:
+    if value is None:
+        return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_daily_bars(symbol: str, payload: dict) -> list[DailyBar]:
     result = (payload.get("chart", {}).get("result") or [{}])[0]
     timestamps = result.get("timestamp") or []
@@ -46,22 +59,33 @@ def parse_daily_bars(symbol: str, payload: dict) -> list[DailyBar]:
     bars: list[DailyBar] = []
     for idx, ts in enumerate(timestamps):
         try:
-            o = opens[idx] if idx < len(opens) else None
-            h = highs[idx] if idx < len(highs) else None
-            l = lows[idx] if idx < len(lows) else None
-            c = closes[idx] if idx < len(closes) else None
-            v = volumes[idx] if idx < len(volumes) else None
-            if None in (o, h, l, c, v):
+            open_value = opens[idx] if idx < len(opens) else None
+            high_value = highs[idx] if idx < len(highs) else None
+            low_value = lows[idx] if idx < len(lows) else None
+            close_value = closes[idx] if idx < len(closes) else None
+            volume_value = volumes[idx] if idx < len(volumes) else None
+            open_float = _as_float(open_value)
+            high_float = _as_float(high_value)
+            low_float = _as_float(low_value)
+            close_float = _as_float(close_value)
+            volume_float = _as_float(volume_value)
+            if (
+                open_float is None
+                or high_float is None
+                or low_float is None
+                or close_float is None
+                or volume_float is None
+            ):
                 continue
             bars.append(
                 DailyBar(
                     symbol=symbol.upper(),
                     ts_utc=_to_iso_utc(int(ts)),
-                    open=float(o),
-                    high=float(h),
-                    low=float(l),
-                    close=float(c),
-                    volume=float(v),
+                    open=open_float,
+                    high=high_float,
+                    low=low_float,
+                    close=close_float,
+                    volume=volume_float,
                 )
             )
         except (TypeError, ValueError) as exc:
