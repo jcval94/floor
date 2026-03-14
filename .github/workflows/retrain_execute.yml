@@ -125,11 +125,26 @@ jobs:
           TASKS_TO_RUN: ${{ steps.gate.outputs.tasks }}
           VERSION_INPUT: ${{ github.event.inputs.version }}
         run: |
+          set -euo pipefail
           VERSION_TAG="$VERSION_INPUT"
           if [ -z "$VERSION_TAG" ]; then
             VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
           fi
           bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN"
+
+          value_champion="data/training/models/value_champion.json"
+          timing_champion="data/training/models/timing_champion.json"
+          missing=0
+          for champion in "$value_champion" "$timing_champion"; do
+            if [ ! -f "$champion" ]; then
+              echo "::error::Missing champion artifact after scripts/retrain_models.sh: $champion"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Champion artifacts were not created by retraining. Failing retrain_execute explicitly."
+            exit 1
+          fi
 
       - name: Validate champion artifacts and publish summary
         if: steps.gate.outputs.run == 'true'
