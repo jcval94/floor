@@ -1,0 +1,695 @@
+{
+  "rows": [],
+  "feature_registry": [
+    {
+      "name": "ret_lag_1",
+      "family": "returns",
+      "window": "1 bar",
+      "leakage_safe": true,
+      "description": "Return close(t)/close(t-1)-1."
+    },
+    {
+      "name": "ret_lag_2",
+      "family": "returns",
+      "window": "2 bars",
+      "leakage_safe": true,
+      "description": "Return close(t)/close(t-2)-1."
+    },
+    {
+      "name": "ret_lag_5",
+      "family": "returns",
+      "window": "5 bars",
+      "leakage_safe": true,
+      "description": "Return close(t)/close(t-5)-1."
+    },
+    {
+      "name": "ret_lag_10",
+      "family": "returns",
+      "window": "10 bars",
+      "leakage_safe": true,
+      "description": "Return close(t)/close(t-10)-1."
+    },
+    {
+      "name": "downside_vol_20",
+      "family": "volatility",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Std of negative returns over 20 bars."
+    },
+    {
+      "name": "parkinson_vol_20",
+      "family": "volatility",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Range-based Parkinson volatility proxy."
+    },
+    {
+      "name": "momentum_10",
+      "family": "trend",
+      "window": "10 bars",
+      "leakage_safe": true,
+      "description": "10-bar cumulative momentum."
+    },
+    {
+      "name": "momentum_20",
+      "family": "trend",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "20-bar cumulative momentum."
+    },
+    {
+      "name": "vol_regime_score",
+      "family": "regime",
+      "window": "5/20 bars",
+      "leakage_safe": true,
+      "description": "Volatility ratio rolling_vol_5/rolling_vol_20."
+    },
+    {
+      "name": "rsi_14",
+      "family": "momentum",
+      "window": "14 bars",
+      "leakage_safe": true,
+      "description": "Relative Strength Index."
+    },
+    {
+      "name": "macd_12_26",
+      "family": "momentum",
+      "window": "12/26 EMA",
+      "leakage_safe": true,
+      "description": "MACD line."
+    },
+    {
+      "name": "macd_signal_9",
+      "family": "momentum",
+      "window": "9 EMA",
+      "leakage_safe": true,
+      "description": "Signal line for MACD."
+    },
+    {
+      "name": "macd_histogram",
+      "family": "momentum",
+      "window": "derived",
+      "leakage_safe": true,
+      "description": "MACD histogram."
+    },
+    {
+      "name": "bollinger_width_20",
+      "family": "volatility",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Bollinger band width normalized by SMA20."
+    },
+    {
+      "name": "vwap_distance",
+      "family": "microstructure",
+      "window": "intraday",
+      "leakage_safe": true,
+      "description": "Distance of close vs intraday VWAP."
+    },
+    {
+      "name": "rolling_vol_5",
+      "family": "volatility",
+      "window": "5 bars",
+      "leakage_safe": true,
+      "description": "Std of lagged returns over 5 bars."
+    },
+    {
+      "name": "rolling_vol_20",
+      "family": "volatility",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Std of lagged returns over 20 bars."
+    },
+    {
+      "name": "atr_14",
+      "family": "volatility",
+      "window": "14 bars",
+      "leakage_safe": true,
+      "description": "Average true range."
+    },
+    {
+      "name": "gap_open_to_prev_close",
+      "family": "microstructure",
+      "window": "1 day",
+      "leakage_safe": true,
+      "description": "Open-to-prev-close gap."
+    },
+    {
+      "name": "relative_volume_20",
+      "family": "volume",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Volume / rolling mean volume."
+    },
+    {
+      "name": "dist_to_low_20",
+      "family": "price_location",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Distance from rolling low."
+    },
+    {
+      "name": "dist_to_high_20",
+      "family": "price_location",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Distance to rolling high."
+    },
+    {
+      "name": "sma_slope_5_20",
+      "family": "trend",
+      "window": "5/20 bars",
+      "leakage_safe": true,
+      "description": "SMA(5) vs SMA(20) normalized spread."
+    },
+    {
+      "name": "beta_20",
+      "family": "relative_strength",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Rolling beta versus benchmark."
+    },
+    {
+      "name": "rel_strength_20",
+      "family": "relative_strength",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Cumulative return spread vs benchmark."
+    },
+    {
+      "name": "vol_regime",
+      "family": "regime",
+      "window": "5/20 bars",
+      "leakage_safe": true,
+      "description": "Volatility regime low/normal/high."
+    },
+    {
+      "name": "recent_drawdown_20",
+      "family": "risk",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Close to rolling max drawdown."
+    },
+    {
+      "name": "intraday_range_5",
+      "family": "range",
+      "window": "5 bars",
+      "leakage_safe": true,
+      "description": "Rolling intraday range intensity."
+    },
+    {
+      "name": "range_width_5",
+      "family": "range",
+      "window": "5 bars",
+      "leakage_safe": true,
+      "description": "Rolling high-low width 5 bars."
+    },
+    {
+      "name": "range_width_20",
+      "family": "range",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Rolling high-low width 20 bars."
+    },
+    {
+      "name": "range_width_60",
+      "family": "range",
+      "window": "60 bars",
+      "leakage_safe": true,
+      "description": "Rolling high-low width 60 bars."
+    },
+    {
+      "name": "price_position_in_range_20",
+      "family": "range",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Price location in rolling range."
+    },
+    {
+      "name": "trend_context_m3",
+      "family": "trend",
+      "window": "65 bars",
+      "leakage_safe": true,
+      "description": "Distance vs SMA65 for intermediate trend context."
+    },
+    {
+      "name": "slope_4w",
+      "family": "trend",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "Approx 4-week slope as cumulative return."
+    },
+    {
+      "name": "slope_8w",
+      "family": "trend",
+      "window": "40 bars",
+      "leakage_safe": true,
+      "description": "Approx 8-week slope as cumulative return."
+    },
+    {
+      "name": "slope_13w",
+      "family": "trend",
+      "window": "65 bars",
+      "leakage_safe": true,
+      "description": "Approx 13-week slope as cumulative return."
+    },
+    {
+      "name": "drawdown_13w",
+      "family": "risk",
+      "window": "65 bars",
+      "leakage_safe": true,
+      "description": "Drawdown vs rolling 13-week peak."
+    },
+    {
+      "name": "range_compression_20_60",
+      "family": "range",
+      "window": "20/60 bars",
+      "leakage_safe": true,
+      "description": "Compression/expansion ratio of short vs long range width."
+    },
+    {
+      "name": "rel_strength_4w",
+      "family": "relative_strength",
+      "window": "20 bars",
+      "leakage_safe": true,
+      "description": "4-week relative strength vs benchmark."
+    },
+    {
+      "name": "rel_strength_8w",
+      "family": "relative_strength",
+      "window": "40 bars",
+      "leakage_safe": true,
+      "description": "8-week relative strength vs benchmark."
+    },
+    {
+      "name": "rel_strength_13w",
+      "family": "relative_strength",
+      "window": "65 bars",
+      "leakage_safe": true,
+      "description": "13-week relative strength vs benchmark."
+    },
+    {
+      "name": "month_of_year",
+      "family": "seasonality",
+      "window": "calendar",
+      "leakage_safe": true,
+      "description": "Month index for simple seasonality."
+    },
+    {
+      "name": "relative_week_of_month",
+      "family": "seasonality",
+      "window": "calendar",
+      "leakage_safe": true,
+      "description": "Relative week index within month (1..5)."
+    },
+    {
+      "name": "dist_to_low_3m",
+      "family": "price_location",
+      "window": "63 bars",
+      "leakage_safe": true,
+      "description": "Distance to rolling 3-month low."
+    },
+    {
+      "name": "dist_to_low_6m",
+      "family": "price_location",
+      "window": "126 bars",
+      "leakage_safe": true,
+      "description": "Distance to rolling 6-month low."
+    },
+    {
+      "name": "dist_to_low_12m",
+      "family": "price_location",
+      "window": "252 bars",
+      "leakage_safe": true,
+      "description": "Distance to rolling 12-month low."
+    },
+    {
+      "name": "rolling_vol_60",
+      "family": "volatility",
+      "window": "60 bars",
+      "leakage_safe": true,
+      "description": "Std of lagged returns over 60 bars."
+    },
+    {
+      "name": "vol_persistence_20_60",
+      "family": "volatility",
+      "window": "20/60 bars",
+      "leakage_safe": true,
+      "description": "Volatility persistence ratio rolling_vol_20/rolling_vol_60."
+    },
+    {
+      "name": "range_amp_daily_5",
+      "family": "range",
+      "window": "5 days",
+      "leakage_safe": true,
+      "description": "Average recent daily range amplitude over 5 days."
+    },
+    {
+      "name": "range_amp_daily_13",
+      "family": "range",
+      "window": "13 days",
+      "leakage_safe": true,
+      "description": "Average recent daily range amplitude over 13 days."
+    },
+    {
+      "name": "ai_action",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "Action from AI sheet."
+    },
+    {
+      "name": "ai_conviction",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "Conviction from AI sheet."
+    },
+    {
+      "name": "ai_floor_d1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI floor forecast d1."
+    },
+    {
+      "name": "ai_ceiling_d1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI ceiling forecast d1."
+    },
+    {
+      "name": "ai_floor_w1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI floor forecast w1."
+    },
+    {
+      "name": "ai_ceiling_w1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI ceiling forecast w1."
+    },
+    {
+      "name": "ai_floor_q1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI floor forecast q1."
+    },
+    {
+      "name": "ai_ceiling_q1",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI ceiling forecast q1."
+    },
+    {
+      "name": "ai_floor_m3",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "AI floor forecast m3."
+    },
+    {
+      "name": "ai_conviction_long",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "Long-horizon AI conviction."
+    },
+    {
+      "name": "ai_recency_long",
+      "family": "ai",
+      "window": "days",
+      "leakage_safe": true,
+      "description": "Days since long-horizon AI update."
+    },
+    {
+      "name": "ai_horizon_alignment",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "Monotonic alignment of AI floor levels across horizons."
+    },
+    {
+      "name": "ai_recency",
+      "family": "ai",
+      "window": "days",
+      "leakage_safe": true,
+      "description": "Days since AI sheet update."
+    },
+    {
+      "name": "ai_consensus_score",
+      "family": "ai",
+      "window": "point-in-time",
+      "leakage_safe": true,
+      "description": "Aggregated consensus score from AI sheet."
+    }
+  ],
+  "walk_forward_folds": [],
+  "missingness_report": [],
+  "target_documentation": {
+    "floor_targets": "floor_h = min(low) in forward horizon h where h in {d1,w1,q1,m3}.",
+    "ceiling_targets": "ceiling_h = max(high) in forward horizon h where h in {d1,w1,q1}.",
+    "m3_target": {
+      "floor_m3": "realized minimum low over next 13 relative market weeks (up to 65 future sessions).",
+      "floor_week_m3": "relative week class 1..13 containing the realized floor_m3.",
+      "week_assignment": "build contiguous future week chunks of up to 5 trading sessions; holidays/incomplete weeks keep available sessions.",
+      "tie_break_rule": "if two weeks share identical floor low, choose earliest relative week index for stability.",
+      "extra_outputs": [
+        "realized_range_m3",
+        "forward_return_m3",
+        "floor_breach_flag_m3",
+        "floor_week_m3_start_date",
+        "floor_week_m3_end_date"
+      ]
+    },
+    "temporal_targets": {
+      "d1": "Event timestamp is labeled at bar resolution, then mapped to OPEN/OPEN_PLUS_2H/OPEN_PLUS_4H/OPEN_PLUS_6H/CLOSE.",
+      "w1": "Relative business day index (1..5) where floor/ceiling occurs within next 5 trading days.",
+      "q1": "Relative business day index (1..10) where floor/ceiling occurs within next 10 trading days."
+    },
+    "calculation_windows": {
+      "returns": [
+        1,
+        2,
+        5,
+        10
+      ],
+      "volatility": [
+        5,
+        20,
+        60
+      ],
+      "momentum": [
+        10,
+        14,
+        20,
+        40,
+        65
+      ],
+      "atr": 14,
+      "relative_volume": 20,
+      "rolling_extremes": [
+        20,
+        60,
+        63,
+        126,
+        252
+      ],
+      "beta_relative_strength": 20
+    }
+  },
+  "final_model_columns": [],
+  "model_competition": {
+    "models_by_horizon": {
+      "d1": [
+        {
+          "model_id": "evt_cp_d1",
+          "model_family": "evt_changepoint_hybrid",
+          "horizon": "d1",
+          "predicts": [
+            "floor_d1",
+            "ceiling_d1"
+          ],
+          "objective": "tail_extreme_probabilistic_regression",
+          "notes": "Modelo basado en recomendaciones de los estudios del repo: EVT/POT para colas + detector de régimen (CUSUM/changepoints) para robustecer timing de extremos piso/techo."
+        },
+        {
+          "model_id": "xgboost_d1",
+          "model_family": "xgboost",
+          "horizon": "d1",
+          "predicts": [
+            "floor_d1",
+            "ceiling_d1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Ensamble boosting eficiente para datos tabulares con no linealidades e interacciones."
+        },
+        {
+          "model_id": "lstm_d1",
+          "model_family": "lstm_sequence",
+          "horizon": "d1",
+          "predicts": [
+            "floor_d1",
+            "ceiling_d1"
+          ],
+          "objective": "multi_output_regression",
+          "notes": "Modelo secuencial para dependencia temporal; usa ventanas lookback y masking por missing."
+        },
+        {
+          "model_id": "qenet_d1",
+          "model_family": "quantile_elastic_net",
+          "horizon": "d1",
+          "predicts": [
+            "floor_d1",
+            "ceiling_d1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Baseline interpretable con regularización; útil para estabilidad y explainability."
+        }
+      ],
+      "w1": [
+        {
+          "model_id": "evt_cp_w1",
+          "model_family": "evt_changepoint_hybrid",
+          "horizon": "w1",
+          "predicts": [
+            "floor_w1",
+            "ceiling_w1"
+          ],
+          "objective": "tail_extreme_probabilistic_regression",
+          "notes": "Modelo basado en recomendaciones de los estudios del repo: EVT/POT para colas + detector de régimen (CUSUM/changepoints) para robustecer timing de extremos piso/techo."
+        },
+        {
+          "model_id": "xgboost_w1",
+          "model_family": "xgboost",
+          "horizon": "w1",
+          "predicts": [
+            "floor_w1",
+            "ceiling_w1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Ensamble boosting eficiente para datos tabulares con no linealidades e interacciones."
+        },
+        {
+          "model_id": "lstm_w1",
+          "model_family": "lstm_sequence",
+          "horizon": "w1",
+          "predicts": [
+            "floor_w1",
+            "ceiling_w1"
+          ],
+          "objective": "multi_output_regression",
+          "notes": "Modelo secuencial para dependencia temporal; usa ventanas lookback y masking por missing."
+        },
+        {
+          "model_id": "qenet_w1",
+          "model_family": "quantile_elastic_net",
+          "horizon": "w1",
+          "predicts": [
+            "floor_w1",
+            "ceiling_w1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Baseline interpretable con regularización; útil para estabilidad y explainability."
+        }
+      ],
+      "q1": [
+        {
+          "model_id": "evt_cp_q1",
+          "model_family": "evt_changepoint_hybrid",
+          "horizon": "q1",
+          "predicts": [
+            "floor_q1",
+            "ceiling_q1"
+          ],
+          "objective": "tail_extreme_probabilistic_regression",
+          "notes": "Modelo basado en recomendaciones de los estudios del repo: EVT/POT para colas + detector de régimen (CUSUM/changepoints) para robustecer timing de extremos piso/techo."
+        },
+        {
+          "model_id": "xgboost_q1",
+          "model_family": "xgboost",
+          "horizon": "q1",
+          "predicts": [
+            "floor_q1",
+            "ceiling_q1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Ensamble boosting eficiente para datos tabulares con no linealidades e interacciones."
+        },
+        {
+          "model_id": "lstm_q1",
+          "model_family": "lstm_sequence",
+          "horizon": "q1",
+          "predicts": [
+            "floor_q1",
+            "ceiling_q1"
+          ],
+          "objective": "multi_output_regression",
+          "notes": "Modelo secuencial para dependencia temporal; usa ventanas lookback y masking por missing."
+        },
+        {
+          "model_id": "qenet_q1",
+          "model_family": "quantile_elastic_net",
+          "horizon": "q1",
+          "predicts": [
+            "floor_q1",
+            "ceiling_q1"
+          ],
+          "objective": "quantile_regression",
+          "notes": "Baseline interpretable con regularización; útil para estabilidad y explainability."
+        }
+      ]
+    },
+    "protocol": {
+      "selection_metric": {
+        "primary": "pinball_loss_p10_p90",
+        "secondary": [
+          "coverage_10_90",
+          "mae_midpoint",
+          "hit_rate_floor_breach",
+          "hit_rate_ceiling_reach"
+        ]
+      },
+      "validation": {
+        "scheme": "walk_forward",
+        "retrain_each_fold": true,
+        "purge_gap_days": 1,
+        "embargo_days": 1
+      },
+      "pdf_recommendation_traceability": {
+        "recommended_core": [
+          "EVT/POT",
+          "CUSUM/ChangePoints",
+          "Temporal CV with purge/embargo"
+        ],
+        "source_docs": [
+          "docs/10_resumenes/02_estudio-piso-techo-acciones-liquidas.md",
+          "docs/20_fuentes/estudio-del-piso-y-el-techo-intradia-en-acciones-liquidas-definiciones-literatura-metodos-de.txt"
+        ]
+      },
+      "tie_break": "best_calibration_then_lowest_turnover_error"
+    }
+  },
+  "horizon_coverage": {
+    "m3": {
+      "horizon": "m3",
+      "rows": 0,
+      "coverage": {
+        "floor_m3": 0.0,
+        "realized_floor_m3": 0.0,
+        "floor_week_m3": 0.0,
+        "realized_range_m3": 0.0,
+        "forward_return_m3": 0.0,
+        "floor_breach_flag_m3": 0.0,
+        "floor_week_m3_start_date": 0.0,
+        "floor_week_m3_end_date": 0.0
+      }
+    }
+  }
+}
