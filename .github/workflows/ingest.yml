@@ -22,7 +22,7 @@ jobs:
       reason: ${{ steps.guard.outputs.reason }}
       session_day: ${{ steps.guard.outputs.session_day }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check market gate
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind always_open_day --data-dir data
@@ -32,7 +32,7 @@ jobs:
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Initialize DBs
         run: make init-dbs
       - name: Normalize DB permissions
@@ -60,6 +60,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           git diff --cached --quiet || git commit -m "chore: ingest artifacts"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
       - name: Upload sqlite artifacts
         uses: actions/upload-artifact@v4

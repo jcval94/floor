@@ -35,7 +35,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -196,6 +196,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/training data/market data/persistence
           git diff --cached --quiet || git commit -m "chore: retrain selected model artifacts"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
 
       - name: Upload retrain artifacts

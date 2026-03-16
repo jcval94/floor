@@ -14,7 +14,7 @@ jobs:
   bootstrap_db:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Decide if bootstrap should run (one-time only)
         id: gate
@@ -67,6 +67,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/market data/persistence data/snapshots/workflow_runs/db_bootstrap.json
           git diff --cached --quiet || git commit -m "chore: bootstrap sqlite databases"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
 
       - name: Upload sqlite artifacts
