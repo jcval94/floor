@@ -15,6 +15,7 @@ from forecasting.run_forecast import run_forecast_pipeline
 
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
+MISSING_CHAMPIONS_REASON = "faltan artefactos entrenados (value_champion.json y timing_champion.json)"
 
 
 def _signal_from_prediction(symbol: str, horizon: Literal["d1", "w1", "q1"], floor: float, ceiling: float) -> SignalRecord:
@@ -196,6 +197,14 @@ def run_intraday_cycle(
     blocked = generated["blocked_list"]
     if not forecasts:
         reason = "; ".join(str(item.get("reason", "unknown")) for item in blocked[:3]) or "forecast generation blocked"
+        blocked_reasons = [str(item.get("reason", "")) for item in blocked]
+        if blocked_reasons and all(MISSING_CHAMPIONS_REASON in entry for entry in blocked_reasons):
+            logger.warning(
+                "[predictions] skip event=%s: %s",
+                event_type,
+                reason,
+            )
+            return
         raise RuntimeError(reason)
 
     for row in forecasts:

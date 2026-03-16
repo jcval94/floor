@@ -54,3 +54,19 @@ def test_run_intraday_cycle_uses_trained_champions(tmp_path: Path) -> None:
     assert len(m3_rows) == 1
     assert "m3_status" in m3_rows[0]["m3_payload"]
     assert (data_dir / "persistence" / "app.sqlite").exists()
+
+
+def test_run_intraday_cycle_skips_when_champions_missing(tmp_path: Path) -> None:
+    root_dir = tmp_path
+    data_dir = tmp_path / "data"
+    (root_dir / "config").mkdir(parents=True, exist_ok=True)
+    (root_dir / "config" / "universe.yaml").write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    _seed_market_db(data_dir / "market" / "market_data.sqlite")
+
+    cfg = RuntimeConfig(root_dir=root_dir, data_dir=data_dir, recommendations_csv_url=None, live_trading_enabled=False)
+    run_intraday_cycle(event_type="OPEN", symbols=["AAPL"], cfg=cfg)
+
+    assert not (data_dir / "predictions" / "AAPL.jsonl").exists()
+    assert not (data_dir / "signals" / "AAPL.jsonl").exists()
+    assert not (data_dir / "orders" / "AAPL.jsonl").exists()

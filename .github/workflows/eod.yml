@@ -22,7 +22,7 @@ jobs:
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Detect close window
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
@@ -32,7 +32,7 @@ jobs:
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build site snapshot
         run: |
           PYTHONPATH=src python -m floor.main build-site
@@ -45,6 +45,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/reports data/snapshots site/data
           git diff --cached --quiet || git commit -m "chore: eod artifacts"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
 
   eod_info:

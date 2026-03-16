@@ -16,7 +16,7 @@ jobs:
   monitor_critical:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Generate monitoring snapshot
         run: |
           mkdir -p data/metrics
@@ -37,6 +37,7 @@ PY
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/metrics/public_metrics.json
           git diff --cached --quiet || git commit -m "chore: monitoring metrics"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
 
   monitor_info:

@@ -23,7 +23,7 @@ jobs:
       event: ${{ steps.guard.outputs.event }}
       session_day: ${{ steps.guard.outputs.session_day }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Detect market checkpoint
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Initialize DBs
         run: make init-dbs
@@ -71,6 +71,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/predictions data/signals data/orders data/snapshots data/persistence
           git diff --cached --quiet || git commit -m "chore: intraday ${{ needs.gate.outputs.event }} artifacts"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
       - name: Upload sqlite artifacts
         uses: actions/upload-artifact@v4

@@ -16,7 +16,7 @@ jobs:
   assess_critical:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build current modelable dataset from in-repo DB
         run: |
           PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
@@ -29,6 +29,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/training data/persistence data/market
           git diff --cached --quiet || git commit -m "chore: retrain assessment"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
           git push
       - name: Upload assessment artifacts
         uses: actions/upload-artifact@v4
