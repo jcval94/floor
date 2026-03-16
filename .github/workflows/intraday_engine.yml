@@ -23,7 +23,7 @@ jobs:
       event: ${{ steps.guard.outputs.event }}
       session_day: ${{ steps.guard.outputs.session_day }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Detect market checkpoint
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Initialize DBs
         run: make init-dbs
@@ -55,30 +55,123 @@ jobs:
             echo "::warning::Market DB daily_bars is empty (COUNT(*)=0). Triggering Yahoo ingest preflight."
             PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
           fi
+      - name: Bootstrap champion artifacts when missing
+        run: |
+          set -euo pipefail
+          value_champion="data/training/models/value_champion.json"
+          timing_champion="data/training/models/timing_champion.json"
+          if [ -f "$value_champion" ] && [ -f "$timing_champion" ]; then
+            echo "Champion artifacts already present."
+            exit 0
+          fi
+
+          echo "::warning::Missing champion artifacts. Running bootstrap retraining for value,timing."
+          dataset_path="data/training/modelable_dataset.json"
+          if [ ! -f "$dataset_path" ]; then
+            echo "Dataset missing, building it from market DB before bootstrap retraining."
+            PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
+            PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output "$dataset_path"
+          fi
+
+          version_tag="bootstrap-$(date -u +%Y%m%dT%H%M%SZ)"
+          bash scripts/retrain_models.sh "$dataset_path" data/training "$version_tag" "value,timing"
+
+          for champion in "$value_champion" "$timing_champion"; do
+            if [ ! -f "$champion" ]; then
+              echo "::error::Champion artifact missing after bootstrap retraining: $champion"
+              exit 1
+            fi
+          done
+
+      - name: Capture SQLite baseline counters
+        id: db_before
+        run: |
+          set -euo pipefail
+          db="data/persistence/app.sqlite"
+          pred_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM predictions;")
+          sig_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM signals;")
+          ord_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM orders;")
+          {
+            echo "predictions=$pred_before"
+            echo "signals=$sig_before"
+            echo "orders=$ord_before"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run intraday engine (idempotent retry)
         env:
           LIVE_TRADING_ENABLED: "false"
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
         run: |
+          set -euo pipefail
           for i in 1 2 3; do
-            PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" && break || sleep $((i*30))
+            if PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}"; then
+              break
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "::error::Intraday engine failed after 3 attempts."
+              exit 1
+            fi
+            sleep $((i*30))
           done
+
+      - name: Validate SQLite writes after intraday run
+        run: |
+          set -euo pipefail
+          db="data/persistence/app.sqlite"
+          integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
+          [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
+
+          pred_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM predictions;")
+          sig_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM signals;")
+          ord_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM orders;")
+
+          pred_delta=$((pred_after - ${{ steps.db_before.outputs.predictions }}))
+          sig_delta=$((sig_after - ${{ steps.db_before.outputs.signals }}))
+          ord_delta=$((ord_after - ${{ steps.db_before.outputs.orders }}))
+
+          echo "predictions delta=$pred_delta"
+          echo "signals delta=$sig_delta"
+          echo "orders delta=$ord_delta"
+
+          if [ "$pred_delta" -le 0 ] || [ "$sig_delta" -le 0 ]; then
+            echo "::error::Expected SQLite inserts were not persisted (predictions/signals deltas must be > 0)."
+            exit 1
+          fi
+
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
       - name: Commit auditable outputs
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/predictions data/signals data/orders data/snapshots data/persistence
-          git diff --cached --quiet || git commit -m "chore: intraday ${{ needs.gate.outputs.event }} artifacts"
-          git push
-      - name: Upload sqlite artifacts
+          git add data/predictions data/signals data/orders data/snapshots data/persistence data/training/models data/training/metrics
+          if git diff --cached --quiet; then
+            echo "No auditable changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: intraday ${{ needs.gate.outputs.event }} artifacts"
+          for attempt in 1 2 3; do
+            if git push; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to push after 3 attempts (non-fast-forward persisted)."
+              exit 1
+            fi
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+          done
+      - name: Upload runtime artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: intraday-engine-sqlite
+          name: intraday-engine-runtime
           path: |
             data/market/market_data.sqlite
             data/persistence/app.sqlite
+            data/training/models
+            data/training/metrics
           if-no-files-found: ignore
 
   engine_info:
