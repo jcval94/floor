@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from pathlib import Path
+
 from forecasting.load_models import load_champion_models
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
 from forecasting.render_time_labels import render_horizon_time_labels
@@ -32,9 +34,15 @@ def _m3_block_reason(row: dict) -> str | None:
     return None
 
 
-def generate_forecasts(market_rows: list[dict], ai_by_symbol: dict[str, dict], session: str, as_of: datetime | None = None) -> dict:
+def generate_forecasts(
+    market_rows: list[dict],
+    ai_by_symbol: dict[str, dict],
+    session: str,
+    as_of: datetime | None = None,
+    model_registry_dir: Path | None = None,
+) -> dict:
     as_of = as_of or datetime.now(tz=timezone.utc)
-    model = load_champion_models()
+    model = load_champion_models() if model_registry_dir is None else load_champion_models(model_registry_dir)
 
     forecasts: list[dict] = []
     blocked: list[dict] = []
