@@ -24,6 +24,9 @@ def _load_dataset(path: Path) -> list[dict]:
         rows = payload
     else:
         raise ValueError("Unsupported dataset payload")
+
+    if not isinstance(rows, list):
+        raise ValueError("Unsupported dataset rows; expected a list")
     logger.info("[training] loaded rows=%s", len(rows))
     if rows:
         logger.info("[training] sample row=%s", rows[0])

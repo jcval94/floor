@@ -132,5 +132,5 @@ class ChampionModelSet:
         )
 
 
-def load_champion_models() -> ChampionModelSet:
-    return ChampionModelSet()
+def load_champion_models(model_registry_dir: Path | None = None) -> ChampionModelSet:
+    return ChampionModelSet(model_registry_dir=model_registry_dir)
