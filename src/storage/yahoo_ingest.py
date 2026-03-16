@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 def _to_iso_utc(epoch_seconds: int) -> str:
     return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).isoformat()
 
+def _symbol_to_yahoo(symbol: str) -> str:
+    return symbol.upper().replace(".", "-")
+
 
 def fetch_yahoo_chart(symbol: str, range_: str, interval: str) -> dict:
     base = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -119,7 +122,8 @@ def ingest_yahoo_to_db(
         while attempts < 3 and not ok:
             attempts += 1
             try:
-                payload = fetch_yahoo_chart(symbol, range_=range_, interval=interval)
+                yahoo_symbol = _symbol_to_yahoo(symbol)
+                payload = fetch_yahoo_chart(yahoo_symbol, range_=range_, interval=interval)
                 bars = parse_daily_bars(symbol, payload)
                 upserted = upsert_daily_bars(db_path, bars, raw_payload=None)
                 inserted += upserted
