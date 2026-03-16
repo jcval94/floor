@@ -34,20 +34,27 @@ function _opportunityMetrics(primaryForecast) {
 }
 
 function _extractM3(rows) {
-  const primaryForecast = _selectPrimaryForecast(rows);
-  const week = Number(primaryForecast.floor_week_m3 || 0);
-  const top3 = Array.isArray(primaryForecast.floor_week_m3_top3) ? primaryForecast.floor_week_m3_top3 : [];
+  const safeRows = rows || [];
+  const m3Row = safeRows.find((r) => r.horizon === 'm3')
+    || safeRows.find((r) => Number(r.floor_week_m3 || 0) > 0)
+    || _selectPrimaryForecast(safeRows)
+    || {};
+  const m3Payload = m3Row.m3_payload || {};
+  const week = Number(m3Row.floor_week_m3 || m3Payload.floor_week_m3 || m3Row.floor_time_bucket || 0);
+  const top3 = Array.isArray(m3Row.floor_week_m3_top3)
+    ? m3Row.floor_week_m3_top3
+    : (Array.isArray(m3Payload.floor_week_m3_top3) ? m3Payload.floor_week_m3_top3 : []);
   return {
-    floor: Number(primaryForecast.floor_m3),
+    floor: Number(m3Row.floor_m3 ?? m3Payload.floor_m3 ?? m3Row.floor_value),
     week,
-    conf: Number(primaryForecast.floor_week_m3_confidence || 0),
-    start: primaryForecast.floor_week_m3_start_date || '',
-    end: primaryForecast.floor_week_m3_end_date || '',
-    labelHuman: primaryForecast.floor_week_m3_label_human || m3WeekHumanLabel(week),
+    conf: Number(m3Row.floor_week_m3_confidence ?? m3Payload.floor_week_m3_confidence ?? m3Row.confidence_score ?? 0),
+    start: m3Row.floor_week_m3_start_date || m3Payload.floor_week_m3_start_date || '',
+    end: m3Row.floor_week_m3_end_date || m3Payload.floor_week_m3_end_date || '',
+    labelHuman: m3Row.floor_week_m3_label_human || m3Payload.floor_week_m3_label_human || m3WeekHumanLabel(week),
     top3,
-    delta: Number(primaryForecast.m3_delta_vs_prev || 0),
-    material: String(primaryForecast.m3_material_change || '').toLowerCase() === 'yes',
-    proximity: primaryForecast.m3_week_proximity || m3ProximityLabel(week),
+    delta: Number(m3Row.m3_delta_vs_prev || 0),
+    material: String(m3Row.m3_material_change || '').toLowerCase() === 'yes',
+    proximity: m3Row.m3_week_proximity || m3ProximityLabel(week),
   };
 }
 

@@ -52,9 +52,21 @@ def _load_ai_map(path: Path | None, recommendations_csv_url: str | None) -> dict
     return by_symbol
 
 
-def run_forecast_pipeline(market_rows: list[dict], ai_by_symbol: dict[str, dict], session: str, as_of: datetime | None = None) -> dict:
+def run_forecast_pipeline(
+    market_rows: list[dict],
+    ai_by_symbol: dict[str, dict],
+    session: str,
+    as_of: datetime | None = None,
+    model_registry_dir: Path | None = None,
+) -> dict:
     as_of = as_of or datetime.now(tz=timezone.utc)
-    generated = generate_forecasts(market_rows=market_rows, ai_by_symbol=ai_by_symbol, session=session, as_of=as_of)
+    generated = generate_forecasts(
+        market_rows=market_rows,
+        ai_by_symbol=ai_by_symbol,
+        session=session,
+        as_of=as_of,
+        model_registry_dir=model_registry_dir,
+    )
     ranked = rank_opportunities(generated["forecasts"], generated["blocked"])
 
     return {
