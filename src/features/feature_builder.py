@@ -16,6 +16,12 @@ def _safe_mean(values: list[float]) -> float | None:
     return mean(values)
 
 
+def _to_float_or_fallback(value: object, fallback: float) -> float:
+    if value is None:
+        return fallback
+    return float(value)
+
+
 def _rolling(values: list[float], end_idx: int, window: int) -> list[float]:
     start = max(0, end_idx - window + 1)
     return values[start : end_idx + 1]
@@ -81,7 +87,7 @@ def build_features(rows: list[dict]) -> list[dict]:
             low = float(row["low"])
             open_ = float(row["open"])
             volume = float(row.get("volume", 0.0))
-            bench_close = float(row.get("benchmark_close", close))
+            bench_close = _to_float_or_fallback(row.get("benchmark_close"), close)
             typical_price = (high + low + close) / 3
 
             if idx == 0:

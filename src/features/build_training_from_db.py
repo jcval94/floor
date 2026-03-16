@@ -3,12 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from floor.universe import parse_universe_yaml
 from storage.market_db import load_daily_bars
 
 logger = logging.getLogger(__name__)
+
+def _session_date(timestamp: str) -> str:
+    return datetime.fromisoformat(timestamp).date().isoformat()
 
 
 def build_rows_from_db(db_path: Path, universe_path: Path, benchmark_symbol: str = "SPY") -> list[dict]:
@@ -31,7 +35,9 @@ def build_rows_from_db(db_path: Path, universe_path: Path, benchmark_symbol: str
         except Exception as exc:
             logger.warning("[etl:training-rows] skipping bad row=%s error=%s", row, exc)
 
-    benchmark_close_by_ts = {r["timestamp"]: float(r["close"]) for r in by_symbol.get(benchmark_symbol, [])}
+    benchmark_close_by_session = {
+        _session_date(r["timestamp"]): float(r["close"]) for r in by_symbol.get(benchmark_symbol, [])
+    }
 
     output: list[dict] = []
     for symbol in symbols:
@@ -47,7 +53,7 @@ def build_rows_from_db(db_path: Path, universe_path: Path, benchmark_symbol: str
                         "low": float(row["low"]),
                         "close": float(row["close"]),
                         "volume": float(row["volume"]),
-                        "benchmark_close": benchmark_close_by_ts.get(ts),
+                        "benchmark_close": benchmark_close_by_session.get(_session_date(ts)),
                         "ai_conviction": None,
                         "ai_floor_d1": None,
                         "ai_ceiling_d1": None,

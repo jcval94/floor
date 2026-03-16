@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from features.run_features import build_modelable_dataset
+from features.feature_builder import build_features
 
 
 def _next_business_day(d: datetime) -> datetime:
@@ -182,3 +183,33 @@ def test_m3_target_documentation_exists() -> None:
     docs = artifact["target_documentation"]["m3_target"]
     assert "tie_break_rule" in docs
     assert "week_assignment" in docs
+
+
+def test_build_features_uses_close_when_benchmark_close_missing() -> None:
+    rows = [
+        {
+            "symbol": "AAPL",
+            "timestamp": "2024-01-02T09:30:00",
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.5,
+            "volume": 1_000,
+            "benchmark_close": None,
+        },
+        {
+            "symbol": "AAPL",
+            "timestamp": "2024-01-02T11:30:00",
+            "open": 100.5,
+            "high": 102.0,
+            "low": 100.0,
+            "close": 101.0,
+            "volume": 1_100,
+            "benchmark_close": None,
+        },
+    ]
+
+    featured = build_features(rows)
+    assert len(featured) == 2
+    assert featured[0]["ret_lag_1"] is None
+    assert featured[1]["ret_lag_1"] == rows[1]["close"] / rows[0]["close"] - 1.0
