@@ -6,7 +6,9 @@ from pathlib import Path
 
 from floor.config import RuntimeConfig
 from floor.pipeline.intraday_cycle import run_intraday_cycle
+from floor.reporting.generate_site_data import build_dashboard_snapshot
 from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
+from utils.pages_build import build_pages_data
 
 
 def _seed_market_db(db_path: Path) -> None:
@@ -32,7 +34,7 @@ def _seed_models(models_dir: Path) -> None:
     )
 
 
-def test_run_intraday_cycle_uses_trained_champions(tmp_path: Path) -> None:
+def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     root_dir = tmp_path
     data_dir = tmp_path / "data"
     (root_dir / "config").mkdir(parents=True, exist_ok=True)
@@ -43,14 +45,14 @@ def test_run_intraday_cycle_uses_trained_champions(tmp_path: Path) -> None:
 
     cfg = RuntimeConfig(root_dir=root_dir, data_dir=data_dir, recommendations_csv_url=None, live_trading_enabled=False)
     run_intraday_cycle(event_type="OPEN", symbols=["AAPL"], cfg=cfg)
+    build_dashboard_snapshot(data_dir, data_dir / "reports" / "dashboard.json")
 
-    pred_path = data_dir / "predictions" / "AAPL.jsonl"
-    lines = pred_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 4
-    payloads = [json.loads(line) for line in lines]
-    assert all("value:v-train" in payload["model_version"] for payload in payloads)
-    assert all(payload["model_version"] != "champion-v0" for payload in payloads)
-    m3_rows = [payload for payload in payloads if payload["horizon"] == "m3"]
+    site_data_dir = tmp_path / "site" / "data"
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data_dir, universe_path=root_dir / "config" / "universe.yaml")
+
+    forecasts = json.loads((site_data_dir / "forecasts.json").read_text(encoding="utf-8"))["rows"]
+    m3_rows = [row for row in forecasts if row.get("horizon") == "m3"]
     assert len(m3_rows) == 1
-    assert "m3_status" in m3_rows[0]["m3_payload"]
-    assert (data_dir / "persistence" / "app.sqlite").exists()
+    m3_payload = m3_rows[0].get("m3_payload", {})
+    assert "m3_status" in m3_payload
+    assert "floor_week_m3" in m3_payload

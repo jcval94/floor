@@ -26,10 +26,15 @@ MODEL_DEFAULTS = {
 def _load_dataset_rows(path: Path) -> list[dict]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
-        return payload.get("rows", [])
-    if isinstance(payload, list):
-        return payload
-    raise ValueError(f"Unsupported dataset payload: {path}")
+        rows = payload.get("rows", [])
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        raise ValueError(f"Unsupported dataset payload: {path}")
+
+    if not isinstance(rows, list):
+        raise ValueError(f"Unsupported dataset rows in {path}; expected list")
+    return rows
 
 
 def _split_eval_rows(rows: list[dict]) -> list[dict]:

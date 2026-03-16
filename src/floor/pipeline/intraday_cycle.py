@@ -63,9 +63,24 @@ def _latest_feature_rows(cfg: RuntimeConfig, symbols: list[str]) -> list[dict]:
     return [latest_by_symbol[symbol] for symbol in symbols if symbol in latest_by_symbol]
 
 
-def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1"], dict]]:
+def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
+    """Build normalized prediction payloads for d1/w1/q1/m3 horizons."""
     confidence = float(row.get("confidence_score", 0.5) or 0.5)
-    return [
+    m3_payload = {
+        "floor_m3": row.get("floor_m3"),
+        "floor_week_m3": row.get("floor_week_m3"),
+        "floor_week_m3_confidence": row.get("floor_week_m3_confidence"),
+        "floor_week_m3_top3": row.get("floor_week_m3_top3", []),
+        "floor_week_m3_start_date": row.get("floor_week_m3_start_date"),
+        "floor_week_m3_end_date": row.get("floor_week_m3_end_date"),
+        "floor_week_m3_label_human": row.get("floor_week_m3_label_human"),
+        "expected_return_m3": row.get("expected_return_m3"),
+        "expected_range_m3": row.get("expected_range_m3"),
+        "m3_status": row.get("m3_status"),
+        "m3_block_reason": row.get("m3_block_reason"),
+    }
+
+    payloads: list[tuple[Literal["d1", "w1", "q1", "m3"], dict]] = [
         (
             "d1",
             {
@@ -75,7 +90,12 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_time_bucket": str(row["ceiling_time_bucket_d1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
+                "confidence_score": confidence,
+                "expected_return": float(row.get("expected_return_d1", 0.0) or 0.0),
+                "expected_range": float(row.get("expected_range_d1", 0.0) or 0.0),
                 "event_type": event_type,
+                "emit_signal": True,
+                "m3_payload": m3_payload,
             },
         ),
         (
@@ -87,7 +107,12 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_time_bucket": str(row["ceiling_day_w1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
+                "confidence_score": confidence,
+                "expected_return": float(row.get("expected_return_w1", 0.0) or 0.0),
+                "expected_range": float(row.get("expected_range_w1", 0.0) or 0.0),
                 "event_type": event_type,
+                "emit_signal": True,
+                "m3_payload": m3_payload,
             },
         ),
         (
@@ -99,10 +124,37 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_time_bucket": str(row["ceiling_day_q1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
+                "confidence_score": confidence,
+                "expected_return": float(row.get("expected_return_q1", 0.0) or 0.0),
+                "expected_range": float(row.get("expected_range_q1", 0.0) or 0.0),
                 "event_type": event_type,
+                "emit_signal": True,
+                "m3_payload": m3_payload,
             },
         ),
     ]
+
+    payloads.append(
+        (
+            "m3",
+            {
+                "floor_value": float(m3_payload["floor_m3"]) if m3_payload.get("floor_m3") is not None else None,
+                "ceiling_value": None,
+                "floor_time_bucket": str(m3_payload.get("floor_week_m3") or ""),
+                "ceiling_time_bucket": "",
+                "floor_time_probability": float(m3_payload.get("floor_week_m3_confidence") or 0.0),
+                "ceiling_time_probability": 0.0,
+                "confidence_score": float(m3_payload.get("floor_week_m3_confidence") or 0.0),
+                "expected_return": float(m3_payload.get("expected_return_m3") or 0.0) if m3_payload.get("expected_return_m3") is not None else None,
+                "expected_range": float(m3_payload.get("expected_range_m3") or 0.0) if m3_payload.get("expected_range_m3") is not None else None,
+                "event_type": event_type,
+                "emit_signal": False,
+                "m3_payload": m3_payload,
+            },
+        )
+    )
+
+    return payloads
 
 
 def run_intraday_cycle(
@@ -133,7 +185,13 @@ def run_intraday_cycle(
     }
 
     as_of = datetime.now(tz=ET)
-    generated = run_forecast_pipeline(market_rows=market_rows, ai_by_symbol=ai_by_symbol, session=event_type, as_of=as_of)
+    generated = run_forecast_pipeline(
+        market_rows=market_rows,
+        ai_by_symbol=ai_by_symbol,
+        session=event_type,
+        as_of=as_of,
+        model_registry_dir=cfg.data_dir / "training" / "models",
+    )
     forecasts = generated["dataset_forecasts"]
     blocked = generated["blocked_list"]
     if not forecasts:
@@ -155,21 +213,26 @@ def run_intraday_cycle(
                 ceiling_time_bucket=payload["ceiling_time_bucket"],
                 floor_time_probability=payload["floor_time_probability"],
                 ceiling_time_probability=payload["ceiling_time_probability"],
+                confidence_score=payload["confidence_score"],
+                expected_return=payload["expected_return"],
+                expected_range=payload["expected_range"],
+                m3_payload=payload["m3_payload"],
                 model_version=str(row.get("model_version", "unknown")),
             )
             append_jsonl(cfg.data_dir / "predictions" / f"{symbol}.jsonl", prediction)
             logger.info("[predictions] wrote prediction symbol=%s horizon=%s", symbol, horizon)
 
-            signal = _signal_from_prediction(symbol, horizon, prediction.floor_value, prediction.ceiling_value)
-            if symbol in external and external[symbol].action in {"BUY", "SELL", "HOLD"}:
-                signal.action = external[symbol].action  # type: ignore[assignment]
-                signal.rationale += f" | external={external[symbol].note}"
-            append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
-            logger.info("[predictions] wrote signal symbol=%s horizon=%s action=%s", symbol, horizon, signal.action)
+            if payload.get("emit_signal", True):
+                signal = _signal_from_prediction(symbol, horizon, float(prediction.floor_value or 0.0), float(prediction.ceiling_value or 0.0))
+                if symbol in external and external[symbol].action in {"BUY", "SELL", "HOLD"}:
+                    signal.action = external[symbol].action  # type: ignore[assignment]
+                    signal.rationale += f" | external={external[symbol].note}"
+                append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
+                logger.info("[predictions] wrote signal symbol=%s horizon=%s action=%s", symbol, horizon, signal.action)
 
-            order = maybe_build_order(signal, cfg)
-            if order:
-                append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
-                logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon)
+                order = maybe_build_order(signal, cfg)
+                if order:
+                    append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
+                    logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon)
 
     logger.info("[predictions] finished intraday cycle event=%s forecasts=%s blocked=%s", event_type, len(forecasts), len(blocked))
