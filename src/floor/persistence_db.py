@@ -124,6 +124,32 @@ def init_persistence_db(db_path: Path) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prediction_reconciliations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prediction_id INTEGER NOT NULL UNIQUE,
+                symbol TEXT NOT NULL,
+                horizon TEXT NOT NULL,
+                predicted_as_of TEXT NOT NULL,
+                resolved_at TEXT NOT NULL,
+                model_version TEXT,
+                window_start TEXT,
+                window_end TEXT,
+                window_sessions INTEGER,
+                predicted_floor REAL,
+                predicted_ceiling REAL,
+                realized_floor REAL,
+                realized_ceiling REAL,
+                abs_error_floor REAL,
+                abs_error_ceiling REAL,
+                m3_predicted_week INTEGER,
+                m3_realized_week INTEGER,
+                m3_week_hit INTEGER,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
 
 
 def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
@@ -257,6 +283,43 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                     payload.get("cv_folds"),
                     json.dumps(payload.get("hyperparameter_grid"), ensure_ascii=False),
                     json.dumps(payload.get("tuning_summary"), ensure_ascii=False),
+                    raw,
+                ),
+            )
+        elif stream == "prediction_reconciliation" and payload.get("prediction_id") is not None:
+            conn.execute(
+                """
+                INSERT INTO prediction_reconciliations(
+                    prediction_id, symbol, horizon, predicted_as_of, resolved_at, model_version,
+                    window_start, window_end, window_sessions,
+                    predicted_floor, predicted_ceiling,
+                    realized_floor, realized_ceiling,
+                    abs_error_floor, abs_error_ceiling,
+                    m3_predicted_week, m3_realized_week, m3_week_hit,
+                    payload_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(prediction_id) DO NOTHING
+                """,
+                (
+                    payload.get("prediction_id"),
+                    payload.get("symbol"),
+                    payload.get("horizon"),
+                    payload.get("predicted_as_of"),
+                    payload.get("resolved_at"),
+                    payload.get("model_version"),
+                    payload.get("window_start"),
+                    payload.get("window_end"),
+                    payload.get("window_sessions"),
+                    payload.get("predicted_floor"),
+                    payload.get("predicted_ceiling"),
+                    payload.get("realized_floor"),
+                    payload.get("realized_ceiling"),
+                    payload.get("abs_error_floor"),
+                    payload.get("abs_error_ceiling"),
+                    payload.get("m3_predicted_week"),
+                    payload.get("m3_realized_week"),
+                    1 if bool(payload.get("m3_week_hit")) else 0 if payload.get("m3_week_hit") is not None else None,
                     raw,
                 ),
             )

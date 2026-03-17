@@ -6,6 +6,7 @@ import logging
 from floor.calendar import nearest_event_type
 from floor.config import RuntimeConfig
 from floor.pipeline.intraday_cycle import run_intraday_cycle
+from floor.prediction_reconciliation import reconcile_predictions
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.training.review import run_training_review
 from floor.universe import parse_universe_yaml
@@ -23,6 +24,7 @@ def main() -> None:
     run_cycle.add_argument("--symbols", default=None)
 
     sub.add_parser("review-training")
+    sub.add_parser("reconcile-predictions")
     sub.add_parser("build-site")
 
     args = parser.parse_args()
@@ -48,6 +50,9 @@ def main() -> None:
                 summary_path=cfg.data_dir / "training" / "review_summary_latest.json",
                 config_path=cfg.root_dir / "config" / "retraining.yaml",
             )
+        elif args.cmd == "reconcile-predictions":
+            logger.info("[main] running reconcile-predictions")
+            reconcile_predictions(cfg.data_dir)
         elif args.cmd == "build-site":
             logger.info("[main] running build-site")
             build_dashboard_snapshot(cfg.data_dir, output_path=cfg.data_dir / "reports" / "dashboard.json")
