@@ -116,6 +116,14 @@ def test_model_competition_has_four_models_including_lstm_xgboost_and_evt_per_ho
         assert "evt_changepoint_hybrid" in families
 
 
+def test_model_competition_exposes_flat_models_list_for_workflow_guards() -> None:
+    artifact = build_modelable_dataset(_synthetic_rows())
+    models = artifact["model_competition"]["models"]
+
+    assert len(models) == 12
+    assert {m["horizon"] for m in models} == {"d1", "w1", "q1"}
+
+
 def test_new_key_indicators_present() -> None:
     artifact = build_modelable_dataset(_synthetic_rows())
     sample = artifact["rows"][250]

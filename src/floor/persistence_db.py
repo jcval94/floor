@@ -78,6 +78,25 @@ def init_persistence_db(db_path: Path) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS model_competition_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                as_of TEXT,
+                version TEXT,
+                horizon TEXT,
+                model_id TEXT,
+                model_family TEXT,
+                is_champion INTEGER,
+                mae_floor REAL,
+                mae_ceiling REAL,
+                mae_spread REAL,
+                test_floor_coverage REAL,
+                test_ceiling_coverage REAL,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
 
 
 def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
@@ -148,6 +167,32 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                     payload.get("concept_drift"),
                     payload.get("calibration_drift"),
                     payload.get("performance_decay"),
+                    raw,
+                ),
+            )
+        elif stream == "model_competition" and str(payload.get("model_id", "")):
+            metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
+            conn.execute(
+                """
+                INSERT INTO model_competition_results(
+                    as_of, version, horizon, model_id, model_family, is_champion,
+                    mae_floor, mae_ceiling, mae_spread, test_floor_coverage, test_ceiling_coverage,
+                    payload_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("as_of"),
+                    payload.get("version"),
+                    payload.get("horizon"),
+                    payload.get("model_id"),
+                    payload.get("model_family"),
+                    1 if bool(payload.get("is_champion")) else 0,
+                    metrics.get("mae_floor"),
+                    metrics.get("mae_ceiling"),
+                    metrics.get("mae_spread"),
+                    metrics.get("test_floor_coverage"),
+                    metrics.get("test_ceiling_coverage"),
                     raw,
                 ),
             )
