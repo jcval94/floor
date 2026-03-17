@@ -40,14 +40,21 @@ function _extractM3(rows) {
     || _selectPrimaryForecast(safeRows)
     || {};
   const m3Payload = m3Row.m3_payload || {};
-  const week = Number(m3Row.floor_week_m3 || m3Payload.floor_week_m3 || m3Row.floor_time_bucket || 0);
   const top3 = Array.isArray(m3Row.floor_week_m3_top3)
     ? m3Row.floor_week_m3_top3
     : (Array.isArray(m3Payload.floor_week_m3_top3) ? m3Payload.floor_week_m3_top3 : []);
+  const floorRaw = m3Row.floor_m3 ?? m3Payload.floor_m3 ?? m3Row.floor_value;
+  const weekRaw = m3Row.floor_week_m3 || m3Payload.floor_week_m3 || m3Row.floor_time_bucket || 0;
+  const confRaw = m3Row.floor_week_m3_confidence ?? m3Payload.floor_week_m3_confidence ?? m3Row.confidence_score ?? 0;
+  const floor = Number(floorRaw);
+  const week = Number(weekRaw);
+  const conf = Number(confRaw);
+  const hasM3 = Number.isFinite(floor) || Number.isFinite(week) || Number.isFinite(conf);
   return {
-    floor: Number(m3Row.floor_m3 ?? m3Payload.floor_m3 ?? m3Row.floor_value),
+    floor,
     week,
-    conf: Number(m3Row.floor_week_m3_confidence ?? m3Payload.floor_week_m3_confidence ?? m3Row.confidence_score ?? 0),
+    conf,
+    hasM3,
     start: m3Row.floor_week_m3_start_date || m3Payload.floor_week_m3_start_date || '',
     end: m3Row.floor_week_m3_end_date || m3Payload.floor_week_m3_end_date || '',
     labelHuman: m3Row.floor_week_m3_label_human || m3Payload.floor_week_m3_label_human || m3WeekHumanLabel(week),
@@ -117,7 +124,7 @@ async function forecasts() {
 
   const m3Rows = Object.entries(grouped).map(([symbol, rows]) => ({ symbol, m3: _extractM3(rows) }));
   const m3Table = m3Rows.map(({ symbol, m3 }) =>
-    `<tr><td>${symbol}</td><td>${fmt(m3.floor)}</td><td>${m3.labelHuman}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${m3WeekBarsSvg(m3.top3)}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`
+    `<tr><td>${symbol}</td><td>${m3.hasM3 ? fmt(m3.floor) : '-'}</td><td>${m3.hasM3 ? m3.labelHuman : 'Sin m3'}</td><td>${m3.hasM3 ? `${m3.start || '-'} → ${m3.end || '-'}` : '-'}</td><td>${m3.hasM3 ? m3WeekBarsSvg(m3.top3) : '-'}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`
   ).join('');
   const m3Root = document.getElementById('m3TopWeeks');
   if (m3Root) m3Root.innerHTML = m3Table || emptyState('No hay datos m3 para mostrar.', 6);

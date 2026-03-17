@@ -16,6 +16,19 @@ def _find_data_root(path: Path) -> Path | None:
     return Path(*root_parts)
 
 
+def load_jsonl_rows(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rows.append(json.loads(line))
+    return rows
+
+
 def append_jsonl(path: Path, record: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = record_to_dict(record) if not isinstance(record, dict) else record
