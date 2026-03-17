@@ -130,3 +130,61 @@ def test_build_pages_data_limits_top_opportunities_and_adds_relative_fields(tmp_
     assert "spread_relative_pct" in opps[0]
     assert "opportunity_score" in opps[0]
     assert opps[0]["opportunity_score"] >= opps[-1]["opportunity_score"]
+
+
+def test_build_pages_data_handles_git_lfs_pointer_inputs(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training").mkdir(parents=True)
+
+    lfs_pointer = """version https://git-lfs.github.com/spec/v1
+oid sha256:deadbeef
+size 42
+"""
+    (data_dir / "reports" / "dashboard.json").write_text(lfs_pointer, encoding="utf-8")
+    (data_dir / "training" / "review_summary_latest.json").write_text(lfs_pointer, encoding="utf-8")
+    (data_dir / "training" / "reviews.jsonl").write_text(lfs_pointer, encoding="utf-8")
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("""symbols:
+  - AAPL
+""", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
+    assert dashboard["prediction_files"] == 0
+    assert dashboard["latest_predictions"] == []
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert models["champion"] == "unknown"
+    assert models["timeline"] == []
+
+
+def test_build_pages_data_skips_invalid_jsonl_rows(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(json.dumps({"latest_predictions": []}), encoding="utf-8")
+    (data_dir / "training" / "reviews.jsonl").write_text(
+        "not-json\n"
+        + json.dumps(["not", "an", "object"])
+        + "\n"
+        + json.dumps({"as_of": "2026-01-02", "model_name": "m3"})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("""symbols:
+  - AAPL
+""", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert len(models["timeline"]) == 1
+    assert models["timeline"][0]["model_name"] == "m3"
