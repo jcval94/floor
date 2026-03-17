@@ -52,3 +52,6 @@
 {"symbol": "UBER", "as_of": "2026-03-17T11:37:39.865573-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "UBER", "as_of": "2026-03-17T11:37:39.866988-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "UBER", "as_of": "2026-03-17T11:37:39.869364-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UBER", "as_of": "2026-03-17T11:48:25.751361-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UBER", "as_of": "2026-03-17T11:48:25.752343-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UBER", "as_of": "2026-03-17T11:48:25.753963-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
