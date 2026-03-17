@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import cast
 
 from features.run_features import build_modelable_dataset
 from features.feature_builder import build_features
@@ -212,4 +213,4 @@ def test_build_features_uses_close_when_benchmark_close_missing() -> None:
     featured = build_features(rows)
     assert len(featured) == 2
     assert featured[0]["ret_lag_1"] is None
-    assert featured[1]["ret_lag_1"] == rows[1]["close"] / rows[0]["close"] - 1.0
+    assert featured[1]["ret_lag_1"] == cast(float, rows[1]["close"]) / cast(float, rows[0]["close"]) - 1.0

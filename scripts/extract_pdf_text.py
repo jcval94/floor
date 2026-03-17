@@ -63,7 +63,7 @@ def _build_merged_cmap(streams: list[bytes]) -> dict[str, str]:
 
     merged: dict[str, str] = {}
     for src, options in counts.items():
-        merged[src] = max(options, key=options.get)
+        merged[src] = max(options, key=lambda key: options[key])
     return merged
 
 
