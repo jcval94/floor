@@ -45,7 +45,7 @@ jobs:
       - name: Validate SQLite bootstrap
         run: |
           sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
-          for table in predictions signals orders training_reviews; do
+          for table in predictions signals orders training_reviews model_training_cycles; do
             sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
           done
       - name: Ensure market data is populated before engine run
@@ -74,7 +74,7 @@ jobs:
           fi
 
           version_tag="bootstrap-$(date -u +%Y%m%dT%H%M%SZ)"
-          bash scripts/retrain_models.sh "$dataset_path" data/training "$version_tag" "value,timing"
+          bash scripts/retrain_models.sh "$dataset_path" data/training "$version_tag" "value,timing" "renewal"
 
           for champion in "$value_champion" "$timing_champion"; do
             if [ ! -f "$champion" ]; then

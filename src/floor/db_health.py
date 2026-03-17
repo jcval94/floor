@@ -11,6 +11,7 @@ REQUIRED_TABLES = {
     "orders",
     "training_reviews",
     "model_competition_results",
+    "model_training_cycles",
 }
 
 

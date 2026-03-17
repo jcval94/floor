@@ -97,6 +97,33 @@ def init_persistence_db(db_path: Path) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS model_training_cycles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                as_of TEXT NOT NULL,
+                task TEXT NOT NULL,
+                training_mode TEXT NOT NULL,
+                action TEXT NOT NULL,
+                champion_decision TEXT,
+                model_name TEXT,
+                model_version TEXT,
+                retrained INTEGER NOT NULL,
+                previous_champion_path TEXT,
+                previous_champion_version TEXT,
+                new_champion_path TEXT,
+                challenger_path TEXT,
+                metrics_path TEXT,
+                dataset_path TEXT,
+                output_dir TEXT,
+                cv_enabled INTEGER NOT NULL,
+                cv_folds INTEGER,
+                hyperparameter_grid_json TEXT,
+                tuning_summary_json TEXT,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
 
 
 def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
@@ -193,6 +220,43 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                     metrics.get("mae_spread"),
                     metrics.get("test_floor_coverage"),
                     metrics.get("test_ceiling_coverage"),
+                    raw,
+                ),
+            )
+        elif stream == "model_training_cycle" and str(payload.get("task", "")):
+            conn.execute(
+                """
+                INSERT INTO model_training_cycles(
+                    as_of, task, training_mode, action, champion_decision,
+                    model_name, model_version, retrained,
+                    previous_champion_path, previous_champion_version,
+                    new_champion_path, challenger_path,
+                    metrics_path, dataset_path, output_dir,
+                    cv_enabled, cv_folds, hyperparameter_grid_json, tuning_summary_json,
+                    payload_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("as_of"),
+                    payload.get("task"),
+                    payload.get("training_mode"),
+                    payload.get("action"),
+                    payload.get("champion_decision"),
+                    payload.get("model_name"),
+                    payload.get("model_version"),
+                    1 if bool(payload.get("retrained")) else 0,
+                    payload.get("previous_champion_path"),
+                    payload.get("previous_champion_version"),
+                    payload.get("new_champion_path"),
+                    payload.get("challenger_path"),
+                    payload.get("metrics_path"),
+                    payload.get("dataset_path"),
+                    payload.get("output_dir"),
+                    1 if bool(payload.get("cv_enabled")) else 0,
+                    payload.get("cv_folds"),
+                    json.dumps(payload.get("hyperparameter_grid"), ensure_ascii=False),
+                    json.dumps(payload.get("tuning_summary"), ensure_ascii=False),
                     raw,
                 ),
             )
