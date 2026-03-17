@@ -65,6 +65,8 @@ def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     assert "floor_m3" in d1_row
     assert "floor_week_m3" in d1_row
     assert "m3_status" in d1_row
+    assert d1_row["m3_status"] == "ok"
+    assert d1_row.get("m3_block_reason") is None
 
     m3_payload = m3_rows[0].get("m3_payload", {})
     assert "m3_status" in m3_payload

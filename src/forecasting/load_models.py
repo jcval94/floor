@@ -201,7 +201,7 @@ class ChampionModelSet:
         )
 
     def predict_m3(self, row: dict) -> M3Forecast | None:
-        required = ["close", "atr_14", "trend_context_m3", "drawdown_13w", "ai_horizon_alignment"]
+        required = ["close", "atr_14", "trend_context_m3", "drawdown_13w"]
         if any(row.get(key) in (None, "") for key in required):
             return None
 

@@ -21,7 +21,6 @@ def _market_rows() -> list[dict]:
             "momentum_20": 0.05,
             "trend_context_m3": 0.04,
             "drawdown_13w": -0.02,
-            "ai_horizon_alignment": 1.0,
         },
         {
             "symbol": "MSFT",
@@ -46,7 +45,6 @@ def _ai_map() -> dict[str, dict]:
             "ai_conviction": 0.8,
             "ai_consensus_score": 0.7,
             "ai_updated_at": "2024-04-01T12:00:00+00:00",
-            "ai_horizon_alignment": 1.0,
         },
         "MSFT": {
             "symbol": "MSFT",
@@ -88,6 +86,11 @@ def test_merge_ai_signal_builds_effective_score() -> None:
     )
     assert merged["ai_weight"] == 1.0
     assert merged["ai_effective_score"] > 0
+
+
+def test_merge_ai_signal_defaults_horizon_alignment() -> None:
+    merged = merge_market_with_ai_signal({"symbol": "AAPL", "close": 190}, None)
+    assert merged["ai_horizon_alignment"] == 0.0
 
 
 def test_run_forecast_pipeline_outputs_required_shapes_and_m3(monkeypatch, tmp_path) -> None:
@@ -213,6 +216,25 @@ def test_top_pick_m3_warning_when_m3_is_missing(monkeypatch, tmp_path) -> None:
     msft_top = next(r for r in out["top_opportunities"] if r["symbol"] == "MSFT")
     assert "m3_missing_for_ticker" in msft_top["m3_warnings"]
     assert "d1/w1/q1" in msft_top["m3_context_note"]
+
+
+def test_predict_m3_uses_neutral_alignment_fallback(tmp_path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    (models_dir / "value_champion.json").write_text(json.dumps({"params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
+    (models_dir / "timing_champion.json").write_text(json.dumps({"params": {"calibrator_reliability": {}}}), encoding="utf-8")
+    model = ChampionModelSet(model_registry_dir=models_dir)
+
+    m3 = model.predict_m3(
+        {
+            "close": 190.0,
+            "atr_14": 2.1,
+            "trend_context_m3": 0.04,
+            "drawdown_13w": -0.02,
+        }
+    )
+
+    assert m3 is not None
 
 
 def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable(monkeypatch, tmp_path) -> None:
