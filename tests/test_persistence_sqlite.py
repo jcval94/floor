@@ -128,3 +128,35 @@ def test_persist_model_training_cycle_to_sqlite(tmp_path: Path) -> None:
     )
 
     assert stream_count(db_path, "model_training_cycles") == 1
+
+
+def test_append_jsonl_prediction_count_matches_sqlite_rows(tmp_path: Path) -> None:
+    pred_path = tmp_path / "data" / "predictions" / "AAPL.jsonl"
+    append_jsonl(
+        pred_path,
+        {
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "event_type": "OPEN",
+            "horizon": "d1",
+            "floor_value": 100.0,
+            "ceiling_value": 110.0,
+            "model_version": "v1",
+        },
+    )
+    append_jsonl(
+        pred_path,
+        {
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T13:00:00+00:00",
+            "event_type": "OPEN_PLUS_2H",
+            "horizon": "w1",
+            "floor_value": 99.5,
+            "ceiling_value": 112.0,
+            "model_version": "v1",
+        },
+    )
+
+    line_count = len([line for line in pred_path.read_text(encoding="utf-8").splitlines() if line.strip()])
+    db_path = tmp_path / "data" / "persistence" / "app.sqlite"
+    assert stream_count(db_path, "predictions") == line_count == 2

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+import logging
 
 from pathlib import Path
 
 from forecasting.load_models import load_champion_models
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
 from forecasting.render_time_labels import render_horizon_time_labels
+
+logger = logging.getLogger(__name__)
 
 REQUIRED_MARKET_COLUMNS = ["symbol", "close", "high", "low"]
 REQUIRED_M3_COLUMNS = ["close", "atr_14", "trend_context_m3", "drawdown_13w", "ai_horizon_alignment"]
@@ -43,11 +46,22 @@ def generate_forecasts(
 ) -> dict:
     as_of = as_of or datetime.now(tz=timezone.utc)
     model = load_champion_models() if model_registry_dir is None else load_champion_models(model_registry_dir)
+    logger.info(
+        "[forecasting] generating forecasts rows=%s session=%s model_available=%s model_version=%s",
+        len(market_rows),
+        session,
+        model.is_available,
+        model.version,
+    )
 
     forecasts: list[dict] = []
     blocked: list[dict] = []
 
     if not model.is_available:
+        logger.error(
+            "[forecasting] forecast generation blocked: trained champions unavailable model_registry_dir=%s",
+            model_registry_dir,
+        )
         for raw in market_rows:
             symbol = str(raw.get("symbol", "")).upper()
             blocked.append(
@@ -62,13 +76,19 @@ def generate_forecasts(
         symbol = str(raw.get("symbol", "")).upper()
         reason = _blocked_reason(raw)
         if reason:
+            logger.warning("[forecasting] blocked symbol=%s reason=%s", symbol, reason)
             blocked.append({"symbol": symbol, "reason": reason})
             continue
 
-        row = merge_market_with_ai_signal(raw, ai_by_symbol.get(symbol), as_of=as_of)
-        d1 = model.predict_d1(row)
-        w1 = model.predict_w1(row)
-        q1 = model.predict_q1(row)
+        try:
+            row = merge_market_with_ai_signal(raw, ai_by_symbol.get(symbol), as_of=as_of)
+            d1 = model.predict_d1(row)
+            w1 = model.predict_w1(row)
+            q1 = model.predict_q1(row)
+        except Exception as exc:
+            logger.exception("[forecasting] prediction failed symbol=%s error=%s", symbol, exc)
+            blocked.append({"symbol": symbol, "reason": f"Prediction failed: {exc}"})
+            continue
 
         ai_eff = _safe_float(row.get("ai_effective_score"), 0.0)
         ai_weight = _safe_float(row.get("ai_weight"), 0.5)
@@ -118,8 +138,14 @@ def generate_forecasts(
 
         m3_reason = _m3_block_reason(row)
         if m3_reason is None:
-            m3 = model.predict_m3(row)
+            try:
+                m3 = model.predict_m3(row)
+            except Exception as exc:
+                logger.exception("[forecasting] m3 prediction failed symbol=%s error=%s", symbol, exc)
+                m3 = None
+                m3_reason = f"M3 prediction failed: {exc}"
         else:
+            logger.warning("[forecasting] m3 blocked symbol=%s reason=%s", symbol, m3_reason)
             m3 = None
 
         if m3 is None:
@@ -153,5 +179,7 @@ def generate_forecasts(
             f"m3 week 1..13 = semanas bursátiles relativas hacia adelante."
         )
         forecasts.append(render_horizon_time_labels(out, as_of=as_of))
+
+    logger.info("[forecasting] generation completed forecasts=%s blocked=%s", len(forecasts), len(blocked))
 
     return {"forecasts": forecasts, "blocked": blocked}
