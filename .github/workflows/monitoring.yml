@@ -20,17 +20,7 @@ jobs:
       - name: Generate monitoring snapshot
         run: |
           mkdir -p data/metrics
-          python - <<'PY'
-import json
-from datetime import datetime
-from pathlib import Path
-p = Path('data/metrics/public_metrics.json')
-p.write_text(json.dumps({
-  'generated_at': datetime.utcnow().isoformat(),
-  'status': 'OK',
-  'series': []
-}, indent=2), encoding='utf-8')
-PY
+          python -c "import json; from datetime import datetime; from pathlib import Path; Path('data/metrics/public_metrics.json').write_text(json.dumps({'generated_at': datetime.utcnow().isoformat(), 'status': 'OK', 'series': []}, indent=2), encoding='utf-8')"
       - name: Commit monitoring metrics if changed
         run: |
           git config user.name "github-actions[bot]"
