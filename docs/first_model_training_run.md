@@ -43,6 +43,23 @@ bash scripts/retrain_models.sh data/training/modelable_dataset.json data/trainin
 
 Eso genera/reemplaza artefactos en la misma carpeta del repo, listos para commit.
 
+
+## Nuevo workflow manual recomendado (ABT con compuertas de calidad)
+
+También puedes lanzar `.github/workflows/manual_train_all_models.yml`, diseñado para:
+
+1. Refrescar mercado desde Yahoo y reconstruir el ABT completo (`modelable_dataset.json`).
+2. Validar calidad del ABT antes de entrenar (mínimo de filas, mínimo de variables y columnas críticas obligatorias para m3).
+3. Entrenar modelos por horizonte para `d1`, `w1`, `q1` y `m3` en una sola ejecución manual.
+4. Generar logs detallados y un CSV consolidado (`d1,w1,q1,m3`) con resultados de entrenamiento, además de verificar champions y métricas antes de commitear artefactos.
+
+Inputs clave del workflow:
+
+- `min_rows` y `min_columns`: umbrales mínimos para exigir un ABT robusto.
+- `yahoo_range` y `yahoo_interval`: ventana/frecuencia del refresco de mercado.
+- `commit_artifacts`: permite activar/desactivar commit automático de artefactos.
+- El workflow publica como artefacto el log de ejecución y un CSV de resultados por horizonte.
+
 ## Notas
 
 - Cada reentrenamiento **reemplaza** la carpeta `data/training/models/` para asegurar que siempre vivan aquí los artefactos vigentes.
