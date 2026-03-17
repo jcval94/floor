@@ -1,0 +1,43 @@
+name: experimento_db_audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_path:
+        description: "Ruta del SQLite a auditar"
+        required: false
+        default: "data/persistence/app.sqlite"
+      head_rows:
+        description: "Cantidad de filas por tabla (head)"
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  db_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize DBs (if missing)
+        run: make init-dbs
+
+      - name: Run DB audit experiment
+        run: |
+          set -euo pipefail
+          echo "[workflow][experimento_db_audit] START running DB table audit"
+          PYTHONPATH=src python experimento/db_table_audit.py \
+            --db "${{ inputs.db_path }}" \
+            --out-dir experimento/artifacts/db_audit \
+            --head "${{ inputs.head_rows }}"
+          echo "[workflow][experimento_db_audit] DONE DB table audit"
+
+      - name: Upload DB audit artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimento-db-audit
+          path: experimento/artifacts/db_audit
+          if-no-files-found: error
