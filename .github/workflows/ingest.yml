@@ -45,6 +45,11 @@ jobs:
           for table in predictions signals orders training_reviews model_training_cycles; do
             sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
           done
+      - name: Capture baseline counters (SQLite + artifacts)
+        run: |
+          set -euo pipefail
+          mkdir -p data/logs
+          PYTHONPATH=src python -m utils.workflow_validations capture-baseline             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals | tee data/logs/ingest_baseline.json
       - name: Refresh in-repo market DB from Yahoo (responsible polling)
         run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
       - name: Ingest data (idempotent retry)
@@ -52,6 +57,21 @@ jobs:
           for i in 1 2 3; do
             PYTHONPATH=src python -m floor.main run-cycle --event OPEN && break || sleep $((i*20))
           done
+      - name: Validate persistence + artifact deltas after ingest run
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          baseline_line = Path('data/logs/ingest_baseline.json').read_text(encoding='utf-8').splitlines()[-1]
+          baseline = json.loads(baseline_line)
+          Path('data/logs/ingest_baseline_payload.json').write_text(json.dumps(baseline), encoding='utf-8')
+          PY
+
+          PYTHONPATH=src python -m utils.workflow_validations validate-deltas             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals             --require-positive predictions,signals             --baseline-json data/logs/ingest_baseline_payload.json
+
+          PYTHONPATH=src python -m utils.workflow_validations validate-latest-payload             --data-dir data             --stream predictions             --required-fields model_version
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind ingest --data-dir data
       - name: Commit changed history
@@ -68,6 +88,7 @@ jobs:
           path: |
             data/market/market_data.sqlite
             data/persistence/app.sqlite
+            data/logs
           if-no-files-found: ignore
 
   ingest_info:

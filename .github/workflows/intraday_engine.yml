@@ -83,19 +83,12 @@ jobs:
             fi
           done
 
-      - name: Capture SQLite baseline counters
+      - name: Capture baseline counters (SQLite + artifacts)
         id: db_before
         run: |
           set -euo pipefail
-          db="data/persistence/app.sqlite"
-          pred_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM predictions;")
-          sig_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM signals;")
-          ord_before=$(sqlite3 "$db" "SELECT COUNT(*) FROM orders;")
-          {
-            echo "predictions=$pred_before"
-            echo "signals=$sig_before"
-            echo "orders=$ord_before"
-          } >> "$GITHUB_OUTPUT"
+          mkdir -p data/logs
+          PYTHONPATH=src python -m utils.workflow_validations capture-baseline             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals             --output-file "$GITHUB_OUTPUT" | tee data/logs/intraday_baseline.json
 
       - name: Run intraday engine (idempotent retry)
         env:
@@ -103,10 +96,15 @@ jobs:
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
         run: |
           set -euo pipefail
+          mkdir -p data/logs
           for i in 1 2 3; do
-            if PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}"; then
+            logfile="data/logs/intraday_engine_${{ needs.gate.outputs.event }}_attempt${i}.log"
+            echo "Running attempt $i; logfile=$logfile"
+            if PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" 2>&1 | tee "$logfile"; then
               break
             fi
+            echo "::warning::Intraday engine attempt $i failed. Showing log tail."
+            tail -n 120 "$logfile" || true
             if [ "$i" -eq 3 ]; then
               echo "::error::Intraday engine failed after 3 attempts."
               exit 1
@@ -114,29 +112,62 @@ jobs:
             sleep $((i*30))
           done
 
-      - name: Validate SQLite writes after intraday run
+      - name: Forecast diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          echo "Collecting forecast diagnostics"
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          models = [
+              Path("data/training/models/value_champion.json"),
+              Path("data/training/models/timing_champion.json"),
+              Path("data/training/models_file/value_champion.pkl"),
+              Path("data/training/models_file/timing_champion.pkl"),
+          ]
+          for p in models:
+              print(f"model_artifact path={p} exists={p.exists()}")
+
+          log_dir = Path("data/logs")
+          if log_dir.exists():
+              print("recent_logs")
+              for path in sorted(log_dir.glob("intraday_engine_*.log"))[-3:]:
+                  print(f"- {path}")
+
+          preds_dir = Path("data/predictions")
+          if preds_dir.exists():
+              files = sorted(preds_dir.glob("*.jsonl"))
+              print(f"prediction_files={len(files)}")
+              if files:
+                  sample = files[-1]
+                  lines = [line.strip() for line in sample.read_text(encoding="utf-8").splitlines() if line.strip()]
+                  print(f"sample_prediction_file={sample} rows={len(lines)}")
+                  if lines:
+                      row = json.loads(lines[-1])
+                      print(f"sample_prediction_symbol={row.get('symbol')} horizon={row.get('horizon')} model_version={row.get('model_version')}")
+          PY
+
+      - name: Validate persistence + artifact deltas after intraday run
         run: |
           set -euo pipefail
           db="data/persistence/app.sqlite"
           integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
           [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
 
-          pred_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM predictions;")
-          sig_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM signals;")
-          ord_after=$(sqlite3 "$db" "SELECT COUNT(*) FROM orders;")
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-          pred_delta=$((pred_after - ${{ steps.db_before.outputs.predictions }}))
-          sig_delta=$((sig_after - ${{ steps.db_before.outputs.signals }}))
-          ord_delta=$((ord_after - ${{ steps.db_before.outputs.orders }}))
+          baseline_line = Path('data/logs/intraday_baseline.json').read_text(encoding='utf-8').splitlines()[-1]
+          baseline = json.loads(baseline_line)
+          Path('data/logs/intraday_baseline_payload.json').write_text(json.dumps(baseline), encoding='utf-8')
+          PY
 
-          echo "predictions delta=$pred_delta"
-          echo "signals delta=$sig_delta"
-          echo "orders delta=$ord_delta"
+          PYTHONPATH=src python -m utils.workflow_validations validate-deltas             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals             --require-positive predictions,signals             --baseline-json data/logs/intraday_baseline_payload.json
 
-          if [ "$pred_delta" -le 0 ] || [ "$sig_delta" -le 0 ]; then
-            echo "::error::Expected SQLite inserts were not persisted (predictions/signals deltas must be > 0)."
-            exit 1
-          fi
+          PYTHONPATH=src python -m utils.workflow_validations validate-latest-payload             --data-dir data             --stream predictions             --required-fields model_version
 
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
@@ -172,6 +203,7 @@ jobs:
             data/persistence/app.sqlite
             data/training/models
             data/training/metrics
+            data/logs
           if-no-files-found: ignore
 
   engine_info:
