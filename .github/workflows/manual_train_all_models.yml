@@ -170,6 +170,13 @@ jobs:
             --output-dir data/training/models \
             --version "${{ steps.runmeta.outputs.version }}" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
+      - name: Persist horizon competition metrics into app DB
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m models.persist_competition_results \
+            --models-dir data/training/models \
+            --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
       - name: Train m3 models (value,timing)
         run: |
           set -euo pipefail
@@ -249,10 +256,18 @@ jobs:
           test -f data/training/models/d1_champion.json
           test -f data/training/models/w1_champion.json
           test -f data/training/models/q1_champion.json
+          test -f data/training/models/d1_competition.json
+          test -f data/training/models/w1_competition.json
+          test -f data/training/models/q1_competition.json
           test -f data/training/models/value_champion.json
           test -f data/training/models/timing_champion.json
           test -f "${{ steps.runmeta.outputs.csv_file }}"
           test -f "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Validate persistence DB health
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m floor.db_health --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Publish workflow summary
         run: |

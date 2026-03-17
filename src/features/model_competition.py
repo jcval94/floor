@@ -99,9 +99,13 @@ def competition_protocol() -> dict:
 def build_model_competition_plan() -> dict:
     specs = build_model_specs()
     by_horizon: dict[str, list[dict]] = {h: [] for h in HORIZONS}
+    models: list[dict] = []
     for spec in specs:
-        by_horizon[spec.horizon].append(spec.__dict__)
+        payload = spec.__dict__
+        by_horizon[spec.horizon].append(payload)
+        models.append(payload)
     return {
+        "models": models,
         "models_by_horizon": by_horizon,
         "protocol": competition_protocol(),
     }

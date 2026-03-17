@@ -33,11 +33,16 @@ def test_train_classic_horizons_outputs_json_and_csv(tmp_path: Path) -> None:
     assert csv_path.exists()
     for horizon in ("d1", "w1", "q1"):
         artifact_path = out_dir / f"{horizon}_champion.json"
+        competition_path = out_dir / f"{horizon}_competition.json"
         assert artifact_path.exists()
+        assert competition_path.exists()
         payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+        competition = json.loads(competition_path.read_text(encoding="utf-8"))
         assert payload["horizon"] == horizon
         assert payload["train_rows"] > 0
         assert payload["test_rows"] > 0
+        assert len(competition["candidates"]) == 4
+        assert payload["model_name"] in {c["model_id"] for c in competition["candidates"]}
 
     with csv_path.open("r", encoding="utf-8", newline="") as fh:
         rows_csv = list(csv.DictReader(fh))
