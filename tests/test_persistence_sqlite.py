@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from floor.reporting.generate_site_data import build_dashboard_snapshot
+from floor.persistence_db import persist_payload, stream_count
 from floor.storage import append_jsonl
 
 
@@ -71,3 +72,28 @@ def test_dashboard_snapshot_uses_sqlite_latest_predictions(tmp_path: Path) -> No
     assert payload["latest_predictions_source"] == "sqlite"
     assert len(payload["latest_predictions"]) == 1
     assert payload["latest_predictions"][0]["floor_value"] == 101.0
+
+
+def test_persist_model_competition_results_to_sqlite(tmp_path: Path) -> None:
+    db_path = tmp_path / "data" / "persistence" / "app.sqlite"
+    persist_payload(
+        db_path,
+        "model_competition",
+        {
+            "as_of": "2026-01-01T13:00:00+00:00",
+            "version": "vtest",
+            "horizon": "d1",
+            "model_id": "xgboost_d1",
+            "model_family": "xgboost",
+            "is_champion": True,
+            "metrics": {
+                "mae_floor": 1.2,
+                "mae_ceiling": 1.4,
+                "mae_spread": 0.6,
+                "test_floor_coverage": 0.9,
+                "test_ceiling_coverage": 0.9,
+            },
+        },
+    )
+
+    assert stream_count(db_path, "model_competition_results") == 1
