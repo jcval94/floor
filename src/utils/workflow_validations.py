@@ -4,6 +4,7 @@ import argparse
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 
 def _sqlite_count(db_path: Path, table: str) -> int:
@@ -86,6 +87,158 @@ def validate_json_file(path: Path, required_fields: list[str]) -> dict:
             raise SystemExit(f"Missing required field '{field}' in json file {path}")
     return payload
 
+
+def _iter_jsonl_payloads(stream_dir: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not stream_dir.exists():
+        return rows
+    for path in sorted(stream_dir.glob("*.jsonl")):
+        for idx, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            payload["__file__"] = str(path)
+            payload["__line__"] = idx
+            rows.append(payload)
+    return rows
+
+
+def _sample_rows(rows: list[dict[str, Any]], sample_limit: int) -> str:
+    sample = []
+    for row in rows[:sample_limit]:
+        sample.append(
+            {
+                "symbol": row.get("symbol"),
+                "horizon": row.get("horizon"),
+                "action": row.get("action"),
+                "file": row.get("__file__"),
+                "line": row.get("__line__"),
+            }
+        )
+    return json.dumps(sample, ensure_ascii=False)
+
+
+def _fail_false_value(message: str, rows: list[dict[str, Any]], sample_limit: int) -> None:
+    raise SystemExit(f"::error::valor falso: {message}. sample_rows={_sample_rows(rows, sample_limit)}")
+
+
+def validate_prediction_quality(
+    data_dir: Path,
+    stream: str,
+    max_m3_blocked_ratio: float,
+    min_action_consistency_ratio: float,
+    action_return_tolerance: float,
+    sample_limit: int,
+) -> dict[str, Any]:
+    rows = _iter_jsonl_payloads(data_dir / stream)
+    if not rows:
+        raise SystemExit(f"No prediction rows found in {(data_dir / stream)}")
+
+    invalid_band_rows = [
+        row
+        for row in rows
+        if any(
+            (row.get(f"floor_{hz}") is not None and row.get(f"ceiling_{hz}") is not None and row.get(f"floor_{hz}") >= row.get(f"ceiling_{hz}"))
+            for hz in ("d1", "w1", "q1")
+        )
+        or (
+            row.get("horizon") in {"d1", "w1", "q1"}
+            and row.get("floor_value") is not None
+            and row.get("ceiling_value") is not None
+            and row.get("floor_value") >= row.get("ceiling_value")
+        )
+    ]
+    if invalid_band_rows:
+        _fail_false_value("floor_value debe ser menor que ceiling_value en d1/w1/q1", invalid_band_rows, sample_limit)
+
+    required_by_horizon = {
+        "d1": ["floor_d1", "ceiling_d1", "expected_return_d1"],
+        "w1": ["floor_w1", "ceiling_w1", "expected_return_w1"],
+        "q1": ["floor_q1", "ceiling_q1", "expected_return_q1"],
+        "m3": ["m3_status", "m3_block_reason"],
+    }
+    # compatibility with legacy per-horizon payloads.
+    legacy_required = ["floor_value", "ceiling_value", "model_version"]
+
+    missing_critical_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("horizon") in {"d1", "w1", "q1"}:
+            if any(str(row.get(field, "")).strip() == "" for field in legacy_required):
+                missing_critical_rows.append(row)
+            continue
+        for fields in required_by_horizon.values():
+            if any(str(row.get(field, "")).strip() == "" for field in fields):
+                missing_critical_rows.append(row)
+                break
+
+    if missing_critical_rows:
+        _fail_false_value("campos críticos nulos por horizonte", missing_critical_rows, sample_limit)
+
+    m3_total = sum(1 for row in rows if str(row.get("m3_status", "")).strip() != "")
+    m3_blocked = sum(1 for row in rows if str(row.get("m3_status", "")).lower() == "blocked")
+    blocked_ratio = (m3_blocked / m3_total) if m3_total else 0.0
+    if blocked_ratio > max_m3_blocked_ratio:
+        _fail_false_value(
+            f"ratio m3_status=blocked {blocked_ratio:.4f} supera umbral {max_m3_blocked_ratio:.4f}",
+            [row for row in rows if str(row.get("m3_status", "")).lower() == "blocked"],
+            sample_limit,
+        )
+
+    actionable = []
+    consistent = 0
+    for row in rows:
+        action = str(row.get("action", "")).upper().strip()
+        if action not in {"BUY", "SELL", "HOLD"}:
+            continue
+        ret = row.get("expected_return")
+        if ret is None:
+            horizon = str(row.get("horizon", "")).strip()
+            if horizon in {"d1", "w1", "q1", "m3"}:
+                ret = row.get(f"expected_return_{horizon}")
+            else:
+                ret = row.get("expected_return_d1")
+        if ret is None:
+            continue
+        val = float(ret)
+        actionable.append(row)
+        if (action == "BUY" and val >= action_return_tolerance) or (
+            action == "SELL" and val <= -action_return_tolerance
+        ) or (action == "HOLD" and abs(val) <= action_return_tolerance):
+            consistent += 1
+
+    action_consistency_ratio = (consistent / len(actionable)) if actionable else 1.0
+    if action_consistency_ratio < min_action_consistency_ratio:
+        inconsistent = []
+        for row in actionable:
+            action = str(row.get("action", "")).upper().strip()
+            horizon = str(row.get("horizon", "")).strip()
+            ret = row.get("expected_return")
+            if ret is None and horizon in {"d1", "w1", "q1", "m3"}:
+                ret = row.get(f"expected_return_{horizon}")
+            if ret is None:
+                ret = row.get("expected_return_d1")
+            val = float(ret)
+            ok = (action == "BUY" and val >= action_return_tolerance) or (
+                action == "SELL" and val <= -action_return_tolerance
+            ) or (action == "HOLD" and abs(val) <= action_return_tolerance)
+            if not ok:
+                inconsistent.append(row)
+        _fail_false_value(
+            f"consistencia acción/retorno {action_consistency_ratio:.4f} debajo de mínimo {min_action_consistency_ratio:.4f}",
+            inconsistent,
+            sample_limit,
+        )
+
+    return {
+        "rows": len(rows),
+        "m3_total": m3_total,
+        "m3_blocked": m3_blocked,
+        "m3_blocked_ratio": round(blocked_ratio, 6),
+        "actionable_rows": len(actionable),
+        "action_consistency_ratio": round(action_consistency_ratio, 6),
+    }
+
 def _write_outputs(path: Path | None, payload: dict[str, int]) -> None:
     if path is None:
         return
@@ -121,6 +274,14 @@ def main() -> None:
     json_p.add_argument("--path", required=True)
     json_p.add_argument("--required-fields", default="model_name,version")
 
+    pred_quality_p = sub.add_parser("validate-prediction-quality")
+    pred_quality_p.add_argument("--data-dir", required=True)
+    pred_quality_p.add_argument("--stream", default="predictions")
+    pred_quality_p.add_argument("--max-m3-blocked-ratio", type=float, default=0.4)
+    pred_quality_p.add_argument("--min-action-consistency-ratio", type=float, default=0.7)
+    pred_quality_p.add_argument("--action-return-tolerance", type=float, default=0.0)
+    pred_quality_p.add_argument("--sample-limit", type=int, default=5)
+
     args = parser.parse_args()
 
     if args.cmd == "capture-baseline":
@@ -152,6 +313,18 @@ def main() -> None:
                 ensure_ascii=False,
             )
         )
+        return
+
+    if args.cmd == "validate-prediction-quality":
+        payload = validate_prediction_quality(
+            data_dir=Path(args.data_dir),
+            stream=args.stream,
+            max_m3_blocked_ratio=args.max_m3_blocked_ratio,
+            min_action_consistency_ratio=args.min_action_consistency_ratio,
+            action_return_tolerance=args.action_return_tolerance,
+            sample_limit=args.sample_limit,
+        )
+        print(json.dumps(payload, ensure_ascii=False))
         return
 
     required_fields = [s.strip() for s in args.required_fields.split(",") if s.strip()]
