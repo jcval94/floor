@@ -12,6 +12,7 @@ REQUIRED_TABLES = {
     "training_reviews",
     "model_competition_results",
     "model_training_cycles",
+    "prediction_reconciliations",
 }
 
 

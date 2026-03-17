@@ -9,6 +9,7 @@ from features.build_training_from_db import build_rows_from_db
 from features.feature_builder import build_features
 from floor.config import RuntimeConfig
 from floor.external.google_sheets import fetch_recommendations
+from floor.prediction_reconciliation import reconcile_predictions
 from floor.schemas import OrderRecord, PredictionRecord, SignalRecord
 from floor.storage import append_jsonl
 from forecasting.run_forecast import run_forecast_pipeline
@@ -262,5 +263,13 @@ def run_intraday_cycle(
                 if order:
                     append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
                     logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon)
+
+    reconciliation = reconcile_predictions(cfg.data_dir)
+    logger.info(
+        "[predictions] reconciliation pending=%s reconciled=%s skipped=%s",
+        reconciliation.get("pending", 0),
+        reconciliation.get("reconciled", 0),
+        reconciliation.get("skipped", 0),
+    )
 
     logger.info("[predictions] finished intraday cycle event=%s forecasts=%s blocked=%s", event_type, len(forecasts), len(blocked))
