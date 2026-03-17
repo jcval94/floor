@@ -35,7 +35,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -165,6 +165,10 @@ jobs:
             exit 1
           fi
 
+          db="data/persistence/app.sqlite"
+          integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
+          [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
+
           value_decision=$(python - <<'PY'
           import json
           from pathlib import Path
@@ -187,16 +191,33 @@ jobs:
             echo ""
             echo "- \`$value_champion\`: selection.decision=\`$value_decision\`"
             echo "- \`$timing_champion\`: selection.decision=\`$timing_decision\`"
+            echo "- \`$db\`: quick_check=\`$integrity\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit retrain artifacts
         if: steps.gate.outputs.run == 'true'
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/training data/market data/persistence
-          git diff --cached --quiet || git commit -m "chore: retrain selected model artifacts"
-          git push
+          if git diff --cached --quiet; then
+            echo "No retrain artifacts changed; skipping commit/push."
+            exit 0
+          fi
+
+          git commit -m "chore: retrain selected model artifacts"
+          for attempt in 1 2 3; do
+            if git push; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Failed to push after 3 attempts (non-fast-forward persisted)."
+              exit 1
+            fi
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+          done
 
       - name: Upload retrain artifacts
         if: steps.gate.outputs.run == 'true'
