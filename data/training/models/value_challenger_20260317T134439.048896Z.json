@@ -1,0 +1,40 @@
+{
+  "model_name": "m3_value_linear",
+  "horizon": "m3",
+  "target": "floor_m3",
+  "version": "bootstrap-20260317T134438Z",
+  "params": {
+    "weights": {
+      "atr_14": -0.6,
+      "trend_context_m3": 0.8,
+      "drawdown_13w": 0.4,
+      "dist_to_low_3m": -0.5
+    },
+    "bias": 0.0,
+    "calibration_scale": 1.0
+  },
+  "metrics": {
+    "pinball_loss": 0.0,
+    "mae_realized_floor": 0.0,
+    "breach_rate": 0.0,
+    "calibration_error": 0.0,
+    "temporal_stability": 1.0,
+    "target": "floor_m3",
+    "horizon": "m3"
+  },
+  "predictions": [],
+  "confidences": [],
+  "dataset_summary": {
+    "rows": 0,
+    "columns": [],
+    "coverage_by_column": {},
+    "numeric_stats": {},
+    "categorical_counts": {}
+  },
+  "selection": {
+    "decision": "promote_first",
+    "reason": "No champion exists; bootstrap champion with first valid artifact.",
+    "scoring_version": "m3-v1",
+    "evaluated_at": "2026-03-17T13:44:39.048896Z"
+  }
+}

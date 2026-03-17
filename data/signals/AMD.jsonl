@@ -43,3 +43,6 @@
 {"symbol": "AMD", "as_of": "2026-03-13T12:32:27.409474-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AMD", "as_of": "2026-03-13T12:32:27.410796-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AMD", "as_of": "2026-03-13T12:32:27.412233-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMD", "as_of": "2026-03-17T09:44:57.987794-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMD", "as_of": "2026-03-17T09:44:57.989170-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AMD", "as_of": "2026-03-17T09:44:57.990522-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

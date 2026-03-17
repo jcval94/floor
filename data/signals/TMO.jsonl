@@ -43,3 +43,6 @@
 {"symbol": "TMO", "as_of": "2026-03-13T12:32:27.527806-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "TMO", "as_of": "2026-03-13T12:32:27.529150-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "TMO", "as_of": "2026-03-13T12:32:27.530465-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "TMO", "as_of": "2026-03-17T09:44:58.126572-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "TMO", "as_of": "2026-03-17T09:44:58.127919-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "TMO", "as_of": "2026-03-17T09:44:58.129183-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
