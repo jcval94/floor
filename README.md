@@ -489,6 +489,7 @@ Hace:
 
 - carga champions `value` y `timing`;
 - calcula pronosticos `d1`, `w1`, `q1` y `m3`;
+- aplica fallback neutral `ai_horizon_alignment=0.0` cuando no hay senal AI completa, sin bloquear `m3` por esa ausencia aislada;
 - deriva `confidence_score`, `composite_signal_score`, `reward_risk_ratio`;
 - genera listas de oportunidades, bloqueados y dashboard humano.
 
