@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from pathlib import Path
 from datetime import date
 from typing import Any
@@ -231,14 +232,30 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     (site_data_dir / "models.json").write_text(json.dumps(_sanitize(models), indent=2), encoding="utf-8")
 
 
+def mirror_site_tree(source_site_dir: Path, target_site_dir: Path) -> None:
+    """Copy the generated static site tree into another location (e.g. docs/)."""
+    target_site_dir.mkdir(parents=True, exist_ok=True)
+    for src_path in source_site_dir.rglob("*"):
+        if src_path.is_dir():
+            continue
+        rel = src_path.relative_to(source_site_dir)
+        dst_path = target_site_dir / rel
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dst_path)
+
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--site-data-dir", default="site/data")
     parser.add_argument("--universe-path", default="config/universe.yaml")
+    parser.add_argument("--mirror-site-dir", default=None)
     args = parser.parse_args()
-    build_pages_data(Path(args.data_dir), Path(args.site_data_dir), Path(args.universe_path))
+    site_data_dir = Path(args.site_data_dir)
+    build_pages_data(Path(args.data_dir), site_data_dir, Path(args.universe_path))
+    if args.mirror_site_dir:
+        mirror_site_tree(site_data_dir.parent, Path(args.mirror_site_dir))
 
 
 if __name__ == "__main__":

@@ -188,3 +188,21 @@ def test_build_pages_data_skips_invalid_jsonl_rows(tmp_path: Path) -> None:
     models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
     assert len(models["timeline"]) == 1
     assert models["timeline"][0]["model_name"] == "m3"
+
+
+def test_mirror_site_tree_copies_html_and_data(tmp_path: Path) -> None:
+    from utils.pages_build import mirror_site_tree
+
+    source = tmp_path / "site"
+    target = tmp_path / "docs"
+    (source / "data").mkdir(parents=True)
+    (source / "assets").mkdir(parents=True)
+    (source / "data" / "dashboard.json").write_text('{"status":"ok"}', encoding="utf-8")
+    (source / "tickers.html").write_text('<html>tickers</html>', encoding="utf-8")
+    (source / "assets" / "app.js").write_text('console.log("ok")', encoding="utf-8")
+
+    mirror_site_tree(source, target)
+
+    assert (target / "data" / "dashboard.json").read_text(encoding="utf-8") == '{"status":"ok"}'
+    assert (target / "tickers.html").read_text(encoding="utf-8") == '<html>tickers</html>'
+    assert (target / "assets" / "app.js").read_text(encoding="utf-8") == 'console.log("ok")'
