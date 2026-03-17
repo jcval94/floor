@@ -19,7 +19,9 @@ def _safe_mean(values: list[float]) -> float | None:
 def _to_float_or_fallback(value: object, fallback: float) -> float:
     if value is None:
         return fallback
-    return float(value)
+    if isinstance(value, (int, float, str, bytes)):
+        return float(value)
+    return fallback
 
 
 def _rolling(values: list[float], end_idx: int, window: int) -> list[float]:
