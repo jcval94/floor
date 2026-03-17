@@ -67,6 +67,13 @@ def _enable_trained_champion(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("forecasting.generate_forecasts.load_champion_models", lambda: model)
 
 
+def _disable_trained_champion(monkeypatch, tmp_path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    model = ChampionModelSet(model_registry_dir=models_dir)
+    monkeypatch.setattr("forecasting.generate_forecasts.load_champion_models", lambda: model)
+
+
 def test_ai_recency_weight_decreases_when_stale() -> None:
     assert ai_recency_weight(1) > ai_recency_weight(6)
     assert ai_recency_weight(10) <= 0.35
@@ -208,7 +215,8 @@ def test_top_pick_m3_warning_when_m3_is_missing(monkeypatch, tmp_path) -> None:
     assert "d1/w1/q1" in msft_top["m3_context_note"]
 
 
-def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable() -> None:
+def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable(monkeypatch, tmp_path) -> None:
+    _disable_trained_champion(monkeypatch, tmp_path)
     out = run_forecast_pipeline(
         market_rows=_market_rows(),
         ai_by_symbol=_ai_map(),
