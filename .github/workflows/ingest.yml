@@ -42,7 +42,7 @@ jobs:
       - name: Validate SQLite bootstrap
         run: |
           sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
-          for table in predictions signals orders training_reviews; do
+          for table in predictions signals orders training_reviews model_training_cycles; do
             sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
           done
       - name: Refresh in-repo market DB from Yahoo (responsible polling)

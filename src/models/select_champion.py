@@ -58,14 +58,18 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     decision = "promote_first"
     reason = "No champion exists; bootstrap champion with first valid artifact."
+    previous_champion_version = None
+    archived_path = None
 
     if existing is not None:
+        previous_champion_version = existing.get("version")
         old_score = _value_score(existing["metrics"]) if task == "value" else _timing_score(existing["metrics"])
         if new_score + 1e-9 < old_score:
             decision = "promote"
             reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
             archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
             archived.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+            archived_path = str(archived)
         else:
             decision = "challenger_only"
             reason = f"Existing champion kept (score {old_score:.6f} <= {new_score:.6f})."
@@ -81,4 +85,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         "reason": reason,
         "champion_path": str(champion_path),
         "challenger_path": str(challenger_path),
+        "previous_champion_path": str(champion_path) if existing is not None else None,
+        "previous_champion_version": previous_champion_version,
+        "archived_champion_path": archived_path,
     }
