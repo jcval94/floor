@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import pickle
 from pathlib import Path
 
 from floor.persistence_db import stream_count
@@ -158,3 +160,48 @@ def test_run_training_retrain_enables_cv_and_audit(tmp_path: Path) -> None:
     assert value_champ["params"]["tuning_summary"]["cv_enabled"] is True
     assert timing_champ["params"]["tuning_summary"]["cv_enabled"] is True
     assert stream_count(db_path, "model_training_cycles") == 2
+
+
+def test_run_training_retrain_persists_only_winners_in_models_file(tmp_path: Path) -> None:
+    dataset = {"rows": _rows(90)}
+    dataset_path = tmp_path / "dataset.json"
+    dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+
+    out = tmp_path / "training"
+    standard = run_training(dataset_path, out, version="v1", tasks="value,timing", training_mode="standard")
+    assert standard["training_mode"] == "standard"
+    assert not (out / "models_file" / "value_champion.pkl").exists()
+    assert not (out / "models_file" / "timing_champion.pkl").exists()
+    assert not (out / "models_file" / "value_champion.manifest.json").exists()
+    assert not (out / "models_file" / "timing_champion.manifest.json").exists()
+
+    retrain = run_training(dataset_path, out, version="v2", tasks="value,timing", training_mode="retrain")
+    assert retrain["training_mode"] == "retrain"
+
+    value_pkl = out / "models_file" / "value_champion.pkl"
+    timing_pkl = out / "models_file" / "timing_champion.pkl"
+
+    if retrain["value"]["decision"] in {"promote", "promote_first"}:
+        assert value_pkl.exists()
+        with value_pkl.open("rb") as fh:
+            value_payload = pickle.load(fh)
+        value_manifest = json.loads((out / "models_file" / "value_champion.manifest.json").read_text(encoding="utf-8"))
+        expected_hash = hashlib.sha256(value_pkl.read_bytes()).hexdigest()
+        assert value_payload["selection"]["objective"] == "minimize_weighted_error"
+        assert isinstance(value_payload["selection"]["new_score"], float)
+        assert value_manifest["task"] == "value"
+        assert value_manifest["sha256"] == expected_hash
+
+    if retrain["timing"]["decision"] in {"promote", "promote_first"}:
+        assert timing_pkl.exists()
+        with timing_pkl.open("rb") as fh:
+            timing_payload = pickle.load(fh)
+        timing_manifest = json.loads((out / "models_file" / "timing_champion.manifest.json").read_text(encoding="utf-8"))
+        expected_hash = hashlib.sha256(timing_pkl.read_bytes()).hexdigest()
+        assert timing_payload["selection"]["objective"] == "minimize_weighted_error"
+        assert isinstance(timing_payload["selection"]["new_score"], float)
+        assert timing_manifest["task"] == "timing"
+        assert timing_manifest["sha256"] == expected_hash
+    else:
+        assert not timing_pkl.exists()
+        assert not (out / "models_file" / "timing_champion.manifest.json").exists()
