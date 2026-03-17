@@ -237,6 +237,21 @@ def test_predict_m3_uses_neutral_alignment_fallback(tmp_path) -> None:
     assert m3 is not None
 
 
+def test_generate_forecasts_blocks_when_models_unavailable(monkeypatch, tmp_path) -> None:
+    """Backward-compatible node id kept for CI command stability."""
+    _disable_trained_champion(monkeypatch, tmp_path)
+    out = run_forecast_pipeline(
+        market_rows=_market_rows(),
+        ai_by_symbol=_ai_map(),
+        session="OPEN_PLUS_2H",
+        as_of=datetime(2024, 4, 2, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert out["dataset_forecasts"] == []
+    assert len(out["blocked_list"]) == len(_market_rows())
+    assert all("Pronóstico no disponible" in row["reason"] for row in out["blocked_list"])
+
+
 def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable(monkeypatch, tmp_path) -> None:
     _disable_trained_champion(monkeypatch, tmp_path)
     out = run_forecast_pipeline(
