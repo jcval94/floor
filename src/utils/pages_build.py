@@ -27,6 +27,7 @@ SENSITIVE_KEYS = {
     "authorization",
 }
 
+LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
 
 
 def _sanitize(obj: Any) -> Any:
@@ -43,20 +44,38 @@ def _sanitize(obj: Any) -> Any:
     return obj
 
 
+def _is_lfs_pointer(content: str) -> bool:
+    return content.startswith(LFS_POINTER_HEADER)
+
+
 def _read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
+    if not path or not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    content = path.read_text(encoding="utf-8").strip()
+    if not content or _is_lfs_pointer(content):
+        return default
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return default
 
 
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
     out: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    content = path.read_text(encoding="utf-8")
+    if _is_lfs_pointer(content):
+        return out
+    for line in content.splitlines():
         line = line.strip()
         if line:
-            out.append(json.loads(line))
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                out.append(payload)
     return out
 
 
@@ -123,8 +142,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "latest_predictions": [],
         "system_health": "UNKNOWN",
     }
-    if dashboard_src.exists():
-        dashboard_payload.update(json.loads(dashboard_src.read_text(encoding="utf-8")))
+    dashboard_payload.update(_read_json(dashboard_src, {}))
 
     dashboard_payload = {k: v for k, v in _sanitize(dashboard_payload).items() if k in ALLOWED_KEYS}
     (site_data_dir / "dashboard.json").write_text(json.dumps(dashboard_payload, indent=2), encoding="utf-8")
