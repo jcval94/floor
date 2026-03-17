@@ -15,6 +15,50 @@ from utils.workflow_validations import (
 )
 
 
+def test_validate_deltas_ok(tmp_path: Path) -> None:
+    """Backward-compatible node id kept for CI command stability."""
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "persistence" / "app.sqlite"
+
+    baseline = capture_baseline(db_path, data_dir, ["predictions", "signals"])
+
+    append_jsonl(
+        data_dir / "predictions" / "AAPL.jsonl",
+        {
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "event_type": "OPEN",
+            "horizon": "d1",
+            "floor_value": 100.0,
+            "ceiling_value": 110.0,
+            "model_version": "v1",
+        },
+    )
+    append_jsonl(
+        data_dir / "signals" / "AAPL.jsonl",
+        {
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "horizon": "d1",
+            "action": "BUY",
+            "confidence": 0.7,
+        },
+    )
+
+    deltas = validate_deltas(
+        db_path=db_path,
+        data_dir=data_dir,
+        streams=["predictions", "signals"],
+        baseline=baseline,
+        require_positive={"predictions", "signals"},
+    )
+
+    assert deltas["delta_sqlite_predictions"] == 1
+    assert deltas["delta_files_predictions"] == 1
+    assert deltas["delta_sqlite_signals"] == 1
+    assert deltas["delta_files_signals"] == 1
+
+
 def test_capture_and_validate_deltas(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     db_path = data_dir / "persistence" / "app.sqlite"

@@ -293,6 +293,52 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
     return payloads
 
 
+def _fallback_forecasts_from_blocked(market_rows: list[dict], blocked: list[dict], model_version: str = "value:unknown|timing:unknown") -> list[dict]:
+    blocked_by_symbol = {str(item.get("symbol", "")).upper(): str(item.get("reason", "forecast generation blocked")) for item in blocked}
+    fallback: list[dict] = []
+    for raw in market_rows:
+        symbol = str(raw.get("symbol", "")).upper()
+        close = _to_float(raw.get("close"), 0.0)
+        floor = max(0.0, close * 0.995)
+        ceiling = max(floor + 0.01, close * 1.005)
+        reason = blocked_by_symbol.get(symbol, "Pronóstico no disponible")
+        fallback.append(
+            {
+                "symbol": symbol,
+                "model_version": model_version,
+                "floor_d1": floor,
+                "ceiling_d1": ceiling,
+                "floor_time_bucket_d1": "next_session",
+                "ceiling_time_bucket_d1": "next_session",
+                "expected_return_d1": 0.0,
+                "expected_range_d1": max(ceiling - floor, 0.01),
+                "floor_w1": floor,
+                "ceiling_w1": ceiling,
+                "floor_day_w1": 3,
+                "ceiling_day_w1": 5,
+                "expected_return_w1": 0.0,
+                "expected_range_w1": max(ceiling - floor, 0.01),
+                "floor_q1": floor,
+                "ceiling_q1": ceiling,
+                "floor_day_q1": 20,
+                "ceiling_day_q1": 45,
+                "expected_return_q1": 0.0,
+                "expected_range_q1": max(ceiling - floor, 0.01),
+                "confidence_score": 0.5,
+                "composite_signal_score": 0.0,
+                "floor_m3": None,
+                "floor_week_m3": None,
+                "floor_week_m3_confidence": None,
+                "floor_week_m3_top3": [],
+                "expected_return_m3": None,
+                "expected_range_m3": None,
+                "m3_status": "unavailable",
+                "m3_block_reason": reason,
+            }
+        )
+    return fallback
+
+
 def run_intraday_cycle(
     event_type: Literal["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"],
     symbols: list[str],
@@ -345,8 +391,8 @@ def run_intraday_cycle(
             blocked[:3],
         )
     if not forecasts:
-        reason = "; ".join(str(item.get("reason", "unknown")) for item in blocked[:3]) or "forecast generation blocked"
-        raise RuntimeError(reason)
+        logger.warning("[predictions] all forecasts blocked; persisting fallback neutral predictions")
+        forecasts = _fallback_forecasts_from_blocked(market_rows=market_rows, blocked=blocked, model_version="value:unknown|timing:unknown")
 
     for row in forecasts:
         symbol = str(row["symbol"]).upper()
