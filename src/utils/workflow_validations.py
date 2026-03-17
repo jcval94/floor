@@ -123,6 +123,15 @@ def _fail_false_value(message: str, rows: list[dict[str, Any]], sample_limit: in
     raise SystemExit(f"::error::valor falso: {message}. sample_rows={_sample_rows(rows, sample_limit)}")
 
 
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def validate_prediction_quality(
     data_dir: Path,
     stream: str,
@@ -139,14 +148,18 @@ def validate_prediction_quality(
         row
         for row in rows
         if any(
-            (row.get(f"floor_{hz}") is not None and row.get(f"ceiling_{hz}") is not None and row.get(f"floor_{hz}") >= row.get(f"ceiling_{hz}"))
+            (
+                (floor_val := _to_float(row.get(f"floor_{hz}"))) is not None
+                and (ceiling_val := _to_float(row.get(f"ceiling_{hz}"))) is not None
+                and floor_val >= ceiling_val
+            )
             for hz in ("d1", "w1", "q1")
         )
         or (
             row.get("horizon") in {"d1", "w1", "q1"}
-            and row.get("floor_value") is not None
-            and row.get("ceiling_value") is not None
-            and row.get("floor_value") >= row.get("ceiling_value")
+            and (floor_value := _to_float(row.get("floor_value"))) is not None
+            and (ceiling_value := _to_float(row.get("ceiling_value"))) is not None
+            and floor_value >= ceiling_value
         )
     ]
     if invalid_band_rows:
@@ -200,7 +213,10 @@ def validate_prediction_quality(
                 ret = row.get("expected_return_d1")
         if ret is None:
             continue
-        val = float(ret)
+        parsed_ret = _to_float(ret)
+        if parsed_ret is None:
+            continue
+        val = parsed_ret
         actionable.append(row)
         if (action == "BUY" and val >= action_return_tolerance) or (
             action == "SELL" and val <= -action_return_tolerance
@@ -218,7 +234,10 @@ def validate_prediction_quality(
                 ret = row.get(f"expected_return_{horizon}")
             if ret is None:
                 ret = row.get("expected_return_d1")
-            val = float(ret)
+            parsed_ret = _to_float(ret)
+            if parsed_ret is None:
+                continue
+            val = parsed_ret
             ok = (action == "BUY" and val >= action_return_tolerance) or (
                 action == "SELL" and val <= -action_return_tolerance
             ) or (action == "HOLD" and abs(val) <= action_return_tolerance)
