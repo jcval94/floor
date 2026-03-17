@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
+from typing import TypedDict
 
 from models.calibration import QuantileCalibrator
 from models.evaluate import value_metrics
@@ -17,6 +18,11 @@ class ValueModelArtifact:
     metrics: dict
     predictions: list[float]
     confidences: list[float]
+
+
+class HyperparameterConfig(TypedDict):
+    weights: dict[str, float]
+    bias: float
 
 
 def _mean(values: list[float]) -> float:
@@ -61,7 +67,7 @@ def _expanding_time_folds(rows: list[dict], folds: int) -> list[tuple[list[dict]
     return result
 
 
-def _hyperparameter_grid(base_weights: dict[str, float], base_bias: float) -> list[dict]:
+def _hyperparameter_grid(base_weights: dict[str, float], base_bias: float) -> list[HyperparameterConfig]:
     atr_weights = [-0.8, -0.6, -0.4]
     trend_weights = [0.6, 0.8, 1.0]
     drawdown_weights = [0.2, 0.4, 0.6]

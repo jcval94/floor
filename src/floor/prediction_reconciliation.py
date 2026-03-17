@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import date, datetime, timezone
+import datetime as dt
+from datetime import timezone
 from pathlib import Path
 
 from floor.persistence_db import persist_payload
@@ -14,11 +15,11 @@ logger = logging.getLogger(__name__)
 _REQUIRED_SESSIONS = {"d1": 1, "w1": 5, "q1": 10, "m3": 65}
 
 
-def _parse_iso_date(value: str) -> date:
+def _parse_iso_date(value: str) -> dt.date:
     v = value.strip()
     if v.endswith("Z"):
         v = v[:-1] + "+00:00"
-    return datetime.fromisoformat(v).date()
+    return dt.datetime.fromisoformat(v).date()
 
 
 def _load_symbol_bars(market_db_path: Path) -> dict[str, list[dict]]:
@@ -100,7 +101,7 @@ def reconcile_predictions(data_dir: Path) -> dict[str, int]:
     reconciled = 0
     skipped = 0
 
-    now = datetime.now(tz=timezone.utc).isoformat()
+    now = dt.datetime.now(tz=timezone.utc).isoformat()
     for pred in pending:
         horizon = pred["horizon"]
         required_sessions = _REQUIRED_SESSIONS.get(horizon)
@@ -130,7 +131,7 @@ def reconcile_predictions(data_dir: Path) -> dict[str, int]:
         m3_pred_week = None
         payload_obj = pred.get("payload")
         pld: dict[str, object] = payload_obj if isinstance(payload_obj, dict) else {}
-        floor_week_m3 = pld.get("floor_week_m3")
+        floor_week_m3: object | None = pld.get("floor_week_m3")
         if isinstance(floor_week_m3, int):
             m3_pred_week = floor_week_m3
         m3_real_week = _week_index_for_floor(window) if horizon == "m3" else None
