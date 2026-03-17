@@ -54,4 +54,5 @@ def merge_market_with_ai_signal(market_row: dict, ai_row: dict | None, as_of: da
     consensus = float(merged.get("ai_consensus_score") or 0.0)
     conviction = float(merged.get("ai_conviction") or 0.5)
     merged["ai_effective_score"] = round(consensus * conviction * merged["ai_weight"], 6)
+    merged["ai_horizon_alignment"] = float(merged.get("ai_horizon_alignment") or 0.0)
     return merged
