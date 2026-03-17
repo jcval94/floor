@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from features.build_training_from_db import build_rows_from_db
@@ -21,6 +21,22 @@ MIN_SIGNAL_CONFIDENCE = 0.55
 EXPECTED_RETURN_THRESHOLD = 0.01
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _signal_from_prediction(
     symbol: str,
     horizon: Literal["d1", "w1", "q1", "m3"],
@@ -33,11 +49,11 @@ def _signal_from_prediction(
     spread = max(ceiling - floor, 0.01)
     spread_confidence = min(0.95, max(0.5, spread / max(floor, 1)))
     confidence = max(
-        min(float(confidence_score or 0.0), 1.0),
-        min(float(composite_signal_score or 0.0), 1.0),
+        min(_to_float(confidence_score, 0.0), 1.0),
+        min(_to_float(composite_signal_score, 0.0), 1.0),
         spread_confidence,
     )
-    expected_ret = float(expected_return or 0.0)
+    expected_ret = _to_float(expected_return, 0.0)
 
     action: Literal["BUY", "SELL", "HOLD"] = "HOLD"
     if confidence >= MIN_SIGNAL_CONFIDENCE and expected_ret >= EXPECTED_RETURN_THRESHOLD:
@@ -106,7 +122,7 @@ def _latest_feature_rows(cfg: RuntimeConfig, symbols: list[str]) -> list[dict]:
 
 def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
     """Build normalized prediction payloads for d1/w1/q1/m3 horizons."""
-    confidence = float(row.get("confidence_score", 0.5) or 0.5)
+    confidence = _to_float(row.get("confidence_score", 0.5), 0.5)
     m3_payload = {
         "floor_m3": row.get("floor_m3"),
         "floor_week_m3": row.get("floor_week_m3"),
@@ -140,15 +156,15 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
         (
             "d1",
             {
-                "floor_value": float(row["floor_d1"]),
-                "ceiling_value": float(row["ceiling_d1"]),
+                "floor_value": _to_float(row.get("floor_d1")),
+                "ceiling_value": _to_float(row.get("ceiling_d1")),
                 "floor_time_bucket": str(row["floor_time_bucket_d1"]),
                 "ceiling_time_bucket": str(row["ceiling_time_bucket_d1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
                 "confidence_score": confidence,
-                "expected_return": float(row.get("expected_return_d1", 0.0) or 0.0),
-                "expected_range": float(row.get("expected_range_d1", 0.0) or 0.0),
+                "expected_return": _to_float(row.get("expected_return_d1", 0.0), 0.0),
+                "expected_range": _to_float(row.get("expected_range_d1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_d1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
@@ -159,15 +175,15 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
         (
             "w1",
             {
-                "floor_value": float(row["floor_w1"]),
-                "ceiling_value": float(row["ceiling_w1"]),
+                "floor_value": _to_float(row.get("floor_w1")),
+                "ceiling_value": _to_float(row.get("ceiling_w1")),
                 "floor_time_bucket": str(row["floor_day_w1"]),
                 "ceiling_time_bucket": str(row["ceiling_day_w1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
                 "confidence_score": confidence,
-                "expected_return": float(row.get("expected_return_w1", 0.0) or 0.0),
-                "expected_range": float(row.get("expected_range_w1", 0.0) or 0.0),
+                "expected_return": _to_float(row.get("expected_return_w1", 0.0), 0.0),
+                "expected_range": _to_float(row.get("expected_range_w1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_w1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
@@ -178,15 +194,15 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
         (
             "q1",
             {
-                "floor_value": float(row["floor_q1"]),
-                "ceiling_value": float(row["ceiling_q1"]),
+                "floor_value": _to_float(row.get("floor_q1")),
+                "ceiling_value": _to_float(row.get("ceiling_q1")),
                 "floor_time_bucket": str(row["floor_day_q1"]),
                 "ceiling_time_bucket": str(row["ceiling_day_q1"]),
                 "floor_time_probability": confidence,
                 "ceiling_time_probability": confidence,
                 "confidence_score": confidence,
-                "expected_return": float(row.get("expected_return_q1", 0.0) or 0.0),
-                "expected_range": float(row.get("expected_range_q1", 0.0) or 0.0),
+                "expected_return": _to_float(row.get("expected_return_q1", 0.0), 0.0),
+                "expected_range": _to_float(row.get("expected_range_q1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_q1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
@@ -200,15 +216,15 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
         (
             "m3",
             {
-                "floor_value": float(m3_payload["floor_m3"]) if m3_payload.get("floor_m3") is not None else None,
+                "floor_value": _to_optional_float(m3_payload.get("floor_m3")),
                 "ceiling_value": None,
                 "floor_time_bucket": str(m3_payload.get("floor_week_m3") or ""),
                 "ceiling_time_bucket": "",
-                "floor_time_probability": float(m3_payload.get("floor_week_m3_confidence") or 0.0),
+                "floor_time_probability": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
                 "ceiling_time_probability": 0.0,
-                "confidence_score": float(m3_payload.get("floor_week_m3_confidence") or 0.0),
-                "expected_return": float(m3_payload.get("expected_return_m3") or 0.0) if m3_payload.get("expected_return_m3") is not None else None,
-                "expected_range": float(m3_payload.get("expected_range_m3") or 0.0) if m3_payload.get("expected_range_m3") is not None else None,
+                "confidence_score": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
+                "expected_return": _to_optional_float(m3_payload.get("expected_return_m3")),
+                "expected_range": _to_optional_float(m3_payload.get("expected_range_m3")),
                 "event_type": event_type,
                 "emit_signal": False,
                 "m3_payload": m3_payload,
