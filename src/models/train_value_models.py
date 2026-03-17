@@ -94,7 +94,8 @@ def _select_hyperparameters_with_cv(train_rows: list[dict], base_weights: dict[s
         return base_weights, base_bias, {"cv_enabled": False, "reason": "insufficient_rows", "folds": folds}
 
     grid = _hyperparameter_grid(base_weights, base_bias)
-    best_config = {"weights": base_weights, "bias": base_bias}
+    best_weights = base_weights
+    best_bias = base_bias
     best_score = float("inf")
 
     for config in grid:
@@ -115,11 +116,12 @@ def _select_hyperparameters_with_cv(train_rows: list[dict], base_weights: dict[s
         score = sum(fold_scores) / len(fold_scores)
         if score < best_score:
             best_score = score
-            best_config = config
+            best_weights = config["weights"]
+            best_bias = float(config["bias"])
 
     return (
-        best_config["weights"],
-        float(best_config["bias"]),
+        best_weights,
+        best_bias,
         {
             "cv_enabled": True,
             "folds": len(folds_data),
