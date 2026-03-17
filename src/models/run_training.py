@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import logging
 import os
+import pickle
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,6 +101,52 @@ def _audit_event(
     persist_payload(db_path, "model_training_cycle", payload)
 
 
+
+
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _build_model_file_manifest(task: str, artifact_payload: dict, pkl_path: Path) -> dict:
+    selection = artifact_payload.get("selection", {}) if isinstance(artifact_payload, dict) else {}
+    return {
+        "task": task,
+        "format": "pkl",
+        "file_name": pkl_path.name,
+        "sha256": _sha256_file(pkl_path),
+        "model_name": artifact_payload.get("model_name") if isinstance(artifact_payload, dict) else None,
+        "model_version": artifact_payload.get("version") if isinstance(artifact_payload, dict) else None,
+        "scoring_version": selection.get("scoring_version"),
+        "selection_decision": selection.get("decision"),
+        "selection_objective": selection.get("objective"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+def _persist_winning_model_file(task: str, models_file_dir: Path, artifact_payload: dict) -> Path:
+    models_file_dir.mkdir(parents=True, exist_ok=True)
+    out_path = models_file_dir / f"{task}_champion.pkl"
+    manifest_path = models_file_dir / f"{task}_champion.manifest.json"
+    with out_path.open("wb") as fh:
+        pickle.dump(artifact_payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+    manifest = _build_model_file_manifest(task=task, artifact_payload=artifact_payload, pkl_path=out_path)
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    logger.info(
+        "[training] persisted winning model file task=%s path=%s format=pkl manifest=%s sha256=%s",
+        task,
+        out_path,
+        manifest_path,
+        manifest["sha256"],
+    )
+    return out_path
+
 def run_training(
     dataset_path: Path,
     output_dir: Path,
@@ -114,6 +162,7 @@ def run_training(
         selected_tasks = normalize_model_tasks(tasks)
 
         models_dir = output_dir / "models"
+        models_file_dir = output_dir / "models_file"
         metrics_dir = output_dir / "metrics"
         models_dir.mkdir(parents=True, exist_ok=True)
         metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -140,6 +189,14 @@ def run_training(
             selection["value"] = select_and_persist_champion(value_payload, models_dir, task="value")
             metrics_payload["value"] = value_artifact.metrics
             trained_payloads["value"] = value_payload
+            if training_mode == "retrain" and selection["value"].get("decision") in {"promote", "promote_first"}:
+                _persist_winning_model_file("value", models_file_dir, value_payload)
+            else:
+                logger.info(
+                    "[training] skip winning model file update task=value training_mode=%s decision=%s",
+                    training_mode,
+                    selection["value"].get("decision"),
+                )
 
         if "timing" in selected_tasks:
             logger.info("[training] training timing model version=%s", version)
@@ -159,6 +216,14 @@ def run_training(
                 "floor_week_m3_top3": timing_artifact.top3,
             }
             trained_payloads["timing"] = timing_payload
+            if training_mode == "retrain" and selection["timing"].get("decision") in {"promote", "promote_first"}:
+                _persist_winning_model_file("timing", models_file_dir, timing_payload)
+            else:
+                logger.info(
+                    "[training] skip winning model file update task=timing training_mode=%s decision=%s",
+                    training_mode,
+                    selection["timing"].get("decision"),
+                )
 
         metrics_payload["selection"] = selection
         metrics_path = metrics_dir / f"training_metrics_{version}.json"
@@ -200,7 +265,7 @@ def run_training(
                     output_dir=output_dir,
                 )
 
-        result: dict[str, object] = {"metrics_path": str(metrics_path), "tasks": selected_tasks, "training_mode": training_mode}
+        result: dict[str, object] = {"metrics_path": str(metrics_path), "tasks": selected_tasks, "training_mode": training_mode, "models_file_dir": str(models_file_dir)}
         result.update(selection)
         return result
     except Exception as exc:
