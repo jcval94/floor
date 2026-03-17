@@ -55,3 +55,6 @@
 {"symbol": "UNH", "as_of": "2026-03-17T11:48:25.688090-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "UNH", "as_of": "2026-03-17T11:48:25.689098-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "UNH", "as_of": "2026-03-17T11:48:25.690065-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UNH", "as_of": "2026-03-17T15:11:19.243760-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UNH", "as_of": "2026-03-17T15:11:19.246004-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "UNH", "as_of": "2026-03-17T15:11:19.247461-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}

@@ -55,3 +55,6 @@
 {"symbol": "CVX", "as_of": "2026-03-17T11:48:25.706300-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "CVX", "as_of": "2026-03-17T11:48:25.707276-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "CVX", "as_of": "2026-03-17T11:48:25.708928-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "CVX", "as_of": "2026-03-17T15:11:19.271058-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "CVX", "as_of": "2026-03-17T15:11:19.273245-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "CVX", "as_of": "2026-03-17T15:11:19.274725-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
