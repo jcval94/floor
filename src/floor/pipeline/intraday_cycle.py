@@ -120,6 +120,63 @@ def _latest_feature_rows(cfg: RuntimeConfig, symbols: list[str]) -> list[dict]:
     return [latest_by_symbol[symbol.upper()] for symbol in symbols if symbol.upper() in latest_by_symbol]
 
 
+def _validate_feature_rows(feature_rows: list[dict]) -> None:
+    logger.info("[predictions][validate] START feature rows validation rows=%s", len(feature_rows))
+    if not feature_rows:
+        raise RuntimeError("Feature rows validation failed: empty input")
+
+    stale = 0
+    malformed = 0
+    for row in feature_rows:
+        ts = row.get("timestamp")
+        if not isinstance(ts, str) or not ts:
+            malformed += 1
+            continue
+        try:
+            parsed = datetime.fromisoformat(ts)
+        except ValueError:
+            malformed += 1
+            continue
+        age_days = (datetime.now(tz=ET).date() - parsed.date()).days
+        if age_days > 7:
+            stale += 1
+
+    if malformed:
+        raise RuntimeError(f"Feature rows validation failed: malformed timestamps={malformed}")
+
+    if stale:
+        logger.warning(
+            "[predictions][validate] feature recency warning stale_rows=%s/%s threshold_days=7",
+            stale,
+            len(feature_rows),
+        )
+    logger.info("[predictions][validate] DONE feature rows validation")
+
+
+def _validate_prediction_payload(symbol: str, horizon: str, payload: dict) -> None:
+    floor_value = payload.get("floor_value")
+    ceiling_value = payload.get("ceiling_value")
+    confidence = _to_float(payload.get("confidence_score"), 0.0)
+    expected_range = payload.get("expected_range")
+
+    if floor_value is None and horizon != "m3":
+        raise RuntimeError(f"Prediction payload invalid symbol={symbol} horizon={horizon}: floor_value is missing")
+    if ceiling_value is None and horizon in {"d1", "w1", "q1"}:
+        raise RuntimeError(f"Prediction payload invalid symbol={symbol} horizon={horizon}: ceiling_value is missing")
+    if floor_value is not None and ceiling_value is not None and float(floor_value) > float(ceiling_value):
+        raise RuntimeError(
+            f"Prediction payload invalid symbol={symbol} horizon={horizon}: floor_value > ceiling_value ({floor_value}>{ceiling_value})"
+        )
+    if not 0.0 <= confidence <= 1.0:
+        raise RuntimeError(
+            f"Prediction payload invalid symbol={symbol} horizon={horizon}: confidence_score out of range ({confidence})"
+        )
+    if expected_range is not None and float(expected_range) < 0:
+        raise RuntimeError(
+            f"Prediction payload invalid symbol={symbol} horizon={horizon}: expected_range is negative ({expected_range})"
+        )
+
+
 def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
     """Build normalized prediction payloads for d1/w1/q1/m3 horizons."""
     confidence = _to_float(row.get("confidence_score", 0.5), 0.5)
@@ -241,10 +298,12 @@ def run_intraday_cycle(
     symbols: list[str],
     cfg: RuntimeConfig,
 ) -> None:
-    logger.info("[predictions] start intraday cycle event=%s symbols=%s", event_type, len(symbols))
+    logger.info("[predictions] STEP 1/7 start intraday cycle event=%s symbols=%s", event_type, len(symbols))
     market_rows = _latest_feature_rows(cfg, symbols)
     if not market_rows:
         raise RuntimeError("No latest feature rows available in market_data.sqlite for requested symbols")
+    _validate_feature_rows(market_rows)
+    logger.info("[predictions] STEP 1/7 DONE feature load + validation rows=%s", len(market_rows))
 
     try:
         external = {record.symbol: record for record in fetch_recommendations(cfg.recommendations_csv_url)}
@@ -252,6 +311,7 @@ def run_intraday_cycle(
     except Exception as exc:
         logger.exception("[predictions] failed to fetch external recommendations: %s", exc)
         external = {}
+    logger.info("[predictions] STEP 2/7 DONE external recommendations count=%s", len(external))
 
     ai_by_symbol = {
         symbol: {
@@ -273,6 +333,11 @@ def run_intraday_cycle(
     )
     forecasts = generated["dataset_forecasts"]
     blocked = generated["blocked_list"]
+    logger.info(
+        "[predictions] STEP 3/7 DONE forecast pipeline forecasts=%s blocked=%s",
+        len(forecasts),
+        len(blocked),
+    )
     if blocked:
         logger.warning(
             "[predictions] blocked forecasts count=%s sample=%s",
@@ -287,6 +352,7 @@ def run_intraday_cycle(
         symbol = str(row["symbol"]).upper()
         logger.info("[predictions] processing symbol=%s model=%s", symbol, row.get("model_version"))
         for horizon, payload in _prediction_payloads(row, event_type):
+            _validate_prediction_payload(symbol, horizon, payload)
             prediction = PredictionRecord(
                 symbol=symbol,
                 as_of=as_of,
@@ -340,8 +406,10 @@ def run_intraday_cycle(
                 if order:
                     append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
                     logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon)
+    logger.info("[predictions] STEP 4/7 DONE payload validation + persistence")
 
     reconciliation = reconcile_predictions(cfg.data_dir)
+    logger.info("[predictions] STEP 5/7 DONE reconciliation run")
     logger.info(
         "[predictions] reconciliation pending=%s reconciled=%s skipped=%s",
         reconciliation.get("pending", 0),
@@ -350,3 +418,5 @@ def run_intraday_cycle(
     )
 
     logger.info("[predictions] finished intraday cycle event=%s forecasts=%s blocked=%s", event_type, len(forecasts), len(blocked))
+    logger.info("[predictions] STEP 6/7 DONE cycle bookkeeping")
+    logger.info("[predictions] STEP 7/7 DONE intraday cycle successful")
