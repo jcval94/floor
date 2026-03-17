@@ -13,6 +13,11 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+    return row is not None
+
+
 def init_persistence_db(db_path: Path) -> None:
     with _connect(db_path) as conn:
         conn.execute(
@@ -148,6 +153,16 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
             )
 
 
+def stream_count(db_path: Path, stream: str) -> int:
+    if not db_path.exists():
+        return 0
+    with _connect(db_path) as conn:
+        if not _table_exists(conn, stream):
+            return 0
+        row = conn.execute(f"SELECT COUNT(*) FROM {stream}").fetchone()
+    return int(row[0]) if row else 0
+
+
 def latest_predictions(db_path: Path) -> list[dict]:
     if not db_path.exists():
         return []
@@ -162,5 +177,7 @@ def latest_predictions(db_path: Path) -> list[dict]:
       ORDER BY p.symbol, p.horizon
     """
     with _connect(db_path) as conn:
+        if not _table_exists(conn, "predictions"):
+            return []
         rows = conn.execute(query).fetchall()
     return [json.loads(r[0]) for r in rows]

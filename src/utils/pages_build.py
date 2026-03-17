@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import date
 from typing import Any
 
+from floor.schemas import MULTI_HORIZON_PREDICTION_CONTRACT
 from floor.universe import parse_universe_yaml
 
 ALLOWED_KEYS = {
@@ -15,6 +16,7 @@ ALLOWED_KEYS = {
     "latest_predictions",
     "generated_at",
     "system_health",
+    "prediction_contract",
 }
 
 SENSITIVE_KEYS = {
@@ -149,16 +151,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
 
     forecasts = {
         "as_of": latest_predictions[0].get("as_of") if latest_predictions else None,
-        "contract": {
-            "horizons": ["d1", "w1", "q1", "m3"],
-            "required_fields": {
-                "d1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
-                "w1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
-                "q1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
-                "m3": ["m3_payload.floor_m3", "m3_payload.floor_week_m3", "m3_payload.floor_week_m3_confidence"],
-            },
-            "score_fields": ["confidence_score", "floor_time_probability", "ceiling_time_probability"],
-        },
+        "contract": dashboard_payload.get("prediction_contract", MULTI_HORIZON_PREDICTION_CONTRACT),
         "rows": latest_predictions,
         "top_opportunities": opportunities[:10],
     }

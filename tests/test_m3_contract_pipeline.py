@@ -50,9 +50,22 @@ def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     site_data_dir = tmp_path / "site" / "data"
     build_pages_data(data_dir=data_dir, site_data_dir=site_data_dir, universe_path=root_dir / "config" / "universe.yaml")
 
-    forecasts = json.loads((site_data_dir / "forecasts.json").read_text(encoding="utf-8"))["rows"]
+    dashboard = json.loads((data_dir / "reports" / "dashboard.json").read_text(encoding="utf-8"))
+    assert dashboard["prediction_contract"]["horizons"] == ["d1", "w1", "q1", "m3"]
+
+    forecasts_payload = json.loads((site_data_dir / "forecasts.json").read_text(encoding="utf-8"))
+    assert forecasts_payload["contract"]["horizons"] == ["d1", "w1", "q1", "m3"]
+
+    forecasts = forecasts_payload["rows"]
     m3_rows = [row for row in forecasts if row.get("horizon") == "m3"]
     assert len(m3_rows) == 1
+
+    d1_row = next(row for row in forecasts if row.get("horizon") == "d1")
+    # m3 must survive as flattened fields, not only nested payload, for all horizons.
+    assert "floor_m3" in d1_row
+    assert "floor_week_m3" in d1_row
+    assert "m3_status" in d1_row
+
     m3_payload = m3_rows[0].get("m3_payload", {})
     assert "m3_status" in m3_payload
     assert "floor_week_m3" in m3_payload

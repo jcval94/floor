@@ -80,6 +80,21 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
         "m3_block_reason": row.get("m3_block_reason"),
     }
 
+    # Flatten m3 contract fields in every horizon row so they survive sqlite/jsonl/dashboard snapshots.
+    shared_m3_fields = {
+        "floor_m3": m3_payload.get("floor_m3"),
+        "floor_week_m3": m3_payload.get("floor_week_m3"),
+        "floor_week_m3_confidence": m3_payload.get("floor_week_m3_confidence"),
+        "floor_week_m3_top3": m3_payload.get("floor_week_m3_top3", []),
+        "floor_week_m3_start_date": m3_payload.get("floor_week_m3_start_date"),
+        "floor_week_m3_end_date": m3_payload.get("floor_week_m3_end_date"),
+        "floor_week_m3_label_human": m3_payload.get("floor_week_m3_label_human"),
+        "expected_return_m3": m3_payload.get("expected_return_m3"),
+        "expected_range_m3": m3_payload.get("expected_range_m3"),
+        "m3_status": m3_payload.get("m3_status"),
+        "m3_block_reason": m3_payload.get("m3_block_reason"),
+    }
+
     payloads: list[tuple[Literal["d1", "w1", "q1", "m3"], dict]] = [
         (
             "d1",
@@ -96,6 +111,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
+                **shared_m3_fields,
             },
         ),
         (
@@ -113,6 +129,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
+                **shared_m3_fields,
             },
         ),
         (
@@ -130,6 +147,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
+                **shared_m3_fields,
             },
         ),
     ]
@@ -150,6 +168,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "event_type": event_type,
                 "emit_signal": False,
                 "m3_payload": m3_payload,
+                **shared_m3_fields,
             },
         )
     )
@@ -217,6 +236,15 @@ def run_intraday_cycle(
                 expected_return=payload["expected_return"],
                 expected_range=payload["expected_range"],
                 m3_payload=payload["m3_payload"],
+                floor_m3=payload.get("floor_m3"),
+                floor_week_m3=payload.get("floor_week_m3"),
+                floor_week_m3_confidence=payload.get("floor_week_m3_confidence"),
+                floor_week_m3_top3=payload.get("floor_week_m3_top3", []),
+                floor_week_m3_start_date=payload.get("floor_week_m3_start_date"),
+                floor_week_m3_end_date=payload.get("floor_week_m3_end_date"),
+                floor_week_m3_label_human=payload.get("floor_week_m3_label_human"),
+                m3_status=payload.get("m3_status"),
+                m3_block_reason=payload.get("m3_block_reason"),
                 model_version=str(row.get("model_version", "unknown")),
             )
             append_jsonl(cfg.data_dir / "predictions" / f"{symbol}.jsonl", prediction)
