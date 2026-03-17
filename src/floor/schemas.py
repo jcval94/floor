@@ -9,6 +9,26 @@ Horizon = Literal["d1", "w1", "q1", "m3"]
 EventType = Literal["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"]
 
 
+MULTI_HORIZON_PREDICTION_CONTRACT: dict[str, object] = {
+    "version": "v1",
+    "horizons": ["d1", "w1", "q1", "m3"],
+    "required_fields": {
+        "d1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
+        "w1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
+        "q1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
+        "m3": [
+            "floor_m3",
+            "floor_week_m3",
+            "floor_week_m3_confidence",
+            "floor_week_m3_top3",
+            "m3_status",
+            "m3_block_reason",
+        ],
+    },
+    "score_fields": ["confidence_score", "floor_time_probability", "ceiling_time_probability"],
+}
+
+
 @dataclass
 class PredictionRecord:
     symbol: str
@@ -27,6 +47,15 @@ class PredictionRecord:
     expected_return: float | None = None
     expected_range: float | None = None
     m3_payload: dict[str, Any] = field(default_factory=dict)
+    floor_m3: float | None = None
+    floor_week_m3: int | None = None
+    floor_week_m3_confidence: float | None = None
+    floor_week_m3_top3: list[dict[str, float]] = field(default_factory=list)
+    floor_week_m3_start_date: str | None = None
+    floor_week_m3_end_date: str | None = None
+    floor_week_m3_label_human: str | None = None
+    m3_status: str | None = None
+    m3_block_reason: str | None = None
     model_version: str = ""
 
 
