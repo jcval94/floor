@@ -1,0 +1,16 @@
+{
+  "horizon": "w1",
+  "model_name": "evt_cp_w1",
+  "version": "20260317T160921Z",
+  "floor_delta": 0.02000889540484362,
+  "ceiling_delta": 0.027214045058299455,
+  "train_rows": 8800,
+  "test_rows": 3800,
+  "metrics": {
+    "mae_floor": 7.383545001305539,
+    "mae_ceiling": 6.5536743621912565,
+    "mae_spread": 7.682373199818728,
+    "test_floor_coverage": 0.9868421052631579,
+    "test_ceiling_coverage": 0.9868421052631579
+  }
+}

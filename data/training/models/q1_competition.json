@@ -1,0 +1,76 @@
+{
+  "horizon": "q1",
+  "version": "20260317T160921Z",
+  "selection_metric": "mae_spread_then_total_mae",
+  "selected_model_id": "evt_cp_q1",
+  "candidates": [
+    {
+      "model_id": "evt_cp_q1",
+      "model_family": "evt_changepoint_hybrid",
+      "horizon": "q1",
+      "version": "20260317T160921Z",
+      "floor_delta": 0.029275392158236282,
+      "ceiling_delta": 0.04124673822482872,
+      "train_rows": 8800,
+      "test_rows": 3800,
+      "metrics": {
+        "mae_floor": 10.04322189679874,
+        "mae_ceiling": 9.057819849083012,
+        "mae_spread": 10.424577440893597,
+        "test_floor_coverage": 0.9868421052631579,
+        "test_ceiling_coverage": 0.9868421052631579
+      }
+    },
+    {
+      "model_id": "xgboost_q1",
+      "model_family": "xgboost",
+      "horizon": "q1",
+      "version": "20260317T160921Z",
+      "floor_delta": 0.030816202271827665,
+      "ceiling_delta": 0.03928260783317021,
+      "train_rows": 8800,
+      "test_rows": 3800,
+      "metrics": {
+        "mae_floor": 9.956078709540389,
+        "mae_ceiling": 8.927130280968957,
+        "mae_spread": 10.453529780023974,
+        "test_floor_coverage": 0.9868421052631579,
+        "test_ceiling_coverage": 0.9868421052631579
+      }
+    },
+    {
+      "model_id": "lstm_q1",
+      "model_family": "lstm_sequence",
+      "horizon": "q1",
+      "version": "20260317T160921Z",
+      "floor_delta": 0.03328149845357388,
+      "ceiling_delta": 0.036139999206516595,
+      "train_rows": 8800,
+      "test_rows": 3800,
+      "metrics": {
+        "mae_floor": 9.846837767606441,
+        "mae_ceiling": 8.764773110561435,
+        "mae_spread": 10.503246837839773,
+        "test_floor_coverage": 0.9868421052631579,
+        "test_ceiling_coverage": 0.9868421052631579
+      }
+    },
+    {
+      "model_id": "qenet_q1",
+      "model_family": "quantile_elastic_net",
+      "horizon": "q1",
+      "version": "20260317T160921Z",
+      "floor_delta": 0.028350906090081455,
+      "ceiling_delta": 0.036139999206516595,
+      "train_rows": 8800,
+      "test_rows": 3800,
+      "metrics": {
+        "mae_floor": 10.100916442044781,
+        "mae_ceiling": 8.764773110561435,
+        "mae_spread": 10.967998349093499,
+        "test_floor_coverage": 0.9868421052631579,
+        "test_ceiling_coverage": 0.9868421052631579
+      }
+    }
+  ]
+}

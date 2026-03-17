@@ -1,0 +1,273 @@
+PYTHONPATH=src python -c "from pathlib import Path; from storage.market_db import init_market_db; from floor.persistence_db import init_persistence_db; init_market_db(Path('data/market/market_data.sqlite')); init_persistence_db(Path('data/persistence/app.sqlite'))"
+2026-03-17 16:09:22,087 INFO __main__ - [etl:yahoo] start ingest symbols=51 db=data/market/market_data.sqlite
+2026-03-17 16:09:22,087 INFO __main__ - [etl:yahoo] requesting symbol=AAPL range=1y interval=1d
+2026-03-17 16:09:22,616 INFO __main__ - [etl:yahoo] parsed bars symbol=AAPL count=252
+2026-03-17 16:09:22,616 INFO __main__ - [etl:yahoo] sample bars symbol=AAPL first=DailyBar(symbol='AAPL', ts_utc='2025-03-17T13:30:00+00:00', open=213.30999755859375, high=215.22000122070312, low=209.97000122070312, close=214.0, volume=48073400.0, source='yahoo') last=DailyBar(symbol='AAPL', ts_utc='2026-03-17T16:09:20+00:00', open=253.07850646972656, high=255.0749969482422, low=252.17999267578125, close=254.58999633789062, volume=8533076.0, source='yahoo')
+2026-03-17 16:09:22,619 INFO __main__ - [etl:yahoo] upserted symbol=AAPL rows=252 attempt=1
+2026-03-17 16:09:23,019 INFO __main__ - [etl:yahoo] requesting symbol=MSFT range=1y interval=1d
+2026-03-17 16:09:23,295 INFO __main__ - [etl:yahoo] parsed bars symbol=MSFT count=252
+2026-03-17 16:09:23,295 INFO __main__ - [etl:yahoo] sample bars symbol=MSFT first=DailyBar(symbol='MSFT', ts_utc='2025-03-17T13:30:00+00:00', open=386.70001220703125, high=392.7099914550781, low=385.57000732421875, close=388.70001220703125, volume=22474300.0, source='yahoo') last=DailyBar(symbol='MSFT', ts_utc='2026-03-17T16:09:21+00:00', open=400.135009765625, high=404.3999938964844, low=397.7449951171875, close=398.489990234375, volume=10291241.0, source='yahoo')
+2026-03-17 16:09:23,296 INFO __main__ - [etl:yahoo] upserted symbol=MSFT rows=252 attempt=1
+2026-03-17 16:09:23,697 INFO __main__ - [etl:yahoo] requesting symbol=NVDA range=1y interval=1d
+2026-03-17 16:09:23,959 INFO __main__ - [etl:yahoo] parsed bars symbol=NVDA count=252
+2026-03-17 16:09:23,959 INFO __main__ - [etl:yahoo] sample bars symbol=NVDA first=DailyBar(symbol='NVDA', ts_utc='2025-03-17T13:30:00+00:00', open=122.73999786376953, high=122.88999938964844, low=118.02999877929688, close=119.52999877929688, volume=255501500.0, source='yahoo') last=DailyBar(symbol='NVDA', ts_utc='2026-03-17T16:09:22+00:00', open=185.0500030517578, high=185.39999389648438, low=181.68040466308594, close=181.881103515625, volume=85309361.0, source='yahoo')
+2026-03-17 16:09:23,961 INFO __main__ - [etl:yahoo] upserted symbol=NVDA rows=252 attempt=1
+2026-03-17 16:09:24,361 INFO __main__ - [etl:yahoo] requesting symbol=AMZN range=1y interval=1d
+2026-03-17 16:09:24,661 INFO __main__ - [etl:yahoo] parsed bars symbol=AMZN count=252
+2026-03-17 16:09:24,661 INFO __main__ - [etl:yahoo] sample bars symbol=AMZN first=DailyBar(symbol='AMZN', ts_utc='2025-03-17T13:30:00+00:00', open=198.77000427246094, high=199.0, low=194.32000732421875, close=195.74000549316406, volume=47341800.0, source='yahoo') last=DailyBar(symbol='AMZN', ts_utc='2026-03-17T16:09:23+00:00', open=212.88499450683594, high=214.8350067138672, low=212.42999267578125, close=213.16000366210938, volume=13887386.0, source='yahoo')
+2026-03-17 16:09:24,663 INFO __main__ - [etl:yahoo] upserted symbol=AMZN rows=252 attempt=1
+2026-03-17 16:09:25,063 INFO __main__ - [etl:yahoo] requesting symbol=GOOGL range=1y interval=1d
+2026-03-17 16:09:25,365 INFO __main__ - [etl:yahoo] parsed bars symbol=GOOGL count=252
+2026-03-17 16:09:25,365 INFO __main__ - [etl:yahoo] sample bars symbol=GOOGL first=DailyBar(symbol='GOOGL', ts_utc='2025-03-17T13:30:00+00:00', open=165.02999877929688, high=166.3000030517578, low=163.6699981689453, close=164.2899932861328, volume=31184300.0, source='yahoo') last=DailyBar(symbol='GOOGL', ts_utc='2026-03-17T16:09:23+00:00', open=305.9949951171875, high=308.2799987792969, low=305.510009765625, close=308.19000244140625, volume=6754403.0, source='yahoo')
+2026-03-17 16:09:25,367 INFO __main__ - [etl:yahoo] upserted symbol=GOOGL rows=252 attempt=1
+2026-03-17 16:09:25,767 INFO __main__ - [etl:yahoo] requesting symbol=META range=1y interval=1d
+2026-03-17 16:09:26,138 INFO __main__ - [etl:yahoo] parsed bars symbol=META count=252
+2026-03-17 16:09:26,138 INFO __main__ - [etl:yahoo] sample bars symbol=META first=DailyBar(symbol='META', ts_utc='2025-03-17T13:30:00+00:00', open=607.4600219726562, high=613.0999755859375, low=598.0, close=604.9000244140625, volume=15473900.0, source='yahoo') last=DailyBar(symbol='META', ts_utc='2026-03-17T16:09:13+00:00', open=628.530029296875, high=636.5499877929688, low=624.530029296875, close=625.7100219726562, volume=4506886.0, source='yahoo')
+2026-03-17 16:09:26,140 INFO __main__ - [etl:yahoo] upserted symbol=META rows=252 attempt=1
+2026-03-17 16:09:26,540 INFO __main__ - [etl:yahoo] requesting symbol=TSLA range=1y interval=1d
+2026-03-17 16:09:26,757 INFO __main__ - [etl:yahoo] parsed bars symbol=TSLA count=252
+2026-03-17 16:09:26,757 INFO __main__ - [etl:yahoo] sample bars symbol=TSLA first=DailyBar(symbol='TSLA', ts_utc='2025-03-17T13:30:00+00:00', open=245.05999755859375, high=245.39999389648438, low=232.8000030517578, close=238.00999450683594, volume=111900600.0, source='yahoo') last=DailyBar(symbol='TSLA', ts_utc='2026-03-17T16:09:25+00:00', open=395.69000244140625, high=400.1199951171875, low=393.0, close=396.2799987792969, volume=24867977.0, source='yahoo')
+2026-03-17 16:09:26,758 INFO __main__ - [etl:yahoo] upserted symbol=TSLA rows=252 attempt=1
+2026-03-17 16:09:27,158 INFO __main__ - [etl:yahoo] requesting symbol=AVGO range=1y interval=1d
+2026-03-17 16:09:27,535 INFO __main__ - [etl:yahoo] parsed bars symbol=AVGO count=252
+2026-03-17 16:09:27,535 INFO __main__ - [etl:yahoo] sample bars symbol=AVGO first=DailyBar(symbol='AVGO', ts_utc='2025-03-17T13:30:00+00:00', open=188.0500030517578, high=196.72000122070312, low=187.5, close=194.5, volume=26830600.0, source='yahoo') last=DailyBar(symbol='AVGO', ts_utc='2026-03-17T16:09:26+00:00', open=325.6199951171875, high=327.44000244140625, low=317.45001220703125, close=318.0, volume=11258003.0, source='yahoo')
+2026-03-17 16:09:27,536 INFO __main__ - [etl:yahoo] upserted symbol=AVGO rows=252 attempt=1
+2026-03-17 16:09:27,936 INFO __main__ - [etl:yahoo] requesting symbol=AMD range=1y interval=1d
+2026-03-17 16:09:28,209 INFO __main__ - [etl:yahoo] parsed bars symbol=AMD count=252
+2026-03-17 16:09:28,209 INFO __main__ - [etl:yahoo] sample bars symbol=AMD first=DailyBar(symbol='AMD', ts_utc='2025-03-17T13:30:00+00:00', open=102.5999984741211, high=106.1500015258789, low=102.5999984741211, close=104.58999633789062, volume=43689500.0, source='yahoo') last=DailyBar(symbol='AMD', ts_utc='2026-03-17T16:09:24+00:00', open=196.67999267578125, high=199.2100067138672, low=195.25999450683594, close=195.85000610351562, volume=11633470.0, source='yahoo')
+2026-03-17 16:09:28,211 INFO __main__ - [etl:yahoo] upserted symbol=AMD rows=252 attempt=1
+2026-03-17 16:09:28,611 INFO __main__ - [etl:yahoo] requesting symbol=ORCL range=1y interval=1d
+2026-03-17 16:09:28,820 INFO __main__ - [etl:yahoo] parsed bars symbol=ORCL count=252
+2026-03-17 16:09:28,820 INFO __main__ - [etl:yahoo] sample bars symbol=ORCL first=DailyBar(symbol='ORCL', ts_utc='2025-03-17T13:30:00+00:00', open=150.39999389648438, high=155.75, low=150.39999389648438, close=154.00999450683594, volume=9885000.0, source='yahoo') last=DailyBar(symbol='ORCL', ts_utc='2026-03-17T16:09:28+00:00', open=155.44000244140625, high=158.9199981689453, low=153.8000030517578, close=154.64999389648438, volume=11534600.0, source='yahoo')
+2026-03-17 16:09:28,821 INFO __main__ - [etl:yahoo] upserted symbol=ORCL rows=252 attempt=1
+2026-03-17 16:09:29,222 INFO __main__ - [etl:yahoo] requesting symbol=CRM range=1y interval=1d
+2026-03-17 16:09:29,444 INFO __main__ - [etl:yahoo] parsed bars symbol=CRM count=252
+2026-03-17 16:09:29,444 INFO __main__ - [etl:yahoo] sample bars symbol=CRM first=DailyBar(symbol='CRM', ts_utc='2025-03-17T13:30:00+00:00', open=277.3699951171875, high=282.7300109863281, low=276.0799865722656, close=280.75, volume=4484300.0, source='yahoo') last=DailyBar(symbol='CRM', ts_utc='2026-03-17T16:09:26+00:00', open=198.22000122070312, high=202.3800048828125, low=196.36000061035156, close=196.43899536132812, volume=2974113.0, source='yahoo')
+2026-03-17 16:09:29,446 INFO __main__ - [etl:yahoo] upserted symbol=CRM rows=252 attempt=1
+2026-03-17 16:09:29,846 INFO __main__ - [etl:yahoo] requesting symbol=ADBE range=1y interval=1d
+2026-03-17 16:09:30,204 INFO __main__ - [etl:yahoo] parsed bars symbol=ADBE count=252
+2026-03-17 16:09:30,205 INFO __main__ - [etl:yahoo] sample bars symbol=ADBE first=DailyBar(symbol='ADBE', ts_utc='2025-03-17T13:30:00+00:00', open=394.1199951171875, high=399.94000244140625, low=387.1300048828125, close=399.3399963378906, volume=4258500.0, source='yahoo') last=DailyBar(symbol='ADBE', ts_utc='2026-03-17T16:09:25+00:00', open=252.44500732421875, high=258.9100036621094, low=252.13999938964844, close=255.6649932861328, volume=3123233.0, source='yahoo')
+2026-03-17 16:09:30,206 INFO __main__ - [etl:yahoo] upserted symbol=ADBE rows=252 attempt=1
+2026-03-17 16:09:30,606 INFO __main__ - [etl:yahoo] requesting symbol=CSCO range=1y interval=1d
+2026-03-17 16:09:30,929 INFO __main__ - [etl:yahoo] parsed bars symbol=CSCO count=252
+2026-03-17 16:09:30,929 INFO __main__ - [etl:yahoo] sample bars symbol=CSCO first=DailyBar(symbol='CSCO', ts_utc='2025-03-17T13:30:00+00:00', open=60.400001525878906, high=61.209999084472656, low=60.34000015258789, close=60.88999938964844, volume=15335800.0, source='yahoo') last=DailyBar(symbol='CSCO', ts_utc='2026-03-17T16:09:26+00:00', open=79.01000213623047, high=79.90499877929688, low=78.81999969482422, close=79.36000061035156, volume=5292413.0, source='yahoo')
+2026-03-17 16:09:30,930 INFO __main__ - [etl:yahoo] upserted symbol=CSCO rows=252 attempt=1
+2026-03-17 16:09:31,330 INFO __main__ - [etl:yahoo] requesting symbol=QCOM range=1y interval=1d
+2026-03-17 16:09:31,594 INFO __main__ - [etl:yahoo] parsed bars symbol=QCOM count=252
+2026-03-17 16:09:31,594 INFO __main__ - [etl:yahoo] sample bars symbol=QCOM first=DailyBar(symbol='QCOM', ts_utc='2025-03-17T13:30:00+00:00', open=155.60000610351562, high=158.72000122070312, low=155.44000244140625, close=157.9499969482422, volume=5781000.0, source='yahoo') last=DailyBar(symbol='QCOM', ts_utc='2026-03-17T16:09:21+00:00', open=133.52000427246094, high=134.0500030517578, low=131.36000061035156, close=131.47999572753906, volume=4322065.0, source='yahoo')
+2026-03-17 16:09:31,596 INFO __main__ - [etl:yahoo] upserted symbol=QCOM rows=252 attempt=1
+2026-03-17 16:09:31,996 INFO __main__ - [etl:yahoo] requesting symbol=AMAT range=1y interval=1d
+2026-03-17 16:09:32,299 INFO __main__ - [etl:yahoo] parsed bars symbol=AMAT count=252
+2026-03-17 16:09:32,299 INFO __main__ - [etl:yahoo] sample bars symbol=AMAT first=DailyBar(symbol='AMAT', ts_utc='2025-03-17T13:30:00+00:00', open=152.9499969482422, high=157.2100067138672, low=152.83999633789062, close=155.4600067138672, volume=4764300.0, source='yahoo') last=DailyBar(symbol='AMAT', ts_utc='2026-03-17T16:09:23+00:00', open=345.7799987792969, high=351.25, low=343.010009765625, close=345.4700012207031, volume=1488307.0, source='yahoo')
+2026-03-17 16:09:32,300 INFO __main__ - [etl:yahoo] upserted symbol=AMAT rows=252 attempt=1
+2026-03-17 16:09:32,701 INFO __main__ - [etl:yahoo] requesting symbol=TXN range=1y interval=1d
+2026-03-17 16:09:32,979 INFO __main__ - [etl:yahoo] parsed bars symbol=TXN count=252
+2026-03-17 16:09:32,979 INFO __main__ - [etl:yahoo] sample bars symbol=TXN first=DailyBar(symbol='TXN', ts_utc='2025-03-17T13:30:00+00:00', open=176.10000610351562, high=181.2899932861328, low=175.97000122070312, close=179.99000549316406, volume=4940400.0, source='yahoo') last=DailyBar(symbol='TXN', ts_utc='2026-03-17T16:09:30+00:00', open=195.86500549316406, high=196.42999267578125, low=193.77000427246094, close=193.94000244140625, volume=999445.0, source='yahoo')
+2026-03-17 16:09:32,980 INFO __main__ - [etl:yahoo] upserted symbol=TXN rows=252 attempt=1
+2026-03-17 16:09:33,381 INFO __main__ - [etl:yahoo] requesting symbol=NFLX range=1y interval=1d
+2026-03-17 16:09:33,659 INFO __main__ - [etl:yahoo] parsed bars symbol=NFLX count=252
+2026-03-17 16:09:33,659 INFO __main__ - [etl:yahoo] sample bars symbol=NFLX first=DailyBar(symbol='NFLX', ts_utc='2025-03-17T13:30:00+00:00', open=93.99500274658203, high=96.76300048828125, low=93.44200134277344, close=95.00199890136719, volume=75431000.0, source='yahoo') last=DailyBar(symbol='NFLX', ts_utc='2026-03-17T16:09:31+00:00', open=95.30000305175781, high=96.33999633789062, low=94.95999908447266, close=95.28500366210938, volume=9653343.0, source='yahoo')
+2026-03-17 16:09:33,661 INFO __main__ - [etl:yahoo] upserted symbol=NFLX rows=252 attempt=1
+2026-03-17 16:09:34,061 INFO __main__ - [etl:yahoo] requesting symbol=INTC range=1y interval=1d
+2026-03-17 16:09:34,317 INFO __main__ - [etl:yahoo] parsed bars symbol=INTC count=252
+2026-03-17 16:09:34,317 INFO __main__ - [etl:yahoo] sample bars symbol=INTC first=DailyBar(symbol='INTC', ts_utc='2025-03-17T13:30:00+00:00', open=24.420000076293945, high=26.149999618530273, low=24.3700008392334, close=25.690000534057617, volume=160723600.0, source='yahoo') last=DailyBar(symbol='INTC', ts_utc='2026-03-17T16:09:32+00:00', open=46.07500076293945, high=46.07500076293945, low=43.90999984741211, close=43.999900817871094, volume=52594540.0, source='yahoo')
+2026-03-17 16:09:34,319 INFO __main__ - [etl:yahoo] upserted symbol=INTC rows=252 attempt=1
+2026-03-17 16:09:34,719 INFO __main__ - [etl:yahoo] requesting symbol=IBM range=1y interval=1d
+2026-03-17 16:09:35,196 INFO __main__ - [etl:yahoo] parsed bars symbol=IBM count=252
+2026-03-17 16:09:35,196 INFO __main__ - [etl:yahoo] sample bars symbol=IBM first=DailyBar(symbol='IBM', ts_utc='2025-03-17T13:30:00+00:00', open=249.25, high=254.6300048828125, low=249.0, close=252.97000122070312, volume=3233900.0, source='yahoo') last=DailyBar(symbol='IBM', ts_utc='2026-03-17T16:09:33+00:00', open=250.50999450683594, high=255.72000122070312, low=250.0, close=252.9600067138672, volume=1355645.0, source='yahoo')
+2026-03-17 16:09:35,198 INFO __main__ - [etl:yahoo] upserted symbol=IBM rows=252 attempt=1
+2026-03-17 16:09:35,598 INFO __main__ - [etl:yahoo] requesting symbol=INTU range=1y interval=1d
+2026-03-17 16:09:35,887 INFO __main__ - [etl:yahoo] parsed bars symbol=INTU count=252
+2026-03-17 16:09:35,887 INFO __main__ - [etl:yahoo] sample bars symbol=INTU first=DailyBar(symbol='INTU', ts_utc='2025-03-17T13:30:00+00:00', open=595.4199829101562, high=605.3300170898438, low=591.9199829101562, close=602.1099853515625, volume=1558800.0, source='yahoo') last=DailyBar(symbol='INTU', ts_utc='2026-03-17T16:09:22+00:00', open=455.0799865722656, high=474.7699890136719, low=455.0, close=459.9649963378906, volume=941914.0, source='yahoo')
+2026-03-17 16:09:35,888 INFO __main__ - [etl:yahoo] upserted symbol=INTU rows=252 attempt=1
+2026-03-17 16:09:36,289 INFO __main__ - [etl:yahoo] requesting symbol=PLTR range=1y interval=1d
+2026-03-17 16:09:36,652 INFO __main__ - [etl:yahoo] parsed bars symbol=PLTR count=252
+2026-03-17 16:09:36,652 INFO __main__ - [etl:yahoo] sample bars symbol=PLTR first=DailyBar(symbol='PLTR', ts_utc='2025-03-17T13:30:00+00:00', open=88.44000244140625, high=88.81999969482422, low=84.5, close=87.3499984741211, volume=99348900.0, source='yahoo') last=DailyBar(symbol='PLTR', ts_utc='2026-03-17T16:09:34+00:00', open=152.3000030517578, high=156.75, low=152.1199951171875, close=155.27999877929688, volume=19596132.0, source='yahoo')
+2026-03-17 16:09:36,653 INFO __main__ - [etl:yahoo] upserted symbol=PLTR rows=252 attempt=1
+2026-03-17 16:09:37,054 INFO __main__ - [etl:yahoo] requesting symbol=JPM range=1y interval=1d
+2026-03-17 16:09:37,419 INFO __main__ - [etl:yahoo] parsed bars symbol=JPM count=252
+2026-03-17 16:09:37,419 INFO __main__ - [etl:yahoo] sample bars symbol=JPM first=DailyBar(symbol='JPM', ts_utc='2025-03-17T13:30:00+00:00', open=231.17999267578125, high=235.6699981689453, low=230.4600067138672, close=233.92999267578125, volume=9586000.0, source='yahoo') last=DailyBar(symbol='JPM', ts_utc='2026-03-17T16:09:36+00:00', open=289.0, high=291.760009765625, low=286.42999267578125, close=287.30999755859375, volume=3113890.0, source='yahoo')
+2026-03-17 16:09:37,420 INFO __main__ - [etl:yahoo] upserted symbol=JPM rows=252 attempt=1
+2026-03-17 16:09:37,820 INFO __main__ - [etl:yahoo] requesting symbol=BAC range=1y interval=1d
+2026-03-17 16:09:38,177 INFO __main__ - [etl:yahoo] parsed bars symbol=BAC count=252
+2026-03-17 16:09:38,178 INFO __main__ - [etl:yahoo] sample bars symbol=BAC first=DailyBar(symbol='BAC', ts_utc='2025-03-17T13:30:00+00:00', open=40.91999816894531, high=41.77000045776367, low=40.59000015258789, close=41.439998626708984, volume=37242800.0, source='yahoo') last=DailyBar(symbol='BAC', ts_utc='2026-03-17T16:09:35+00:00', open=47.65999984741211, high=48.08000183105469, low=47.34000015258789, close=47.42499923706055, volume=10533742.0, source='yahoo')
+2026-03-17 16:09:38,179 INFO __main__ - [etl:yahoo] upserted symbol=BAC rows=252 attempt=1
+2026-03-17 16:09:38,579 INFO __main__ - [etl:yahoo] requesting symbol=WFC range=1y interval=1d
+2026-03-17 16:09:39,022 INFO __main__ - [etl:yahoo] parsed bars symbol=WFC count=252
+2026-03-17 16:09:39,022 INFO __main__ - [etl:yahoo] sample bars symbol=WFC first=DailyBar(symbol='WFC', ts_utc='2025-03-17T13:30:00+00:00', open=70.47000122070312, high=71.55999755859375, low=70.08000183105469, close=70.83999633789062, volume=11185000.0, source='yahoo') last=DailyBar(symbol='WFC', ts_utc='2026-03-17T16:09:30+00:00', open=76.5, high=77.16999816894531, low=75.81999969482422, close=76.1500015258789, volume=4864300.0, source='yahoo')
+2026-03-17 16:09:39,024 INFO __main__ - [etl:yahoo] upserted symbol=WFC rows=252 attempt=1
+2026-03-17 16:09:39,425 INFO __main__ - [etl:yahoo] requesting symbol=GS range=1y interval=1d
+2026-03-17 16:09:39,688 INFO __main__ - [etl:yahoo] parsed bars symbol=GS count=252
+2026-03-17 16:09:39,688 INFO __main__ - [etl:yahoo] sample bars symbol=GS first=DailyBar(symbol='GS', ts_utc='2025-03-17T13:30:00+00:00', open=541.22998046875, high=557.1599731445312, low=540.0, close=551.3400268554688, volume=2695600.0, source='yahoo') last=DailyBar(symbol='GS', ts_utc='2026-03-17T16:09:31+00:00', open=806.2999877929688, high=820.4400024414062, low=803.469970703125, close=806.4199829101562, volume=710399.0, source='yahoo')
+2026-03-17 16:09:39,690 INFO __main__ - [etl:yahoo] upserted symbol=GS rows=252 attempt=1
+2026-03-17 16:09:40,090 INFO __main__ - [etl:yahoo] requesting symbol=MS range=1y interval=1d
+2026-03-17 16:09:40,342 INFO __main__ - [etl:yahoo] parsed bars symbol=MS count=252
+2026-03-17 16:09:40,342 INFO __main__ - [etl:yahoo] sample bars symbol=MS first=DailyBar(symbol='MS', ts_utc='2025-03-17T13:30:00+00:00', open=114.97000122070312, high=119.30000305175781, low=114.83999633789062, close=117.95999908447266, volume=8374900.0, source='yahoo') last=DailyBar(symbol='MS', ts_utc='2026-03-17T16:09:23+00:00', open=157.3000030517578, high=160.64010620117188, low=157.3000030517578, close=158.58999633789062, volume=2238818.0, source='yahoo')
+2026-03-17 16:09:40,344 INFO __main__ - [etl:yahoo] upserted symbol=MS rows=252 attempt=1
+2026-03-17 16:09:40,744 INFO __main__ - [etl:yahoo] requesting symbol=V range=1y interval=1d
+2026-03-17 16:09:41,042 INFO __main__ - [etl:yahoo] parsed bars symbol=V count=252
+2026-03-17 16:09:41,042 INFO __main__ - [etl:yahoo] sample bars symbol=V first=DailyBar(symbol='V', ts_utc='2025-03-17T13:30:00+00:00', open=330.0299987792969, high=336.1099853515625, low=329.760009765625, close=334.54998779296875, volume=6149400.0, source='yahoo') last=DailyBar(symbol='V', ts_utc='2026-03-17T16:09:31+00:00', open=311.32000732421875, high=312.69000244140625, low=309.4849853515625, close=309.7349853515625, volume=2122783.0, source='yahoo')
+2026-03-17 16:09:41,044 INFO __main__ - [etl:yahoo] upserted symbol=V rows=252 attempt=1
+2026-03-17 16:09:41,445 INFO __main__ - [etl:yahoo] requesting symbol=MA range=1y interval=1d
+2026-03-17 16:09:41,710 INFO __main__ - [etl:yahoo] parsed bars symbol=MA count=252
+2026-03-17 16:09:41,710 INFO __main__ - [etl:yahoo] sample bars symbol=MA first=DailyBar(symbol='MA', ts_utc='2025-03-17T13:30:00+00:00', open=523.25, high=533.47998046875, low=521.47998046875, close=531.989990234375, volume=2544800.0, source='yahoo') last=DailyBar(symbol='MA', ts_utc='2026-03-17T16:09:34+00:00', open=510.54998779296875, high=516.9600219726562, low=508.7301025390625, close=509.3500061035156, volume=919909.0, source='yahoo')
+2026-03-17 16:09:41,711 INFO __main__ - [etl:yahoo] upserted symbol=MA rows=252 attempt=1
+2026-03-17 16:09:42,112 INFO __main__ - [etl:yahoo] requesting symbol=AXP range=1y interval=1d
+2026-03-17 16:09:42,385 INFO __main__ - [etl:yahoo] parsed bars symbol=AXP count=252
+2026-03-17 16:09:42,385 INFO __main__ - [etl:yahoo] sample bars symbol=AXP first=DailyBar(symbol='AXP', ts_utc='2025-03-17T13:30:00+00:00', open=265.19000244140625, high=266.44000244140625, low=261.2699890136719, close=264.3800048828125, volume=2975800.0, source='yahoo') last=DailyBar(symbol='AXP', ts_utc='2026-03-17T16:09:24+00:00', open=303.8599853515625, high=306.28900146484375, low=300.5400085449219, close=300.989990234375, volume=915964.0, source='yahoo')
+2026-03-17 16:09:42,386 INFO __main__ - [etl:yahoo] upserted symbol=AXP rows=252 attempt=1
+2026-03-17 16:09:42,787 INFO __main__ - [etl:yahoo] requesting symbol=BRK-B range=1y interval=1d
+2026-03-17 16:09:43,066 INFO __main__ - [etl:yahoo] parsed bars symbol=BRK.B count=252
+2026-03-17 16:09:43,066 INFO __main__ - [etl:yahoo] sample bars symbol=BRK.B first=DailyBar(symbol='BRK.B', ts_utc='2025-03-17T13:30:00+00:00', open=514.6199951171875, high=524.7100219726562, low=513.2100219726562, close=523.010009765625, volume=5343400.0, source='yahoo') last=DailyBar(symbol='BRK.B', ts_utc='2026-03-17T16:09:41+00:00', open=494.8399963378906, high=496.9599914550781, low=491.7250061035156, close=492.2799987792969, volume=1072023.0, source='yahoo')
+2026-03-17 16:09:43,068 INFO __main__ - [etl:yahoo] upserted symbol=BRK.B rows=252 attempt=1
+2026-03-17 16:09:43,468 INFO __main__ - [etl:yahoo] requesting symbol=LLY range=1y interval=1d
+2026-03-17 16:09:43,799 INFO __main__ - [etl:yahoo] parsed bars symbol=LLY count=252
+2026-03-17 16:09:43,799 INFO __main__ - [etl:yahoo] sample bars symbol=LLY first=DailyBar(symbol='LLY', ts_utc='2025-03-17T13:30:00+00:00', open=816.9500122070312, high=829.0, low=814.5700073242188, close=824.760009765625, volume=2546600.0, source='yahoo') last=DailyBar(symbol='LLY', ts_utc='2026-03-17T16:09:37+00:00', open=978.9199829101562, high=981.1649780273438, low=936.2301025390625, close=937.5549926757812, volume=1900744.0, source='yahoo')
+2026-03-17 16:09:43,800 INFO __main__ - [etl:yahoo] upserted symbol=LLY rows=252 attempt=1
+2026-03-17 16:09:44,201 INFO __main__ - [etl:yahoo] requesting symbol=ABBV range=1y interval=1d
+2026-03-17 16:09:44,505 INFO __main__ - [etl:yahoo] parsed bars symbol=ABBV count=252
+2026-03-17 16:09:44,505 INFO __main__ - [etl:yahoo] sample bars symbol=ABBV first=DailyBar(symbol='ABBV', ts_utc='2025-03-17T13:30:00+00:00', open=212.22000122070312, high=215.5, low=209.52000427246094, close=214.47000122070312, volume=5075400.0, source='yahoo') last=DailyBar(symbol='ABBV', ts_utc='2026-03-17T16:09:15+00:00', open=222.0399932861328, high=223.27499389648438, low=220.72999572753906, close=222.375, volume=1031440.0, source='yahoo')
+2026-03-17 16:09:44,507 INFO __main__ - [etl:yahoo] upserted symbol=ABBV rows=252 attempt=1
+2026-03-17 16:09:44,907 INFO __main__ - [etl:yahoo] requesting symbol=UNH range=1y interval=1d
+2026-03-17 16:09:45,208 INFO __main__ - [etl:yahoo] parsed bars symbol=UNH count=252
+2026-03-17 16:09:45,208 INFO __main__ - [etl:yahoo] sample bars symbol=UNH first=DailyBar(symbol='UNH', ts_utc='2025-03-17T13:30:00+00:00', open=487.510009765625, high=500.6099853515625, low=485.95001220703125, close=499.0199890136719, volume=5152300.0, source='yahoo') last=DailyBar(symbol='UNH', ts_utc='2026-03-17T16:09:41+00:00', open=287.79998779296875, high=288.989990234375, low=285.7250061035156, close=285.95001220703125, volume=1808142.0, source='yahoo')
+2026-03-17 16:09:45,210 INFO __main__ - [etl:yahoo] upserted symbol=UNH rows=252 attempt=1
+2026-03-17 16:09:45,610 INFO __main__ - [etl:yahoo] requesting symbol=MRK range=1y interval=1d
+2026-03-17 16:09:45,913 INFO __main__ - [etl:yahoo] parsed bars symbol=MRK count=252
+2026-03-17 16:09:45,913 INFO __main__ - [etl:yahoo] sample bars symbol=MRK first=DailyBar(symbol='MRK', ts_utc='2025-03-17T13:30:00+00:00', open=93.6500015258789, high=95.30000305175781, low=93.08000183105469, close=94.79000091552734, volume=12237900.0, source='yahoo') last=DailyBar(symbol='MRK', ts_utc='2026-03-17T16:09:36+00:00', open=115.77999877929688, high=116.80000305175781, low=114.37999725341797, close=115.70010375976562, volume=2403053.0, source='yahoo')
+2026-03-17 16:09:45,914 INFO __main__ - [etl:yahoo] upserted symbol=MRK rows=252 attempt=1
+2026-03-17 16:09:46,314 INFO __main__ - [etl:yahoo] requesting symbol=ABT range=1y interval=1d
+2026-03-17 16:09:46,595 INFO __main__ - [etl:yahoo] parsed bars symbol=ABT count=252
+2026-03-17 16:09:46,595 INFO __main__ - [etl:yahoo] sample bars symbol=ABT first=DailyBar(symbol='ABT', ts_utc='2025-03-17T13:30:00+00:00', open=126.72000122070312, high=127.87000274658203, low=126.19999694824219, close=127.63999938964844, volume=6662800.0, source='yahoo') last=DailyBar(symbol='ABT', ts_utc='2026-03-17T16:09:44+00:00', open=110.0999984741211, high=111.7699966430664, low=109.91999816894531, close=111.37999725341797, volume=2094425.0, source='yahoo')
+2026-03-17 16:09:46,597 INFO __main__ - [etl:yahoo] upserted symbol=ABT rows=252 attempt=1
+2026-03-17 16:09:46,997 INFO __main__ - [etl:yahoo] requesting symbol=TMO range=1y interval=1d
+2026-03-17 16:09:47,306 INFO __main__ - [etl:yahoo] parsed bars symbol=TMO count=252
+2026-03-17 16:09:47,306 INFO __main__ - [etl:yahoo] sample bars symbol=TMO first=DailyBar(symbol='TMO', ts_utc='2025-03-17T13:30:00+00:00', open=522.72998046875, high=525.719970703125, low=514.6699829101562, close=519.5700073242188, volume=1670400.0, source='yahoo') last=DailyBar(symbol='TMO', ts_utc='2026-03-17T16:09:15+00:00', open=475.5199890136719, high=480.9880065917969, low=471.8200988769531, close=472.4800109863281, volume=675032.0, source='yahoo')
+2026-03-17 16:09:47,307 INFO __main__ - [etl:yahoo] upserted symbol=TMO rows=252 attempt=1
+2026-03-17 16:09:47,708 INFO __main__ - [etl:yahoo] requesting symbol=XOM range=1y interval=1d
+2026-03-17 16:09:48,062 INFO __main__ - [etl:yahoo] parsed bars symbol=XOM count=252
+2026-03-17 16:09:48,062 INFO __main__ - [etl:yahoo] sample bars symbol=XOM first=DailyBar(symbol='XOM', ts_utc='2025-03-17T13:30:00+00:00', open=111.80000305175781, high=114.5, low=111.7300033569336, close=113.76000213623047, volume=19908800.0, source='yahoo') last=DailyBar(symbol='XOM', ts_utc='2026-03-17T16:09:46+00:00', open=158.25, high=160.44000244140625, low=156.8000030517578, close=160.32000732421875, volume=7047574.0, source='yahoo')
+2026-03-17 16:09:48,064 INFO __main__ - [etl:yahoo] upserted symbol=XOM rows=252 attempt=1
+2026-03-17 16:09:48,464 INFO __main__ - [etl:yahoo] requesting symbol=CVX range=1y interval=1d
+2026-03-17 16:09:48,939 INFO __main__ - [etl:yahoo] parsed bars symbol=CVX count=252
+2026-03-17 16:09:48,939 INFO __main__ - [etl:yahoo] sample bars symbol=CVX first=DailyBar(symbol='CVX', ts_utc='2025-03-17T13:30:00+00:00', open=157.22000122070312, high=159.4499969482422, low=156.75999450683594, close=158.72000122070312, volume=7615200.0, source='yahoo') last=DailyBar(symbol='CVX', ts_utc='2026-03-17T16:09:46+00:00', open=197.48500061035156, high=200.2899932861328, low=196.4600067138672, close=200.1999969482422, volume=5359399.0, source='yahoo')
+2026-03-17 16:09:48,940 INFO __main__ - [etl:yahoo] upserted symbol=CVX rows=252 attempt=1
+2026-03-17 16:09:49,341 INFO __main__ - [etl:yahoo] requesting symbol=CAT range=1y interval=1d
+2026-03-17 16:09:49,584 INFO __main__ - [etl:yahoo] parsed bars symbol=CAT count=252
+2026-03-17 16:09:49,584 INFO __main__ - [etl:yahoo] sample bars symbol=CAT first=DailyBar(symbol='CAT', ts_utc='2025-03-17T13:30:00+00:00', open=339.739990234375, high=344.3599853515625, low=339.0, close=342.6400146484375, volume=1683800.0, source='yahoo') last=DailyBar(symbol='CAT', ts_utc='2026-03-17T16:09:22+00:00', open=707.3599853515625, high=709.0, low=694.9849853515625, close=702.4400024414062, volume=509217.0, source='yahoo')
+2026-03-17 16:09:49,586 INFO __main__ - [etl:yahoo] upserted symbol=CAT rows=252 attempt=1
+2026-03-17 16:09:49,986 INFO __main__ - [etl:yahoo] requesting symbol=GE range=1y interval=1d
+2026-03-17 16:09:50,330 INFO __main__ - [etl:yahoo] parsed bars symbol=GE count=252
+2026-03-17 16:09:50,330 INFO __main__ - [etl:yahoo] sample bars symbol=GE first=DailyBar(symbol='GE', ts_utc='2025-03-17T13:30:00+00:00', open=197.0, high=203.60000610351562, low=196.3300018310547, close=202.02999877929688, volume=3733000.0, source='yahoo') last=DailyBar(symbol='GE', ts_utc='2026-03-17T16:09:40+00:00', open=305.4100036621094, high=305.9999084472656, low=299.0199890136719, close=300.0299987792969, volume=1626843.0, source='yahoo')
+2026-03-17 16:09:50,332 INFO __main__ - [etl:yahoo] upserted symbol=GE rows=252 attempt=1
+2026-03-17 16:09:50,732 INFO __main__ - [etl:yahoo] requesting symbol=RTX range=1y interval=1d
+2026-03-17 16:09:51,130 INFO __main__ - [etl:yahoo] parsed bars symbol=RTX count=252
+2026-03-17 16:09:51,130 INFO __main__ - [etl:yahoo] sample bars symbol=RTX first=DailyBar(symbol='RTX', ts_utc='2025-03-17T13:30:00+00:00', open=130.0, high=132.7100067138672, low=130.0, close=132.0500030517578, volume=4934600.0, source='yahoo') last=DailyBar(symbol='RTX', ts_utc='2026-03-17T16:09:44+00:00', open=205.80999755859375, high=206.6699981689453, low=200.7133026123047, close=202.16000366210938, volume=1412881.0, source='yahoo')
+2026-03-17 16:09:51,131 INFO __main__ - [etl:yahoo] upserted symbol=RTX rows=252 attempt=1
+2026-03-17 16:09:51,531 INFO __main__ - [etl:yahoo] requesting symbol=BA range=1y interval=1d
+2026-03-17 16:09:51,812 INFO __main__ - [etl:yahoo] parsed bars symbol=BA count=252
+2026-03-17 16:09:51,812 INFO __main__ - [etl:yahoo] sample bars symbol=BA first=DailyBar(symbol='BA', ts_utc='2025-03-17T13:30:00+00:00', open=160.5, high=162.77000427246094, low=159.6199951171875, close=161.85000610351562, volume=5602700.0, source='yahoo') last=DailyBar(symbol='BA', ts_utc='2026-03-17T16:09:30+00:00', open=214.67999267578125, high=217.14999389648438, low=206.6699981689453, close=209.38999938964844, volume=4358688.0, source='yahoo')
+2026-03-17 16:09:51,814 INFO __main__ - [etl:yahoo] upserted symbol=BA rows=252 attempt=1
+2026-03-17 16:09:52,214 INFO __main__ - [etl:yahoo] requesting symbol=WMT range=1y interval=1d
+2026-03-17 16:09:52,563 INFO __main__ - [etl:yahoo] parsed bars symbol=WMT count=252
+2026-03-17 16:09:52,563 INFO __main__ - [etl:yahoo] sample bars symbol=WMT first=DailyBar(symbol='WMT', ts_utc='2025-03-17T13:30:00+00:00', open=85.12999725341797, high=87.98999786376953, low=84.9800033569336, close=87.45999908447266, volume=26297800.0, source='yahoo') last=DailyBar(symbol='WMT', ts_utc='2026-03-17T16:09:50+00:00', open=126.56500244140625, high=127.19000244140625, low=125.19999694824219, close=126.04000091552734, volume=4346026.0, source='yahoo')
+2026-03-17 16:09:52,564 INFO __main__ - [etl:yahoo] upserted symbol=WMT rows=252 attempt=1
+2026-03-17 16:09:52,964 INFO __main__ - [etl:yahoo] requesting symbol=COST range=1y interval=1d
+2026-03-17 16:09:53,284 INFO __main__ - [etl:yahoo] parsed bars symbol=COST count=252
+2026-03-17 16:09:53,285 INFO __main__ - [etl:yahoo] sample bars symbol=COST first=DailyBar(symbol='COST', ts_utc='2025-03-17T13:30:00+00:00', open=901.6300048828125, high=923.3900146484375, low=898.0, close=916.6099853515625, volume=2256100.0, source='yahoo') last=DailyBar(symbol='COST', ts_utc='2026-03-17T16:09:22+00:00', open=1006.489990234375, high=1008.094970703125, low=999.7999877929688, close=1004.4400024414062, volume=399670.0, source='yahoo')
+2026-03-17 16:09:53,286 INFO __main__ - [etl:yahoo] upserted symbol=COST rows=252 attempt=1
+2026-03-17 16:09:53,686 INFO __main__ - [etl:yahoo] requesting symbol=HD range=1y interval=1d
+2026-03-17 16:09:53,913 INFO __main__ - [etl:yahoo] parsed bars symbol=HD count=252
+2026-03-17 16:09:53,920 INFO __main__ - [etl:yahoo] sample bars symbol=HD first=DailyBar(symbol='HD', ts_utc='2025-03-17T13:30:00+00:00', open=351.760009765625, high=355.54998779296875, low=350.9599914550781, close=354.1300048828125, volume=3681300.0, source='yahoo') last=DailyBar(symbol='HD', ts_utc='2026-03-17T16:09:45+00:00', open=344.8900146484375, high=346.7799987792969, low=341.67999267578125, close=342.4700012207031, volume=716492.0, source='yahoo')
+2026-03-17 16:09:53,922 INFO __main__ - [etl:yahoo] upserted symbol=HD rows=252 attempt=1
+2026-03-17 16:09:54,322 INFO __main__ - [etl:yahoo] requesting symbol=PG range=1y interval=1d
+2026-03-17 16:09:54,729 INFO __main__ - [etl:yahoo] parsed bars symbol=PG count=252
+2026-03-17 16:09:54,729 INFO __main__ - [etl:yahoo] sample bars symbol=PG first=DailyBar(symbol='PG', ts_utc='2025-03-17T13:30:00+00:00', open=168.3699951171875, high=171.08999633789062, low=168.1300048828125, close=169.75999450683594, volume=9931700.0, source='yahoo') last=DailyBar(symbol='PG', ts_utc='2026-03-17T16:09:53+00:00', open=153.00999450683594, high=153.4600067138672, low=152.25, close=152.77000427246094, volume=1622170.0, source='yahoo')
+2026-03-17 16:09:54,730 INFO __main__ - [etl:yahoo] upserted symbol=PG rows=252 attempt=1
+2026-03-17 16:09:55,131 INFO __main__ - [etl:yahoo] requesting symbol=KO range=1y interval=1d
+2026-03-17 16:09:55,445 INFO __main__ - [etl:yahoo] parsed bars symbol=KO count=252
+2026-03-17 16:09:55,445 INFO __main__ - [etl:yahoo] sample bars symbol=KO first=DailyBar(symbol='KO', ts_utc='2025-03-17T13:30:00+00:00', open=69.23999786376953, high=70.16999816894531, low=69.08000183105469, close=70.12000274658203, volume=15634800.0, source='yahoo') last=DailyBar(symbol='KO', ts_utc='2026-03-17T16:09:54+00:00', open=78.0, high=78.30000305175781, low=77.45099639892578, close=77.9800033569336, volume=4207733.0, source='yahoo')
+2026-03-17 16:09:55,446 INFO __main__ - [etl:yahoo] upserted symbol=KO rows=252 attempt=1
+2026-03-17 16:09:55,847 INFO __main__ - [etl:yahoo] requesting symbol=MCD range=1y interval=1d
+2026-03-17 16:09:56,221 INFO __main__ - [etl:yahoo] parsed bars symbol=MCD count=252
+2026-03-17 16:09:56,221 INFO __main__ - [etl:yahoo] sample bars symbol=MCD first=DailyBar(symbol='MCD', ts_utc='2025-03-17T13:30:00+00:00', open=301.29998779296875, high=305.2300109863281, low=300.0299987792969, close=303.9700012207031, volume=2758400.0, source='yahoo') last=DailyBar(symbol='MCD', ts_utc='2026-03-17T16:09:55+00:00', open=327.3399963378906, high=330.4898986816406, low=327.3399963378906, close=328.8900146484375, volume=887183.0, source='yahoo')
+2026-03-17 16:09:56,223 INFO __main__ - [etl:yahoo] upserted symbol=MCD rows=252 attempt=1
+2026-03-17 16:09:56,623 INFO __main__ - [etl:yahoo] requesting symbol=DIS range=1y interval=1d
+2026-03-17 16:09:57,039 INFO __main__ - [etl:yahoo] parsed bars symbol=DIS count=252
+2026-03-17 16:09:57,039 INFO __main__ - [etl:yahoo] sample bars symbol=DIS first=DailyBar(symbol='DIS', ts_utc='2025-03-17T13:30:00+00:00', open=98.73999786376953, high=100.12000274658203, low=98.66000366210938, close=99.36000061035156, volume=8332100.0, source='yahoo') last=DailyBar(symbol='DIS', ts_utc='2026-03-17T16:09:50+00:00', open=99.16999816894531, high=100.70999908447266, low=99.07250213623047, close=100.33499908447266, volume=4279298.0, source='yahoo')
+2026-03-17 16:09:57,040 INFO __main__ - [etl:yahoo] upserted symbol=DIS rows=252 attempt=1
+2026-03-17 16:09:57,440 INFO __main__ - [etl:yahoo] requesting symbol=UBER range=1y interval=1d
+2026-03-17 16:09:57,669 INFO __main__ - [etl:yahoo] parsed bars symbol=UBER count=252
+2026-03-17 16:09:57,669 INFO __main__ - [etl:yahoo] sample bars symbol=UBER first=DailyBar(symbol='UBER', ts_utc='2025-03-17T13:30:00+00:00', open=72.0199966430664, high=73.80999755859375, low=71.7750015258789, close=72.7300033569336, volume=20577800.0, source='yahoo') last=DailyBar(symbol='UBER', ts_utc='2026-03-17T16:09:53+00:00', open=77.38999938964844, high=79.13749694824219, low=77.30999755859375, close=78.12000274658203, volume=15389212.0, source='yahoo')
+2026-03-17 16:09:57,671 INFO __main__ - [etl:yahoo] upserted symbol=UBER rows=252 attempt=1
+2026-03-17 16:09:58,071 INFO __main__ - [etl:yahoo] requesting symbol=SPY range=1y interval=1d
+2026-03-17 16:09:58,440 INFO __main__ - [etl:yahoo] parsed bars symbol=SPY count=252
+2026-03-17 16:09:58,440 INFO __main__ - [etl:yahoo] sample bars symbol=SPY first=DailyBar(symbol='SPY', ts_utc='2025-03-17T13:30:00+00:00', open=562.7899780273438, high=569.7100219726562, low=562.3499755859375, close=567.1500244140625, volume=49008700.0, source='yahoo') last=DailyBar(symbol='SPY', ts_utc='2026-03-17T16:09:57+00:00', open=672.3900146484375, high=674.4400024414062, low=669.8499755859375, close=670.7050170898438, volume=30226107.0, source='yahoo')
+2026-03-17 16:09:58,442 INFO __main__ - [etl:yahoo] upserted symbol=SPY rows=252 attempt=1
+2026-03-17 16:09:58,842 INFO __main__ - [etl:yahoo] finished ingest summary={'symbols': 51, 'upserted_rows': 12852, 'failed': [], 'db_path': 'data/market/market_data.sqlite'}
+{
+  "symbols": 51,
+  "upserted_rows": 12852,
+  "failed": [],
+  "db_path": "data/market/market_data.sqlite"
+}
+2026-03-17 16:09:58,917 INFO __main__ - [etl:training-rows] loading universe path=config/universe.yaml
+2026-03-17 16:09:58,918 INFO __main__ - [etl:training-rows] reading bars from db=data/market/market_data.sqlite symbols=51
+2026-03-17 16:09:58,971 INFO __main__ - [etl:training-rows] built rows=12600
+2026-03-17 16:09:58,971 INFO __main__ - [etl:training-rows] sample first={'timestamp': '2025-03-17T13:30:00+00:00', 'symbol': 'AAPL', 'open': 213.30999755859375, 'high': 215.22000122070312, 'low': 209.97000122070312, 'close': 214.0, 'volume': 48073400.0, 'benchmark_close': 567.1500244140625, 'ai_conviction': None, 'ai_floor_d1': None, 'ai_ceiling_d1': None, 'ai_floor_w1': None, 'ai_ceiling_w1': None, 'ai_floor_q1': None, 'ai_ceiling_q1': None, 'ai_floor_m3': None, 'ai_conviction_long': None, 'ai_recency_long': None, 'ai_consensus_score': None}
+2026-03-17 16:09:58,972 INFO __main__ - [etl:training-rows] sample last={'timestamp': '2026-03-17T16:09:55+00:00', 'symbol': 'MCD', 'open': 327.3399963378906, 'high': 330.4898986816406, 'low': 327.3399963378906, 'close': 328.8900146484375, 'volume': 887183.0, 'benchmark_close': 670.7050170898438, 'ai_conviction': None, 'ai_floor_d1': None, 'ai_ceiling_d1': None, 'ai_floor_w1': None, 'ai_ceiling_w1': None, 'ai_floor_q1': None, 'ai_ceiling_q1': None, 'ai_floor_m3': None, 'ai_conviction_long': None, 'ai_recency_long': None, 'ai_consensus_score': None}
+2026-03-17 16:09:59,077 INFO __main__ - [etl:training-rows] wrote output path=data/training/yahoo_market_rows.jsonl rows=12600
+{
+  "rows": 12600,
+  "output": "data/training/yahoo_market_rows.jsonl"
+}
+2026-03-17 16:09:59,232 INFO __main__ - [etl:features] loading input path=data/training/yahoo_market_rows.jsonl
+2026-03-17 16:09:59,312 INFO __main__ - [etl:features] loaded json/jsonl rows=12600
+2026-03-17 16:09:59,312 INFO __main__ - [etl:features] building modelable dataset input_rows=12600
+2026-03-17 16:10:08,689 INFO __main__ - [etl:features] feature rows=12600
+2026-03-17 16:10:09,954 INFO __main__ - [etl:features] artifact ready rows=12600 folds=20 columns=111
+2026-03-17 16:10:09,955 INFO __main__ - [etl:features] sample labeled row={'timestamp': '2025-03-17T13:30:00+00:00', 'symbol': 'AAPL', 'open': 213.30999755859375, 'high': 215.22000122070312, 'low': 209.97000122070312, 'close': 214.0, 'volume': 48073400.0, 'benchmark_close': 567.1500244140625, 'ai_conviction': None, 'ai_floor_d1': None, 'ai_ceiling_d1': None, 'ai_floor_w1': None, 'ai_ceiling_w1': None, 'ai_floor_q1': None, 'ai_ceiling_q1': None, 'ai_floor_m3': None, 'ai_conviction_long': None, 'ai_recency_long': None, 'ai_consensus_score': None, 'ret_lag_1': None, 'ret_lag_2': None, 'ret_lag_5': None, 'ret_lag_10': None, 'rolling_vol_5': None, 'rolling_vol_20': None, 'rolling_vol_60': None, 'downside_vol_20': None, 'atr_14': 5.25, 'parkinson_vol_20': None, 'gap_open_to_prev_close': None, 'relative_volume_20': 1.0, 'dist_to_low_20': 0.019193212153487016, 'dist_to_high_20': 0.005700940283659417, 'sma_slope_5_20': 0.0, 'beta_20': None, 'rel_strength_20': None, 'momentum_20': None, 'momentum_10': None, 'vol_regime': None, 'recent_drawdown_20': 0.0, 'intraday_range_5': 0.02453271028037383, 'range_width_5': 0.02453271028037383, 'range_width_20': 0.02453271028037383, 'range_width_60': 0.02453271028037383, 'price_position_in_range_20': 0.7676188151041666, 'trend_context_m3': 0.0, 'slope_4w': None, 'slope_8w': None, 'slope_13w': None, 'drawdown_13w': 0.0, 'range_compression_20_60': 1.0, 'rel_strength_4w': None, 'rel_strength_8w': None, 'rel_strength_13w': None, 'month_of_year': 3, 'relative_week_of_month': 3, 'dist_to_low_3m': 0.019193212153487016, 'dist_to_low_6m': 0.019193212153487016, 'dist_to_low_12m': 0.019193212153487016, 'vol_persistence_20_60': None, 'range_amp_daily_5': 0.02453271028037383, 'range_amp_daily_13': 0.02453271028037383, 'rsi_14': None, 'macd_12_26': 0.0, 'macd_signal_9': 0.0, 'macd_histogram': 0.0, 'bollinger_width_20': None, 'vwap_distance': 0.004396185090287608, 'ai_action': None, 'ai_recency': None, 'ai_horizon_alignment': None, 'floor_d1': 211.49000549316406, 'ceiling_d1': 215.14999389648438, 'realized_floor_d1': 211.49000549316406, 'realized_ceiling_d1': 215.14999389648438, 'forward_return_d1': -0.006121483918662407, 'realized_range_d1': 3.6599884033203125, 'floor_breach_flag_d1': None, 'ceiling_reach_flag_d1': None, 'floor_w1': 211.27999877929688, 'ceiling_w1': 221.47999572753906, 'realized_floor_w1': 211.27999877929688, 'realized_ceiling_w1': 221.47999572753906, 'forward_return_w1': 0.031448578166070495, 'realized_range_w1': 10.199996948242188, 'floor_breach_flag_w1': None, 'ceiling_reach_flag_w1': None, 'floor_q1': 211.27999877929688, 'ceiling_q1': 225.6199951171875, 'realized_floor_q1': 211.27999877929688, 'realized_ceiling_q1': 225.6199951171875, 'forward_return_q1': 0.03799067702248826, 'realized_range_q1': 14.339996337890625, 'floor_breach_flag_q1': None, 'ceiling_reach_flag_q1': None, 'floor_m3': 169.2100067138672, 'realized_floor_m3': 169.2100067138672, 'floor_week_m3': 4, 'forward_return_m3': -0.08140186060254817, 'realized_range_m3': 56.40998840332031, 'floor_week_m3_start_date': '2025-04-08', 'floor_week_m3_end_date': '2025-04-14', 'floor_breach_flag_m3': None, 'floor_time_bucket_d1': 'OPEN', 'ceiling_time_bucket_d1': 'OPEN', 'floor_day_w1': 4, 'ceiling_day_w1': 5, 'floor_day_q1': 4, 'ceiling_day_q1': 10, 'split': 'train'}
+2026-03-17 16:10:11,542 INFO __main__ - [etl:features] wrote modelable dataset path=data/training/modelable_dataset.json
+ABT OK rows=12600 columns=111 models=12
+2026-03-17 16:10:12,922 INFO __main__ - [horizon-training] horizon=d1 champion=evt_cp_d1 train_rows=8800 test_rows=3800 mae_floor=3.570525 mae_ceiling=3.359187
+2026-03-17 16:10:12,962 INFO __main__ - [horizon-training] horizon=w1 champion=evt_cp_w1 train_rows=8800 test_rows=3800 mae_floor=7.383545 mae_ceiling=6.553674
+2026-03-17 16:10:12,998 INFO __main__ - [horizon-training] horizon=q1 champion=evt_cp_q1 train_rows=8800 test_rows=3800 mae_floor=10.043222 mae_ceiling=9.057820
+2026-03-17 16:10:12,998 INFO __main__ - [horizon-training] wrote csv summary=data/training/models/horizon_training_results_20260317T160921Z.csv
+persisted_model_competition_rows=12
+2026-03-17 16:10:13,167 INFO __main__ - [training] loading dataset path=data/training/modelable_dataset.json
+2026-03-17 16:10:13,730 INFO __main__ - [training] loaded rows=12600
+2026-03-17 16:10:13,730 INFO __main__ - [training] sample row={'timestamp': '2025-03-17T13:30:00+00:00', 'symbol': 'AAPL', 'open': 213.30999755859375, 'high': 215.22000122070312, 'low': 209.97000122070312, 'close': 214.0, 'volume': 48073400.0, 'benchmark_close': 567.1500244140625, 'ai_conviction': None, 'ai_floor_d1': None, 'ai_ceiling_d1': None, 'ai_floor_w1': None, 'ai_ceiling_w1': None, 'ai_floor_q1': None, 'ai_ceiling_q1': None, 'ai_floor_m3': None, 'ai_conviction_long': None, 'ai_recency_long': None, 'ai_consensus_score': None, 'ret_lag_1': None, 'ret_lag_2': None, 'ret_lag_5': None, 'ret_lag_10': None, 'rolling_vol_5': None, 'rolling_vol_20': None, 'rolling_vol_60': None, 'downside_vol_20': None, 'atr_14': 5.25, 'parkinson_vol_20': None, 'gap_open_to_prev_close': None, 'relative_volume_20': 1.0, 'dist_to_low_20': 0.019193212153487016, 'dist_to_high_20': 0.005700940283659417, 'sma_slope_5_20': 0.0, 'beta_20': None, 'rel_strength_20': None, 'momentum_20': None, 'momentum_10': None, 'vol_regime': None, 'recent_drawdown_20': 0.0, 'intraday_range_5': 0.02453271028037383, 'range_width_5': 0.02453271028037383, 'range_width_20': 0.02453271028037383, 'range_width_60': 0.02453271028037383, 'price_position_in_range_20': 0.7676188151041666, 'trend_context_m3': 0.0, 'slope_4w': None, 'slope_8w': None, 'slope_13w': None, 'drawdown_13w': 0.0, 'range_compression_20_60': 1.0, 'rel_strength_4w': None, 'rel_strength_8w': None, 'rel_strength_13w': None, 'month_of_year': 3, 'relative_week_of_month': 3, 'dist_to_low_3m': 0.019193212153487016, 'dist_to_low_6m': 0.019193212153487016, 'dist_to_low_12m': 0.019193212153487016, 'vol_persistence_20_60': None, 'range_amp_daily_5': 0.02453271028037383, 'range_amp_daily_13': 0.02453271028037383, 'rsi_14': None, 'macd_12_26': 0.0, 'macd_signal_9': 0.0, 'macd_histogram': 0.0, 'bollinger_width_20': None, 'vwap_distance': 0.004396185090287608, 'ai_action': None, 'ai_recency': None, 'ai_horizon_alignment': None, 'floor_d1': 211.49000549316406, 'ceiling_d1': 215.14999389648438, 'realized_floor_d1': 211.49000549316406, 'realized_ceiling_d1': 215.14999389648438, 'forward_return_d1': -0.006121483918662407, 'realized_range_d1': 3.6599884033203125, 'floor_breach_flag_d1': None, 'ceiling_reach_flag_d1': None, 'floor_w1': 211.27999877929688, 'ceiling_w1': 221.47999572753906, 'realized_floor_w1': 211.27999877929688, 'realized_ceiling_w1': 221.47999572753906, 'forward_return_w1': 0.031448578166070495, 'realized_range_w1': 10.199996948242188, 'floor_breach_flag_w1': None, 'ceiling_reach_flag_w1': None, 'floor_q1': 211.27999877929688, 'ceiling_q1': 225.6199951171875, 'realized_floor_q1': 211.27999877929688, 'realized_ceiling_q1': 225.6199951171875, 'forward_return_q1': 0.03799067702248826, 'realized_range_q1': 14.339996337890625, 'floor_breach_flag_q1': None, 'ceiling_reach_flag_q1': None, 'floor_m3': 169.2100067138672, 'realized_floor_m3': 169.2100067138672, 'floor_week_m3': 4, 'forward_return_m3': -0.08140186060254817, 'realized_range_m3': 56.40998840332031, 'floor_week_m3_start_date': '2025-04-08', 'floor_week_m3_end_date': '2025-04-14', 'floor_breach_flag_m3': None, 'floor_time_bucket_d1': 'OPEN', 'ceiling_time_bucket_d1': 'OPEN', 'floor_day_w1': 4, 'ceiling_day_w1': 5, 'floor_day_q1': 4, 'ceiling_day_q1': 10, 'split': 'train'}
+2026-03-17 16:10:15,119 INFO __main__ - [training] split train=8800 valid=3800
+2026-03-17 16:10:15,119 INFO __main__ - [training] training value model version=20260317T160921Z
+2026-03-17 16:10:15,145 INFO __main__ - [training] training timing model version=20260317T160921Z
+2026-03-17 16:10:15,507 INFO __main__ - [training] metrics saved path=data/training/metrics/training_metrics_20260317T160921Z.json
+2026-03-17 16:10:15,528 INFO __main__ - [training] run complete result={'metrics_path': 'data/training/metrics/training_metrics_20260317T160921Z.json', 'tasks': ['value', 'timing'], 'value': {'decision': 'challenger_only', 'reason': 'Existing champion kept (score 0.200000 <= 230.430923).', 'champion_path': 'data/training/models/value_champion.json', 'challenger_path': 'data/training/models/value_challenger_20260317T161015.139271Z.json'}, 'timing': {'decision': 'challenger_only', 'reason': 'Existing champion kept (score 2.000000 <= 4.329176).', 'champion_path': 'data/training/models/timing_champion.json', 'challenger_path': 'data/training/models/timing_challenger_20260317T161015.355560Z.json'}}
+{
+  "metrics_path": "data/training/metrics/training_metrics_20260317T160921Z.json",
+  "tasks": [
+    "value",
+    "timing"
+  ],
+  "value": {
+    "decision": "challenger_only",
+    "reason": "Existing champion kept (score 0.200000 <= 230.430923).",
+    "champion_path": "data/training/models/value_champion.json",
+    "challenger_path": "data/training/models/value_challenger_20260317T161015.139271Z.json"
+  },
+  "timing": {
+    "decision": "challenger_only",
+    "reason": "Existing champion kept (score 2.000000 <= 4.329176).",
+    "champion_path": "data/training/models/timing_champion.json",
+    "challenger_path": "data/training/models/timing_challenger_20260317T161015.355560Z.json"
+  }
+}
+Unified CSV written: data/training/models/horizon_training_results_20260317T160921Z.csv
+integrity_check=ok
+tables_present=6 required_missing=[]
+rows[model_competition_results]=12
+rows[orders]=0
+rows[predictions]=0
+rows[signals]=0
+rows[training_reviews]=0
+prediction_duplicate_keys=0
+journal_mode=wal auto_vacuum=0
