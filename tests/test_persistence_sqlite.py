@@ -97,3 +97,34 @@ def test_persist_model_competition_results_to_sqlite(tmp_path: Path) -> None:
     )
 
     assert stream_count(db_path, "model_competition_results") == 1
+
+
+def test_persist_model_training_cycle_to_sqlite(tmp_path: Path) -> None:
+    db_path = tmp_path / "data" / "persistence" / "app.sqlite"
+    persist_payload(
+        db_path,
+        "model_training_cycle",
+        {
+            "as_of": "2026-01-01T13:00:00+00:00",
+            "task": "value",
+            "training_mode": "retrain",
+            "action": "TRAINED",
+            "champion_decision": "promote",
+            "model_name": "m3_value_linear",
+            "model_version": "vtest",
+            "retrained": True,
+            "previous_champion_path": "data/training/models/value_champion.json",
+            "previous_champion_version": "vprev",
+            "new_champion_path": "data/training/models/value_champion.json",
+            "challenger_path": "data/training/models/value_challenger_x.json",
+            "metrics_path": "data/training/metrics/training_metrics_vtest.json",
+            "dataset_path": "data/training/modelable_dataset.json",
+            "output_dir": "data/training",
+            "cv_enabled": True,
+            "cv_folds": 3,
+            "hyperparameter_grid": {"atr_14": [-0.8, -0.6, -0.4]},
+            "tuning_summary": {"cv_enabled": True, "folds": 3, "grid_size": 10},
+        },
+    )
+
+    assert stream_count(db_path, "model_training_cycles") == 1

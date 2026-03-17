@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from floor.persistence_db import stream_count
 from models.evaluate import top3_weeks
 from models.run_training import run_training
 from models.train_timing_models import train_floor_week_m3_timing_model
@@ -139,3 +140,21 @@ def test_forecast_contract_top3_helper() -> None:
 
     top3 = top3_weeks(probs)
     assert [x["week"] for x in top3] == [3, 8, 12]
+
+
+def test_run_training_retrain_enables_cv_and_audit(tmp_path: Path) -> None:
+    dataset = {"rows": _rows(120)}
+    dataset_path = tmp_path / "dataset.json"
+    dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+
+    out = tmp_path / "training"
+    db_path = tmp_path / "persistence" / "app.sqlite"
+    result = run_training(dataset_path, out, version="v-cv", tasks="value,timing", training_mode="retrain", persistence_db_path=db_path)
+
+    assert result["training_mode"] == "retrain"
+    value_champ = json.loads((out / "models" / "value_champion.json").read_text(encoding="utf-8"))
+    timing_champ = json.loads((out / "models" / "timing_champion.json").read_text(encoding="utf-8"))
+
+    assert value_champ["params"]["tuning_summary"]["cv_enabled"] is True
+    assert timing_champ["params"]["tuning_summary"]["cv_enabled"] is True
+    assert stream_count(db_path, "model_training_cycles") == 2
