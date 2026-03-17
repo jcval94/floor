@@ -13,7 +13,7 @@ from forecasting.render_time_labels import render_horizon_time_labels
 logger = logging.getLogger(__name__)
 
 REQUIRED_MARKET_COLUMNS = ["symbol", "close", "high", "low"]
-REQUIRED_M3_COLUMNS = ["close", "atr_14", "trend_context_m3", "drawdown_13w", "ai_horizon_alignment"]
+REQUIRED_M3_COLUMNS = ["close", "atr_14", "trend_context_m3", "drawdown_13w"]
 
 
 def _blocked_reason(row: dict) -> str | None:

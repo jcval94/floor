@@ -326,7 +326,7 @@ def build_features(rows: list[dict]) -> list[dict]:
                     floor_d1_value >= floor_w1_value >= floor_q1_value >= floor_m3_value
                 )
             else:
-                row["ai_horizon_alignment"] = None
+                row["ai_horizon_alignment"] = 0.0
 
             if row.get("ai_recency_long") is None and row.get("ai_recency") is not None:
                 row["ai_recency_long"] = row["ai_recency"]
