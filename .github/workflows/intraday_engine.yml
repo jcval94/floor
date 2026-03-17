@@ -169,6 +169,11 @@ jobs:
 
           PYTHONPATH=src python -m utils.workflow_validations validate-latest-payload             --data-dir data             --stream predictions             --required-fields model_version
 
+      - name: Validate prediction quality guardrails
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.workflow_validations validate-prediction-quality             --data-dir data             --stream predictions             --max-m3-blocked-ratio 0.4             --min-action-consistency-ratio 0.7             --action-return-tolerance 0.0             --sample-limit 10
+
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
       - name: Commit auditable outputs
