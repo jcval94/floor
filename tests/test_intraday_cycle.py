@@ -8,6 +8,7 @@ from pathlib import Path
 
 from floor.config import RuntimeConfig
 from floor.pipeline.intraday_cycle import run_intraday_cycle
+from floor.persistence_db import stream_count
 from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
 
 
@@ -67,7 +68,11 @@ def test_run_intraday_cycle_uses_trained_champions(tmp_path: Path) -> None:
     m3_rows = [payload for payload in payloads if payload["horizon"] == "m3"]
     assert len(m3_rows) == 1
     assert "m3_status" in m3_rows[0]["m3_payload"]
-    assert (data_dir / "persistence" / "app.sqlite").exists()
+
+    db_path = data_dir / "persistence" / "app.sqlite"
+    assert db_path.exists()
+    assert stream_count(db_path, "predictions") == 4
+    assert stream_count(db_path, "signals") >= 3
 
 
 def test_run_intraday_cycle_loads_models_from_models_file_pkls(tmp_path: Path) -> None:

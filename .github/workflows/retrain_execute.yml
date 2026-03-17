@@ -169,6 +169,9 @@ jobs:
           integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
           [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
 
+          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$value_champion"             --required-fields model_name,version
+          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$timing_champion"             --required-fields model_name,version
+
           value_decision=$(python - <<'PY'
           import json
           from pathlib import Path
