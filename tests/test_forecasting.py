@@ -227,3 +227,26 @@ def test_run_forecast_pipeline_blocks_all_when_models_are_unavailable(monkeypatc
     assert out["dataset_forecasts"] == []
     assert len(out["blocked_list"]) == len(_market_rows())
     assert all("Pronóstico no disponible" in row["reason"] for row in out["blocked_list"])
+
+
+def test_run_forecast_pipeline_blocks_symbol_when_prediction_raises(monkeypatch, tmp_path) -> None:
+    _enable_trained_champion(monkeypatch, tmp_path)
+
+    class BoomError(RuntimeError):
+        pass
+
+    def _boom(_self: ChampionModelSet, _row: dict) -> None:
+        raise BoomError("boom d1")
+
+    monkeypatch.setattr(ChampionModelSet, "predict_d1", _boom)
+
+    out = run_forecast_pipeline(
+        market_rows=[_market_rows()[0]],
+        ai_by_symbol=_ai_map(),
+        session="OPEN_PLUS_2H",
+        as_of=datetime(2024, 4, 2, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert out["dataset_forecasts"] == []
+    assert len(out["blocked_list"]) == 1
+    assert "Prediction failed" in out["blocked_list"][0]["reason"]

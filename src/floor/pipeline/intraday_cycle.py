@@ -51,17 +51,31 @@ def maybe_build_order(signal: SignalRecord, cfg: RuntimeConfig) -> OrderRecord |
 
 
 def _latest_feature_rows(cfg: RuntimeConfig, symbols: list[str]) -> list[dict]:
+    symbol_set = {s.upper() for s in symbols}
     raw_rows = build_rows_from_db(
         db_path=cfg.data_dir / "market" / "market_data.sqlite",
         universe_path=cfg.root_dir / "config" / "universe.yaml",
     )
-    selected = [row for row in raw_rows if str(row.get("symbol", "")).upper() in set(symbols)]
+    selected = [row for row in raw_rows if str(row.get("symbol", "")).upper() in symbol_set]
     featured = build_features(selected)
 
     latest_by_symbol: dict[str, dict] = {}
     for row in featured:
         latest_by_symbol[str(row["symbol"]).upper()] = row
-    return [latest_by_symbol[symbol] for symbol in symbols if symbol in latest_by_symbol]
+
+    missing_symbols = [symbol for symbol in symbols if symbol.upper() not in latest_by_symbol]
+    logger.info(
+        "[predictions] feature snapshot raw_rows=%s selected_rows=%s featured_rows=%s symbols_requested=%s symbols_missing=%s",
+        len(raw_rows),
+        len(selected),
+        len(featured),
+        len(symbols),
+        len(missing_symbols),
+    )
+    if missing_symbols:
+        logger.warning("[predictions] missing latest feature rows symbols=%s", ",".join(missing_symbols[:20]))
+
+    return [latest_by_symbol[symbol.upper()] for symbol in symbols if symbol.upper() in latest_by_symbol]
 
 
 def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
@@ -214,6 +228,12 @@ def run_intraday_cycle(
     )
     forecasts = generated["dataset_forecasts"]
     blocked = generated["blocked_list"]
+    if blocked:
+        logger.warning(
+            "[predictions] blocked forecasts count=%s sample=%s",
+            len(blocked),
+            blocked[:3],
+        )
     if not forecasts:
         reason = "; ".join(str(item.get("reason", "unknown")) for item in blocked[:3]) or "forecast generation blocked"
         raise RuntimeError(reason)
