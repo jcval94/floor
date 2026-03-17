@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
 
-def _signal_from_prediction(symbol: str, horizon: Literal["d1", "w1", "q1"], floor: float, ceiling: float) -> SignalRecord:
+def _signal_from_prediction(symbol: str, horizon: Literal["d1", "w1", "q1", "m3"], floor: float, ceiling: float) -> SignalRecord:
     spread = max(ceiling - floor, 0.01)
     confidence = min(0.95, max(0.5, spread / max(floor, 1)))
     action: Literal["BUY", "SELL", "HOLD"] = "HOLD"
