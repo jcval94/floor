@@ -46,3 +46,6 @@
 {"symbol": "ORCL", "as_of": "2026-03-17T09:44:57.992608-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "ORCL", "as_of": "2026-03-17T09:44:57.993954-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "ORCL", "as_of": "2026-03-17T09:44:57.995266-04:00", "horizon": "q1", "action": "BUY", "confidence": 0.5642, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ORCL", "as_of": "2026-03-17T10:16:52.033363-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ORCL", "as_of": "2026-03-17T10:16:52.034992-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "ORCL", "as_of": "2026-03-17T10:16:52.036347-04:00", "horizon": "q1", "action": "BUY", "confidence": 0.5703, "rationale": "Quantile spread + calibrated temporal confidence"}

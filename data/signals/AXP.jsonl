@@ -46,3 +46,6 @@
 {"symbol": "AXP", "as_of": "2026-03-17T09:44:58.091631-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AXP", "as_of": "2026-03-17T09:44:58.092910-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
 {"symbol": "AXP", "as_of": "2026-03-17T09:44:58.095080-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AXP", "as_of": "2026-03-17T10:16:52.128413-04:00", "horizon": "d1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AXP", "as_of": "2026-03-17T10:16:52.129687-04:00", "horizon": "w1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
+{"symbol": "AXP", "as_of": "2026-03-17T10:16:52.131693-04:00", "horizon": "q1", "action": "HOLD", "confidence": 0.5, "rationale": "Quantile spread + calibrated temporal confidence"}
