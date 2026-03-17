@@ -1,0 +1,290 @@
+name: manual_train_all_models
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag for model artifacts (optional, UTC timestamp if empty)"
+        required: false
+        default: ""
+      yahoo_range:
+        description: "Yahoo range for market refresh"
+        required: false
+        default: "2y"
+      yahoo_interval:
+        description: "Yahoo interval for market refresh"
+        required: false
+        default: "1d"
+      min_rows:
+        description: "Minimum ABT rows required before training"
+        required: false
+        default: "800"
+      min_columns:
+        description: "Minimum ABT variables in final_model_columns"
+        required: false
+        default: "45"
+      commit_artifacts:
+        description: "Commit data/training and SQLite artifacts back to the branch"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-train-all-models-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  train_all_models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve run metadata
+        id: runmeta
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          VERSION_TAG="$VERSION_INPUT"
+          if [ -z "$VERSION_TAG" ]; then
+            VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
+          fi
+          LOG_FILE="data/training/manual_train_all_models_${VERSION_TAG}.log"
+          CSV_FILE="data/training/models/horizon_training_results_${VERSION_TAG}.csv"
+          mkdir -p data/training data/training/models
+          touch "$LOG_FILE"
+
+          echo "version=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+          echo "log_file=$LOG_FILE" >> "$GITHUB_OUTPUT"
+          echo "csv_file=$CSV_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Initialize DBs
+        run: |
+          set -euo pipefail
+          make init-dbs | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Validate SQLite bootstrap
+        run: |
+          set -euo pipefail
+          {
+            sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
+            for table in predictions signals orders training_reviews; do
+              sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
+            done
+          } 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Refresh market DB from Yahoo
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m storage.yahoo_ingest \
+            --db data/market/market_data.sqlite \
+            --range "${{ inputs.yahoo_range }}" \
+            --interval "${{ inputs.yahoo_interval }}" \
+            --sleep-seconds 0.4 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Build ABT base rows from SQLite
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m features.build_training_from_db \
+            --db data/market/market_data.sqlite \
+            --output data/training/yahoo_market_rows.jsonl 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Build ABT modelable dataset
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m features.run_features \
+            --input data/training/yahoo_market_rows.jsonl \
+            --output data/training/modelable_dataset.json 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Validate ABT quality and variable coverage
+        env:
+          MIN_ROWS: ${{ inputs.min_rows }}
+          MIN_COLUMNS: ${{ inputs.min_columns }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('data/training/modelable_dataset.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          rows = payload.get('rows', [])
+          columns = payload.get('final_model_columns', [])
+          competition = payload.get('model_competition', {})
+          coverage = payload.get('horizon_coverage', {}).get('m3', {}).get('coverage', {})
+
+          min_rows = int(os.environ.get('MIN_ROWS', '800'))
+          min_columns = int(os.environ.get('MIN_COLUMNS', '45'))
+
+          required_columns = {
+              'close',
+              'atr_14',
+              'trend_context_m3',
+              'drawdown_13w',
+              'dist_to_low_3m',
+              'ai_horizon_alignment',
+              'floor_d1',
+              'ceiling_d1',
+              'floor_w1',
+              'ceiling_w1',
+              'floor_q1',
+              'ceiling_q1',
+              'floor_m3',
+              'floor_week_m3',
+              'split',
+          }
+
+          missing = sorted(required_columns.difference(columns))
+          if len(rows) < min_rows:
+              raise SystemExit(f'ABT rows below threshold: {len(rows)} < {min_rows}')
+          if len(columns) < min_columns:
+              raise SystemExit(f'ABT columns below threshold: {len(columns)} < {min_columns}')
+          if missing:
+              raise SystemExit(f'ABT missing required variables: {missing}')
+
+          models = competition.get('models', []) if isinstance(competition, dict) else []
+          if len(models) < 4:
+              raise SystemExit(f'ABT model_competition is too small: {len(models)} models found')
+
+          if float(coverage.get('floor_m3', 0.0)) <= 0.85:
+              raise SystemExit(f"ABT floor_m3 coverage too low: {coverage.get('floor_m3')}")
+          if float(coverage.get('floor_week_m3', 0.0)) <= 0.85:
+              raise SystemExit(f"ABT floor_week_m3 coverage too low: {coverage.get('floor_week_m3')}")
+
+          print(f"ABT OK rows={len(rows)} columns={len(columns)} models={len(models)}")
+          PY
+
+      - name: Train d1/w1/q1 horizon champions
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m models.train_classic_horizons \
+            --dataset data/training/modelable_dataset.json \
+            --output-dir data/training/models \
+            --version "${{ steps.runmeta.outputs.version }}" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Train m3 models (value,timing)
+        run: |
+          set -euo pipefail
+          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "value,timing" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Build unified training results CSV (d1,w1,q1,m3)
+        run: |
+          set -euo pipefail
+          python - <<'PY' 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          import csv
+          import json
+          from pathlib import Path
+
+          version = "${{ steps.runmeta.outputs.version }}"
+          models_dir = Path("data/training/models")
+          metrics_path = Path(f"data/training/metrics/training_metrics_{version}.json")
+          out_path = Path("${{ steps.runmeta.outputs.csv_file }}")
+
+          rows = []
+          for horizon in ("d1", "w1", "q1"):
+              payload = json.loads((models_dir / f"{horizon}_champion.json").read_text(encoding="utf-8"))
+              rows.append({
+                  "horizon": horizon,
+                  "model_name": payload.get("model_name"),
+                  "version": payload.get("version", version),
+                  "train_rows": payload.get("train_rows", 0),
+                  "test_rows": payload.get("test_rows", 0),
+                  "mae_floor": payload.get("metrics", {}).get("mae_floor"),
+                  "mae_ceiling": payload.get("metrics", {}).get("mae_ceiling"),
+                  "mae_spread": payload.get("metrics", {}).get("mae_spread"),
+                  "extra_metric_1": payload.get("metrics", {}).get("test_floor_coverage"),
+                  "extra_metric_2": payload.get("metrics", {}).get("test_ceiling_coverage"),
+              })
+
+          metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+          value_metrics = metrics_payload.get("value", {})
+          timing_metrics = metrics_payload.get("timing", {})
+          rows.append({
+              "horizon": "m3",
+              "model_name": "m3_value_linear + m3_timing_multiclass",
+              "version": version,
+              "train_rows": "n/a",
+              "test_rows": "n/a",
+              "mae_floor": value_metrics.get("mae_realized_floor"),
+              "mae_ceiling": value_metrics.get("pinball_loss"),
+              "mae_spread": timing_metrics.get("expected_week_distance"),
+              "extra_metric_1": timing_metrics.get("top1_accuracy"),
+              "extra_metric_2": timing_metrics.get("top3_accuracy"),
+          })
+
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+          with out_path.open("w", encoding="utf-8", newline="") as fh:
+              writer = csv.DictWriter(
+                  fh,
+                  fieldnames=[
+                      "horizon",
+                      "model_name",
+                      "version",
+                      "train_rows",
+                      "test_rows",
+                      "mae_floor",
+                      "mae_ceiling",
+                      "mae_spread",
+                      "extra_metric_1",
+                      "extra_metric_2",
+                  ],
+              )
+              writer.writeheader()
+              writer.writerows(rows)
+
+          print(f"Unified CSV written: {out_path}")
+          PY
+
+      - name: Validate generated champions and metrics
+        run: |
+          set -euo pipefail
+          test -f data/training/models/d1_champion.json
+          test -f data/training/models/w1_champion.json
+          test -f data/training/models/q1_champion.json
+          test -f data/training/models/value_champion.json
+          test -f data/training/models/timing_champion.json
+          test -f "${{ steps.runmeta.outputs.csv_file }}"
+          test -f "${{ steps.runmeta.outputs.log_file }}"
+
+      - name: Publish workflow summary
+        run: |
+          {
+            echo "## manual_train_all_models"
+            echo ""
+            echo "- Version: \`${{ steps.runmeta.outputs.version }}\`"
+            echo "- Log file: \`${{ steps.runmeta.outputs.log_file }}\`"
+            echo "- CSV results: \`${{ steps.runmeta.outputs.csv_file }}\`"
+            echo "- Champions: d1/w1/q1/value/timing"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit artifacts
+        if: inputs.commit_artifacts == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/training data/market data/persistence
+          if git diff --cached --quiet; then
+            echo "No artifacts changed; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore: manual full horizon model rebuild with logs and csv"
+          git push
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-train-all-models-artifacts
+          path: |
+            data/training
+            data/market/market_data.sqlite
+            data/persistence/app.sqlite
+          if-no-files-found: error
