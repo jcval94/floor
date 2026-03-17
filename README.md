@@ -50,6 +50,16 @@ El repositorio implementa una plataforma local y orientada a GitHub Actions para
 
 No se encontro un backend HTTP, ni endpoints REST, ni una API interna propia. La visualizacion final es un sitio estatico que lee archivos JSON desde `site/data/`.
 
+## Manejo de artefactos grandes en GitHub
+
+GitHub ya reporto advertencias por `data/training/modelable_dataset.json` (>50 MB). Para evitar nuevos pushes con blobs grandes, el repositorio ahora incluye `.gitattributes` para trackear los JSON de `data/training/` con Git LFS.
+
+Pasos recomendados en local:
+
+1. `git lfs install`
+2. `git lfs pull` (si clonas por primera vez)
+3. Para migrar historial existente: `git lfs migrate import --include="data/training/*.json"`
+
 ## Snapshot actual del repo inspeccionado
 
 Estado observado al inspeccionar el repositorio el `2026-03-13`:

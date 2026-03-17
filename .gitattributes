@@ -1,0 +1,4 @@
+# Track large training artifacts with Git LFS to avoid oversized Git blobs
+# and reduce push warnings/errors on GitHub.
+data/training/*.json filter=lfs diff=lfs merge=lfs -text
+data/training/**/*.json filter=lfs diff=lfs merge=lfs -text
