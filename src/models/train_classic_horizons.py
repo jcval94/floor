@@ -53,11 +53,17 @@ def _split(rows: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def _to_float(value: object) -> float | None:
-    if value in (None, ""):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
         return None
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
 
 
