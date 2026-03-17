@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import logging
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
+
+logger = logging.getLogger(__name__)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -33,9 +46,16 @@ class ChampionModelSet:
 
     def __init__(self, model_registry_dir: Path | None = None) -> None:
         self._registry = model_registry_dir or Path("data/training/models")
-        self._value_champion = self._load_json(self._registry / "value_champion.json")
-        self._timing_champion = self._load_json(self._registry / "timing_champion.json")
+        self._models_file_registry = self._registry.parent / "models_file"
+        self._value_champion = self._load_artifact("value")
+        self._timing_champion = self._load_artifact("timing")
         self.version = format_champion_version(self._value_champion, self._timing_champion)
+        logger.info(
+            "[forecasting] loaded champions value=%s timing=%s version=%s",
+            "ok" if self._value_champion is not None else "missing",
+            "ok" if self._timing_champion is not None else "missing",
+            self.version,
+        )
 
     @property
     def is_available(self) -> bool:
@@ -49,7 +69,86 @@ class ChampionModelSet:
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
+            logger.warning("[forecasting] invalid json artifact path=%s", path)
             return None
+
+    @staticmethod
+    def _load_pickle(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        try:
+            with path.open("rb") as fh:
+                payload = pickle.load(fh)
+            return payload if isinstance(payload, dict) else None
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            logger.warning("[forecasting] failed to read pickle artifact path=%s error=%s", path, exc)
+            return None
+
+    @staticmethod
+    def _load_manifest(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else None
+        except json.JSONDecodeError:
+            logger.warning("[forecasting] invalid manifest json path=%s", path)
+            return None
+
+    def _validate_manifest(self, task: str, pkl_path: Path, manifest: dict | None) -> bool:
+        if manifest is None:
+            logger.warning("[forecasting] missing manifest task=%s pkl=%s", task, pkl_path)
+            return False
+
+        expected_task = str(manifest.get("task", "")).strip()
+        if expected_task != task:
+            logger.warning("[forecasting] manifest task mismatch expected=%s actual=%s path=%s", task, expected_task, pkl_path)
+            return False
+
+        expected_hash = str(manifest.get("sha256", "")).strip().lower()
+        if not expected_hash:
+            logger.warning("[forecasting] manifest without sha256 task=%s path=%s", task, pkl_path)
+            return False
+
+        current_hash = _sha256_file(pkl_path).lower()
+        if expected_hash != current_hash:
+            logger.warning(
+                "[forecasting] manifest hash mismatch task=%s path=%s expected_sha256=%s current_sha256=%s",
+                task,
+                pkl_path,
+                expected_hash,
+                current_hash,
+            )
+            return False
+
+        return True
+
+    def _load_artifact(self, task: str) -> dict | None:
+        pkl_path = self._models_file_registry / f"{task}_champion.pkl"
+        manifest_path = self._models_file_registry / f"{task}_champion.manifest.json"
+
+        if pkl_path.exists():
+            manifest = self._load_manifest(manifest_path)
+            if self._validate_manifest(task, pkl_path, manifest):
+                artifact = self._load_pickle(pkl_path)
+                if artifact is not None:
+                    logger.info("[forecasting] using pkl champion task=%s path=%s manifest=%s", task, pkl_path, manifest_path)
+                    return artifact
+                logger.warning("[forecasting] pkl champion unreadable after manifest validation task=%s path=%s", task, pkl_path)
+
+        json_path = self._registry / f"{task}_champion.json"
+        artifact = self._load_json(json_path)
+        if artifact is not None:
+            logger.info("[forecasting] using json champion task=%s path=%s", task, json_path)
+        else:
+            logger.warning(
+                "[forecasting] champion artifact missing task=%s pkl=%s manifest=%s json=%s",
+                task,
+                pkl_path,
+                manifest_path,
+                json_path,
+            )
+        return artifact
 
     def _base(self, row: dict) -> tuple[float, float, float]:
         close = float(row["close"])

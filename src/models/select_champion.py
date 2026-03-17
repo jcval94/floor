@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _to_dict(obj: object) -> dict:
@@ -64,6 +67,12 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
     if existing is not None:
         previous_champion_version = existing.get("version")
         old_score = _value_score(existing["metrics"]) if task == "value" else _timing_score(existing["metrics"])
+        logger.info(
+            "[champion-selection] task=%s old_score=%.6f new_score=%.6f criterion=lower_is_better",
+            task,
+            old_score,
+            new_score,
+        )
         if new_score + 1e-9 < old_score:
             decision = "promote"
             reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
@@ -73,8 +82,22 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         else:
             decision = "challenger_only"
             reason = f"Existing champion kept (score {old_score:.6f} <= {new_score:.6f})."
+    else:
+        logger.info(
+            "[champion-selection] task=%s old_score=none new_score=%.6f criterion=lower_is_better",
+            task,
+            new_score,
+        )
 
-    payload["selection"] = {"decision": decision, "reason": reason, "scoring_version": "m3-v1", "evaluated_at": now}
+    payload["selection"] = {
+        "decision": decision,
+        "reason": reason,
+        "scoring_version": "m3-v1",
+        "evaluated_at": now,
+        "new_score": new_score,
+        "existing_score": old_score if existing is not None else None,
+        "objective": "minimize_weighted_error",
+    }
     challenger_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if decision in {"promote_first", "promote"}:
