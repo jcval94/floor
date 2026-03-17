@@ -217,3 +217,30 @@ def test_run_intraday_cycle_external_override_has_priority_and_rationale(tmp_pat
     assert all(signal["action"] == "SELL" for signal in signals)
     assert all("external_override=SELL" in signal["rationale"] for signal in signals)
     assert all("model_action=" in signal["rationale"] for signal in signals)
+
+
+def test_run_intraday_cycle_persists_neutral_fallback_when_champions_missing(tmp_path: Path) -> None:
+    root_dir = tmp_path
+    data_dir = tmp_path / "data"
+    (root_dir / "config").mkdir(parents=True, exist_ok=True)
+    (root_dir / "config" / "universe.yaml").write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    _seed_market_db(data_dir / "market" / "market_data.sqlite")
+
+    cfg = RuntimeConfig(root_dir=root_dir, data_dir=data_dir, recommendations_csv_url=None, live_trading_enabled=False)
+    run_intraday_cycle(event_type="OPEN", symbols=["AAPL"], cfg=cfg)
+
+    pred_path = data_dir / "predictions" / "AAPL.jsonl"
+    payloads = [json.loads(line) for line in pred_path.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(payloads) == 4
+    assert all(payload["model_version"] == "value:unknown|timing:unknown" for payload in payloads)
+    assert all(payload["m3_status"] == "unavailable" for payload in payloads)
+
+    signal_path = data_dir / "signals" / "AAPL.jsonl"
+    signals = [json.loads(line) for line in signal_path.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(signals) == 3
+    assert all(signal["action"] == "HOLD" for signal in signals)
+
+    db_path = data_dir / "persistence" / "app.sqlite"
+    assert stream_count(db_path, "predictions") == 4
+    assert stream_count(db_path, "signals") == 3
