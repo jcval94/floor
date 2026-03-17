@@ -17,20 +17,46 @@ from forecasting.run_forecast import run_forecast_pipeline
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
+MIN_SIGNAL_CONFIDENCE = 0.55
+EXPECTED_RETURN_THRESHOLD = 0.01
 
-def _signal_from_prediction(symbol: str, horizon: Literal["d1", "w1", "q1", "m3"], floor: float, ceiling: float) -> SignalRecord:
+
+def _signal_from_prediction(
+    symbol: str,
+    horizon: Literal["d1", "w1", "q1", "m3"],
+    floor: float,
+    ceiling: float,
+    expected_return: float | None,
+    confidence_score: float | None,
+    composite_signal_score: float | None,
+) -> SignalRecord:
     spread = max(ceiling - floor, 0.01)
-    confidence = min(0.95, max(0.5, spread / max(floor, 1)))
+    spread_confidence = min(0.95, max(0.5, spread / max(floor, 1)))
+    confidence = max(
+        min(float(confidence_score or 0.0), 1.0),
+        min(float(composite_signal_score or 0.0), 1.0),
+        spread_confidence,
+    )
+    expected_ret = float(expected_return or 0.0)
+
     action: Literal["BUY", "SELL", "HOLD"] = "HOLD"
-    if confidence > 0.55:
+    if confidence >= MIN_SIGNAL_CONFIDENCE and expected_ret >= EXPECTED_RETURN_THRESHOLD:
         action = "BUY"
+    elif confidence >= MIN_SIGNAL_CONFIDENCE and expected_ret <= -EXPECTED_RETURN_THRESHOLD:
+        action = "SELL"
+
     return SignalRecord(
         symbol=symbol,
         as_of=datetime.now(tz=ET),
         horizon=horizon,
         action=action,
         confidence=round(confidence, 4),
-        rationale="Quantile spread + calibrated temporal confidence",
+        rationale=(
+            "Expected return + confidence decision "
+            f"(expected_return={expected_ret:.4f}, confidence={confidence:.4f}, "
+            f"threshold={EXPECTED_RETURN_THRESHOLD:.4f}, min_confidence={MIN_SIGNAL_CONFIDENCE:.2f}); "
+            f"spread={spread:.4f} as auxiliary quality metric"
+        ),
     )
 
 
@@ -123,6 +149,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "confidence_score": confidence,
                 "expected_return": float(row.get("expected_return_d1", 0.0) or 0.0),
                 "expected_range": float(row.get("expected_range_d1", 0.0) or 0.0),
+                "composite_signal_score": row.get("composite_signal_score_d1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
@@ -141,6 +168,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "confidence_score": confidence,
                 "expected_return": float(row.get("expected_return_w1", 0.0) or 0.0),
                 "expected_range": float(row.get("expected_range_w1", 0.0) or 0.0),
+                "composite_signal_score": row.get("composite_signal_score_w1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
@@ -159,6 +187,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "confidence_score": confidence,
                 "expected_return": float(row.get("expected_return_q1", 0.0) or 0.0),
                 "expected_range": float(row.get("expected_range_q1", 0.0) or 0.0),
+                "composite_signal_score": row.get("composite_signal_score_q1", row.get("composite_signal_score")),
                 "event_type": event_type,
                 "emit_signal": True,
                 "m3_payload": m3_payload,
@@ -272,10 +301,22 @@ def run_intraday_cycle(
             logger.info("[predictions] wrote prediction symbol=%s horizon=%s", symbol, horizon)
 
             if payload.get("emit_signal", True):
-                signal = _signal_from_prediction(symbol, horizon, float(prediction.floor_value or 0.0), float(prediction.ceiling_value or 0.0))
+                signal = _signal_from_prediction(
+                    symbol,
+                    horizon,
+                    float(prediction.floor_value or 0.0),
+                    float(prediction.ceiling_value or 0.0),
+                    prediction.expected_return,
+                    prediction.confidence_score,
+                    payload.get("composite_signal_score"),
+                )
                 if symbol in external and external[symbol].action in {"BUY", "SELL", "HOLD"}:
+                    previous_action = signal.action
                     signal.action = external[symbol].action  # type: ignore[assignment]
-                    signal.rationale += f" | external={external[symbol].note}"
+                    signal.rationale += (
+                        " | external_override="
+                        f"{external[symbol].action} (model_action={previous_action}, note={external[symbol].note})"
+                    )
                 append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
                 logger.info("[predictions] wrote signal symbol=%s horizon=%s action=%s", symbol, horizon, signal.action)
 

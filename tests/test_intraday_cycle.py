@@ -137,3 +137,83 @@ def test_run_intraday_cycle_fallbacks_to_json_when_manifest_is_invalid(tmp_path:
     payloads = [json.loads(line) for line in pred_path.read_text(encoding="utf-8").strip().splitlines()]
     assert payloads
     assert all("value:v-train|timing:t-train" == payload["model_version"] for payload in payloads)
+
+
+def test_signal_from_prediction_buy_sell_hold_rules() -> None:
+    from floor.pipeline.intraday_cycle import _signal_from_prediction
+
+    buy_signal = _signal_from_prediction(
+        symbol="AAPL",
+        horizon="d1",
+        floor=100.0,
+        ceiling=104.0,
+        expected_return=0.03,
+        confidence_score=0.8,
+        composite_signal_score=None,
+    )
+    assert buy_signal.action == "BUY"
+
+    sell_signal = _signal_from_prediction(
+        symbol="AAPL",
+        horizon="d1",
+        floor=100.0,
+        ceiling=104.0,
+        expected_return=-0.03,
+        confidence_score=0.8,
+        composite_signal_score=None,
+    )
+    assert sell_signal.action == "SELL"
+
+    neutral_signal = _signal_from_prediction(
+        symbol="AAPL",
+        horizon="d1",
+        floor=100.0,
+        ceiling=104.0,
+        expected_return=0.0,
+        confidence_score=0.8,
+        composite_signal_score=None,
+    )
+    assert neutral_signal.action == "HOLD"
+
+
+def test_signal_from_prediction_holds_on_low_confidence() -> None:
+    from floor.pipeline.intraday_cycle import _signal_from_prediction
+
+    low_conf_signal = _signal_from_prediction(
+        symbol="AAPL",
+        horizon="d1",
+        floor=100.0,
+        ceiling=100.4,
+        expected_return=0.05,
+        confidence_score=0.2,
+        composite_signal_score=0.1,
+    )
+
+    assert low_conf_signal.action == "HOLD"
+
+
+def test_run_intraday_cycle_external_override_has_priority_and_rationale(tmp_path: Path, monkeypatch) -> None:
+    from floor.external.google_sheets import ExternalRecommendation
+
+    root_dir = tmp_path
+    data_dir = tmp_path / "data"
+    (root_dir / "config").mkdir(parents=True, exist_ok=True)
+    (root_dir / "config" / "universe.yaml").write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    _seed_market_db(data_dir / "market" / "market_data.sqlite")
+    _seed_models(data_dir / "training" / "models")
+
+    monkeypatch.setattr(
+        "floor.pipeline.intraday_cycle.fetch_recommendations",
+        lambda _url: [ExternalRecommendation(symbol="AAPL", action="SELL", confidence=0.9, note="risk desk")],
+    )
+
+    cfg = RuntimeConfig(root_dir=root_dir, data_dir=data_dir, recommendations_csv_url="http://mock", live_trading_enabled=False)
+    run_intraday_cycle(event_type="OPEN", symbols=["AAPL"], cfg=cfg)
+
+    signal_path = data_dir / "signals" / "AAPL.jsonl"
+    signals = [json.loads(line) for line in signal_path.read_text(encoding="utf-8").strip().splitlines()]
+    assert signals
+    assert all(signal["action"] == "SELL" for signal in signals)
+    assert all("external_override=SELL" in signal["rationale"] for signal in signals)
+    assert all("model_action=" in signal["rationale"] for signal in signals)
