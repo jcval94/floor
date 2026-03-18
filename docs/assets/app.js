@@ -123,13 +123,67 @@ async function tickers() {
   ]);
   const route = initRouter();
   const grouped = bySymbol(forecasts.rows);
+  const latestIntraday = forecasts.latest_intraday || {};
+  const latestClose = forecasts.latest_close || {};
   const table = document.getElementById('tickersTable');
-  table.innerHTML = universe.symbols.map((s) => {
-    const rows = grouped[s] || [];
-    const primaryForecast = _selectPrimaryForecast(rows);
-    const m3 = _extractM3(rows);
-    return `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(primaryForecast.floor_value)}</td><td>${fmt(primaryForecast.ceiling_value)}</td><td>${fmt(m3.floor)}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td></tr>`;
-  }).join('');
+  const horizonFilter = document.getElementById('horizonFilter');
+
+  function pickByHorizon(rows, horizon) {
+    if (horizon === 'm3') {
+      return rows.find((r) => r.horizon === 'm3') || _selectPrimaryForecast(rows);
+    }
+    return rows.find((r) => r.horizon === horizon) || _selectPrimaryForecast(rows);
+  }
+
+  function pctDelta(value, reference) {
+    const val = Number(value);
+    const ref = Number(reference);
+    if (!Number.isFinite(val) || !Number.isFinite(ref) || Math.abs(ref) < 1e-9) return null;
+    return ((val - ref) / ref) * 100;
+  }
+
+  function rowScore(recent, floor, ceiling) {
+    const toFloor = Math.max(recent - floor, 0);
+    const toCeiling = Math.max(ceiling - recent, 0);
+    const denom = Math.max(recent, 1e-6);
+    return ((toCeiling / denom) * 100) - ((toFloor / denom) * 100);
+  }
+
+  function renderTable() {
+    const selectedHorizon = (horizonFilter?.value || 'd1').toLowerCase();
+    const rowsForTable = universe.symbols.map((s) => {
+      const rows = grouped[s] || [];
+      const chosen = pickByHorizon(rows, selectedHorizon);
+      const d1 = rows.find((r) => r.horizon === 'd1') || chosen;
+      const m3 = _extractM3(rows);
+      const intradayFromEngine = Number(latestIntraday[s]?.price);
+      const closeFromEngine = Number(latestClose[s]?.close);
+      const fallbackMidpoint = (Number(d1?.floor_value) + Number(d1?.ceiling_value)) / 2;
+
+      const recent = Number.isFinite(intradayFromEngine)
+        ? intradayFromEngine
+        : Number.isFinite(closeFromEngine) ? closeFromEngine : fallbackMidpoint;
+      const closeDaily = Number.isFinite(closeFromEngine) ? closeFromEngine : null;
+      const chosenFloor = Number(chosen?.floor_value);
+      const chosenCeiling = Number(chosen?.ceiling_value);
+      const deltaRecentVsClosePct = closeDaily == null ? null : pctDelta(recent, closeDaily);
+      const deltaFloorPct = pctDelta(chosenFloor, recent);
+      const deltaCeilingPct = pctDelta(chosenCeiling, recent);
+      const deltaM3Pct = pctDelta(Number(m3.floor), recent);
+      const score = rowScore(recent, chosenFloor, chosenCeiling);
+
+        return {
+          symbol: s,
+          score,
+          html: `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(recent)}</td><td>${closeDaily == null ? '-' : fmt(closeDaily)}</td><td>${deltaRecentVsClosePct == null ? '-' : `${fmt(deltaRecentVsClosePct)}%`}</td><td>${fmt(chosenFloor)}</td><td>${deltaFloorPct == null ? '-' : `${fmt(deltaFloorPct)}%`}</td><td>${fmt(chosenCeiling)}</td><td>${deltaCeilingPct == null ? '-' : `${fmt(deltaCeilingPct)}%`}</td><td>${fmt(m3.floor)}</td><td>${deltaM3Pct == null ? '-' : `${fmt(deltaM3Pct)}%`}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${fmt(score)}</td></tr>`,
+        };
+      }).sort((a, b) => b.score - a.score);
+
+    table.innerHTML = rowsForTable.map((x) => x.html).join('');
+  }
+
+  renderTable();
+  horizonFilter?.addEventListener('change', renderTable);
 
   if (route.ticker) {
     const rows = grouped[route.ticker] || [];
