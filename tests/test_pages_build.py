@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 from utils.pages_build import build_pages_data
@@ -206,3 +207,79 @@ def test_mirror_site_tree_copies_html_and_data(tmp_path: Path) -> None:
     assert (target / "data" / "dashboard.json").read_text(encoding="utf-8") == '{"status":"ok"}'
     assert (target / "tickers.html").read_text(encoding="utf-8") == '<html>tickers</html>'
     assert (target / "assets" / "app.js").read_text(encoding="utf-8") == 'console.log("ok")'
+
+
+def test_build_pages_data_includes_latest_intraday_and_latest_close(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "market").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps(
+            {
+                "latest_predictions": [
+                    {"symbol": "AAPL", "horizon": "d1", "floor_value": 100, "ceiling_value": 110},
+                    {"symbol": "MSFT", "horizon": "d1", "floor_value": 200, "ceiling_value": 220},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n  - MSFT\n", encoding="utf-8")
+
+    (data_dir / "training").mkdir(parents=True)
+    (data_dir / "training" / "yahoo_market_rows.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"symbol": "AAPL", "timestamp": "2026-03-18T19:45:00+00:00", "close": 212.9}),
+                json.dumps({"symbol": "AAPL", "timestamp": "2026-03-18T20:00:00+00:00", "close": 213.6}),
+                json.dumps({"symbol": "MSFT", "timestamp": "2026-03-18T20:00:00+00:00", "close": 401.8}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    db_path = data_dir / "market" / "market_data.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE daily_bars (
+                symbol TEXT NOT NULL,
+                ts_utc TEXT NOT NULL,
+                open REAL NOT NULL,
+                high REAL NOT NULL,
+                low REAL NOT NULL,
+                close REAL NOT NULL,
+                volume REAL NOT NULL,
+                source TEXT NOT NULL DEFAULT 'yahoo',
+                fetched_at_utc TEXT NOT NULL,
+                raw_payload TEXT,
+                PRIMARY KEY (symbol, ts_utc)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO daily_bars(symbol, ts_utc, open, high, low, close, volume, source, fetched_at_utc, raw_payload)
+            VALUES
+                ('AAPL', '2026-03-17T20:00:00+00:00', 210, 212, 208, 211.5, 1000, 'yahoo', '2026-03-17T20:01:00+00:00', NULL),
+                ('AAPL', '2026-03-18T20:00:00+00:00', 212, 214, 210, 213.25, 1000, 'yahoo', '2026-03-18T20:01:00+00:00', NULL),
+                ('MSFT', '2026-03-18T20:00:00+00:00', 400, 405, 395, 402.1, 1000, 'yahoo', '2026-03-18T20:01:00+00:00', NULL)
+            """
+        )
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    forecasts = json.loads((site_data / "forecasts.json").read_text(encoding="utf-8"))
+    latest_close = forecasts["latest_close"]
+    assert latest_close["AAPL"]["close"] == 213.25
+    assert latest_close["AAPL"]["as_of"] == "2026-03-18T20:00:00+00:00"
+    assert latest_close["MSFT"]["close"] == 402.1
+
+    latest_intraday = forecasts["latest_intraday"]
+    assert latest_intraday["AAPL"]["price"] == 213.6
+    assert latest_intraday["AAPL"]["as_of"] == "2026-03-18T20:00:00+00:00"
+    assert latest_intraday["MSFT"]["price"] == 401.8
