@@ -23,6 +23,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Rebuild market training rows for Pages (CI source)
+        run: |
+          PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --universe config/universe.yaml --output data/training/yahoo_market_rows.jsonl
       - name: Build static site data payloads
         run: |
           PYTHONPATH=src python -m floor.main build-site
