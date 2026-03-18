@@ -263,26 +263,65 @@ jobs:
       - name: Validate generated champions and metrics
         run: |
           set -euo pipefail
-          test -f data/training/models/d1_champion.json
-          test -f data/training/models/w1_champion.json
-          test -f data/training/models/q1_champion.json
-          test -f data/training/models/d1_competition.json
-          test -f data/training/models/w1_competition.json
-          test -f data/training/models/q1_competition.json
-          test -f data/training/models/value_champion.json
-          test -f data/training/models/timing_champion.json
-          test -f data/training/models_file/d1_champion.pkl
-          test -f data/training/models_file/w1_champion.pkl
-          test -f data/training/models_file/q1_champion.pkl
-          test -f data/training/models_file/value_champion.pkl
-          test -f data/training/models_file/timing_champion.pkl
-          test -f data/training/models_file/d1_champion.manifest.json
-          test -f data/training/models_file/w1_champion.manifest.json
-          test -f data/training/models_file/q1_champion.manifest.json
-          test -f data/training/models_file/value_champion.manifest.json
-          test -f data/training/models_file/timing_champion.manifest.json
-          test -f "${{ steps.runmeta.outputs.csv_file }}"
-          test -f "${{ steps.runmeta.outputs.log_file }}"
+          echo "[train_all_models] Verificando presencia de artefactos esperados..." | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          for path in \
+            data/training/models/d1_champion.json \
+            data/training/models/w1_champion.json \
+            data/training/models/q1_champion.json \
+            data/training/models/d1_competition.json \
+            data/training/models/w1_competition.json \
+            data/training/models/q1_competition.json \
+            data/training/models/value_champion.json \
+            data/training/models/timing_champion.json \
+            data/training/models_file/d1_champion.pkl \
+            data/training/models_file/w1_champion.pkl \
+            data/training/models_file/q1_champion.pkl \
+            data/training/models_file/value_champion.pkl \
+            data/training/models_file/timing_champion.pkl \
+            data/training/models_file/d1_champion.manifest.json \
+            data/training/models_file/w1_champion.manifest.json \
+            data/training/models_file/q1_champion.manifest.json \
+            data/training/models_file/value_champion.manifest.json \
+            data/training/models_file/timing_champion.manifest.json \
+            "${{ steps.runmeta.outputs.csv_file }}" \
+            "${{ steps.runmeta.outputs.log_file }}"; do
+            test -f "$path"
+            echo "[train_all_models] OK existe -> $path" | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          done
+
+          python - <<'PY' 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          import json
+          from pathlib import Path
+
+          models_dir = Path("data/training/models")
+          models_file_dir = Path("data/training/models_file")
+          tasks = ("d1", "w1", "q1", "value", "timing")
+
+          print("[train_all_models] Verificando contenido JSON/pkl/manifest por task...")
+          for task in tasks:
+              champion_path = models_dir / f"{task}_champion.json"
+              manifest_path = models_file_dir / f"{task}_champion.manifest.json"
+              pkl_path = models_file_dir / f"{task}_champion.pkl"
+
+              champion_payload = json.loads(champion_path.read_text(encoding="utf-8"))
+              manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+              pkl_size = pkl_path.stat().st_size
+
+              if pkl_size <= 0:
+                  raise SystemExit(f"PKL vacío detectado para {task}: {pkl_path}")
+
+              champion_version = champion_payload.get("version", "missing")
+              manifest_version = manifest_payload.get("version", "missing")
+              if champion_version != "missing" and manifest_version != "missing" and champion_version != manifest_version:
+                  raise SystemExit(
+                      f"Version inconsistente para {task}: champion={champion_version} manifest={manifest_version}"
+                  )
+
+              print(
+                  "[train_all_models] OK task=%s champion_version=%s manifest_version=%s pkl_bytes=%s"
+                  % (task, champion_version, manifest_version, pkl_size)
+              )
+          PY
 
       - name: Validate persistence DB health
         run: |
