@@ -22,7 +22,19 @@ def _to_dict(obj: object) -> dict:
 def _load_json(path: Path) -> dict | None:
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    raw = path.read_text(encoding="utf-8").strip()
+    if not raw:
+        logger.warning("[training] champion json unreadable path=%s reason=empty_payload", path)
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.warning("[training] champion json unreadable path=%s error=%s", path, exc)
+        return None
+    if not isinstance(payload, dict):
+        logger.warning("[training] champion json unreadable path=%s reason=payload_not_object", path)
+        return None
+    return payload
 
 
 def _value_score(metrics: dict) -> float:
