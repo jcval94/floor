@@ -42,6 +42,8 @@ def main() -> None:
                 symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
             logger.info("[main] running run-cycle event=%s symbols=%s", event, len(symbols))
             run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
+            build_dashboard_snapshot(cfg.data_dir, output_path=cfg.data_dir / "reports" / "dashboard.json")
+            logger.info("[main] refreshed dashboard snapshot after run-cycle")
         elif args.cmd == "review-training":
             logger.info("[main] running review-training")
             run_training_review(

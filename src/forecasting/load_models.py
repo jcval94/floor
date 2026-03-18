@@ -5,11 +5,18 @@ import hashlib
 import logging
 import pickle
 from dataclasses import dataclass
+from typing import Any
 from pathlib import Path
 
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
 
 logger = logging.getLogger(__name__)
+
+LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
+
+
+def _looks_like_lfs_pointer(text: str) -> bool:
+    return text.startswith(LFS_POINTER_HEADER)
 
 
 def _sha256_file(path: Path) -> str:
@@ -47,14 +54,24 @@ class ChampionModelSet:
     def __init__(self, model_registry_dir: Path | None = None) -> None:
         self._registry = model_registry_dir or Path("data/training/models")
         self._models_file_registry = self._registry.parent / "models_file"
+        self._load_diagnostics: dict[str, str] = {}
+        logger.info(
+            "[forecasting] champion load preflight cwd=%s registry=%s registry_exists=%s models_file_registry=%s models_file_exists=%s",
+            Path.cwd(),
+            self._registry,
+            self._registry.exists(),
+            self._models_file_registry,
+            self._models_file_registry.exists(),
+        )
         self._value_champion = self._load_artifact("value")
         self._timing_champion = self._load_artifact("timing")
         self.version = format_champion_version(self._value_champion, self._timing_champion)
         logger.info(
-            "[forecasting] loaded champions value=%s timing=%s version=%s",
+            "[forecasting] loaded champions value=%s timing=%s version=%s diagnostics=%s",
             "ok" if self._value_champion is not None else "missing",
             "ok" if self._timing_champion is not None else "missing",
             self.version,
+            self._load_diagnostics,
         )
 
     @property
@@ -63,23 +80,40 @@ class ChampionModelSet:
         return self._value_champion is not None and self._timing_champion is not None
 
     @staticmethod
-    def _load_json(path: Path) -> dict | None:
+    def _load_json(path: Path) -> Any | None:
         if not path.exists():
             return None
+        text = path.read_text(encoding="utf-8")
+        if _looks_like_lfs_pointer(text):
+            logger.error(
+                "[forecasting] json artifact is a Git LFS pointer (real model payload missing locally) path=%s",
+                path,
+            )
+            return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(text)
         except json.JSONDecodeError:
             logger.warning("[forecasting] invalid json artifact path=%s", path)
             return None
 
     @staticmethod
-    def _load_pickle(path: Path) -> dict | None:
+    def _load_pickle(path: Path) -> Any | None:
         if not path.exists():
+            return None
+        head = path.read_bytes()[:200]
+        try:
+            head_text = head.decode("utf-8")
+        except UnicodeDecodeError:
+            head_text = ""
+        if _looks_like_lfs_pointer(head_text):
+            logger.error(
+                "[forecasting] pickle artifact is a Git LFS pointer (real model payload missing locally) path=%s",
+                path,
+            )
             return None
         try:
             with path.open("rb") as fh:
-                payload = pickle.load(fh)
-            return payload if isinstance(payload, dict) else None
+                return pickle.load(fh)
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.warning("[forecasting] failed to read pickle artifact path=%s error=%s", path, exc)
             return None
@@ -123,30 +157,67 @@ class ChampionModelSet:
 
         return True
 
-    def _load_artifact(self, task: str) -> dict | None:
+    def _load_artifact(self, task: str) -> Any | None:
         pkl_path = self._models_file_registry / f"{task}_champion.pkl"
         manifest_path = self._models_file_registry / f"{task}_champion.manifest.json"
+
+        logger.info(
+            "[forecasting] trying champion task=%s pkl=%s pkl_exists=%s manifest=%s manifest_exists=%s",
+            task,
+            pkl_path,
+            pkl_path.exists(),
+            manifest_path,
+            manifest_path.exists(),
+        )
 
         if pkl_path.exists():
             manifest = self._load_manifest(manifest_path)
             if self._validate_manifest(task, pkl_path, manifest):
                 artifact = self._load_pickle(pkl_path)
                 if artifact is not None:
-                    logger.info("[forecasting] using pkl champion task=%s path=%s manifest=%s", task, pkl_path, manifest_path)
+                    logger.info(
+                        "[forecasting] using pkl champion task=%s path=%s manifest=%s payload_type=%s",
+                        task,
+                        pkl_path,
+                        manifest_path,
+                        type(artifact).__name__,
+                    )
+                    self._load_diagnostics[task] = f"loaded:pkl:{pkl_path}:type={type(artifact).__name__}"
                     return artifact
                 logger.warning("[forecasting] pkl champion unreadable after manifest validation task=%s path=%s", task, pkl_path)
+                self._load_diagnostics[task] = f"invalid_pkl:{pkl_path}"
+            else:
+                self._load_diagnostics[task] = f"invalid_manifest:{manifest_path}"
 
         json_path = self._registry / f"{task}_champion.json"
         artifact = self._load_json(json_path)
         if artifact is not None:
-            logger.info("[forecasting] using json champion task=%s path=%s", task, json_path)
+            logger.info(
+                "[forecasting] using json champion task=%s path=%s payload_type=%s",
+                task,
+                json_path,
+                type(artifact).__name__,
+            )
+            self._load_diagnostics[task] = f"loaded:json:{json_path}:type={type(artifact).__name__}"
         else:
+            if json_path.exists():
+                text = json_path.read_text(encoding="utf-8")
+                if _looks_like_lfs_pointer(text):
+                    reason = f"lfs_pointer:{json_path}"
+                else:
+                    reason = f"invalid_json:{json_path}"
+            elif task not in self._load_diagnostics:
+                reason = f"missing_all_artifacts:pkl={pkl_path};json={json_path}"
+            else:
+                reason = self._load_diagnostics[task]
+            self._load_diagnostics[task] = reason
             logger.warning(
-                "[forecasting] champion artifact missing task=%s pkl=%s manifest=%s json=%s",
+                "[forecasting] champion artifact missing task=%s pkl=%s manifest=%s json=%s reason=%s",
                 task,
                 pkl_path,
                 manifest_path,
                 json_path,
+                reason,
             )
         return artifact
 
