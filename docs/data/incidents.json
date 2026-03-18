@@ -48,5 +48,7 @@
     "src/monitoring/incident_commander.py",
     "tests/test_incident_commander.py",
     "docs/release_checklist.md"
-  ]
+  ],
+  "source_file": "incident_review_2026-03-12.json",
+  "source_date": null
 }
