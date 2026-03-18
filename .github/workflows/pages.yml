@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod", "monitoring", "retrain_assessment", "retrain_execute"]
+    workflows: ["intraday_engine", "ingest", "eod", "monitoring", "retrain_assessment", "retrain_execute", "manual_train_all_models"]
     types: [completed]
   workflow_dispatch:
 
