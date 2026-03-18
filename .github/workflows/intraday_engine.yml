@@ -2,7 +2,15 @@ name: intraday_engine
 
 on:
   schedule:
-    - cron: "*/15 * * * 1-5"
+    # GitHub Actions schedule uses UTC and does not follow America/New_York DST directly.
+    # We keep two narrow UTC windows to cover 09:15-16:15 ET year-round:
+    # - EDT (UTC-4): 13:15-20:15 UTC
+    # - EST (UTC-5): 14:15-21:15 UTC
+    # The gate job remains the second defense for exact market checkpoints.
+    - cron: "15,30,45 13-19 * * 1-5"
+    - cron: "0,15 20 * * 1-5"
+    - cron: "15,30,45 14-20 * * 1-5"
+    - cron: "0,15 21 * * 1-5"
   workflow_dispatch:
     inputs:
       force_run:
