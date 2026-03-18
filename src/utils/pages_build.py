@@ -210,14 +210,23 @@ def _opportunity_row(row: dict) -> dict | None:
     if floor_raw is None or ceiling_raw is None:
         return None
 
-    floor = float(floor_raw)
-    ceiling = float(ceiling_raw)
+    try:
+        floor = float(floor_raw)
+        ceiling = float(ceiling_raw)
+    except (TypeError, ValueError):
+        return None
     spread_abs = max(ceiling - floor, 0.0)
     midpoint = (ceiling + floor) / 2.0
     spread_rel = spread_abs / max(abs(midpoint), 1e-6)
 
-    floor_prob = float(row.get("floor_time_probability", 0.5) or 0.5)
-    ceiling_prob = float(row.get("ceiling_time_probability", 0.5) or 0.5)
+    try:
+        floor_prob = float(row.get("floor_time_probability", 0.5) or 0.5)
+    except (TypeError, ValueError):
+        floor_prob = 0.5
+    try:
+        ceiling_prob = float(row.get("ceiling_time_probability", 0.5) or 0.5)
+    except (TypeError, ValueError):
+        ceiling_prob = 0.5
     confidence = max(min((floor_prob + ceiling_prob) / 2.0, 1.0), 0.0)
 
     score = spread_abs * spread_rel * confidence
@@ -287,8 +296,10 @@ def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, di
         close = row.get("close")
         if not ts:
             continue
+        if close is None:
+            continue
         try:
-            close_value = float(close)
+            close_value = float(str(close))
         except (TypeError, ValueError):
             continue
         prev = latest.get(symbol)
@@ -326,13 +337,14 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     strategy_payload = _sanitize(_read_json(data_dir / "reports" / "strategy.json", {"status": "no_strategy_report", "equity_curve": []}))
     (site_data_dir / "strategy.json").write_text(json.dumps(strategy_payload, indent=2), encoding="utf-8")
 
+    symbols = list(parse_universe_yaml(universe_path))
     universe = {
         "name": "us_top50_liquid_v1",
-        "symbols": parse_universe_yaml(universe_path),
+        "symbols": symbols,
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
-    latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", universe["symbols"])
-    latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", universe["symbols"])
+    latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", symbols)
+    latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", symbols)
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
