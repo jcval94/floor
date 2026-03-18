@@ -6,6 +6,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Callable
 
 from features.model_competition import HORIZONS, build_model_specs
 
@@ -219,8 +220,16 @@ def _fit_evt(train: list[_PreparedRow], target_key: str, bins: int = 3) -> dict[
 
 
 def _predict_evt(item: _PreparedRow, params: dict[str, object]) -> float:
-    bins = int(params.get("bins", 3) or 3)
-    cuts = [float(x) for x in (params.get("vol_cuts", []) or [])]
+    bins_raw = params.get("bins", 3)
+    bins = int(bins_raw) if isinstance(bins_raw, (int, float, str)) else 3
+
+    cuts_raw = params.get("vol_cuts", [])
+    cuts: list[float] = []
+    if isinstance(cuts_raw, list):
+        for x in cuts_raw:
+            if isinstance(x, (int, float, str)):
+                cuts.append(float(x))
+
     trend = float(item.features.get("trend_context_m3", 0.0))
     trend_bucket = "up" if trend >= 0 else "down"
     vol = abs(float(item.features.get("atr_14", 0.0)))
@@ -230,8 +239,17 @@ def _predict_evt(item: _PreparedRow, params: dict[str, object]) -> float:
             vol_bucket = idx
             break
     key = f"v{vol_bucket}:{trend_bucket}"
-    table = params.get("table", {}) if isinstance(params.get("table"), dict) else {}
-    pred = float(table.get(key, params.get("global", 0.01)))
+
+    table_raw = params.get("table", {})
+    table: dict[str, float] = {}
+    if isinstance(table_raw, dict):
+        for k, v in table_raw.items():
+            if isinstance(k, str) and isinstance(v, (int, float, str)):
+                table[k] = float(v)
+
+    global_raw = params.get("global", 0.01)
+    global_default = float(global_raw) if isinstance(global_raw, (int, float, str)) else 0.01
+    pred = table.get(key, global_default)
     return _clamp_delta(pred)
 
 
@@ -278,9 +296,15 @@ def _fit_boosted_stumps(train: list[_PreparedRow], feature_names: tuple[str, ...
 
 
 def _predict_boosted_stumps(item: _PreparedRow, params: dict[str, object]) -> float:
-    pred = float(params.get("base", 0.01))
-    lr = float(params.get("lr", 0.45))
-    for stump in params.get("stumps", []):
+    base_raw = params.get("base", 0.01)
+    pred = float(base_raw) if isinstance(base_raw, (int, float, str)) else 0.01
+
+    lr_raw = params.get("lr", 0.45)
+    lr = float(lr_raw) if isinstance(lr_raw, (int, float, str)) else 0.45
+
+    stumps_raw = params.get("stumps", [])
+    stumps = stumps_raw if isinstance(stumps_raw, list) else []
+    for stump in stumps:
         if not isinstance(stump, dict):
             continue
         feat = str(stump.get("feature", ""))
@@ -296,7 +320,7 @@ def _family_model(
     train_rows: list[_PreparedRow],
     target_key: str,
     training_mode: str,
-) -> tuple[dict[str, object], callable]:
+) -> tuple[dict[str, object], Callable[[_PreparedRow], float]]:
     if family == "evt_changepoint_hybrid":
         if training_mode == "retrain":
             folds = _expanding_folds(train_rows, folds=3)
@@ -325,8 +349,8 @@ def _family_model(
         feature_names = FEATURES_BY_FAMILY["xgboost"]
         if training_mode == "retrain":
             folds = _expanding_folds(train_rows, folds=3)
-            grid = [(6, 0.45), (8, 0.35), (10, 0.25)]
-            best_cfg = grid[0]
+            grid: list[tuple[int, float]] = [(6, 0.45), (8, 0.35), (10, 0.25)]
+            xgb_best_cfg = grid[0]
             best_score = float("inf")
             if folds:
                 for rounds, lr in grid:
@@ -338,8 +362,8 @@ def _family_model(
                     score /= len(folds)
                     if score < best_score:
                         best_score = score
-                        best_cfg = (rounds, lr)
-            rounds, lr = best_cfg
+                        xgb_best_cfg = (rounds, lr)
+            rounds, lr = xgb_best_cfg
             params = _fit_boosted_stumps(train_rows, feature_names, target_key, rounds=rounds, lr=lr)
             params["cv"] = {"enabled": bool(folds), "folds": len(folds), "best_rounds": rounds, "best_lr": lr}
         else:
@@ -352,11 +376,11 @@ def _family_model(
     feature_names = FEATURES_BY_FAMILY[feature_key]
     if training_mode == "retrain":
         folds = _expanding_folds(train_rows, folds=3)
-        grid = [(0.005, 0.03), (0.01, 0.02), (0.05, 0.015)]
-        best_cfg = grid[0]
+        linear_grid: list[tuple[float, float]] = [(0.005, 0.03), (0.01, 0.02), (0.05, 0.015)]
+        linear_best_cfg = linear_grid[0]
         best_score = float("inf")
         if folds:
-            for l2, lr in grid:
+            for l2, lr in linear_grid:
                 score = 0.0
                 for tr, va in folds:
                     w, b = _linear_fit(tr, feature_names, target_key, l2=l2, lr=lr, epochs=140)
@@ -365,14 +389,23 @@ def _family_model(
                 score /= len(folds)
                 if score < best_score:
                     best_score = score
-                    best_cfg = (l2, lr)
-        l2, lr = best_cfg
+                    linear_best_cfg = (l2, lr)
+        l2, lr = linear_best_cfg
         w, b = _linear_fit(train_rows, feature_names, target_key, l2=l2, lr=lr, epochs=160)
         params = {"weights": w, "bias": b, "features": list(feature_names), "l2": l2, "lr": lr, "cv": {"enabled": bool(folds), "folds": len(folds)}}
     else:
         w, b = _linear_fit(train_rows, feature_names, target_key, l2=0.01, lr=0.02, epochs=120)
         params = {"weights": w, "bias": b, "features": list(feature_names), "l2": 0.01, "lr": 0.02, "cv": {"enabled": False, "folds": 0}}
-    return params, lambda item: _predict_linear(item, params["weights"], float(params["bias"]), feature_names)
+    weights_raw = params.get("weights", {})
+    weights: dict[str, float] = {}
+    if isinstance(weights_raw, dict):
+        for k, v in weights_raw.items():
+            if isinstance(k, str) and isinstance(v, (int, float, str)):
+                weights[k] = float(v)
+
+    bias_raw = params.get("bias", 0.0)
+    bias = float(bias_raw) if isinstance(bias_raw, (int, float, str)) else 0.0
+    return params, lambda item: _predict_linear(item, weights, bias, feature_names)
 
 
 def _evaluate_predictions(test_rows: list[_PreparedRow], pred_floor_delta: list[float], pred_ceiling_delta: list[float]) -> dict[str, float]:
