@@ -354,17 +354,30 @@ jobs:
           from pathlib import Path
 
           max_chunk_bytes = 95 * 1024 * 1024
+          def clear_chunk_dir(chunks_dir: Path) -> int:
+              if not chunks_dir.exists():
+                  return 0
+              removed = 0
+              for stale in chunks_dir.glob("*"):
+                  if stale.is_file():
+                      stale.unlink()
+                      removed += 1
+              if not any(chunks_dir.iterdir()):
+                  chunks_dir.rmdir()
+              return removed
+
           def chunk_binary_file(path: Path, chunks_dir: Path) -> None:
               blob = path.read_bytes()
               source_size = len(blob)
               if source_size <= max_chunk_bytes:
+                  removed = clear_chunk_dir(chunks_dir)
+                  if removed:
+                      print(f"[commit-artifacts] cleared stale chunks path={chunks_dir} removed={removed}")
                   print(f"[commit-artifacts] skip chunk path={path} size={source_size} bytes")
                   return
 
               chunks_dir.mkdir(parents=True, exist_ok=True)
-              for stale in chunks_dir.glob("*"):
-                  if stale.is_file():
-                      stale.unlink()
+              clear_chunk_dir(chunks_dir)
 
               parts: list[str] = []
               cursor = 0
@@ -417,7 +430,9 @@ jobs:
                 fi
                 continue
               fi
-              paths+=( "${candidate}" )
+              if [[ -e "${candidate}" ]] || git ls-files --error-unmatch "${candidate}" >/dev/null 2>&1; then
+                paths+=( "${candidate}" )
+              fi
             done
 
             if [[ ${#paths[@]} -eq 0 ]]; then
