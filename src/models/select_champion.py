@@ -161,6 +161,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         if decision == "promote":
             if existing is None:
                 raise RuntimeError("Promotion decision requires an existing champion artifact.")
+            assert existing is not None
             _write_json_atomic(archived, existing, task=task)
         _write_json_atomic(challenger_path, payload, task=task)
         if decision in {"promote_first", "promote"}:
