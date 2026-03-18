@@ -10,4 +10,6 @@ jobs:
   deprecated:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Deprecated: use intraday_engine workflow"
+      - name: Show deprecation notice
+        run: |
+          echo "Deprecated: use intraday_engine workflow"
