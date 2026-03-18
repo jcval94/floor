@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -20,6 +21,48 @@ ET = ZoneInfo("America/New_York")
 MIN_SIGNAL_CONFIDENCE = 0.55
 EXPECTED_RETURN_THRESHOLD = 0.01
 
+
+LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
+
+
+def _looks_like_lfs_pointer(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    try:
+        head = path.read_text(encoding="utf-8")[:120]
+    except UnicodeDecodeError:
+        return False
+    return head.startswith(LFS_POINTER_HEADER)
+
+
+def _log_model_registry_preflight(cfg: RuntimeConfig) -> None:
+    registry = cfg.data_dir / "training" / "models"
+    models_file = cfg.data_dir / "training" / "models_file"
+    candidates = [
+        registry / "value_champion.json",
+        registry / "timing_champion.json",
+        models_file / "value_champion.pkl",
+        models_file / "timing_champion.pkl",
+    ]
+    diagnostics: list[dict[str, object]] = []
+    for path in candidates:
+        item = {
+            "path": str(path),
+            "exists": path.exists(),
+            "is_lfs_pointer": _looks_like_lfs_pointer(path),
+            "size": path.stat().st_size if path.exists() else None,
+        }
+        diagnostics.append(item)
+
+    logger.info(
+        "[predictions][model-preflight] cwd=%s registry=%s registry_exists=%s models_file=%s models_file_exists=%s diagnostics=%s",
+        Path.cwd(),
+        registry,
+        registry.exists(),
+        models_file,
+        models_file.exists(),
+        diagnostics,
+    )
 
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -370,6 +413,7 @@ def run_intraday_cycle(
     }
 
     as_of = datetime.now(tz=ET)
+    _log_model_registry_preflight(cfg)
     generated = run_forecast_pipeline(
         market_rows=market_rows,
         ai_by_symbol=ai_by_symbol,
@@ -391,8 +435,15 @@ def run_intraday_cycle(
             blocked[:3],
         )
     if not forecasts:
-        logger.warning("[predictions] all forecasts blocked; persisting fallback neutral predictions")
-        forecasts = _fallback_forecasts_from_blocked(market_rows=market_rows, blocked=blocked, model_version="value:unknown|timing:unknown")
+        sample = blocked[:3]
+        logger.error(
+            "[predictions] all forecasts blocked; refusing to persist synthetic fallback predictions sample=%s",
+            sample,
+        )
+        raise RuntimeError(
+            "Forecast pipeline blocked for all symbols: trained champions are unavailable. "
+            "Run training/review and publish value_champion + timing_champion artifacts before run-cycle."
+        )
 
     for row in forecasts:
         symbol = str(row["symbol"]).upper()
