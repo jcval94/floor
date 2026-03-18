@@ -345,12 +345,107 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/training data/market data/persistence
-          if git diff --cached --quiet; then
-            echo "No artifacts changed; skipping commit."
+          PYTHONPATH=src python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          max_chunk_bytes = 95 * 1024 * 1024
+          def chunk_binary_file(path: Path, chunks_dir: Path) -> None:
+              blob = path.read_bytes()
+              source_size = len(blob)
+              if source_size <= max_chunk_bytes:
+                  print(f"[commit-artifacts] skip chunk path={path} size={source_size} bytes")
+                  return
+
+              chunks_dir.mkdir(parents=True, exist_ok=True)
+              for stale in chunks_dir.glob("*"):
+                  if stale.is_file():
+                      stale.unlink()
+
+              parts: list[str] = []
+              cursor = 0
+              idx = 1
+              while cursor < source_size:
+                  end = min(source_size, cursor + max_chunk_bytes)
+                  chunk = blob[cursor:end]
+                  chunk_name = f"{path.name}.part{idx:03d}.bin"
+                  (chunks_dir / chunk_name).write_bytes(chunk)
+                  parts.append(chunk_name)
+                  cursor = end
+                  idx += 1
+
+              manifest = {
+                  "source_file": path.name,
+                  "source_size_bytes": source_size,
+                  "source_sha256": hashlib.sha256(blob).hexdigest(),
+                  "chunk_max_bytes": max_chunk_bytes,
+                  "chunk_count": len(parts),
+                  "parts": parts,
+              }
+              (chunks_dir / f"{path.name}.manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+              path.unlink()
+              print(
+                  "[commit-artifacts] chunked source=%s chunk_count=%s chunks_dir=%s source_size=%s"
+                  % (path, manifest["chunk_count"], chunks_dir, source_size)
+              )
+
+          dataset_path = Path("data/training/modelable_dataset.json")
+          if dataset_path.exists():
+              chunk_binary_file(dataset_path, dataset_path.parent / "modelable_dataset_chunks")
+
+          for task in ("d1", "w1", "q1", "value", "timing"):
+              pkl_path = Path(f"data/training/models_file/{task}_champion.pkl")
+              if pkl_path.exists():
+                  chunk_binary_file(pkl_path, pkl_path.parent / f"{task}_champion.pkl.chunks")
+          PY
+
+          batch_commit() {
+            local message="$1"
+            shift
+            git reset
+            git add -A "$@"
+            if git diff --cached --quiet; then
+              echo "[commit-artifacts] no changes for batch: ${message}"
+              return 1
+            fi
+            git commit -m "${message}"
+            return 0
+          }
+
+          committed_any=0
+
+          # Batch 1: data base + logs + metrics + dataset/chunks
+          if batch_commit \
+            "chore: manual training artifacts (base + dataset + logs)" \
+            data/market \
+            data/persistence \
+            data/training/manual_train_all_models_*.log \
+            data/training/metrics \
+            data/training/models/horizon_training_results_*.csv \
+            data/training/modelable_dataset.json \
+            data/training/modelable_dataset_chunks; then
+            committed_any=1
+          fi
+
+          # Batch 2..N: one model at a time
+          for task in d1 w1 q1 value timing; do
+            if batch_commit \
+              "chore: manual training artifacts (${task} champion batch)" \
+              ":(glob)data/training/models/${task}_challenger_*.json" \
+              ":(glob)data/training/models/${task}_champion_*.json" \
+              "data/training/models_file/${task}_champion.pkl" \
+              "data/training/models_file/${task}_champion.pkl.chunks" \
+              "data/training/models_file/${task}_champion.manifest.json"; then
+              committed_any=1
+            fi
+          done
+
+          if [[ "${committed_any}" -eq 0 ]]; then
+            echo "No artifacts changed; skipping push."
             exit 0
           fi
-          git commit -m "chore: manual full horizon model rebuild with logs and csv"
+
           git push
 
       - name: Upload training artifacts
