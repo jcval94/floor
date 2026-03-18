@@ -33,6 +33,9 @@ SENSITIVE_KEYS = {
 }
 
 LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
+# Mínimo de cobertura intraday para considerar el dataset "usable" sin alerta de frescura.
+# Si queda por debajo, se publica `data_health` para que la UI no lo presente como dato actualizado.
+MIN_INTRADAY_COVERAGE_RATIO_FOR_OK = 0.6
 
 
 def _sanitize(obj: Any) -> Any:
@@ -305,6 +308,74 @@ def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, di
     return {symbol: payload for symbol, (_, __, payload) in latest.items()}
 
 
+def _max_timestamp(records: dict[str, dict[str, Any]]) -> str | None:
+    max_dt: datetime | None = None
+    max_raw: str | None = None
+    for payload in records.values():
+        ts_raw = payload.get("as_of")
+        ts = _parse_iso_datetime(ts_raw)
+        if ts is None:
+            continue
+        if max_dt is None or ts > max_dt:
+            max_dt = ts
+            max_raw = str(ts_raw)
+    return max_raw
+
+
+def _build_market_data_health(
+    latest_intraday: dict[str, dict[str, Any]],
+    latest_close: dict[str, dict[str, Any]],
+    universe_symbols: list[str],
+) -> dict[str, Any]:
+    universe_count = len(universe_symbols)
+    intraday_count = len(latest_intraday)
+    close_count = len(latest_close)
+    intraday_coverage = (intraday_count / universe_count) if universe_count else 0.0
+    close_coverage = (close_count / universe_count) if universe_count else 0.0
+    intraday_max_ts = _max_timestamp(latest_intraday)
+    close_max_ts = _max_timestamp(latest_close)
+
+    summary = {
+        "universe_symbols": universe_count,
+        "latest_intraday_count": intraday_count,
+        "latest_close_count": close_count,
+        "latest_intraday_max_timestamp": intraday_max_ts,
+        "latest_close_max_timestamp": close_max_ts,
+        "latest_intraday_coverage_pct": round(intraday_coverage * 100.0, 2),
+        "latest_close_coverage_pct": round(close_coverage * 100.0, 2),
+        "intraday_min_coverage_pct_for_ok": round(MIN_INTRADAY_COVERAGE_RATIO_FOR_OK * 100.0, 2),
+    }
+
+    alerts: list[dict[str, Any]] = []
+    if close_coverage == 0.0:
+        alerts.append(
+            {
+                "code": "LATEST_CLOSE_COVERAGE_ZERO",
+                "message": "Sin cobertura de cierre diario (latest_close).",
+                "severity": "critical",
+            }
+        )
+    if intraday_coverage < MIN_INTRADAY_COVERAGE_RATIO_FOR_OK:
+        alerts.append(
+            {
+                "code": "LATEST_INTRADAY_LOW_COVERAGE",
+                "message": (
+                    "Cobertura intraday baja "
+                    f"(< {int(MIN_INTRADAY_COVERAGE_RATIO_FOR_OK * 100)}%)."
+                ),
+                "severity": "warning",
+            }
+        )
+
+    health = {
+        "status": "ok" if not alerts else "degraded",
+        "summary": summary,
+    }
+    if alerts:
+        health["alerts"] = alerts
+    return health
+
+
 def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -> None:
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -333,6 +404,17 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
     latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", universe["symbols"])
     latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", universe["symbols"])
+    market_data_health = _build_market_data_health(latest_intraday, latest_close, universe["symbols"])
+
+    print(
+        "[pages_build] market data coverage:",
+        json.dumps(market_data_health["summary"], ensure_ascii=False),
+    )
+    if market_data_health["status"] != "ok":
+        print(
+            "[pages_build] market data alerts:",
+            json.dumps(market_data_health.get("alerts", []), ensure_ascii=False),
+        )
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
@@ -350,6 +432,8 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "latest_close": latest_close,
         "top_opportunities": opportunities[:10],
     }
+    if market_data_health["status"] != "ok":
+        forecasts["data_health"] = market_data_health
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
     (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:10]), indent=2), encoding="utf-8")
 
