@@ -18,9 +18,36 @@ METRICS_DIR="$OUTPUT_DIR/metrics"
 
 mkdir -p "$MODELS_DIR" "$METRICS_DIR"
 
-PYTHONPATH=src python -m models.run_training \
-  --dataset "$DATASET_PATH" \
-  --output-dir "$OUTPUT_DIR" \
-  --version "$VERSION_TAG" \
-  --tasks "$TASKS_ARG" \
-  --training-mode "$TRAINING_MODE"
+IFS=',' read -r -a REQUESTED_TASKS <<< "$TASKS_ARG"
+horizon_csv=""
+m3_csv=""
+
+for task in "${REQUESTED_TASKS[@]}"; do
+  t="$(echo "$task" | xargs)"
+  case "$t" in
+    d1|w1|q1)
+      horizon_csv="${horizon_csv:+$horizon_csv,}$t"
+      ;;
+    value|timing)
+      m3_csv="${m3_csv:+$m3_csv,}$t"
+      ;;
+  esac
+done
+
+if [[ -n "$horizon_csv" ]]; then
+  PYTHONPATH=src python -m models.train_classic_horizons \
+    --dataset "$DATASET_PATH" \
+    --output-dir "$MODELS_DIR" \
+    --version "$VERSION_TAG" \
+    --tasks "$horizon_csv" \
+    --training-mode "$TRAINING_MODE"
+fi
+
+if [[ -n "$m3_csv" ]]; then
+  PYTHONPATH=src python -m models.run_training \
+    --dataset "$DATASET_PATH" \
+    --output-dir "$OUTPUT_DIR" \
+    --version "$VERSION_TAG" \
+    --tasks "$m3_csv" \
+    --training-mode "$TRAINING_MODE"
+fi
