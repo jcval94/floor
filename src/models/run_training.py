@@ -149,7 +149,7 @@ def _persist_winning_model_file(task: str, models_file_dir: Path, artifact_paylo
 
 
 
-def _horizon_defaults(task: str) -> dict[str, float]:
+def _horizon_defaults(task: str) -> dict[str, float | str]:
     if task == "d1":
         return {
             "move_base": 1.2,
