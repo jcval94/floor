@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-03-18T14:19:51.850381+00:00",
-  "source": "sqlite",
+  "generated_at": "2026-03-18T20:06:28.987297+00:00",
+  "source": "jsonl",
   "prediction_files": 51,
   "signal_files": 51,
-  "prediction_count": 200,
-  "signal_count": 150,
+  "prediction_count": 5934,
+  "signal_count": 5034,
   "latest_predictions": [
     {
       "symbol": "AAPL",
@@ -6567,6 +6567,51 @@
       "model_version": "value:unknown|timing:unknown"
     },
     {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989571-04:00",
+      "event_type": "CLOSE",
+      "horizon": "d1",
+      "floor_value": 105.44,
+      "ceiling_value": 111.96,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "OPEN_PLUS_2H",
+      "ceiling_time_bucket": "CLOSE",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989976-04:00",
+      "event_type": "CLOSE",
+      "horizon": "q1",
+      "floor_value": 97.39,
+      "ceiling_value": 103.41,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "10",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989767-04:00",
+      "event_type": "CLOSE",
+      "horizon": "w1",
+      "floor_value": 101.95,
+      "ceiling_value": 108.25,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "5",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
       "symbol": "TMO",
       "as_of": "2026-03-18T10:19:51.484953-04:00",
       "event_type": "OPEN",
@@ -8007,7 +8052,7 @@
       "model_version": "value:unknown|timing:unknown"
     }
   ],
-  "latest_predictions_source": "sqlite",
+  "latest_predictions_source": "jsonl",
   "prediction_contract": {
     "version": "v1",
     "horizons": [

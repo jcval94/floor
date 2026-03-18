@@ -1,23 +1,332 @@
 {
-  "champion": "champion-v0",
+  "champion": "value:unknown|timing:unknown",
   "timeline": [
     {
       "as_of": "2026-03-12T13:48:49.509989-04:00",
       "model_name": "champion-v0",
+      "model_key": "unknown",
       "action": "SKIP",
       "status": "OK",
-      "drift_level": "GREEN"
+      "drift_level": "GREEN",
+      "current_version": "unknown"
     },
     {
       "as_of": "2026-03-12T21:59:42.161612+00:00",
       "model_name": "champion-v0",
+      "model_key": "unknown",
       "action": "RETRAIN_SOON",
       "status": "WARN",
-      "drift_level": "YELLOW"
+      "drift_level": "YELLOW",
+      "current_version": "unknown"
+    },
+    {
+      "as_of": "2026-03-15T08:27:00.016834-04:00",
+      "model_name": "m3_value_linear",
+      "model_key": "value",
+      "action": "RETRAIN_NOW",
+      "status": "ALERT",
+      "drift_level": "RED",
+      "current_version": "missing"
+    },
+    {
+      "as_of": "2026-03-15T08:27:00.016856-04:00",
+      "model_name": "m3_timing_multiclass",
+      "model_key": "timing",
+      "action": "RETRAIN_NOW",
+      "status": "ALERT",
+      "drift_level": "RED",
+      "current_version": "missing"
     }
   ],
   "health": {
-    "status": "no_public_metrics",
+    "generated_at": "2026-03-18T20:01:36.002808",
+    "status": "OK",
     "series": []
+  },
+  "champions": {
+    "d1": {
+      "current_version": "unknown",
+      "model_name": "unknown"
+    },
+    "w1": {
+      "current_version": "unknown",
+      "model_name": "unknown"
+    },
+    "q1": {
+      "current_version": "unknown",
+      "model_name": "unknown"
+    },
+    "value": {
+      "current_version": "unknown",
+      "model_name": "unknown"
+    },
+    "timing": {
+      "current_version": "unknown",
+      "model_name": "unknown"
+    },
+    "m3": {
+      "current_version": "value:unknown|timing:unknown",
+      "model_name": "m3_value_linear + m3_timing_multiclass"
+    }
+  },
+  "suite_status": "UNKNOWN",
+  "suite_recommendation": "PENDING",
+  "retraining_schedule": {
+    "cadence_days": 14,
+    "last_review_at": "2026-03-15T08:27:00.016856-04:00",
+    "next_review_at": "2026-03-29T08:27:00.016856-04:00",
+    "seconds_until_due": 922830,
+    "human_eta": "faltan 10d 16h",
+    "is_overdue": false
+  },
+  "details": {
+    "d1": {
+      "model_key": "d1",
+      "model_name": "unknown",
+      "current_version": "unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {},
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": null,
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {}
+      }
+    },
+    "w1": {
+      "model_key": "w1",
+      "model_name": "unknown",
+      "current_version": "unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {},
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": null,
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {}
+      }
+    },
+    "q1": {
+      "model_key": "q1",
+      "model_name": "unknown",
+      "current_version": "unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {},
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": null,
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {}
+      }
+    },
+    "value": {
+      "model_key": "value",
+      "model_name": "unknown",
+      "current_version": "unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {},
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": null,
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {}
+      }
+    },
+    "timing": {
+      "model_key": "timing",
+      "model_name": "unknown",
+      "current_version": "unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {},
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": null,
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {}
+      }
+    },
+    "m3": {
+      "model_key": "m3",
+      "model_name": "m3_value_linear + m3_timing_multiclass",
+      "current_version": "value:unknown|timing:unknown",
+      "status": "UNKNOWN",
+      "drift_level": "GREEN",
+      "recommendation": "SKIP_RETRAIN",
+      "auto_retrain": false,
+      "as_of": null,
+      "reason": "",
+      "metrics": {
+        "current": {
+          "pinball_loss_m3": null,
+          "mae_realized_floor_m3": null,
+          "top1_accuracy_m3": null,
+          "top3_accuracy_m3": null
+        },
+        "baseline": {},
+        "deltas": {}
+      },
+      "drift_components": {
+        "shared_data": {
+          "state": null,
+          "score": null
+        },
+        "target": {
+          "state": null,
+          "score": null
+        },
+        "schema": {
+          "state": null,
+          "score": null
+        },
+        "performance": {
+          "state": null,
+          "score": null
+        }
+      },
+      "artifact": {
+        "model_type": "ensemble",
+        "trained_at": null,
+        "dataset_summary": {},
+        "params": {
+          "value": {},
+          "timing": {}
+        }
+      }
+    }
   }
 }
