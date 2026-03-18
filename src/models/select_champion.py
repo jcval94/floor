@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +25,33 @@ def _load_json(path: Path) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json_atomic(path: Path, payload: dict, *, task: str) -> None:
+    tmp_path = path.with_suffix(path.suffix + f".{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as tmp_file:
+            json.dump(payload, tmp_file, ensure_ascii=False, indent=2)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        tmp_path.replace(path)
+    except Exception:
+        logger.exception(
+            "[champion-selection] Failed JSON persistence task=%s path=%s tmp_path=%s",
+            task,
+            path,
+            tmp_path,
+        )
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            logger.exception(
+                "[champion-selection] Failed cleanup of temporary file task=%s tmp_path=%s",
+                task,
+                tmp_path,
+            )
+        raise
 
 
 def _value_score(metrics: dict) -> float:
@@ -96,7 +125,6 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
             decision = "promote"
             reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
             archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
-            archived.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
             archived_path = str(archived)
         else:
             decision = "challenger_only"
@@ -117,10 +145,20 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         "existing_score": old_score if existing is not None else None,
         "objective": "minimize_weighted_error",
     }
-    challenger_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    if decision in {"promote_first", "promote"}:
-        champion_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        if decision == "promote":
+            _write_json_atomic(archived, existing, task=task)
+        _write_json_atomic(challenger_path, payload, task=task)
+        if decision in {"promote_first", "promote"}:
+            _write_json_atomic(champion_path, payload, task=task)
+    except Exception:
+        logger.error(
+            "[champion-selection] Persistence aborted task=%s champion_path=%s challenger_path=%s",
+            task,
+            champion_path,
+            challenger_path,
+        )
+        raise
 
     return {
         "decision": decision,
