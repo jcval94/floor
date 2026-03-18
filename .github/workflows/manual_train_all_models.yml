@@ -168,7 +168,9 @@ jobs:
           PYTHONPATH=src python -m models.train_classic_horizons \
             --dataset data/training/modelable_dataset.json \
             --output-dir data/training/models \
-            --version "${{ steps.runmeta.outputs.version }}" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+            --version "${{ steps.runmeta.outputs.version }}" \
+            --tasks d1,w1,q1 \
+            --training-mode manual 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Persist horizon competition metrics into app DB
         run: |
@@ -343,6 +345,7 @@ jobs:
         if: inputs.commit_artifacts == 'true'
         run: |
           set -euo pipefail
+          shopt -s nullglob
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           PYTHONPATH=src python - <<'PY'
@@ -404,7 +407,25 @@ jobs:
             local message="$1"
             shift
             git reset
-            git add -A "$@"
+            local paths=()
+            local candidate
+            for candidate in "$@"; do
+              if [[ "${candidate}" == *"*"* || "${candidate}" == *"?"* || "${candidate}" == *"["* ]]; then
+                local expanded=( ${candidate} )
+                if [[ ${#expanded[@]} -gt 0 ]]; then
+                  paths+=( "${expanded[@]}" )
+                fi
+                continue
+              fi
+              paths+=( "${candidate}" )
+            done
+
+            if [[ ${#paths[@]} -eq 0 ]]; then
+              echo "[commit-artifacts] no files matched for batch: ${message}"
+              return 1
+            fi
+
+            git add -A "${paths[@]}"
             if git diff --cached --quiet; then
               echo "[commit-artifacts] no changes for batch: ${message}"
               return 1
@@ -423,6 +444,7 @@ jobs:
             data/training/manual_train_all_models_*.log \
             data/training/metrics \
             data/training/models/horizon_training_results_*.csv \
+            data/training/yahoo_market_rows.jsonl \
             data/training/modelable_dataset.json \
             data/training/modelable_dataset_chunks; then
             committed_any=1
@@ -432,8 +454,10 @@ jobs:
           for task in d1 w1 q1 value timing; do
             if batch_commit \
               "chore: manual training artifacts (${task} champion batch)" \
-              ":(glob)data/training/models/${task}_challenger_*.json" \
-              ":(glob)data/training/models/${task}_champion_*.json" \
+              data/training/models/${task}_champion.json \
+              data/training/models/${task}_competition.json \
+              data/training/models/${task}_challenger_*.json \
+              data/training/models/${task}_champion_*.json \
               "data/training/models_file/${task}_champion.pkl" \
               "data/training/models_file/${task}_champion.pkl.chunks" \
               "data/training/models_file/${task}_champion.manifest.json"; then
