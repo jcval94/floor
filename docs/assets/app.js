@@ -12,6 +12,15 @@ function emptyState(message, colspan = 1) {
   return `<tr><td colspan="${colspan}" class="small">${message}</td></tr>`;
 }
 
+function safeJSON(value) {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function listItems(rows) {
+  if (!rows.length) return '<li>-</li>';
+  return rows.map((x) => `<li>${x}</li>`).join('');
+}
+
 function _selectPrimaryForecast(rows) {
   const safeRows = rows || [];
   return safeRows.find((r) => r.horizon === 'd1')
@@ -34,20 +43,34 @@ function _opportunityMetrics(primaryForecast) {
 }
 
 function _extractM3(rows) {
-  const primaryForecast = _selectPrimaryForecast(rows);
-  const week = Number(primaryForecast.floor_week_m3 || 0);
-  const top3 = Array.isArray(primaryForecast.floor_week_m3_top3) ? primaryForecast.floor_week_m3_top3 : [];
+  const safeRows = rows || [];
+  const m3Row = safeRows.find((r) => r.horizon === 'm3')
+    || safeRows.find((r) => Number(r.floor_week_m3 || 0) > 0)
+    || _selectPrimaryForecast(safeRows)
+    || {};
+  const m3Payload = m3Row.m3_payload || {};
+  const top3 = Array.isArray(m3Row.floor_week_m3_top3)
+    ? m3Row.floor_week_m3_top3
+    : (Array.isArray(m3Payload.floor_week_m3_top3) ? m3Payload.floor_week_m3_top3 : []);
+  const floorRaw = m3Row.floor_m3 ?? m3Payload.floor_m3 ?? m3Row.floor_value;
+  const weekRaw = m3Row.floor_week_m3 || m3Payload.floor_week_m3 || m3Row.floor_time_bucket || 0;
+  const confRaw = m3Row.floor_week_m3_confidence ?? m3Payload.floor_week_m3_confidence ?? m3Row.confidence_score ?? 0;
+  const floor = Number(floorRaw);
+  const week = Number(weekRaw);
+  const conf = Number(confRaw);
+  const hasM3 = Number.isFinite(floor) || Number.isFinite(week) || Number.isFinite(conf);
   return {
-    floor: Number(primaryForecast.floor_m3),
+    floor,
     week,
-    conf: Number(primaryForecast.floor_week_m3_confidence || 0),
-    start: primaryForecast.floor_week_m3_start_date || '',
-    end: primaryForecast.floor_week_m3_end_date || '',
-    labelHuman: primaryForecast.floor_week_m3_label_human || m3WeekHumanLabel(week),
+    conf,
+    hasM3,
+    start: m3Row.floor_week_m3_start_date || m3Payload.floor_week_m3_start_date || '',
+    end: m3Row.floor_week_m3_end_date || m3Payload.floor_week_m3_end_date || '',
+    labelHuman: m3Row.floor_week_m3_label_human || m3Payload.floor_week_m3_label_human || m3WeekHumanLabel(week),
     top3,
-    delta: Number(primaryForecast.m3_delta_vs_prev || 0),
-    material: String(primaryForecast.m3_material_change || '').toLowerCase() === 'yes',
-    proximity: primaryForecast.m3_week_proximity || m3ProximityLabel(week),
+    delta: Number(m3Row.m3_delta_vs_prev || 0),
+    material: String(m3Row.m3_material_change || '').toLowerCase() === 'yes',
+    proximity: m3Row.m3_week_proximity || m3ProximityLabel(week),
   };
 }
 
@@ -110,7 +133,7 @@ async function forecasts() {
 
   const m3Rows = Object.entries(grouped).map(([symbol, rows]) => ({ symbol, m3: _extractM3(rows) }));
   const m3Table = m3Rows.map(({ symbol, m3 }) =>
-    `<tr><td>${symbol}</td><td>${fmt(m3.floor)}</td><td>${m3.labelHuman}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${m3WeekBarsSvg(m3.top3)}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`
+    `<tr><td>${symbol}</td><td>${m3.hasM3 ? fmt(m3.floor) : '-'}</td><td>${m3.hasM3 ? m3.labelHuman : 'Sin m3'}</td><td>${m3.hasM3 ? `${m3.start || '-'} → ${m3.end || '-'}` : '-'}</td><td>${m3.hasM3 ? m3WeekBarsSvg(m3.top3) : '-'}</td><td>${m3.material ? 'Sí' : 'No'}</td></tr>`
   ).join('');
   const m3Root = document.getElementById('m3TopWeeks');
   if (m3Root) m3Root.innerHTML = m3Table || emptyState('No hay datos m3 para mostrar.', 6);
@@ -163,13 +186,18 @@ async function strategies() {
 }
 
 async function models() {
-  const [models, forecasts] = await Promise.all([
-    loadJSON('data/models.json', { champion: 'unknown', timeline: [], health: {} }),
-    loadJSON('data/forecasts.json', { rows: [] }),
-  ]);
+  const models = await loadJSON('data/models.json', {
+    champion: 'unknown',
+    timeline: [],
+    health: {},
+    suite_status: 'UNKNOWN',
+    suite_recommendation: 'PENDING',
+    retraining_schedule: {},
+    details: {},
+  });
   document.getElementById('champion').textContent = models.champion;
   const health = models.health || {};
-  document.getElementById('calibration').textContent = JSON.stringify(health, null, 2);
+  document.getElementById('calibration').textContent = safeJSON(health);
   const hint = document.getElementById('modelsHint');
   const hasSeries = Array.isArray(health.series) && health.series.length > 0;
   if (hint) {
@@ -177,6 +205,52 @@ async function models() {
       ? ''
       : 'Sin métricas públicas todavía: falta generar data/metrics/public_metrics.json y reconstruir los datos del sitio.';
   }
+
+  const schedule = models.retraining_schedule || {};
+  const retrainingRoot = document.getElementById('retrainingSchedule');
+  if (retrainingRoot) {
+    retrainingRoot.innerHTML = `
+      <div class="small">Cadencia: ${schedule.cadence_days ?? '-'} días</div>
+      <div class="small">Última revisión: ${schedule.last_review_at || '-'}</div>
+      <div class="small">Próxima revisión: ${schedule.next_review_at || '-'}</div>
+      <div class="small">ETA: ${schedule.human_eta || '-'}</div>
+      <div class="small">Vencido: ${schedule.is_overdue === null || schedule.is_overdue === undefined ? '-' : (schedule.is_overdue ? 'Sí' : 'No')}</div>
+    `;
+  }
+
+  const suiteRoot = document.getElementById('suiteStatus');
+  if (suiteRoot) {
+    suiteRoot.innerHTML = `
+      <div class="small">Estado suite: ${badge(models.suite_status || 'UNKNOWN')}</div>
+      <div class="small">Recomendación: ${badge(models.suite_recommendation || 'PENDING')}</div>
+    `;
+  }
+
+  const detailsRows = Object.values(models.details || {}).map((detail) => {
+    const metricKeys = Object.keys(detail?.metrics?.current || {});
+    const drift = detail?.drift_components || {};
+    const driftSummary = [
+      `shared=${drift.shared_data?.state || '-'} (${fmt(drift.shared_data?.score)})`,
+      `target=${drift.target?.state || '-'} (${fmt(drift.target?.score)})`,
+      `schema=${drift.schema?.state || '-'} (${fmt(drift.schema?.score)})`,
+      `perf=${drift.performance?.state || '-'} (${fmt(drift.performance?.score)})`,
+    ];
+    return `<tr>
+      <td>${detail.model_key || '-'}</td>
+      <td>${detail.model_name || '-'}</td>
+      <td>${detail.current_version || '-'}</td>
+      <td>${badge(detail.status || 'UNKNOWN')} ${badge(detail.drift_level || 'GREEN')}</td>
+      <td>${detail.recommendation || '-'}${detail.auto_retrain ? ' · auto' : ''}</td>
+      <td><ul class="small">${listItems(metricKeys.map((k) => `${k}: ${fmt(detail.metrics.current[k])}`))}</ul></td>
+      <td><pre class="small">${safeJSON(detail.artifact?.params || {})}</pre></td>
+      <td><ul class="small">${listItems(driftSummary)}</ul><div class="small">${detail.reason || '-'}</div></td>
+    </tr>`;
+  }).join('');
+  const detailsRoot = document.getElementById('modelDetails');
+  if (detailsRoot) {
+    detailsRoot.innerHTML = detailsRows || emptyState('Sin detalles de modelos disponibles.', 8);
+  }
+
   const timeline = (models.timeline || []).map((x) =>
     `<tr><td>${x.as_of || '-'}</td><td>${x.model_name || '-'}</td><td>${x.action || '-'}</td><td>${x.drift_level || '-'}</td></tr>`).join('');
   document.getElementById('timeline').innerHTML = timeline || emptyState('Sin eventos de timeline.', 4);
