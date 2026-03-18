@@ -39,8 +39,14 @@ def _log_model_registry_preflight(cfg: RuntimeConfig) -> None:
     registry = cfg.data_dir / "training" / "models"
     models_file = cfg.data_dir / "training" / "models_file"
     candidates = [
+        registry / "d1_champion.json",
+        registry / "w1_champion.json",
+        registry / "q1_champion.json",
         registry / "value_champion.json",
         registry / "timing_champion.json",
+        models_file / "d1_champion.pkl",
+        models_file / "w1_champion.pkl",
+        models_file / "q1_champion.pkl",
         models_file / "value_champion.pkl",
         models_file / "timing_champion.pkl",
     ]
@@ -336,7 +342,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
     return payloads
 
 
-def _fallback_forecasts_from_blocked(market_rows: list[dict], blocked: list[dict], model_version: str = "value:unknown|timing:unknown") -> list[dict]:
+def _fallback_forecasts_from_blocked(market_rows: list[dict], blocked: list[dict], model_version: str = "d1:unknown|w1:unknown|q1:unknown|value:unknown|timing:unknown") -> list[dict]:
     blocked_by_symbol = {str(item.get("symbol", "")).upper(): str(item.get("reason", "forecast generation blocked")) for item in blocked}
     fallback: list[dict] = []
     for raw in market_rows:

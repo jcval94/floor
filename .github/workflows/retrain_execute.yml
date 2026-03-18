@@ -18,7 +18,7 @@ on:
       tasks:
         description: "Comma-separated model tasks for manual force runs"
         required: false
-        default: "value,timing"
+        default: "d1,w1,q1,value,timing"
   workflow_run:
     workflows: ["retrain_assessment"]
     types: [completed]
@@ -57,14 +57,14 @@ jobs:
 
           event_name = os.environ.get('EVENT_NAME', 'workflow_dispatch')
           force = os.environ.get('FORCE', 'false').lower() == 'true'
-          requested_tasks = [x.strip() for x in os.environ.get('INPUT_TASKS', 'value,timing').split(',') if x.strip()]
+          requested_tasks = [x.strip() for x in os.environ.get('INPUT_TASKS', 'd1,w1,q1,value,timing').split(',') if x.strip()]
           dataset_path = os.environ.get('INPUT_DATASET_PATH', '').strip() or 'data/training/modelable_dataset.json'
           summary_path = Path('data/training/review_summary_latest.json')
 
           tasks: list[str] = []
           reason = 'no_summary'
           if event_name == 'workflow_dispatch' and force:
-              tasks = requested_tasks or ['value', 'timing']
+              tasks = requested_tasks or ['d1', 'w1', 'q1', 'value', 'timing']
               reason = 'manual_force'
           elif summary_path.exists():
               payload = json.loads(summary_path.read_text(encoding='utf-8'))
@@ -132,10 +132,13 @@ jobs:
           fi
           bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN" "retrain"
 
+          d1_champion="data/training/models/d1_champion.json"
+          w1_champion="data/training/models/w1_champion.json"
+          q1_champion="data/training/models/q1_champion.json"
           value_champion="data/training/models/value_champion.json"
           timing_champion="data/training/models/timing_champion.json"
           missing=0
-          for champion in "$value_champion" "$timing_champion"; do
+          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
             if [ ! -f "$champion" ]; then
               echo "::error::Missing champion artifact after scripts/retrain_models.sh: $champion"
               missing=1
@@ -150,13 +153,28 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
+          d1_champion="data/training/models/d1_champion.json"
+          w1_champion="data/training/models/w1_champion.json"
+          q1_champion="data/training/models/q1_champion.json"
           value_champion="data/training/models/value_champion.json"
           timing_champion="data/training/models/timing_champion.json"
 
           missing=0
-          for champion in "$value_champion" "$timing_champion"; do
+          lfs_header='version https://git-lfs.github.com/spec/v1'
+          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
+            attr=$(git check-attr filter -- "$champion" | awk -F": " '{print $3}')
+            if [ "$attr" = "lfs" ]; then
+              echo "::error::Champion artifact is tracked by Git LFS: $champion"
+              missing=1
+            fi
             if [ ! -f "$champion" ]; then
               echo "::error::Missing champion artifact after retraining: $champion"
+              missing=1
+              continue
+            fi
+            head=$(head -c 120 "$champion" 2>/dev/null || true)
+            if [ "${head#${lfs_header}}" != "$head" ]; then
+              echo "::error::Champion artifact persisted as unresolved LFS pointer: $champion"
               missing=1
             fi
           done
@@ -169,9 +187,36 @@ jobs:
           integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
           [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
 
+          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$d1_champion"             --required-fields model_name,version
+          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$w1_champion"             --required-fields model_name,version
+          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$q1_champion"             --required-fields model_name,version
           PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$value_champion"             --required-fields model_name,version
           PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$timing_champion"             --required-fields model_name,version
 
+          d1_decision=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data/training/models/d1_champion.json')
+          payload = json.loads(p.read_text(encoding='utf-8'))
+          print(payload.get('selection', {}).get('decision', 'unknown'))
+          PY
+          )
+          w1_decision=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data/training/models/w1_champion.json')
+          payload = json.loads(p.read_text(encoding='utf-8'))
+          print(payload.get('selection', {}).get('decision', 'unknown'))
+          PY
+          )
+          q1_decision=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data/training/models/q1_champion.json')
+          payload = json.loads(p.read_text(encoding='utf-8'))
+          print(payload.get('selection', {}).get('decision', 'unknown'))
+          PY
+          )
           value_decision=$(python - <<'PY'
           import json
           from pathlib import Path

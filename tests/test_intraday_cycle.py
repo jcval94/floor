@@ -25,6 +25,18 @@ def _seed_market_db(db_path: Path) -> None:
 
 def _seed_models(models_dir: Path) -> None:
     models_dir.mkdir(parents=True, exist_ok=True)
+    (models_dir / "d1_champion.json").write_text(
+        json.dumps({"model_name": "d1_heuristic_v1", "version": "d1-train", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "w1_champion.json").write_text(
+        json.dumps({"model_name": "w1_heuristic_v1", "version": "w1-train", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "q1_champion.json").write_text(
+        json.dumps({"model_name": "q1_heuristic_v1", "version": "q1-train", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
     (models_dir / "value_champion.json").write_text(
         json.dumps({"model_name": "m3_value_linear", "version": "v-train", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}),
         encoding="utf-8",
@@ -63,7 +75,7 @@ def test_run_intraday_cycle_uses_trained_champions(tmp_path: Path) -> None:
     lines = pred_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 4
     payloads = [json.loads(line) for line in lines]
-    assert all("value:v-train" in payload["model_version"] for payload in payloads)
+    assert all("value:v-train" in payload["model_version"] and "d1:d1-train" in payload["model_version"] for payload in payloads)
     assert all(payload["model_version"] != "champion-v0" for payload in payloads)
     m3_rows = [payload for payload in payloads if payload["horizon"] == "m3"]
     assert len(m3_rows) == 1
@@ -84,6 +96,12 @@ def test_run_intraday_cycle_loads_models_from_models_file_pkls(tmp_path: Path) -
     _seed_market_db(data_dir / "market" / "market_data.sqlite")
     models_file_dir = data_dir / "training" / "models_file"
     models_file_dir.mkdir(parents=True, exist_ok=True)
+    for task in ("d1", "w1", "q1"):
+        pkl = models_file_dir / f"{task}_champion.pkl"
+        with pkl.open("wb") as fh:
+            pickle.dump({"model_name": f"{task}_heuristic_v1", "version": f"{task}-pkl", "params": {}, "metrics": {}}, fh)
+        _write_manifest(models_file_dir, task, pkl)
+
     value_pkl = models_file_dir / "value_champion.pkl"
     with value_pkl.open("wb") as fh:
         pickle.dump({"model_name": "m3_value_linear", "version": "v-pkl", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}, fh)
@@ -100,7 +118,7 @@ def test_run_intraday_cycle_loads_models_from_models_file_pkls(tmp_path: Path) -
     pred_path = data_dir / "predictions" / "AAPL.jsonl"
     payloads = [json.loads(line) for line in pred_path.read_text(encoding="utf-8").strip().splitlines()]
     assert payloads
-    assert all("value:v-pkl|timing:t-pkl" == payload["model_version"] for payload in payloads)
+    assert all("d1:d1-pkl|w1:w1-pkl|q1:q1-pkl|value:v-pkl|timing:t-pkl" == payload["model_version"] for payload in payloads)
 
 
 def test_run_intraday_cycle_fallbacks_to_json_when_manifest_is_invalid(tmp_path: Path) -> None:
@@ -136,7 +154,7 @@ def test_run_intraday_cycle_fallbacks_to_json_when_manifest_is_invalid(tmp_path:
     pred_path = data_dir / "predictions" / "AAPL.jsonl"
     payloads = [json.loads(line) for line in pred_path.read_text(encoding="utf-8").strip().splitlines()]
     assert payloads
-    assert all("value:v-train|timing:t-train" == payload["model_version"] for payload in payloads)
+    assert all("d1:d1-train|w1:w1-train|q1:q1-train|value:v-train|timing:t-train" == payload["model_version"] for payload in payloads)
 
 
 def test_signal_from_prediction_buy_sell_hold_rules() -> None:
@@ -233,7 +251,7 @@ def test_run_intraday_cycle_persists_neutral_fallback_when_champions_missing(tmp
     pred_path = data_dir / "predictions" / "AAPL.jsonl"
     payloads = [json.loads(line) for line in pred_path.read_text(encoding="utf-8").strip().splitlines()]
     assert len(payloads) == 4
-    assert all(payload["model_version"] == "value:unknown|timing:unknown" for payload in payloads)
+    assert all(payload["model_version"] == "d1:unknown|w1:unknown|q1:unknown|value:unknown|timing:unknown" for payload in payloads)
     assert all(payload["m3_status"] == "unavailable" for payload in payloads)
 
     signal_path = data_dir / "signals" / "AAPL.jsonl"
@@ -244,3 +262,4 @@ def test_run_intraday_cycle_persists_neutral_fallback_when_champions_missing(tmp
     db_path = data_dir / "persistence" / "app.sqlite"
     assert stream_count(db_path, "predictions") == 4
     assert stream_count(db_path, "signals") == 3
+

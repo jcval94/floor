@@ -48,6 +48,25 @@ def _timing_score(metrics: dict) -> float:
     )
 
 
+def _horizon_score(metrics: dict) -> float:
+    # lower is better
+    return (
+        float(metrics.get("mae_proxy", 999.0))
+        + abs(float(metrics.get("breach_rate_proxy", 0.2)) - 0.2)
+        + (1 - float(metrics.get("temporal_stability", 0.0)))
+    )
+
+
+def _task_score(task: str, metrics: dict) -> float:
+    if task == "value":
+        return _value_score(metrics)
+    if task == "timing":
+        return _timing_score(metrics)
+    if task in {"d1", "w1", "q1"}:
+        return _horizon_score(metrics)
+    raise ValueError(f"Unsupported champion task for scoring: {task}")
+
+
 def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: str) -> dict:
     registry_dir.mkdir(parents=True, exist_ok=True)
     payload = _to_dict(new_artifact)
@@ -57,7 +76,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
     challenger_path = registry_dir / f"{task}_challenger_{now.replace(':', '').replace('-', '')}.json"
 
     existing = _load_json(champion_path)
-    new_score = _value_score(payload["metrics"]) if task == "value" else _timing_score(payload["metrics"])
+    new_score = _task_score(task, payload["metrics"])
 
     decision = "promote_first"
     reason = "No champion exists; bootstrap champion with first valid artifact."
@@ -66,7 +85,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     if existing is not None:
         previous_champion_version = existing.get("version")
-        old_score = _value_score(existing["metrics"]) if task == "value" else _timing_score(existing["metrics"])
+        old_score = _task_score(task, existing["metrics"])
         logger.info(
             "[champion-selection] task=%s old_score=%.6f new_score=%.6f criterion=lower_is_better",
             task,
