@@ -1,0 +1,11 @@
+{
+  "source_file": "modelable_dataset.json",
+  "source_size_bytes": 111143218,
+  "source_sha256": "1ebd361fd999c65c982615d464ab12a4f6c921ef571b543fdc79709ec528656f",
+  "chunk_max_bytes": 99614720,
+  "chunk_count": 2,
+  "parts": [
+    "modelable_dataset.json.part001.bin",
+    "modelable_dataset.json.part002.bin"
+  ]
+}
