@@ -216,6 +216,67 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
     }
 
 
+def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]) -> dict[str, Any]:
+    value_version = str(value_detail.get("current_version", "unknown"))
+    timing_version = str(timing_detail.get("current_version", "unknown"))
+    value_metrics = value_detail.get("metrics", {}).get("current", {}) if isinstance(value_detail.get("metrics"), dict) else {}
+    timing_metrics = timing_detail.get("metrics", {}).get("current", {}) if isinstance(timing_detail.get("metrics"), dict) else {}
+    return {
+        "model_key": "m3",
+        "model_name": "m3_value_linear + m3_timing_multiclass",
+        "current_version": f"value:{value_version}|timing:{timing_version}",
+        "status": value_detail.get("status", "UNKNOWN"),
+        "drift_level": value_detail.get("drift_level", "GREEN"),
+        "recommendation": value_detail.get("recommendation", "SKIP_RETRAIN"),
+        "auto_retrain": bool(value_detail.get("auto_retrain", False) or timing_detail.get("auto_retrain", False)),
+        "as_of": value_detail.get("as_of") or timing_detail.get("as_of"),
+        "reason": value_detail.get("reason") or timing_detail.get("reason") or "",
+        "metrics": {
+            "current": {
+                "pinball_loss_m3": value_metrics.get("pinball_loss"),
+                "mae_realized_floor_m3": value_metrics.get("mae_realized_floor"),
+                "top1_accuracy_m3": timing_metrics.get("top1_accuracy"),
+                "top3_accuracy_m3": timing_metrics.get("top3_accuracy"),
+            },
+            "baseline": {},
+            "deltas": {},
+        },
+        "drift_components": {
+            "shared_data": {"state": None, "score": None},
+            "target": {"state": None, "score": None},
+            "schema": {"state": None, "score": None},
+            "performance": {"state": None, "score": None},
+        },
+        "artifact": {
+            "model_type": "ensemble",
+            "trained_at": value_detail.get("artifact", {}).get("trained_at") or timing_detail.get("artifact", {}).get("trained_at"),
+            "dataset_summary": value_detail.get("artifact", {}).get("dataset_summary", {}),
+            "params": {
+                "value": value_detail.get("artifact", {}).get("params", {}),
+                "timing": timing_detail.get("artifact", {}).get("params", {}),
+            },
+        },
+    }
+
+
+def _champion_versions_from_artifacts(artifacts: dict[str, dict]) -> dict[str, dict]:
+    champion_versions: dict[str, dict] = {}
+    for task in ("d1", "w1", "q1", "value", "timing"):
+        artifact = artifacts.get(task, {}) if isinstance(artifacts, dict) else {}
+        champion_versions[task] = {
+            "current_version": artifact.get("version", "unknown"),
+            "model_name": artifact.get("model_name", "unknown"),
+        }
+    champion_versions["m3"] = {
+        "current_version": (
+            f"value:{champion_versions['value']['current_version']}|"
+            f"timing:{champion_versions['timing']['current_version']}"
+        ),
+        "model_name": "m3_value_linear + m3_timing_multiclass",
+    }
+    return champion_versions
+
+
 def _read_cadence_days(config_path: Path, default: int = 14) -> int:
     if not config_path.exists():
         return default
@@ -553,13 +614,18 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
 
     review_models = review_summary.get("models", {}) if isinstance(review_summary.get("models"), dict) else {}
     artifacts = {
+        "d1": _read_json(data_dir / "training" / "models" / "d1_champion.json", {}),
+        "w1": _read_json(data_dir / "training" / "models" / "w1_champion.json", {}),
+        "q1": _read_json(data_dir / "training" / "models" / "q1_champion.json", {}),
         "value": _read_json(data_dir / "training" / "models" / "value_champion.json", {}),
         "timing": _read_json(data_dir / "training" / "models" / "timing_champion.json", {}),
     }
+    fallback_champions = _champion_versions_from_artifacts(artifacts)
     model_details = {
         model_key: _build_model_detail(model_key, review_models.get(model_key), artifacts.get(model_key))
-        for model_key in ("value", "timing")
+        for model_key in ("d1", "w1", "q1", "value", "timing")
     }
+    model_details["m3"] = _build_m3_detail(model_details["value"], model_details["timing"])
 
     last_review_at = review_summary.get("as_of")
     if not last_review_at and model_timeline:
@@ -569,7 +635,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "champion": review_summary.get("suite_version") or (latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown"),
         "timeline": model_timeline,
         "health": metrics_payload,
-        "champions": review_summary.get("models", {}),
+        "champions": {**fallback_champions, **(review_summary.get("models", {}) if isinstance(review_summary.get("models"), dict) else {})},
         "suite_status": review_summary.get("suite_status", "UNKNOWN"),
         "suite_recommendation": review_summary.get("suite_recommendation", "PENDING"),
         "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days),

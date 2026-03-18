@@ -349,3 +349,73 @@ def test_champion_loader_prefers_repo_json_over_models_file_pickle(tmp_path) -> 
 
     model = ChampionModelSet(model_registry_dir=models_dir)
     assert model.version == "d1:d1-json|w1:w1-json|q1:q1-json|value:v-json|timing:t-json"
+
+
+def test_classic_horizon_champions_use_family_specific_prediction_paths(tmp_path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    (models_dir / "d1_champion.json").write_text(
+        json.dumps(
+            {
+                "model_name": "evt_cp_d1",
+                "version": "d1-classic",
+                "floor_delta": 0.01,
+                "ceiling_delta": 0.02,
+                "metrics": {"mae_spread": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (models_dir / "w1_champion.json").write_text(
+        json.dumps(
+            {
+                "model_name": "xgboost_w1",
+                "version": "w1-classic",
+                "floor_delta": 0.03,
+                "ceiling_delta": 0.04,
+                "metrics": {"mae_spread": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (models_dir / "q1_champion.json").write_text(
+        json.dumps(
+            {
+                "model_name": "qenet_q1",
+                "version": "q1-classic",
+                "floor_delta": 0.05,
+                "ceiling_delta": 0.06,
+                "metrics": {"mae_spread": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (models_dir / "value_champion.json").write_text(
+        json.dumps({"model_name": "m3_value_linear", "version": "v-json", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "timing_champion.json").write_text(
+        json.dumps({"model_name": "m3_timing_multiclass", "version": "t-json", "params": {"calibrator_reliability": {}}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    model = ChampionModelSet(model_registry_dir=models_dir)
+    row = {"close": 100.0, "atr_14": 2.0, "vol_regime_score": 1.0, "rel_strength_20": 0.1, "momentum_20": 0.2}
+
+    d1 = model.predict_d1(row)
+    w1 = model.predict_w1(row)
+    q1 = model.predict_q1(row)
+
+    assert d1.floor == 99.0
+    assert d1.ceiling == 102.0
+    assert d1.floor_time == "OPEN_PLUS_2H"
+    assert d1.ceiling_time == "CLOSE"
+
+    assert w1.floor == 97.0
+    assert w1.ceiling == 104.0
+    assert w1.floor_time == "3"
+    assert w1.ceiling_time == "4"
+
+    assert q1.floor == 95.0
+    assert q1.ceiling == 106.0
+    assert q1.floor_time == "15"
+    assert q1.ceiling_time == "35"

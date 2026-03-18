@@ -191,31 +191,28 @@ def test_run_training_retrain_persists_only_winners_in_models_file(tmp_path: Pat
 
     for pkl in (d1_pkl, w1_pkl, q1_pkl):
         assert not pkl.exists()
+        assert not (out / "models_file" / f"{pkl.stem}.manifest.json").exists()
+    for pkl in (value_pkl, timing_pkl):
+        assert pkl.exists()
+        assert (out / "models_file" / f"{pkl.stem}.manifest.json").exists()
 
-    if retrain["value"]["decision"] in {"promote", "promote_first"}:
-        assert value_pkl.exists()
-        with value_pkl.open("rb") as fh:
-            value_payload = pickle.load(fh)
-        value_manifest = json.loads((out / "models_file" / "value_champion.manifest.json").read_text(encoding="utf-8"))
-        expected_hash = hashlib.sha256(value_pkl.read_bytes()).hexdigest()
-        assert value_payload["selection"]["objective"] == "minimize_weighted_error"
-        assert isinstance(value_payload["selection"]["new_score"], float)
-        assert value_manifest["task"] == "value"
-        assert value_manifest["sha256"] == expected_hash
+    with value_pkl.open("rb") as fh:
+        value_payload = pickle.load(fh)
+    value_manifest = json.loads((out / "models_file" / "value_champion.manifest.json").read_text(encoding="utf-8"))
+    expected_value_hash = hashlib.sha256(value_pkl.read_bytes()).hexdigest()
+    assert value_payload["selection"]["objective"] == "minimize_weighted_error"
+    assert isinstance(value_payload["selection"]["new_score"], float)
+    assert value_manifest["task"] == "value"
+    assert value_manifest["sha256"] == expected_value_hash
 
-    if retrain["timing"]["decision"] in {"promote", "promote_first"}:
-        assert timing_pkl.exists()
-        with timing_pkl.open("rb") as fh:
-            timing_payload = pickle.load(fh)
-        timing_manifest = json.loads((out / "models_file" / "timing_champion.manifest.json").read_text(encoding="utf-8"))
-        expected_hash = hashlib.sha256(timing_pkl.read_bytes()).hexdigest()
-        assert timing_payload["selection"]["objective"] == "minimize_weighted_error"
-        assert isinstance(timing_payload["selection"]["new_score"], float)
-        assert timing_manifest["task"] == "timing"
-        assert timing_manifest["sha256"] == expected_hash
-    else:
-        assert not timing_pkl.exists()
-        assert not (out / "models_file" / "timing_champion.manifest.json").exists()
+    with timing_pkl.open("rb") as fh:
+        timing_payload = pickle.load(fh)
+    timing_manifest = json.loads((out / "models_file" / "timing_champion.manifest.json").read_text(encoding="utf-8"))
+    expected_timing_hash = hashlib.sha256(timing_pkl.read_bytes()).hexdigest()
+    assert timing_payload["selection"]["objective"] == "minimize_weighted_error"
+    assert isinstance(timing_payload["selection"]["new_score"], float)
+    assert timing_manifest["task"] == "timing"
+    assert timing_manifest["sha256"] == expected_timing_hash
 
 
 def test_run_training_persists_large_champion_payloads_in_repo_json(tmp_path: Path, monkeypatch) -> None:
@@ -278,3 +275,19 @@ def test_run_training_persists_large_champion_payloads_in_repo_json(tmp_path: Pa
     payload = json.loads(value_champ.read_text(encoding="utf-8"))
     assert payload["version"] == "v-large"
     assert len(payload["params"]["weights"]) == 120_000
+
+
+def test_run_training_manual_syncs_all_champions_into_models_file(tmp_path: Path) -> None:
+    dataset = {"rows": _rows(90)}
+    dataset_path = tmp_path / "dataset.json"
+    dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+
+    out = tmp_path / "training"
+    result = run_training(dataset_path, out, version="v-manual", tasks="d1,w1,q1,value,timing", training_mode="manual")
+    assert result["training_mode"] == "manual"
+
+    for task in ("d1", "w1", "q1", "value", "timing"):
+        pkl = out / "models_file" / f"{task}_champion.pkl"
+        manifest = out / "models_file" / f"{task}_champion.manifest.json"
+        assert pkl.exists()
+        assert manifest.exists()
