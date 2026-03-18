@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-VALID_MODEL_TASKS = ("value", "timing")
+ALIASES: dict[str, tuple[str, ...]] = {"m3": ("value", "timing")}
+
+VALID_MODEL_TASKS = ("d1", "w1", "q1", "value", "timing")
 
 
 def normalize_model_tasks(tasks: str | Iterable[str] | None) -> list[str]:
@@ -34,11 +36,13 @@ def normalize_model_tasks(tasks: str | Iterable[str] | None) -> list[str]:
     normalized: list[str] = []
     invalid: list[str] = []
     for part in parts:
-        if part not in VALID_MODEL_TASKS:
-            invalid.append(part)
-            continue
-        if part not in normalized:
-            normalized.append(part)
+        expanded = ALIASES.get(part, (part,))
+        for item in expanded:
+            if item not in VALID_MODEL_TASKS:
+                invalid.append(part)
+                continue
+            if item not in normalized:
+                normalized.append(item)
 
     if invalid:
         raise ValueError(f"Unsupported model tasks: {', '.join(invalid)}")

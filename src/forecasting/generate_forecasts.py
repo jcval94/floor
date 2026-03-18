@@ -67,7 +67,7 @@ def generate_forecasts(
             blocked.append(
                 {
                     "symbol": symbol,
-                    "reason": "Pronóstico no disponible: faltan artefactos entrenados (value_champion.json y timing_champion.json)",
+                    "reason": "Pronóstico no disponible: faltan artefactos entrenados (d1_champion.json, w1_champion.json, q1_champion.json, value_champion.json y timing_champion.json)",
                 }
             )
         return {"forecasts": forecasts, "blocked": blocked}

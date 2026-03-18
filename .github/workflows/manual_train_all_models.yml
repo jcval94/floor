@@ -177,10 +177,10 @@ jobs:
             --models-dir data/training/models \
             --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
-      - name: Train m3 models (value,timing)
+      - name: Train horizon+m3 models (d1,w1,q1,value,timing)
         run: |
           set -euo pipefail
-          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "value,timing" "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "d1,w1,q1,value,timing" "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Build unified training results CSV (d1,w1,q1,m3)
         run: |

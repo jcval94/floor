@@ -1,4 +1,4 @@
-# Track large training artifacts with Git LFS to avoid oversized Git blobs
-# and reduce push warnings/errors on GitHub.
-data/training/*.json filter=lfs diff=lfs merge=lfs -text
-data/training/**/*.json filter=lfs diff=lfs merge=lfs -text
+# Store training/model artifacts directly in Git (non-LFS).
+# This keeps champion payloads available without external LFS resolution.
+data/training/*.json -filter -diff -merge text
+data/training/**/*.json -filter -diff -merge text

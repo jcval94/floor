@@ -8,8 +8,8 @@ from pathlib import Path
 from floor.persistence_db import stream_count
 from models.evaluate import top3_weeks
 from models.run_training import run_training
-from models.train_timing_models import train_floor_week_m3_timing_model
-from models.train_value_models import train_floor_m3_value_model
+from models.train_timing_models import TimingModelArtifact, train_floor_week_m3_timing_model
+from models.train_value_models import ValueModelArtifact, train_floor_m3_value_model
 
 
 def _rows(n: int = 60) -> list[dict]:
@@ -95,12 +95,18 @@ def test_run_training_persists_artifacts_and_snapshot(tmp_path: Path) -> None:
 
     assert Path(first["metrics_path"]).exists()
     assert Path(second["metrics_path"]).exists()
-    assert first["tasks"] == ["value", "timing"]
+    assert first["tasks"] == ["d1", "w1", "q1", "value", "timing"]
 
     value_champ = out / "models" / "value_champion.json"
     timing_champ = out / "models" / "timing_champion.json"
+    d1_champ = out / "models" / "d1_champion.json"
+    w1_champ = out / "models" / "w1_champion.json"
+    q1_champ = out / "models" / "q1_champion.json"
     assert value_champ.exists()
     assert timing_champ.exists()
+    assert d1_champ.exists()
+    assert w1_champ.exists()
+    assert q1_champ.exists()
 
     challengers = list((out / "models").glob("*_challenger_*.json"))
     assert len(challengers) >= 2
@@ -111,7 +117,7 @@ def test_run_training_persists_artifacts_and_snapshot(tmp_path: Path) -> None:
     assert "dataset_summary" in champ_payload
 
     metrics_payload = json.loads(Path(second["metrics_path"]).read_text(encoding="utf-8"))
-    assert metrics_payload["tasks"] == ["value", "timing"]
+    assert metrics_payload["tasks"] == ["d1", "w1", "q1", "value", "timing"]
     assert "dataset_summary" in metrics_payload
 
 
@@ -159,7 +165,7 @@ def test_run_training_retrain_enables_cv_and_audit(tmp_path: Path) -> None:
 
     assert value_champ["params"]["tuning_summary"]["cv_enabled"] is True
     assert timing_champ["params"]["tuning_summary"]["cv_enabled"] is True
-    assert stream_count(db_path, "model_training_cycles") == 2
+    assert stream_count(db_path, "model_training_cycles") == 5
 
 
 def test_run_training_retrain_persists_only_winners_in_models_file(tmp_path: Path) -> None:
@@ -170,16 +176,21 @@ def test_run_training_retrain_persists_only_winners_in_models_file(tmp_path: Pat
     out = tmp_path / "training"
     standard = run_training(dataset_path, out, version="v1", tasks="value,timing", training_mode="standard")
     assert standard["training_mode"] == "standard"
-    assert not (out / "models_file" / "value_champion.pkl").exists()
-    assert not (out / "models_file" / "timing_champion.pkl").exists()
-    assert not (out / "models_file" / "value_champion.manifest.json").exists()
-    assert not (out / "models_file" / "timing_champion.manifest.json").exists()
+    for task in ("d1", "w1", "q1", "value", "timing"):
+        assert not (out / "models_file" / f"{task}_champion.pkl").exists()
+        assert not (out / "models_file" / f"{task}_champion.manifest.json").exists()
 
     retrain = run_training(dataset_path, out, version="v2", tasks="value,timing", training_mode="retrain")
     assert retrain["training_mode"] == "retrain"
 
+    d1_pkl = out / "models_file" / "d1_champion.pkl"
+    w1_pkl = out / "models_file" / "w1_champion.pkl"
+    q1_pkl = out / "models_file" / "q1_champion.pkl"
     value_pkl = out / "models_file" / "value_champion.pkl"
     timing_pkl = out / "models_file" / "timing_champion.pkl"
+
+    for pkl in (d1_pkl, w1_pkl, q1_pkl):
+        assert not pkl.exists()
 
     if retrain["value"]["decision"] in {"promote", "promote_first"}:
         assert value_pkl.exists()
@@ -205,3 +216,65 @@ def test_run_training_retrain_persists_only_winners_in_models_file(tmp_path: Pat
     else:
         assert not timing_pkl.exists()
         assert not (out / "models_file" / "timing_champion.manifest.json").exists()
+
+
+def test_run_training_persists_large_champion_payloads_in_repo_json(tmp_path: Path, monkeypatch) -> None:
+    dataset = {"rows": _rows(80)}
+    dataset_path = tmp_path / "dataset.json"
+    dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+
+    large_weights = {f"feature_{i}": float(i) * 0.0001 for i in range(120_000)}
+
+    def _fake_value(*_args, **_kwargs) -> ValueModelArtifact:
+        return ValueModelArtifact(
+            model_name="m3_value_linear",
+            horizon="m3",
+            target="floor_m3",
+            version="v-large",
+            params={"weights": large_weights, "bias": 95.0},
+            metrics={
+                "pinball_loss": 0.1,
+                "mae_realized_floor": 0.1,
+                "breach_rate": 0.2,
+                "calibration_error": 0.1,
+                "temporal_stability": 0.9,
+            },
+            predictions=[95.0],
+            confidences=[0.6],
+        )
+
+    def _fake_timing(*_args, **_kwargs) -> TimingModelArtifact:
+        probs = [[1 / 13] * 13]
+        return TimingModelArtifact(
+            model_name="m3_timing_multiclass",
+            horizon="m3",
+            target="floor_week_m3",
+            version="t-large",
+            params={"calibrator_reliability": {}},
+            metrics={
+                "top1_accuracy": 0.2,
+                "top3_accuracy": 0.4,
+                "log_loss": 0.5,
+                "brier_score": 0.2,
+                "expected_week_distance": 2.0,
+                "calibration_error": 0.1,
+                "confusion_matrix": {},
+            },
+            probabilities=probs,
+            best_class=[7],
+            top3=[[{"week": 7, "prob": 0.2}, {"week": 6, "prob": 0.15}, {"week": 8, "prob": 0.15}]],
+        )
+
+    monkeypatch.setattr("models.run_training.train_floor_m3_value_model", _fake_value)
+    monkeypatch.setattr("models.run_training.train_floor_week_m3_timing_model", _fake_timing)
+
+    out = tmp_path / "training"
+    run_training(dataset_path, out, version="v-large", tasks="value,timing", training_mode="standard")
+
+    value_champ = out / "models" / "value_champion.json"
+    assert value_champ.exists()
+    assert value_champ.stat().st_size > 1_000_000
+
+    payload = json.loads(value_champ.read_text(encoding="utf-8"))
+    assert payload["version"] == "v-large"
+    assert len(payload["params"]["weights"]) == 120_000

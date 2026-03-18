@@ -63,11 +63,18 @@ class ChampionModelSet:
             self._models_file_registry,
             self._models_file_registry.exists(),
         )
+        self._d1_champion = self._load_artifact("d1")
+        self._w1_champion = self._load_artifact("w1")
+        self._q1_champion = self._load_artifact("q1")
         self._value_champion = self._load_artifact("value")
         self._timing_champion = self._load_artifact("timing")
-        self.version = format_champion_version(self._value_champion, self._timing_champion)
+        base_version = format_champion_version(self._value_champion, self._timing_champion)
+        self.version = f"d1:{self._artifact_version(self._d1_champion)}|w1:{self._artifact_version(self._w1_champion)}|q1:{self._artifact_version(self._q1_champion)}|{base_version}"
         logger.info(
-            "[forecasting] loaded champions value=%s timing=%s version=%s diagnostics=%s",
+            "[forecasting] loaded champions d1=%s w1=%s q1=%s value=%s timing=%s version=%s diagnostics=%s",
+            "ok" if self._d1_champion is not None else "missing",
+            "ok" if self._w1_champion is not None else "missing",
+            "ok" if self._q1_champion is not None else "missing",
             "ok" if self._value_champion is not None else "missing",
             "ok" if self._timing_champion is not None else "missing",
             self.version,
@@ -77,7 +84,7 @@ class ChampionModelSet:
     @property
     def is_available(self) -> bool:
         """Only publish forecasts when both trained artifacts are available."""
-        return self._value_champion is not None and self._timing_champion is not None
+        return all(artifact is not None for artifact in (self._d1_champion, self._w1_champion, self._q1_champion, self._value_champion, self._timing_champion))
 
     @staticmethod
     def _load_json(path: Path) -> Any | None:
@@ -157,18 +164,48 @@ class ChampionModelSet:
 
         return True
 
+    @staticmethod
+    def _artifact_version(artifact: Any | None) -> str:
+        if isinstance(artifact, dict):
+            raw = artifact.get("version") or artifact.get("model_name") or "unknown"
+            return str(raw)
+        return "unknown"
+
+    @staticmethod
+    def _horizon_params(artifact: Any | None, defaults: dict[str, Any]) -> dict[str, Any]:
+        params = artifact.get("params", {}) if isinstance(artifact, dict) else {}
+        out = dict(defaults)
+        for key, value in params.items():
+            if key in out:
+                out[key] = value
+        return out
+
     def _load_artifact(self, task: str) -> Any | None:
         pkl_path = self._models_file_registry / f"{task}_champion.pkl"
         manifest_path = self._models_file_registry / f"{task}_champion.manifest.json"
+        json_path = self._registry / f"{task}_champion.json"
 
         logger.info(
-            "[forecasting] trying champion task=%s pkl=%s pkl_exists=%s manifest=%s manifest_exists=%s",
+            "[forecasting] trying champion task=%s json=%s json_exists=%s pkl=%s pkl_exists=%s manifest=%s manifest_exists=%s",
             task,
+            json_path,
+            json_path.exists(),
             pkl_path,
             pkl_path.exists(),
             manifest_path,
             manifest_path.exists(),
         )
+
+        artifact = self._load_json(json_path)
+        if artifact is not None:
+            logger.info(
+                "[forecasting] using json champion task=%s path=%s payload_type=%s",
+                task,
+                json_path,
+                type(artifact).__name__,
+            )
+            self._load_diagnostics[task] = f"loaded:json:{json_path}:type={type(artifact).__name__}"
+            return artifact
 
         if pkl_path.exists():
             manifest = self._load_manifest(manifest_path)
@@ -189,37 +226,26 @@ class ChampionModelSet:
             else:
                 self._load_diagnostics[task] = f"invalid_manifest:{manifest_path}"
 
-        json_path = self._registry / f"{task}_champion.json"
-        artifact = self._load_json(json_path)
-        if artifact is not None:
-            logger.info(
-                "[forecasting] using json champion task=%s path=%s payload_type=%s",
-                task,
-                json_path,
-                type(artifact).__name__,
-            )
-            self._load_diagnostics[task] = f"loaded:json:{json_path}:type={type(artifact).__name__}"
-        else:
-            if json_path.exists():
-                text = json_path.read_text(encoding="utf-8")
-                if _looks_like_lfs_pointer(text):
-                    reason = f"lfs_pointer:{json_path}"
-                else:
-                    reason = f"invalid_json:{json_path}"
-            elif task not in self._load_diagnostics:
-                reason = f"missing_all_artifacts:pkl={pkl_path};json={json_path}"
+        if json_path.exists():
+            text = json_path.read_text(encoding="utf-8")
+            if _looks_like_lfs_pointer(text):
+                reason = f"lfs_pointer:{json_path}"
             else:
-                reason = self._load_diagnostics[task]
-            self._load_diagnostics[task] = reason
-            logger.warning(
-                "[forecasting] champion artifact missing task=%s pkl=%s manifest=%s json=%s reason=%s",
-                task,
-                pkl_path,
-                manifest_path,
-                json_path,
-                reason,
-            )
-        return artifact
+                reason = f"invalid_json:{json_path}"
+        elif task not in self._load_diagnostics:
+            reason = f"missing_all_artifacts:json={json_path};pkl={pkl_path}"
+        else:
+            reason = self._load_diagnostics[task]
+        self._load_diagnostics[task] = reason
+        logger.warning(
+            "[forecasting] champion artifact missing task=%s json=%s pkl=%s manifest=%s reason=%s",
+            task,
+            json_path,
+            pkl_path,
+            manifest_path,
+            reason,
+        )
+        return None
 
     def _base(self, row: dict) -> tuple[float, float, float]:
         close = float(row["close"])
@@ -230,44 +256,97 @@ class ChampionModelSet:
     def predict_d1(self, row: dict) -> HorizonForecast:
         close, atr, vol = self._base(row)
         ai_bias = float(row.get("ai_consensus_score") or 0.0)
-        move = atr * (1.2 + 0.4 * vol)
-        floor = close - move * (1.0 - 0.15 * ai_bias)
-        ceiling = close + move * (1.0 + 0.15 * ai_bias)
+        cfg = self._horizon_params(
+            self._d1_champion,
+            {
+                "move_base": 1.2,
+                "move_vol_mult": 0.4,
+                "bias_mult": 0.15,
+                "breach_base": 0.35,
+                "breach_vol_mult": 0.15,
+                "expected_feature": "rel_strength_20",
+                "expected_mult": 0.5,
+                "time_floor_positive": 2.0,
+                "time_floor_negative": 4.0,
+                "time_ceiling_positive": 6.0,
+                "time_ceiling_negative": 8.0,
+            },
+        )
+        move = atr * (float(cfg["move_base"]) + float(cfg["move_vol_mult"]) * vol)
+        floor = close - move * (1.0 - float(cfg["bias_mult"]) * ai_bias)
+        ceiling = close + move * (1.0 + float(cfg["bias_mult"]) * ai_bias)
+        feature_value = float(row.get(str(cfg["expected_feature"])) or 0.0)
+        floor_slot = int(float(cfg["time_floor_positive"]) if feature_value > 0 else float(cfg["time_floor_negative"]))
+        ceiling_slot = int(float(cfg["time_ceiling_positive"]) if feature_value > 0 else float(cfg["time_ceiling_negative"]))
+        floor_time_map = {2: "OPEN_PLUS_2H", 4: "OPEN_PLUS_4H"}
+        ceil_time_map = {6: "OPEN_PLUS_6H", 8: "CLOSE"}
         return HorizonForecast(
             floor=round(floor, 4),
             ceiling=round(ceiling, 4),
-            floor_time="OPEN_PLUS_2H" if vol > 1 else "OPEN_PLUS_4H",
-            ceiling_time="CLOSE" if ai_bias >= 0 else "OPEN_PLUS_6H",
-            breach_prob=round(min(0.95, 0.35 + 0.15 * vol), 4),
-            expected_return=round((ai_bias * 0.02) + (float(row.get("rel_strength_20") or 0.0) * 0.5), 6),
+            floor_time=floor_time_map.get(floor_slot, "OPEN_PLUS_2H"),
+            ceiling_time=ceil_time_map.get(ceiling_slot, "CLOSE"),
+            breach_prob=round(min(0.95, float(cfg["breach_base"]) + float(cfg["breach_vol_mult"]) * vol), 4),
+            expected_return=round((ai_bias * 0.02) + (feature_value * float(cfg["expected_mult"])), 6),
             expected_range=round(max(0.01, ceiling - floor), 4),
         )
 
     def predict_w1(self, row: dict) -> HorizonForecast:
         close, atr, vol = self._base(row)
-        rs = float(row.get("rel_strength_20") or 0.0)
-        move = atr * (2.2 + 0.5 * vol)
+        cfg = self._horizon_params(
+            self._w1_champion,
+            {
+                "move_base": 2.2,
+                "move_vol_mult": 0.5,
+                "bias_mult": 0.1,
+                "breach_base": 0.42,
+                "breach_vol_mult": 0.18,
+                "expected_feature": "rel_strength_20",
+                "expected_mult": 0.8,
+                "time_floor_positive": 2.0,
+                "time_floor_negative": 1.0,
+                "time_ceiling_positive": 5.0,
+                "time_ceiling_negative": 4.0,
+            },
+        )
+        feat = float(row.get(str(cfg["expected_feature"])) or 0.0)
+        move = atr * (float(cfg["move_base"]) + float(cfg["move_vol_mult"]) * vol)
         return HorizonForecast(
-            floor=round(close - move * (1.0 - 0.1 * rs), 4),
-            ceiling=round(close + move * (1.0 + 0.1 * rs), 4),
-            floor_time=str(2 if rs > 0 else 1),
-            ceiling_time=str(5 if rs > 0 else 4),
-            breach_prob=round(min(0.97, 0.42 + 0.18 * vol), 4),
-            expected_return=round(rs * 0.8, 6),
+            floor=round(close - move * (1.0 - float(cfg["bias_mult"]) * feat), 4),
+            ceiling=round(close + move * (1.0 + float(cfg["bias_mult"]) * feat), 4),
+            floor_time=str(int(float(cfg["time_floor_positive"]) if feat > 0 else float(cfg["time_floor_negative"]))),
+            ceiling_time=str(int(float(cfg["time_ceiling_positive"]) if feat > 0 else float(cfg["time_ceiling_negative"]))),
+            breach_prob=round(min(0.97, float(cfg["breach_base"]) + float(cfg["breach_vol_mult"]) * vol), 4),
+            expected_return=round(feat * float(cfg["expected_mult"]), 6),
             expected_range=round(move * 2, 4),
         )
 
     def predict_q1(self, row: dict) -> HorizonForecast:
         close, atr, vol = self._base(row)
-        momentum = float(row.get("momentum_20") or 0.0)
-        move = atr * (3.6 + 0.6 * vol)
+        cfg = self._horizon_params(
+            self._q1_champion,
+            {
+                "move_base": 3.6,
+                "move_vol_mult": 0.6,
+                "bias_mult": 0.1,
+                "breach_base": 0.5,
+                "breach_vol_mult": 0.15,
+                "expected_feature": "momentum_20",
+                "expected_mult": 0.9,
+                "time_floor_positive": 3.0,
+                "time_floor_negative": 2.0,
+                "time_ceiling_positive": 10.0,
+                "time_ceiling_negative": 8.0,
+            },
+        )
+        feat = float(row.get(str(cfg["expected_feature"])) or 0.0)
+        move = atr * (float(cfg["move_base"]) + float(cfg["move_vol_mult"]) * vol)
         return HorizonForecast(
-            floor=round(close - move * (1.0 - 0.1 * momentum), 4),
-            ceiling=round(close + move * (1.0 + 0.1 * momentum), 4),
-            floor_time=str(3 if momentum > 0 else 2),
-            ceiling_time=str(10 if momentum > 0 else 8),
-            breach_prob=round(min(0.98, 0.5 + 0.15 * vol), 4),
-            expected_return=round(momentum * 0.9, 6),
+            floor=round(close - move * (1.0 - float(cfg["bias_mult"]) * feat), 4),
+            ceiling=round(close + move * (1.0 + float(cfg["bias_mult"]) * feat), 4),
+            floor_time=str(int(float(cfg["time_floor_positive"]) if feat > 0 else float(cfg["time_floor_negative"]))),
+            ceiling_time=str(int(float(cfg["time_ceiling_positive"]) if feat > 0 else float(cfg["time_ceiling_negative"]))),
+            breach_prob=round(min(0.98, float(cfg["breach_base"]) + float(cfg["breach_vol_mult"]) * vol), 4),
+            expected_return=round(feat * float(cfg["expected_mult"]), 6),
             expected_range=round(move * 2, 4),
         )
 

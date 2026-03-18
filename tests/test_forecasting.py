@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import pickle
 from datetime import datetime, timezone
 
 from forecasting.load_models import ChampionModelSet
@@ -59,8 +61,11 @@ def _ai_map() -> dict[str, dict]:
 def _enable_trained_champion(monkeypatch, tmp_path) -> None:
     models_dir = tmp_path / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    (models_dir / "value_champion.json").write_text(json.dumps({"params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
-    (models_dir / "timing_champion.json").write_text(json.dumps({"params": {"calibrator_reliability": {}}}), encoding="utf-8")
+    (models_dir / "d1_champion.json").write_text(json.dumps({"version": "d1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "w1_champion.json").write_text(json.dumps({"version": "w1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "q1_champion.json").write_text(json.dumps({"version": "q1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "value_champion.json").write_text(json.dumps({"version": "v-json", "params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
+    (models_dir / "timing_champion.json").write_text(json.dumps({"version": "t-json", "params": {"calibrator_reliability": {}}}), encoding="utf-8")
     model = ChampionModelSet(model_registry_dir=models_dir)
     monkeypatch.setattr("forecasting.generate_forecasts.load_champion_models", lambda: model)
 
@@ -221,8 +226,11 @@ def test_top_pick_m3_warning_when_m3_is_missing(monkeypatch, tmp_path) -> None:
 def test_predict_m3_uses_neutral_alignment_fallback(tmp_path) -> None:
     models_dir = tmp_path / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    (models_dir / "value_champion.json").write_text(json.dumps({"params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
-    (models_dir / "timing_champion.json").write_text(json.dumps({"params": {"calibrator_reliability": {}}}), encoding="utf-8")
+    (models_dir / "d1_champion.json").write_text(json.dumps({"version": "d1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "w1_champion.json").write_text(json.dumps({"version": "w1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "q1_champion.json").write_text(json.dumps({"version": "q1-v", "params": {}}), encoding="utf-8")
+    (models_dir / "value_champion.json").write_text(json.dumps({"version": "v-json", "params": {"weights": {}, "bias": 95.0}}), encoding="utf-8")
+    (models_dir / "timing_champion.json").write_text(json.dumps({"version": "t-json", "params": {"calibrator_reliability": {}}}), encoding="utf-8")
     model = ChampionModelSet(model_registry_dir=models_dir)
 
     m3 = model.predict_m3(
@@ -287,3 +295,57 @@ def test_run_forecast_pipeline_blocks_symbol_when_prediction_raises(monkeypatch,
     assert out["dataset_forecasts"] == []
     assert len(out["blocked_list"]) == 1
     assert "Prediction failed" in out["blocked_list"][0]["reason"]
+
+
+def test_champion_loader_prefers_repo_json_over_models_file_pickle(tmp_path) -> None:
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    models_file_dir = tmp_path / "models_file"
+    models_file_dir.mkdir(parents=True, exist_ok=True)
+
+    (models_dir / "d1_champion.json").write_text(
+        json.dumps({"model_name": "d1_heuristic_v1", "version": "d1-json", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "w1_champion.json").write_text(
+        json.dumps({"model_name": "w1_heuristic_v1", "version": "w1-json", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "q1_champion.json").write_text(
+        json.dumps({"model_name": "q1_heuristic_v1", "version": "q1-json", "params": {}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "value_champion.json").write_text(
+        json.dumps({"model_name": "m3_value_linear", "version": "v-json", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}),
+        encoding="utf-8",
+    )
+    (models_dir / "timing_champion.json").write_text(
+        json.dumps({"model_name": "m3_timing_multiclass", "version": "t-json", "params": {"calibrator_reliability": {}}, "metrics": {}}),
+        encoding="utf-8",
+    )
+
+    value_pkl = models_file_dir / "value_champion.pkl"
+    timing_pkl = models_file_dir / "timing_champion.pkl"
+    with value_pkl.open("wb") as fh:
+        pickle.dump({"model_name": "m3_value_linear", "version": "v-pkl", "params": {"weights": {}, "bias": 90.0}, "metrics": {}}, fh)
+    with timing_pkl.open("wb") as fh:
+        pickle.dump({"model_name": "m3_timing_multiclass", "version": "t-pkl", "params": {"calibrator_reliability": {}}, "metrics": {}}, fh)
+
+    for task in ("d1", "w1", "q1"):
+        pkl_path = models_file_dir / f"{task}_champion.pkl"
+        with pkl_path.open("wb") as fh:
+            pickle.dump({"model_name": f"{task}_heuristic_v1", "version": f"{task}-pkl", "params": {}, "metrics": {}}, fh)
+
+    for task, pkl_path in (("d1", models_file_dir / "d1_champion.pkl"), ("w1", models_file_dir / "w1_champion.pkl"), ("q1", models_file_dir / "q1_champion.pkl"), ("value", value_pkl), ("timing", timing_pkl)):
+
+        manifest = {
+            "task": task,
+            "format": "pkl",
+            "file_name": pkl_path.name,
+            "sha256": hashlib.sha256(pkl_path.read_bytes()).hexdigest(),
+            "model_version": "test",
+        }
+        (models_file_dir / f"{task}_champion.manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    model = ChampionModelSet(model_registry_dir=models_dir)
+    assert model.version == "d1:d1-json|w1:w1-json|q1:q1-json|value:v-json|timing:t-json"

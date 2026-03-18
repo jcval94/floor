@@ -4,7 +4,7 @@ set -euo pipefail
 DATASET_PATH="${1:-data/training/modelable_dataset.json}"
 OUTPUT_DIR="${2:-data/training}"
 VERSION_TAG="${3:-$(date -u +%Y%m%dT%H%M%SZ)}"
-TASKS_ARG="${4:-${TASKS:-value,timing}}"
+TASKS_ARG="${4:-${TASKS:-d1,w1,q1,value,timing}}"
 TRAINING_MODE="${5:-standard}"
 
 if [[ ! -f "$DATASET_PATH" ]]; then
