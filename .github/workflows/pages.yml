@@ -26,6 +26,9 @@ jobs:
       - name: Build static site data payloads
         run: |
           PYTHONPATH=src python -m floor.main build-site
+          mkdir -p data/market data/training
+          PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
           PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data --universe-path config/universe.yaml --mirror-site-dir docs
           touch site/.nojekyll
       - name: Upload static site artifact

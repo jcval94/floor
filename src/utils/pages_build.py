@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sqlite3
 import shutil
@@ -33,6 +34,7 @@ SENSITIVE_KEYS = {
 }
 
 LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
+LOW_INTRADAY_COVERAGE_THRESHOLD = 0.8
 
 
 def _sanitize(obj: Any) -> Any:
@@ -117,6 +119,29 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _max_source_timestamp(source_values: dict[str, dict[str, Any]]) -> str | None:
+    best: tuple[datetime, str] | None = None
+    for payload in source_values.values():
+        if not isinstance(payload, dict):
+            continue
+        ts_value = payload.get("as_of") or payload.get("timestamp") or payload.get("fetched_at")
+        ts_raw = str(ts_value).strip() if ts_value is not None else ""
+        if not ts_raw:
+            continue
+        parsed = _parse_iso_datetime(ts_raw)
+        if parsed is None:
+            continue
+        if best is None or parsed > best[0]:
+            best = (parsed, ts_raw)
+    return best[1] if best else None
+
+
+def _compute_coverage(total_symbols: int, observed_symbols: int) -> float:
+    if total_symbols <= 0:
+        return 0.0
+    return observed_symbols / float(total_symbols)
 
 
 def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict[str, Any]:
@@ -316,6 +341,39 @@ def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, di
     return {symbol: payload for symbol, (_, __, payload) in latest.items()}
 
 
+def _latest_close_from_rows(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not rows_path.exists() or not symbols:
+        return {}
+    allowed = {s.upper() for s in symbols}
+    latest: dict[str, tuple[str, int, dict[str, Any]]] = {}
+    for idx, row in enumerate(_read_jsonl(rows_path)):
+        symbol = str(row.get("symbol", "")).upper()
+        if symbol not in allowed:
+            continue
+        ts = str(row.get("timestamp") or row.get("as_of") or "")
+        close = row.get("close")
+        if not ts:
+            continue
+        if close is None:
+            continue
+        try:
+            close_value = float(str(close))
+        except (TypeError, ValueError):
+            continue
+        prev = latest.get(symbol)
+        if prev is None or (ts, idx) >= (prev[0], prev[1]):
+            latest[symbol] = (
+                ts,
+                idx,
+                {
+                    "as_of": ts,
+                    "close": close_value,
+                    "source": "training/yahoo_market_rows.jsonl",
+                },
+            )
+    return {symbol: payload for symbol, (_, __, payload) in latest.items()}
+
+
 def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -> None:
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -343,8 +401,48 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "symbols": symbols,
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
-    latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", symbols)
-    latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", symbols)
+    market_db_path = data_dir / "market" / "market_data.sqlite"
+    market_rows_path = data_dir / "training" / "yahoo_market_rows.jsonl"
+    latest_close = _latest_market_values(market_db_path, symbols)
+    latest_close_source = "market/market_data.sqlite:daily_bars"
+    latest_close_mode = "preferred"
+    if not latest_close:
+        latest_close = _latest_close_from_rows(market_rows_path, symbols)
+        latest_close_source = "training/yahoo_market_rows.jsonl:fallback"
+        latest_close_mode = "fallback"
+        logging.warning(
+            "latest_close fallback activated: sqlite source missing/empty at %s, using %s",
+            market_db_path,
+            market_rows_path,
+        )
+    latest_intraday = _latest_intraday_values(market_rows_path, symbols)
+
+    symbol_count = len(symbols)
+    close_count = len(latest_close)
+    intraday_count = len(latest_intraday)
+    close_coverage = _compute_coverage(symbol_count, close_count)
+    intraday_coverage = _compute_coverage(symbol_count, intraday_count)
+    close_max_ts = _max_source_timestamp(latest_close)
+    intraday_max_ts = _max_source_timestamp(latest_intraday)
+
+    logging.info(
+        "Forecast source stats | universe=%s latest_close=%s (coverage=%.2f%%, max_ts=%s) latest_intraday=%s (coverage=%.2f%%, max_ts=%s)",
+        symbol_count,
+        close_count,
+        close_coverage * 100.0,
+        close_max_ts,
+        intraday_count,
+        intraday_coverage * 100.0,
+        intraday_max_ts,
+    )
+
+    alerts: list[str] = []
+    if close_coverage == 0.0:
+        alerts.append("latest_close coverage is 0%")
+    if intraday_coverage < LOW_INTRADAY_COVERAGE_THRESHOLD:
+        alerts.append(
+            f"latest_intraday coverage below threshold ({intraday_coverage * 100.0:.2f}% < {LOW_INTRADAY_COVERAGE_THRESHOLD * 100.0:.0f}%)"
+        )
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
@@ -360,8 +458,39 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "rows": latest_predictions,
         "latest_intraday": latest_intraday,
         "latest_close": latest_close,
+        "source_metadata": {
+            "latest_close": {
+                "source": latest_close_source,
+                "mode": latest_close_mode,
+                "as_of": close_max_ts,
+            },
+            "latest_intraday": {
+                "source": "training/yahoo_market_rows.jsonl",
+                "as_of": intraday_max_ts,
+            },
+        },
         "top_opportunities": opportunities[:10],
     }
+    if alerts:
+        forecasts["data_health"] = {
+            "status": "DEGRADED",
+            "alerts": alerts,
+            "thresholds": {
+                "intraday_min_coverage_pct": LOW_INTRADAY_COVERAGE_THRESHOLD * 100.0,
+            },
+            "sources": {
+                "latest_close": {
+                    "symbols": close_count,
+                    "coverage_pct": round(close_coverage * 100.0, 2),
+                    "max_timestamp": close_max_ts,
+                },
+                "latest_intraday": {
+                    "symbols": intraday_count,
+                    "coverage_pct": round(intraday_coverage * 100.0, 2),
+                    "max_timestamp": intraday_max_ts,
+                },
+            },
+        }
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
     (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:10]), indent=2), encoding="utf-8")
 
