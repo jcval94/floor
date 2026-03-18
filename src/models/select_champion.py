@@ -22,7 +22,21 @@ def _to_dict(obj: object) -> dict:
 def _load_json(path: Path) -> dict | None:
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        logger.warning("[champion-selection] invalid JSON in %s; ignoring previous champion", path)
+        return None
+    if not isinstance(payload, dict):
+        logger.warning("[champion-selection] non-object JSON in %s; ignoring previous champion", path)
+        return None
+    return payload
+
+
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(path)
 
 
 def _value_score(metrics: dict) -> float:
@@ -96,7 +110,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
             decision = "promote"
             reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
             archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
-            archived.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+            _write_json_atomic(archived, existing)
             archived_path = str(archived)
         else:
             decision = "challenger_only"
@@ -117,10 +131,10 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         "existing_score": old_score if existing is not None else None,
         "objective": "minimize_weighted_error",
     }
-    challenger_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_json_atomic(challenger_path, payload)
 
     if decision in {"promote_first", "promote"}:
-        champion_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _write_json_atomic(champion_path, payload)
 
     return {
         "decision": decision,
