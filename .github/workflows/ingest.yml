@@ -52,6 +52,36 @@ jobs:
           PYTHONPATH=src python -m utils.workflow_validations capture-baseline             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals | tee data/logs/ingest_baseline.json
       - name: Refresh in-repo market DB from Yahoo (responsible polling)
         run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
+      - name: Validate champion artifacts (repo-managed, non-LFS)
+        run: |
+          set -euo pipefail
+          d1_champion="data/training/models/d1_champion.json"
+          w1_champion="data/training/models/w1_champion.json"
+          q1_champion="data/training/models/q1_champion.json"
+          value_champion="data/training/models/value_champion.json"
+          timing_champion="data/training/models/timing_champion.json"
+          lfs_header='version https://git-lfs.github.com/spec/v1'
+
+          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
+            attr=$(git check-attr filter -- "$champion" | awk -F": " '{print $3}')
+            if [ "$attr" = "lfs" ]; then
+              echo "::error::Champion artifact is tracked by Git LFS: $champion"
+              echo "Update .gitattributes to disable LFS for training JSON artifacts."
+              exit 1
+            fi
+            if [ ! -f "$champion" ]; then
+              echo "::error::Missing champion artifact: $champion"
+              echo "Publish champions via retraining workflow before running ingest."
+              exit 1
+            fi
+            head=$(head -c 120 "$champion" 2>/dev/null || true)
+            if [ "${head#${lfs_header}}" != "$head" ]; then
+              echo "::error::Champion artifact is unresolved Git LFS pointer: $champion"
+              echo "Store champion payloads directly in-repo (non-LFS) for deterministic ingest runs."
+              exit 1
+            fi
+          done
+          echo "Champion artifacts validated (present + non-LFS)."
       - name: Ingest data (idempotent retry)
         run: |
           for i in 1 2 3; do

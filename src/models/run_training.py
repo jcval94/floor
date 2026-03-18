@@ -147,6 +147,82 @@ def _persist_winning_model_file(task: str, models_file_dir: Path, artifact_paylo
     )
     return out_path
 
+
+
+def _horizon_defaults(task: str) -> dict[str, float]:
+    if task == "d1":
+        return {
+            "move_base": 1.2,
+            "move_vol_mult": 0.4,
+            "bias_mult": 0.15,
+            "breach_base": 0.35,
+            "breach_vol_mult": 0.15,
+            "expected_feature": "rel_strength_20",
+            "expected_mult": 0.5,
+            "time_floor_positive": 2.0,
+            "time_floor_negative": 4.0,
+            "time_ceiling_positive": 6.0,
+            "time_ceiling_negative": 8.0,
+        }
+    if task == "w1":
+        return {
+            "move_base": 2.2,
+            "move_vol_mult": 0.5,
+            "bias_mult": 0.1,
+            "breach_base": 0.42,
+            "breach_vol_mult": 0.18,
+            "expected_feature": "rel_strength_20",
+            "expected_mult": 0.8,
+            "time_floor_positive": 2.0,
+            "time_floor_negative": 1.0,
+            "time_ceiling_positive": 5.0,
+            "time_ceiling_negative": 4.0,
+        }
+    if task == "q1":
+        return {
+            "move_base": 3.6,
+            "move_vol_mult": 0.6,
+            "bias_mult": 0.1,
+            "breach_base": 0.5,
+            "breach_vol_mult": 0.15,
+            "expected_feature": "momentum_20",
+            "expected_mult": 0.9,
+            "time_floor_positive": 3.0,
+            "time_floor_negative": 2.0,
+            "time_ceiling_positive": 10.0,
+            "time_ceiling_negative": 8.0,
+        }
+    raise ValueError(f"Unsupported horizon task: {task}")
+
+
+def _train_horizon_model(task: str, rows: list[dict], version: str, dataset_summary: dict) -> dict:
+    cfg = _horizon_defaults(task)
+    usable = [r for r in rows if r.get("close") not in (None, "")]
+    if not usable:
+        metrics = {"mae_proxy": 999.0, "breach_rate_proxy": 1.0, "temporal_stability": 0.0, "rows_used": 0}
+    else:
+        close_vals = [float(r.get("close") or 0.0) for r in usable]
+        mean_close = sum(close_vals) / len(close_vals)
+        mean_abs_dev = sum(abs(v - mean_close) for v in close_vals) / len(close_vals)
+        coverage = len(usable) / max(1, len(rows))
+        metrics = {
+            "mae_proxy": round(mean_abs_dev / max(mean_close, 1.0), 6),
+            "breach_rate_proxy": round(max(0.01, min(0.99, 0.2 + (1 - coverage) * 0.2)), 6),
+            "temporal_stability": round(max(0.0, min(1.0, coverage)), 6),
+            "rows_used": len(usable),
+        }
+
+    return {
+        "model_name": f"{task}_heuristic_v1",
+        "horizon": task,
+        "target": f"{task}_band",
+        "version": version,
+        "params": cfg,
+        "metrics": metrics,
+        "dataset_summary": dataset_summary,
+    }
+
+
 def run_training(
     dataset_path: Path,
     output_dir: Path,
@@ -174,6 +250,24 @@ def run_training(
             "training_mode": training_mode,
         }
         trained_payloads: dict[str, dict] = {}
+
+        for horizon_task in ["d1", "w1", "q1"]:
+            if horizon_task not in selected_tasks:
+                continue
+            logger.info("[training] training horizon model task=%s version=%s", horizon_task, version)
+            horizon_payload = _train_horizon_model(horizon_task, valid, version=version, dataset_summary=dataset_summary)
+            selection[horizon_task] = select_and_persist_champion(horizon_payload, models_dir, task=horizon_task)
+            metrics_payload[horizon_task] = horizon_payload["metrics"]
+            trained_payloads[horizon_task] = horizon_payload
+            if training_mode == "retrain" and selection[horizon_task].get("decision") in {"promote", "promote_first"}:
+                _persist_winning_model_file(horizon_task, models_file_dir, horizon_payload)
+            else:
+                logger.info(
+                    "[training] skip winning model file update task=%s training_mode=%s decision=%s",
+                    horizon_task,
+                    training_mode,
+                    selection[horizon_task].get("decision"),
+                )
 
         if "value" in selected_tasks:
             logger.info("[training] training value model version=%s", version)
@@ -231,7 +325,7 @@ def run_training(
         logger.info("[training] metrics saved path=%s", metrics_path)
 
         db_path = _resolve_persistence_db_path(persistence_db_path, output_dir=output_dir)
-        for task in ["value", "timing"]:
+        for task in ["d1", "w1", "q1", "value", "timing"]:
             if task in selected_tasks:
                 art = trained_payloads.get(task, {})
                 sel = selection.get(task)
@@ -279,7 +373,7 @@ def main() -> None:
     parser.add_argument("--dataset", required=True, help="Path to modelable dataset JSON")
     parser.add_argument("--output-dir", default="data/training", help="Output directory for artifacts and metrics")
     parser.add_argument("--version", default="v1", help="Training version tag")
-    parser.add_argument("--tasks", default="value,timing", help="Comma-separated model tasks to train")
+    parser.add_argument("--tasks", default="d1,w1,q1,value,timing", help="Comma-separated model tasks to train")
     parser.add_argument(
         "--training-mode",
         default="standard",

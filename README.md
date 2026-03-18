@@ -50,15 +50,15 @@ El repositorio implementa una plataforma local y orientada a GitHub Actions para
 
 No se encontro un backend HTTP, ni endpoints REST, ni una API interna propia. La visualizacion final es un sitio estatico que lee archivos JSON desde `site/data/`.
 
-## Manejo de artefactos grandes en GitHub
+## Manejo de artefactos de modelos en GitHub
 
-GitHub ya reporto advertencias por `data/training/modelable_dataset.json` (>50 MB). Para evitar nuevos pushes con blobs grandes, el repositorio ahora incluye `.gitattributes` para trackear los JSON de `data/training/` con Git LFS.
+Los artefactos champion/challenger de `data/training/models/*.json` se versionan directamente en el repositorio (sin Git LFS), para que `ingest` e `intraday` puedan leerlos de forma deterministica sin pasos extra de descarga.
 
-Pasos recomendados en local:
+Notas operativas:
 
-1. `git lfs install`
-2. `git lfs pull` (si clonas por primera vez)
-3. Para migrar historial existente: `git lfs migrate import --include="data/training/*.json"`
+1. Si un champion aparece como puntero LFS (`version https://git-lfs.github.com/spec/v1`), el workflow falla en validacion.
+2. El flujo de reentrenamiento debe publicar payloads JSON reales en `data/training/models/`.
+3. Aunque el JSON sea grande, se mantiene en Git por requisito operativo del proyecto.
 
 ## Snapshot actual del repo inspeccionado
 

@@ -24,6 +24,11 @@ def _seed_market_db(db_path: Path) -> None:
 
 def _seed_models(models_dir: Path) -> None:
     models_dir.mkdir(parents=True, exist_ok=True)
+    for task, version in (("d1", "d1-train"), ("w1", "w1-train"), ("q1", "q1-train")):
+        (models_dir / f"{task}_champion.json").write_text(
+            json.dumps({"model_name": f"{task}_heuristic_v1", "version": version, "params": {}, "metrics": {}}),
+            encoding="utf-8",
+        )
     (models_dir / "value_champion.json").write_text(
         json.dumps({"model_name": "m3_value_linear", "version": "v-train", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}),
         encoding="utf-8",
