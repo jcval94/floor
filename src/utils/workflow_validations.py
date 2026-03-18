@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +115,8 @@ def _sample_rows(rows: list[dict[str, Any]], sample_limit: int) -> str:
                 "action": row.get("action"),
                 "file": row.get("__file__"),
                 "line": row.get("__line__"),
+                "missing_fields": row.get("__missing_fields__"),
+                "validation_mode": row.get("__validation_mode__"),
             }
         )
     return json.dumps(sample, ensure_ascii=False)
@@ -121,6 +124,59 @@ def _sample_rows(rows: list[dict[str, Any]], sample_limit: int) -> str:
 
 def _fail_false_value(message: str, rows: list[dict[str, Any]], sample_limit: int) -> None:
     raise SystemExit(f"::error::valor falso: {message}. sample_rows={_sample_rows(rows, sample_limit)}")
+
+
+def _parse_as_of(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _latest_batch_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str | None]:
+    dated = []
+    for row in rows:
+        parsed = _parse_as_of(row.get("as_of"))
+        if parsed is not None:
+            dated.append((parsed, row))
+    if not dated:
+        return rows, None
+    latest_dt = max(item[0] for item in dated)
+    selected = [row for parsed, row in dated if parsed == latest_dt]
+    return selected, latest_dt.isoformat()
+
+
+def _prediction_quality_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_horizon: dict[str, int] = {}
+    null_action_by_horizon: dict[str, int] = {}
+    schema_counts = {
+        "legacy_floor_ceiling": 0,
+        "per_horizon_floor_ceiling": 0,
+    }
+
+    for row in rows:
+        horizon = str(row.get("horizon", "")).strip().lower() or "<missing>"
+        by_horizon[horizon] = by_horizon.get(horizon, 0) + 1
+        if row.get("action") is None or str(row.get("action", "")).strip() == "":
+            null_action_by_horizon[horizon] = null_action_by_horizon.get(horizon, 0) + 1
+
+        if all(str(row.get(k, "")).strip() != "" for k in ("floor_value", "ceiling_value")):
+            schema_counts["legacy_floor_ceiling"] += 1
+        if all(str(row.get(k, "")).strip() != "" for k in ("floor_d1", "ceiling_d1", "floor_w1", "ceiling_w1", "floor_q1", "ceiling_q1")):
+            schema_counts["per_horizon_floor_ceiling"] += 1
+
+    return {
+        "rows_total": len(rows),
+        "rows_by_horizon": by_horizon,
+        "rows_with_null_action_by_horizon": null_action_by_horizon,
+        "schema_presence": schema_counts,
+    }
 
 
 def _to_float(value: Any) -> float | None:
@@ -139,10 +195,33 @@ def validate_prediction_quality(
     min_action_consistency_ratio: float,
     action_return_tolerance: float,
     sample_limit: int,
+    evaluation_scope: str = "latest_batch",
 ) -> dict[str, Any]:
     rows = _iter_jsonl_payloads(data_dir / stream)
     if not rows:
         raise SystemExit(f"No prediction rows found in {(data_dir / stream)}")
+
+    selected_rows = rows
+    latest_as_of = None
+    if evaluation_scope == "latest_batch":
+        selected_rows, latest_as_of = _latest_batch_rows(rows)
+
+    diagnostics = _prediction_quality_diagnostics(selected_rows)
+    print(
+        "::notice::prediction_quality diagnostics="
+        + json.dumps(
+            {
+                **diagnostics,
+                "rows_total_raw": len(rows),
+                "rows_total_evaluated": len(selected_rows),
+                "evaluation_scope": evaluation_scope,
+                "latest_as_of": latest_as_of,
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    rows = selected_rows
 
     invalid_band_rows = [
         row
@@ -176,25 +255,42 @@ def validate_prediction_quality(
 
     missing_critical_rows: list[dict[str, Any]] = []
     for row in rows:
-        if row.get("horizon") in {"d1", "w1", "q1"}:
-            if any(str(row.get(field, "")).strip() == "" for field in legacy_required):
+        horizon = str(row.get("horizon", "")).strip().lower()
+        if horizon in {"d1", "w1", "q1"}:
+            missing_fields = [field for field in legacy_required if str(row.get(field, "")).strip() == ""]
+            if missing_fields:
+                row["__missing_fields__"] = missing_fields
+                row["__validation_mode__"] = "legacy_short_horizon"
                 missing_critical_rows.append(row)
             continue
-        for fields in required_by_horizon.values():
-            if any(str(row.get(field, "")).strip() == "" for field in fields):
+        required_fields = required_by_horizon.get(horizon)
+        if required_fields:
+            missing_fields = [field for field in required_fields if str(row.get(field, "")).strip() == ""]
+            if missing_fields:
+                row["__missing_fields__"] = missing_fields
+                row["__validation_mode__"] = f"per_horizon:{horizon}"
                 missing_critical_rows.append(row)
-                break
 
     if missing_critical_rows:
-        _fail_false_value("campos críticos nulos por horizonte", missing_critical_rows, sample_limit)
+        cause_counts: dict[str, int] = {}
+        for row in missing_critical_rows:
+            for field in row.get("__missing_fields__", []):
+                cause_counts[field] = cause_counts.get(field, 0) + 1
+        message = (
+            "campos críticos nulos por horizonte "
+            f"(causas={json.dumps(cause_counts, ensure_ascii=False)}, "
+            f"diagnostics={json.dumps(diagnostics, ensure_ascii=False)})"
+        )
+        _fail_false_value(message, missing_critical_rows, sample_limit)
 
-    m3_total = sum(1 for row in rows if str(row.get("m3_status", "")).strip() != "")
-    m3_blocked = sum(1 for row in rows if str(row.get("m3_status", "")).lower() == "blocked")
+    m3_rows = [row for row in rows if str(row.get("horizon", "")).strip().lower() == "m3"]
+    m3_total = sum(1 for row in m3_rows if str(row.get("m3_status", "")).strip() != "")
+    m3_blocked = sum(1 for row in m3_rows if str(row.get("m3_status", "")).lower() == "blocked")
     blocked_ratio = (m3_blocked / m3_total) if m3_total else 0.0
     if blocked_ratio > max_m3_blocked_ratio:
         _fail_false_value(
             f"ratio m3_status=blocked {blocked_ratio:.4f} supera umbral {max_m3_blocked_ratio:.4f}",
-            [row for row in rows if str(row.get("m3_status", "")).lower() == "blocked"],
+            [row for row in m3_rows if str(row.get("m3_status", "")).lower() == "blocked"],
             sample_limit,
         )
 
@@ -300,6 +396,7 @@ def main() -> None:
     pred_quality_p.add_argument("--min-action-consistency-ratio", type=float, default=0.7)
     pred_quality_p.add_argument("--action-return-tolerance", type=float, default=0.0)
     pred_quality_p.add_argument("--sample-limit", type=int, default=5)
+    pred_quality_p.add_argument("--evaluation-scope", choices=["latest_batch", "all_rows"], default="latest_batch")
 
     args = parser.parse_args()
 
@@ -342,6 +439,7 @@ def main() -> None:
             min_action_consistency_ratio=args.min_action_consistency_ratio,
             action_return_tolerance=args.action_return_tolerance,
             sample_limit=args.sample_limit,
+            evaluation_scope=args.evaluation_scope,
         )
         print(json.dumps(payload, ensure_ascii=False))
         return
