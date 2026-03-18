@@ -274,6 +274,38 @@ def _latest_market_values(db_path: Path, symbols: list[str]) -> dict[str, dict[s
     }
 
 
+def _latest_close_from_training_rows(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not rows_path.exists() or not symbols:
+        return {}
+    allowed = {s.upper() for s in symbols}
+    latest: dict[str, tuple[str, int, dict[str, Any]]] = {}
+    for idx, row in enumerate(_read_jsonl(rows_path)):
+        symbol = str(row.get("symbol", "")).upper()
+        if symbol not in allowed:
+            continue
+        ts = str(row.get("timestamp") or row.get("as_of") or "")
+        close = row.get("close")
+        if not ts:
+            continue
+        try:
+            close_value = float(close)
+        except (TypeError, ValueError):
+            continue
+        prev = latest.get(symbol)
+        if prev is None or (ts, idx) >= (prev[0], prev[1]):
+            latest[symbol] = (
+                ts,
+                idx,
+                {
+                    "as_of": ts,
+                    "close": close_value,
+                    "source": "training/yahoo_market_rows.jsonl",
+                    "fetched_at": None,
+                },
+            )
+    return {symbol: payload for symbol, (_, __, payload) in latest.items()}
+
+
 def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
     if not rows_path.exists() or not symbols:
         return {}
@@ -331,8 +363,21 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "symbols": parse_universe_yaml(universe_path),
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
-    latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", universe["symbols"])
-    latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", universe["symbols"])
+    market_db_path = data_dir / "market" / "market_data.sqlite"
+    market_rows_path = data_dir / "training" / "yahoo_market_rows.jsonl"
+    latest_close_db = _latest_market_values(market_db_path, universe["symbols"])
+    latest_close_fallback = _latest_close_from_training_rows(market_rows_path, universe["symbols"])
+    latest_close = latest_close_db or latest_close_fallback
+    latest_close_source = "market/market_data.sqlite" if latest_close_db else "training/yahoo_market_rows.jsonl"
+    latest_close_as_of = max(
+        [str(v.get("as_of")) for v in latest_close.values() if v.get("as_of")],
+        default=None,
+    )
+    latest_intraday = _latest_intraday_values(market_rows_path, universe["symbols"])
+    latest_intraday_as_of = max(
+        [str(v.get("as_of")) for v in latest_intraday.values() if v.get("as_of")],
+        default=None,
+    )
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
@@ -348,6 +393,19 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "rows": latest_predictions,
         "latest_intraday": latest_intraday,
         "latest_close": latest_close,
+        "field_sources": {
+            "latest_close": {
+                "source": latest_close_source,
+                "as_of": latest_close_as_of,
+                "preferred_source": "market/market_data.sqlite",
+                "fallback_used": not bool(latest_close_db),
+                "fallback_reason": None if latest_close_db else "market_data.sqlite missing_or_empty",
+            },
+            "latest_intraday": {
+                "source": "training/yahoo_market_rows.jsonl",
+                "as_of": latest_intraday_as_of,
+            },
+        },
         "top_opportunities": opportunities[:10],
     }
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
