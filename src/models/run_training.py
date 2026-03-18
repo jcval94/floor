@@ -132,18 +132,28 @@ def _persist_winning_model_file(task: str, models_file_dir: Path, artifact_paylo
     models_file_dir.mkdir(parents=True, exist_ok=True)
     out_path = models_file_dir / f"{task}_champion.pkl"
     manifest_path = models_file_dir / f"{task}_champion.manifest.json"
+    logger.info(
+        "[training] persisting models_file artifact task=%s pkl=%s manifest=%s",
+        task,
+        out_path,
+        manifest_path,
+    )
     with out_path.open("wb") as fh:
         pickle.dump(artifact_payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
     manifest = _build_model_file_manifest(task=task, artifact_payload=artifact_payload, pkl_path=out_path)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    pkl_size = out_path.stat().st_size
+    manifest_size = manifest_path.stat().st_size
 
     logger.info(
-        "[training] persisted winning model file task=%s path=%s format=pkl manifest=%s sha256=%s",
+        "[training] persisted winning model file task=%s path=%s format=pkl manifest=%s sha256=%s pkl_bytes=%s manifest_bytes=%s",
         task,
         out_path,
         manifest_path,
         manifest["sha256"],
+        pkl_size,
+        manifest_size,
     )
     return out_path
 
@@ -161,6 +171,7 @@ def _load_champion_payload(models_dir: Path, task: str) -> dict | None:
 
 
 def _sync_models_file_champion(task: str, models_dir: Path, models_file_dir: Path) -> None:
+    logger.info("[training] syncing champion into models_file task=%s", task)
     champion_payload = _load_champion_payload(models_dir=models_dir, task=task)
     if champion_payload is None:
         logger.warning("[training] skip models_file sync task=%s reason=missing_champion_payload", task)
@@ -277,6 +288,13 @@ def run_training(
             logger.info("[training] training horizon model task=%s version=%s", horizon_task, version)
             horizon_payload = _train_horizon_model(horizon_task, valid, version=version, dataset_summary=dataset_summary)
             selection[horizon_task] = select_and_persist_champion(horizon_payload, models_dir, task=horizon_task)
+            logger.info(
+                "[training] champion selection task=%s decision=%s champion=%s challenger=%s",
+                horizon_task,
+                selection[horizon_task].get("decision"),
+                selection[horizon_task].get("champion_path"),
+                selection[horizon_task].get("challenger_path"),
+            )
             metrics_payload[horizon_task] = horizon_payload["metrics"]
             trained_payloads[horizon_task] = horizon_payload
             if training_mode == "retrain" and selection[horizon_task].get("decision") in {"promote", "promote_first"}:
@@ -303,6 +321,12 @@ def run_training(
             value_payload = asdict(value_artifact)
             value_payload["dataset_summary"] = dataset_summary
             selection["value"] = select_and_persist_champion(value_payload, models_dir, task="value")
+            logger.info(
+                "[training] champion selection task=value decision=%s champion=%s challenger=%s",
+                selection["value"].get("decision"),
+                selection["value"].get("champion_path"),
+                selection["value"].get("challenger_path"),
+            )
             metrics_payload["value"] = value_artifact.metrics
             trained_payloads["value"] = value_payload
             if training_mode == "retrain" and selection["value"].get("decision") in {"promote", "promote_first"}:
@@ -328,6 +352,12 @@ def run_training(
             timing_payload = asdict(timing_artifact)
             timing_payload["dataset_summary"] = dataset_summary
             selection["timing"] = select_and_persist_champion(timing_payload, models_dir, task="timing")
+            logger.info(
+                "[training] champion selection task=timing decision=%s champion=%s challenger=%s",
+                selection["timing"].get("decision"),
+                selection["timing"].get("champion_path"),
+                selection["timing"].get("challenger_path"),
+            )
             metrics_payload["timing"] = timing_artifact.metrics
             metrics_payload["forecast_contract"] = {
                 "floor_week_m3_best_class": timing_artifact.best_class,
@@ -348,7 +378,7 @@ def run_training(
         metrics_payload["selection"] = selection
         metrics_path = metrics_dir / f"training_metrics_{version}.json"
         metrics_path.write_text(json.dumps(metrics_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        logger.info("[training] metrics saved path=%s", metrics_path)
+        logger.info("[training] metrics saved path=%s bytes=%s", metrics_path, metrics_path.stat().st_size)
 
         db_path = _resolve_persistence_db_path(persistence_db_path, output_dir=output_dir)
         for task in ["d1", "w1", "q1", "value", "timing"]:
