@@ -1,0 +1,9 @@
+{
+  "task": "timing",
+  "format": "pkl",
+  "file_name": "timing_champion.pkl",
+  "sha256": "c064993e1ee47a74172c0ee37f78c1e4e99306ef1673eef374447a48e1ad1d21",
+  "model_name": "m3_timing_multiclass",
+  "model_version": "20260318T223030Z",
+  "created_at": "2026-03-18T22:31:38.339697+00:00"
+}
