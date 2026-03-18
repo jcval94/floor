@@ -1,0 +1,9 @@
+{
+  "task": "d1",
+  "format": "pkl",
+  "file_name": "d1_champion.pkl",
+  "sha256": "37878177f1956d6ab6a487b077f93bd9484e532051eef724150d71ee05b3b6a9",
+  "model_name": "evt_cp_d1",
+  "model_version": "20260318T223030Z",
+  "created_at": "2026-03-18T22:31:38.305847+00:00"
+}

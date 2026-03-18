@@ -1,3 +1,59 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:4277c3942e2d703b8339e89669bce2bf2e48b59668014c72084dfcf237d9d583
-size 434
+{
+  "horizon": "d1",
+  "model_name": "evt_cp_d1",
+  "version": "20260318T223030Z",
+  "floor_delta": 0.009355300049144914,
+  "ceiling_delta": 0.010052562122045436,
+  "train_rows": 8750,
+  "test_rows": 3750,
+  "metrics": {
+    "mae_floor": 3.199987334481006,
+    "mae_ceiling": 2.9281332152957833,
+    "mae_spread": 3.198584427105754,
+    "test_floor_coverage": 1.0,
+    "test_ceiling_coverage": 1.0
+  },
+  "params": {
+    "floor": {
+      "global": 0.008642218230259093,
+      "table": {
+        "v2:up": 0.008376879724267958,
+        "v1:up": 0.006864521727145148,
+        "v3:up": 0.011666993975803109,
+        "v2:down": 0.009355300049144914,
+        "v1:down": 0.006451628048425868,
+        "v3:down": 0.013430778013631496
+      },
+      "vol_cuts": [
+        0.019902818635444672,
+        0.02804409530265844
+      ],
+      "bins": 3,
+      "cv": {
+        "enabled": false,
+        "folds": 0
+      }
+    },
+    "ceiling": {
+      "global": 0.009652754611051965,
+      "table": {
+        "v2:up": 0.009328584311378174,
+        "v1:up": 0.007065651667115201,
+        "v3:up": 0.013618618411592879,
+        "v2:down": 0.010052562122045436,
+        "v1:down": 0.0069490610198972525,
+        "v3:down": 0.014896928233981206
+      },
+      "vol_cuts": [
+        0.019902818635444672,
+        0.02804409530265844
+      ],
+      "bins": 3,
+      "cv": {
+        "enabled": false,
+        "folds": 0
+      }
+    },
+    "training_mode": "manual"
+  }
+}
