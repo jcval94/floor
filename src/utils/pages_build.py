@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sqlite3
 import shutil
 from pathlib import Path
 from datetime import date
@@ -133,6 +134,74 @@ def _opportunity_row(row: dict) -> dict | None:
     }
 
 
+def _latest_market_values(db_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not db_path.exists() or not symbols:
+        return {}
+    placeholders = ",".join("?" for _ in symbols)
+    query = f"""
+        SELECT d.symbol, d.ts_utc, d.close, d.source, d.fetched_at_utc
+        FROM daily_bars d
+        JOIN (
+            SELECT symbol, MAX(ts_utc) AS max_ts
+            FROM daily_bars
+            WHERE symbol IN ({placeholders})
+            GROUP BY symbol
+        ) x ON x.symbol = d.symbol AND x.max_ts = d.ts_utc
+        ORDER BY d.symbol ASC
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            has_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_bars' LIMIT 1"
+            ).fetchone()
+            if not has_table:
+                return {}
+            rows = conn.execute(query, [s.upper() for s in symbols]).fetchall()
+    except sqlite3.Error:
+        return {}
+
+    return {
+        str(row[0]).upper(): {
+            "as_of": row[1],
+            "close": float(row[2]),
+            "source": row[3],
+            "fetched_at": row[4],
+        }
+        for row in rows
+    }
+
+
+def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not rows_path.exists() or not symbols:
+        return {}
+    allowed = {s.upper() for s in symbols}
+    latest: dict[str, tuple[str, int, dict[str, Any]]] = {}
+    for idx, row in enumerate(_read_jsonl(rows_path)):
+        symbol = str(row.get("symbol", "")).upper()
+        if symbol not in allowed:
+            continue
+        ts = str(row.get("timestamp") or row.get("as_of") or "")
+        close = row.get("close")
+        if not ts:
+            continue
+        try:
+            close_value = float(close)
+        except (TypeError, ValueError):
+            continue
+        prev = latest.get(symbol)
+        if prev is None or (ts, idx) >= (prev[0], prev[1]):
+            latest[symbol] = (
+                ts,
+                idx,
+                {
+                    "as_of": ts,
+                    "price": close_value,
+                    "source": "training/yahoo_market_rows.jsonl",
+                },
+            )
+    return {symbol: payload for symbol, (_, __, payload) in latest.items()}
+
+
 def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -> None:
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -159,6 +228,8 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "symbols": parse_universe_yaml(universe_path),
     }
     (site_data_dir / "universe.json").write_text(json.dumps(universe, indent=2), encoding="utf-8")
+    latest_close = _latest_market_values(data_dir / "market" / "market_data.sqlite", universe["symbols"])
+    latest_intraday = _latest_intraday_values(data_dir / "training" / "yahoo_market_rows.jsonl", universe["symbols"])
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
@@ -172,6 +243,8 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "as_of": latest_predictions[0].get("as_of") if latest_predictions else None,
         "contract": dashboard_payload.get("prediction_contract", MULTI_HORIZON_PREDICTION_CONTRACT),
         "rows": latest_predictions,
+        "latest_intraday": latest_intraday,
+        "latest_close": latest_close,
         "top_opportunities": opportunities[:10],
     }
     (site_data_dir / "forecasts.json").write_text(json.dumps(_sanitize(forecasts), indent=2), encoding="utf-8")
