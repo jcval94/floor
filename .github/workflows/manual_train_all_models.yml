@@ -180,7 +180,9 @@ jobs:
       - name: Train horizon+m3 models (d1,w1,q1,value,timing)
         run: |
           set -euo pipefail
-          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "d1,w1,q1,value,timing" "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          # d1/w1/q1 champions are produced by train_classic_horizons (4-family competition).
+          # Here we train only m3 components (value/timing) to avoid overwriting horizon champions.
+          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "value,timing" "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Build unified training results CSV (d1,w1,q1,m3)
         run: |
@@ -250,6 +252,14 @@ jobs:
           print(f"Unified CSV written: {out_path}")
           PY
 
+      - name: Sync champion JSON -> models_file pkl/manifest (d1,w1,q1,value,timing)
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m models.sync_models_file \
+            --models-dir data/training/models \
+            --models-file-dir data/training/models_file \
+            --tasks d1,w1,q1,value,timing 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
       - name: Validate generated champions and metrics
         run: |
           set -euo pipefail
@@ -261,6 +271,16 @@ jobs:
           test -f data/training/models/q1_competition.json
           test -f data/training/models/value_champion.json
           test -f data/training/models/timing_champion.json
+          test -f data/training/models_file/d1_champion.pkl
+          test -f data/training/models_file/w1_champion.pkl
+          test -f data/training/models_file/q1_champion.pkl
+          test -f data/training/models_file/value_champion.pkl
+          test -f data/training/models_file/timing_champion.pkl
+          test -f data/training/models_file/d1_champion.manifest.json
+          test -f data/training/models_file/w1_champion.manifest.json
+          test -f data/training/models_file/q1_champion.manifest.json
+          test -f data/training/models_file/value_champion.manifest.json
+          test -f data/training/models_file/timing_champion.manifest.json
           test -f "${{ steps.runmeta.outputs.csv_file }}"
           test -f "${{ steps.runmeta.outputs.log_file }}"
 

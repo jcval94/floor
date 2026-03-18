@@ -253,7 +253,72 @@ class ChampionModelSet:
         vol_score = float(row.get("vol_regime_score") or 1.0)
         return close, atr, vol_score
 
+    @staticmethod
+    def _classic_family(model_name: str) -> str:
+        name = str(model_name or "").lower()
+        if name.startswith("evt_cp_"):
+            return "evt_cp"
+        if name.startswith("xgboost_"):
+            return "xgboost"
+        if name.startswith("lstm_"):
+            return "lstm"
+        if name.startswith("qenet_"):
+            return "qenet"
+        return ""
+
+    def _predict_classic_horizon(self, row: dict, artifact: Any | None, horizon: str) -> HorizonForecast | None:
+        if not isinstance(artifact, dict):
+            return None
+        family = self._classic_family(str(artifact.get("model_name", "")))
+        if not family:
+            return None
+
+        close, _atr, _vol = self._base(row)
+        floor_delta = float(artifact.get("floor_delta") or 0.01)
+        ceiling_delta = float(artifact.get("ceiling_delta") or 0.01)
+        floor = close * (1.0 - floor_delta)
+        ceiling = close * (1.0 + ceiling_delta)
+        expected_return = ((floor + ceiling) / 2.0 - close) / max(close, 1e-6)
+        spread = max(0.01, ceiling - floor)
+
+        d1_times = {
+            "evt_cp": ("OPEN_PLUS_2H", "CLOSE"),
+            "xgboost": ("OPEN_PLUS_4H", "OPEN_PLUS_6H"),
+            "lstm": ("OPEN_PLUS_2H", "OPEN_PLUS_6H"),
+            "qenet": ("OPEN_PLUS_4H", "CLOSE"),
+        }
+        w1_times = {
+            "evt_cp": ("2", "5"),
+            "xgboost": ("3", "4"),
+            "lstm": ("1", "5"),
+            "qenet": ("2", "4"),
+        }
+        q1_times = {
+            "evt_cp": ("15", "45"),
+            "xgboost": ("20", "40"),
+            "lstm": ("10", "45"),
+            "qenet": ("15", "35"),
+        }
+        horizon_times = {"d1": d1_times, "w1": w1_times, "q1": q1_times}
+        floor_time, ceiling_time = horizon_times[horizon].get(family, ("", ""))
+
+        metrics = artifact.get("metrics", {}) if isinstance(artifact.get("metrics"), dict) else {}
+        spread_mae = float(metrics.get("mae_spread") or spread / max(close, 1.0))
+        breach_prob = min(0.98, max(0.05, 0.2 + spread_mae / max(close, 1.0)))
+        return HorizonForecast(
+            floor=round(floor, 4),
+            ceiling=round(ceiling, 4),
+            floor_time=floor_time,
+            ceiling_time=ceiling_time,
+            breach_prob=round(breach_prob, 4),
+            expected_return=round(expected_return, 6),
+            expected_range=round(spread, 4),
+        )
+
     def predict_d1(self, row: dict) -> HorizonForecast:
+        classic = self._predict_classic_horizon(row, self._d1_champion, horizon="d1")
+        if classic is not None:
+            return classic
         close, atr, vol = self._base(row)
         ai_bias = float(row.get("ai_consensus_score") or 0.0)
         cfg = self._horizon_params(
@@ -291,6 +356,9 @@ class ChampionModelSet:
         )
 
     def predict_w1(self, row: dict) -> HorizonForecast:
+        classic = self._predict_classic_horizon(row, self._w1_champion, horizon="w1")
+        if classic is not None:
+            return classic
         close, atr, vol = self._base(row)
         cfg = self._horizon_params(
             self._w1_champion,
@@ -321,6 +389,9 @@ class ChampionModelSet:
         )
 
     def predict_q1(self, row: dict) -> HorizonForecast:
+        classic = self._predict_classic_horizon(row, self._q1_champion, horizon="q1")
+        if classic is not None:
+            return classic
         close, atr, vol = self._base(row)
         cfg = self._horizon_params(
             self._q1_champion,
