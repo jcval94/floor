@@ -7,6 +7,9 @@ import sqlite3
 import shutil
 from pathlib import Path
 from datetime import date
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from typing import Any
 
 from floor.schemas import MULTI_HORIZON_PREDICTION_CONTRACT
@@ -99,6 +102,106 @@ def _latest_report_file(reports_dir: Path, pattern: str) -> Path | None:
         return (parsed_date, path.stat().st_mtime)
 
     return max(candidates, key=_sort_key)
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict[str, Any]:
+    cadence_days = max(int(cadence_days), 1)
+    last_dt = _parse_iso_datetime(last_review_at)
+    if last_dt is None:
+        return {
+            "cadence_days": cadence_days,
+            "last_review_at": None,
+            "next_review_at": None,
+            "seconds_until_due": None,
+            "human_eta": "sin fecha de última revisión",
+            "is_overdue": None,
+        }
+
+    now = datetime.now(tz=timezone.utc)
+    next_dt = last_dt + timedelta(days=cadence_days)
+    seconds_until_due = int((next_dt - now).total_seconds())
+    is_overdue = seconds_until_due < 0
+    abs_seconds = abs(seconds_until_due)
+    days = abs_seconds // 86400
+    hours = (abs_seconds % 86400) // 3600
+    prefix = "vencido hace" if is_overdue else "faltan"
+    human_eta = f"{prefix} {days}d {hours}h"
+
+    return {
+        "cadence_days": cadence_days,
+        "last_review_at": last_dt.isoformat(),
+        "next_review_at": next_dt.isoformat(),
+        "seconds_until_due": seconds_until_due,
+        "human_eta": human_eta,
+        "is_overdue": is_overdue,
+    }
+
+
+def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dict[str, Any]:
+    review_model = review_model if isinstance(review_model, dict) else {}
+    artifact = artifact if isinstance(artifact, dict) else {}
+    summary = review_model.get("summary", {}) if isinstance(review_model.get("summary"), dict) else {}
+    performance = summary.get("performance", {}) if isinstance(summary.get("performance"), dict) else {}
+    shared_data = summary.get("shared_data", {}) if isinstance(summary.get("shared_data"), dict) else {}
+    target = summary.get("target", {}) if isinstance(summary.get("target"), dict) else {}
+    schema = summary.get("schema", {}) if isinstance(summary.get("schema"), dict) else {}
+
+    return {
+        "model_key": model_key,
+        "model_name": review_model.get("model_name", artifact.get("model_name", "unknown")),
+        "current_version": review_model.get("current_version", artifact.get("version", "unknown")),
+        "status": review_model.get("status", "UNKNOWN"),
+        "drift_level": review_model.get("drift_level", "GREEN"),
+        "recommendation": review_model.get("recommendation", review_model.get("action", "SKIP_RETRAIN")),
+        "auto_retrain": bool(review_model.get("auto_retrain", False)),
+        "as_of": review_model.get("as_of"),
+        "reason": review_model.get("reason", ""),
+        "metrics": {
+            "current": performance.get("current_metrics", {}),
+            "baseline": performance.get("baseline_metrics", {}),
+            "deltas": performance.get("deltas", {}),
+        },
+        "drift_components": {
+            "shared_data": {"state": shared_data.get("state"), "score": shared_data.get("score")},
+            "target": {"state": target.get("state"), "score": target.get("score")},
+            "schema": {"state": schema.get("state"), "score": schema.get("score")},
+            "performance": {"state": performance.get("state"), "score": performance.get("score")},
+        },
+        "artifact": {
+            "model_type": artifact.get("model_type"),
+            "trained_at": artifact.get("trained_at") or artifact.get("as_of"),
+            "dataset_summary": artifact.get("dataset_summary", {}),
+            "params": artifact.get("params", {}),
+        },
+    }
+
+
+def _read_cadence_days(config_path: Path, default: int = 14) -> int:
+    if not config_path.exists():
+        return default
+    content = config_path.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(r"^\s*cadence_days\s*:\s*(\d+)\s*$", content, flags=re.MULTILINE)
+    if not match:
+        return default
+    try:
+        return max(int(match.group(1)), 1)
+    except ValueError:
+        return default
 
 
 def _opportunity_row(row: dict) -> dict | None:
@@ -281,7 +384,18 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     )
     (site_data_dir / "incidents.json").write_text(json.dumps(_sanitize(incident_payload), indent=2), encoding="utf-8")
 
-    review_summary = _read_json(data_dir / "training" / "review_summary_latest.json", {"suite_version": "", "models": {}})
+    review_summary = _read_json(
+        data_dir / "training" / "review_summary_latest.json",
+        {"suite_version": "", "models": {}, "as_of": None, "suite_status": "UNKNOWN", "suite_recommendation": "PENDING"},
+    )
+    retraining_cfg = _read_json(data_dir / "reports" / "retraining_config_snapshot.json", {})
+    if isinstance(retraining_cfg, dict):
+        cadence_days = int(((retraining_cfg.get("review", {}) if isinstance(retraining_cfg.get("review"), dict) else {}).get("cadence_days", 14) or 14))
+    else:
+        cadence_days = 14
+    if cadence_days <= 0:
+        cadence_days = _read_cadence_days(Path("config/retraining.yaml"), 14)
+
     model_timeline = []
     for row in _read_jsonl(data_dir / "training" / "reviews.jsonl")[-30:]:
         model_timeline.append(
@@ -296,11 +410,29 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             }
         )
 
+    review_models = review_summary.get("models", {}) if isinstance(review_summary.get("models"), dict) else {}
+    artifacts = {
+        "value": _read_json(data_dir / "training" / "models" / "value_champion.json", {}),
+        "timing": _read_json(data_dir / "training" / "models" / "timing_champion.json", {}),
+    }
+    model_details = {
+        model_key: _build_model_detail(model_key, review_models.get(model_key), artifacts.get(model_key))
+        for model_key in ("value", "timing")
+    }
+
+    last_review_at = review_summary.get("as_of")
+    if not last_review_at and model_timeline:
+        last_review_at = model_timeline[-1].get("as_of")
+
     models = {
         "champion": review_summary.get("suite_version") or (latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown"),
         "timeline": model_timeline,
         "health": metrics_payload,
         "champions": review_summary.get("models", {}),
+        "suite_status": review_summary.get("suite_status", "UNKNOWN"),
+        "suite_recommendation": review_summary.get("suite_recommendation", "PENDING"),
+        "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days),
+        "details": model_details,
     }
     (site_data_dir / "models.json").write_text(json.dumps(_sanitize(models), indent=2), encoding="utf-8")
 

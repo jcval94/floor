@@ -61,8 +61,38 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
     assert models["champion"] == "value:m3_value_linear@v2|timing:m3_timing_multiclass@v1"
     assert set(models["champions"].keys()) == {"value", "timing"}
+    assert models["suite_status"] == "UNKNOWN"
+    assert models["suite_recommendation"] == "PENDING"
+    assert models["retraining_schedule"]["cadence_days"] == 14
+    assert set(models["details"].keys()) == {"value", "timing"}
+    assert models["details"]["value"]["current_version"] == "v2"
     dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
     assert "api_key" not in json.dumps(dashboard)
+
+
+def test_build_pages_data_adds_retraining_countdown_from_summary_date(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(json.dumps({"latest_predictions": []}), encoding="utf-8")
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps({"as_of": "2026-01-10T00:00:00+00:00", "models": {}}),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    schedule = models["retraining_schedule"]
+    assert schedule["cadence_days"] == 14
+    assert schedule["last_review_at"] == "2026-01-10T00:00:00+00:00"
+    assert schedule["next_review_at"] == "2026-01-24T00:00:00+00:00"
+    assert isinstance(schedule["seconds_until_due"], int)
+    assert isinstance(schedule["human_eta"], str)
 
 
 def test_build_pages_data_parses_nested_universe_yaml(tmp_path: Path) -> None:
