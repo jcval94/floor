@@ -1,0 +1,9 @@
+{
+  "task": "value",
+  "format": "pkl",
+  "file_name": "value_champion.pkl",
+  "sha256": "614b7fb1ce78670d91c7bd92f9bbc5cd7b2de0642e05d6e13dc4999d86aa3688",
+  "model_name": "m3_value_linear",
+  "model_version": "20260318T223030Z",
+  "created_at": "2026-03-18T22:31:38.308699+00:00"
+}
