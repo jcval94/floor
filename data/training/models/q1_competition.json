@@ -1,3 +1,315 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:a1d1b654abe5231fd6d7b76da2e2f97a7fce08325d2aaeecddf69beb8351fce0
-size 2313
+{
+  "horizon": "q1",
+  "version": "20260318T223030Z",
+  "selection_metric": "mae_spread_then_total_mae",
+  "training_mode": "manual",
+  "selected_model_id": "evt_cp_q1",
+  "candidates": [
+    {
+      "model_id": "evt_cp_q1",
+      "model_family": "evt_changepoint_hybrid",
+      "horizon": "q1",
+      "version": "20260318T223030Z",
+      "floor_delta": 0.031670338648168976,
+      "ceiling_delta": 0.03770123414620992,
+      "train_rows": 8750,
+      "test_rows": 3750,
+      "metrics": {
+        "mae_floor": 9.54546295798123,
+        "mae_ceiling": 9.91885808554354,
+        "mae_spread": 9.942259473607043,
+        "test_floor_coverage": 1.0,
+        "test_ceiling_coverage": 1.0
+      },
+      "params": {
+        "floor": {
+          "global": 0.03064000250322048,
+          "table": {
+            "v2:up": 0.0279064742133213,
+            "v1:up": 0.028357728606619653,
+            "v3:up": 0.04009430779388839,
+            "v2:down": 0.031670338648168976,
+            "v1:down": 0.020928190999356864,
+            "v3:down": 0.03829574747062218
+          },
+          "vol_cuts": [
+            0.019902818635444672,
+            0.02804409530265844
+          ],
+          "bins": 3,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "ceiling": {
+          "global": 0.03920121563555181,
+          "table": {
+            "v2:up": 0.03770123414620992,
+            "v1:up": 0.026049428296525026,
+            "v3:up": 0.06610746963271973,
+            "v2:down": 0.0374004678041346,
+            "v1:down": 0.026305521674464618,
+            "v3:down": 0.06873498404986039
+          },
+          "vol_cuts": [
+            0.019902818635444672,
+            0.02804409530265844
+          ],
+          "bins": 3,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "training_mode": "manual"
+      }
+    },
+    {
+      "model_id": "xgboost_q1",
+      "model_family": "xgboost",
+      "horizon": "q1",
+      "version": "20260318T223030Z",
+      "floor_delta": 0.0453885839844076,
+      "ceiling_delta": 0.059366456889554185,
+      "train_rows": 8750,
+      "test_rows": 3750,
+      "metrics": {
+        "mae_floor": 9.518123983160498,
+        "mae_ceiling": 11.023897925215953,
+        "mae_spread": 10.75728788615082,
+        "test_floor_coverage": 1.0,
+        "test_ceiling_coverage": 1.0
+      },
+      "params": {
+        "floor": {
+          "base": 0.044174027590640555,
+          "stumps": [
+            {
+              "feature": "atr_14",
+              "threshold": 0.02579691491903247,
+              "left": -0.007121240291924149,
+              "right": 0.010681860437887205
+            },
+            {
+              "feature": "dist_to_low_3m",
+              "threshold": 0.04922196733281936,
+              "left": 0.017842907367816574,
+              "right": -0.004463913530653753
+            },
+            {
+              "feature": "rel_strength_20",
+              "threshold": -0.010014319439370256,
+              "left": -0.009821250086970296,
+              "right": 0.0065506185091415954
+            },
+            {
+              "feature": "rel_strength_20",
+              "threshold": 0.0061029371923091436,
+              "left": 0.005352903115045912,
+              "right": -0.008029354672568843
+            },
+            {
+              "feature": "rel_strength_20",
+              "threshold": -0.010014319439370256,
+              "left": -0.007810493949604318,
+              "right": 0.005209475960671489
+            },
+            {
+              "feature": "atr_14",
+              "threshold": 0.03475837493697688,
+              "left": -0.0028288295539098994,
+              "right": 0.011315318215639794
+            }
+          ],
+          "lr": 0.45,
+          "rounds": 6,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "ceiling": {
+          "base": 0.05402410423548975,
+          "stumps": [
+            {
+              "feature": "atr_14",
+              "threshold": 0.02579691491903247,
+              "left": -0.015517675559369035,
+              "right": 0.02327651333905425
+            },
+            {
+              "feature": "atr_14",
+              "threshold": 0.03475837493697688,
+              "left": -0.006568530437129896,
+              "right": 0.026274121748520587
+            },
+            {
+              "feature": "atr_14",
+              "threshold": 0.0212543540905842,
+              "left": -0.009702378275848656,
+              "right": 0.006471332890788158
+            },
+            {
+              "feature": "drawdown_13w",
+              "threshold": -0.09733817809468126,
+              "left": 0.013008758485298321,
+              "right": -0.00325451294581466
+            },
+            {
+              "feature": "dist_to_low_3m",
+              "threshold": 0.18502790568261163,
+              "left": -0.005789618193057971,
+              "right": 0.008684427289587017
+            },
+            {
+              "feature": "atr_14",
+              "threshold": 0.03475837493697688,
+              "left": -0.0022632898670300306,
+              "right": 0.009053159468120147
+            }
+          ],
+          "lr": 0.45,
+          "rounds": 6,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "training_mode": "manual"
+      }
+    },
+    {
+      "model_id": "lstm_q1",
+      "model_family": "lstm_sequence",
+      "horizon": "q1",
+      "version": "20260318T223030Z",
+      "floor_delta": 0.044194741738043816,
+      "ceiling_delta": 0.05403528517571156,
+      "train_rows": 8750,
+      "test_rows": 3750,
+      "metrics": {
+        "mae_floor": 9.702782314172214,
+        "mae_ceiling": 10.229587476541447,
+        "mae_spread": 10.917756553379062,
+        "test_floor_coverage": 1.0,
+        "test_ceiling_coverage": 1.0
+      },
+      "params": {
+        "floor": {
+          "weights": {
+            "momentum_20": -0.0003441263691541183,
+            "trend_context_m3": -0.00040795063700564454,
+            "ai_horizon_alignment": 0.0,
+            "ai_recency_long": 0.0,
+            "atr_14": 0.0005252991555457534
+          },
+          "bias": 0.0441830129797051,
+          "features": [
+            "momentum_20",
+            "trend_context_m3",
+            "ai_horizon_alignment",
+            "ai_recency_long",
+            "atr_14"
+          ],
+          "l2": 0.01,
+          "lr": 0.02,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "ceiling": {
+          "weights": {
+            "momentum_20": -0.0002789659080421613,
+            "trend_context_m3": -4.964442868710975e-05,
+            "ai_horizon_alignment": 0.0,
+            "ai_recency_long": 0.0,
+            "atr_14": 0.0014033251206980633
+          },
+          "bias": 0.05400161791507906,
+          "features": [
+            "momentum_20",
+            "trend_context_m3",
+            "ai_horizon_alignment",
+            "ai_recency_long",
+            "atr_14"
+          ],
+          "l2": 0.01,
+          "lr": 0.02,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "training_mode": "manual"
+      }
+    },
+    {
+      "model_id": "qenet_q1",
+      "model_family": "quantile_elastic_net",
+      "horizon": "q1",
+      "version": "20260318T223030Z",
+      "floor_delta": 0.044287379460012474,
+      "ceiling_delta": 0.053839825946118,
+      "train_rows": 8750,
+      "test_rows": 3750,
+      "metrics": {
+        "mae_floor": 9.705834558279161,
+        "mae_ceiling": 10.207564678597544,
+        "mae_spread": 10.8796708686948,
+        "test_floor_coverage": 1.0,
+        "test_ceiling_coverage": 1.0
+      },
+      "params": {
+        "floor": {
+          "weights": {
+            "atr_14": 0.0005337000671441643,
+            "trend_context_m3": -0.0003456114310001849,
+            "drawdown_13w": -0.0001943476736181818,
+            "dist_to_low_3m": -0.0016472189678145204,
+            "ai_horizon_alignment": 0.0
+          },
+          "bias": 0.04442830323958219,
+          "features": [
+            "atr_14",
+            "trend_context_m3",
+            "drawdown_13w",
+            "dist_to_low_3m",
+            "ai_horizon_alignment"
+          ],
+          "l2": 0.01,
+          "lr": 0.02,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "ceiling": {
+          "weights": {
+            "atr_14": 0.0013584227045196375,
+            "trend_context_m3": -0.00030958155598849164,
+            "drawdown_13w": -0.003283213807960794,
+            "dist_to_low_3m": 0.007004283073257173,
+            "ai_horizon_alignment": 0.0
+          },
+          "bias": 0.05272893409294121,
+          "features": [
+            "atr_14",
+            "trend_context_m3",
+            "drawdown_13w",
+            "dist_to_low_3m",
+            "ai_horizon_alignment"
+          ],
+          "l2": 0.01,
+          "lr": 0.02,
+          "cv": {
+            "enabled": false,
+            "folds": 0
+          }
+        },
+        "training_mode": "manual"
+      }
+    }
+  ]
+}
