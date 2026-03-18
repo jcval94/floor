@@ -60,11 +60,11 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert (site_data / "universe.json").exists()
     models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
     assert models["champion"] == "value:m3_value_linear@v2|timing:m3_timing_multiclass@v1"
-    assert set(models["champions"].keys()) == {"value", "timing"}
+    assert set(models["champions"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["suite_status"] == "UNKNOWN"
     assert models["suite_recommendation"] == "PENDING"
     assert models["retraining_schedule"]["cadence_days"] == 14
-    assert set(models["details"].keys()) == {"value", "timing"}
+    assert set(models["details"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["details"]["value"]["current_version"] == "v2"
     dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
     assert "api_key" not in json.dumps(dashboard)

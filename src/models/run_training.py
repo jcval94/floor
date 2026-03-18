@@ -148,6 +148,26 @@ def _persist_winning_model_file(task: str, models_file_dir: Path, artifact_paylo
     return out_path
 
 
+def _load_champion_payload(models_dir: Path, task: str) -> dict | None:
+    champion_path = models_dir / f"{task}_champion.json"
+    if not champion_path.exists():
+        return None
+    try:
+        payload = json.loads(champion_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        logger.warning("[training] champion json unreadable task=%s path=%s", task, champion_path)
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _sync_models_file_champion(task: str, models_dir: Path, models_file_dir: Path) -> None:
+    champion_payload = _load_champion_payload(models_dir=models_dir, task=task)
+    if champion_payload is None:
+        logger.warning("[training] skip models_file sync task=%s reason=missing_champion_payload", task)
+        return
+    _persist_winning_model_file(task, models_file_dir, champion_payload)
+
+
 
 def _horizon_defaults(task: str) -> dict[str, float | str]:
     if task == "d1":
@@ -268,6 +288,8 @@ def run_training(
                     training_mode,
                     selection[horizon_task].get("decision"),
                 )
+            if training_mode in {"manual", "retrain", "renewal"}:
+                _sync_models_file_champion(task=horizon_task, models_dir=models_dir, models_file_dir=models_file_dir)
 
         if "value" in selected_tasks:
             logger.info("[training] training value model version=%s", version)
@@ -291,6 +313,8 @@ def run_training(
                     training_mode,
                     selection["value"].get("decision"),
                 )
+            if training_mode in {"manual", "retrain", "renewal"}:
+                _sync_models_file_champion(task="value", models_dir=models_dir, models_file_dir=models_file_dir)
 
         if "timing" in selected_tasks:
             logger.info("[training] training timing model version=%s", version)
@@ -318,6 +342,8 @@ def run_training(
                     training_mode,
                     selection["timing"].get("decision"),
                 )
+            if training_mode in {"manual", "retrain", "renewal"}:
+                _sync_models_file_champion(task="timing", models_dir=models_dir, models_file_dir=models_file_dir)
 
         metrics_payload["selection"] = selection
         metrics_path = metrics_dir / f"training_metrics_{version}.json"
