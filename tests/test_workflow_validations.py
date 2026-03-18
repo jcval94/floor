@@ -127,6 +127,7 @@ def test_validate_prediction_quality_valid_rows(tmp_path: Path) -> None:
         data_dir / "predictions" / "AAPL.jsonl",
         {
             "symbol": "AAPL",
+            "horizon": "m3",
             "action": "BUY",
             "floor_d1": 100.0,
             "ceiling_d1": 110.0,
@@ -154,6 +155,35 @@ def test_validate_prediction_quality_valid_rows(tmp_path: Path) -> None:
     assert out["rows"] == 1
     assert out["m3_blocked_ratio"] == 0.0
     assert out["action_consistency_ratio"] == 1.0
+
+
+
+
+def test_validate_prediction_quality_m3_row_allows_null_action(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    append_jsonl(
+        data_dir / "predictions" / "m3_only.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "m3",
+            "action": None,
+            "m3_status": "unavailable",
+            "m3_block_reason": "missing_models",
+            "expected_return_m3": None,
+        },
+    )
+
+    out = validate_prediction_quality(
+        data_dir=data_dir,
+        stream="predictions",
+        max_m3_blocked_ratio=1.0,
+        min_action_consistency_ratio=1.0,
+        action_return_tolerance=0.0,
+        sample_limit=2,
+    )
+
+    assert out["rows"] == 1
+    assert out["m3_total"] == 1
 
 
 def test_validate_prediction_quality_invalid_floor_ceiling_fail_fast(tmp_path: Path) -> None:
@@ -194,6 +224,7 @@ def test_validate_prediction_quality_invalid_blocked_ratio(tmp_path: Path) -> No
         data_dir / "predictions" / "blocked.jsonl",
         {
             "symbol": "AAPL",
+            "horizon": "m3",
             "action": "BUY",
             "floor_d1": 100.0,
             "ceiling_d1": 110.0,
@@ -212,6 +243,7 @@ def test_validate_prediction_quality_invalid_blocked_ratio(tmp_path: Path) -> No
         data_dir / "predictions" / "ok.jsonl",
         {
             "symbol": "MSFT",
+            "horizon": "m3",
             "action": "BUY",
             "floor_d1": 200.0,
             "ceiling_d1": 210.0,
@@ -267,4 +299,123 @@ def test_validate_prediction_quality_invalid_action_consistency(tmp_path: Path) 
             min_action_consistency_ratio=1.0,
             action_return_tolerance=0.0,
             sample_limit=2,
+        )
+
+
+def test_validate_prediction_quality_missing_fields_reports_diagnostics(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    data_dir = tmp_path / "data"
+    append_jsonl(
+        data_dir / "predictions" / "missing.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "m3",
+            "action": None,
+            "m3_status": "",
+            "m3_block_reason": "missing_models",
+        },
+    )
+
+    with pytest.raises(SystemExit, match=r"::error::valor falso: campos críticos nulos por horizonte") as exc:
+        validate_prediction_quality(
+            data_dir=data_dir,
+            stream="predictions",
+            max_m3_blocked_ratio=1.0,
+            min_action_consistency_ratio=1.0,
+            action_return_tolerance=0.0,
+            sample_limit=2,
+        )
+
+    assert 'causas={' in str(exc.value)
+    assert '"m3_status"' in str(exc.value)
+
+    captured = capsys.readouterr()
+    assert "::notice::prediction_quality diagnostics=" in captured.out
+    assert '"rows_with_null_action_by_horizon": {"m3": 1}' in captured.out
+
+
+def test_validate_prediction_quality_m3_ratio_uses_only_m3_rows(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    append_jsonl(
+        data_dir / "predictions" / "d1.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "d1",
+            "action": None,
+            "floor_value": 100.0,
+            "ceiling_value": 110.0,
+            "model_version": "v1",
+            "m3_status": "blocked",
+            "m3_block_reason": "only_context",
+        },
+    )
+    append_jsonl(
+        data_dir / "predictions" / "m3.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "m3",
+            "action": None,
+            "m3_status": "ok",
+            "m3_block_reason": "not_blocked",
+        },
+    )
+
+    out = validate_prediction_quality(
+        data_dir=data_dir,
+        stream="predictions",
+        max_m3_blocked_ratio=0.1,
+        min_action_consistency_ratio=1.0,
+        action_return_tolerance=0.0,
+        sample_limit=2,
+    )
+
+    assert out["m3_total"] == 1
+    assert out["m3_blocked"] == 0
+    assert out["m3_blocked_ratio"] == 0.0
+
+
+def test_validate_prediction_quality_latest_batch_ignores_historical_failures(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    append_jsonl(
+        data_dir / "predictions" / "history.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "m3",
+            "as_of": "2026-01-01T10:00:00+00:00",
+            "m3_status": "blocked",
+            "m3_block_reason": "historical_issue",
+        },
+    )
+    append_jsonl(
+        data_dir / "predictions" / "latest.jsonl",
+        {
+            "symbol": "AAPL",
+            "horizon": "m3",
+            "as_of": "2026-01-02T10:00:00+00:00",
+            "m3_status": "ok",
+            "m3_block_reason": "not_blocked",
+        },
+    )
+
+    out = validate_prediction_quality(
+        data_dir=data_dir,
+        stream="predictions",
+        max_m3_blocked_ratio=0.4,
+        min_action_consistency_ratio=1.0,
+        action_return_tolerance=0.0,
+        sample_limit=2,
+    )
+
+    assert out["rows"] == 1
+    assert out["m3_total"] == 1
+    assert out["m3_blocked"] == 0
+
+    with pytest.raises(SystemExit, match=r"ratio m3_status=blocked"):
+        validate_prediction_quality(
+            data_dir=data_dir,
+            stream="predictions",
+            max_m3_blocked_ratio=0.4,
+            min_action_consistency_ratio=1.0,
+            action_return_tolerance=0.0,
+            sample_limit=2,
+            evaluation_scope="all_rows",
         )
