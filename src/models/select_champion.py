@@ -158,7 +158,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         "objective": "minimize_weighted_error",
     }
     try:
-        if decision == "promote":
+        if decision == "promote" and existing is not None:
             _write_json_atomic(archived, existing, task=task)
         _write_json_atomic(challenger_path, payload, task=task)
         if decision in {"promote_first", "promote"}:
