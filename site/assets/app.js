@@ -136,6 +136,7 @@ async function tickers() {
   const latestClose = forecasts.latest_close || {};
   const table = document.getElementById('tickersTable');
   const horizonFilter = document.getElementById('horizonFilter');
+  let currentSort = { column: 12, direction: 'desc' };
 
   function pickByHorizon(rows, horizon) {
     if (horizon === 'm3') {
@@ -152,10 +153,30 @@ async function tickers() {
   }
 
   function rowScore(recent, floor, ceiling) {
+    if (![recent, floor, ceiling].every(Number.isFinite)) return null;
     const toFloor = Math.max(recent - floor, 0);
     const toCeiling = Math.max(ceiling - recent, 0);
     const denom = Math.max(recent, 1e-6);
     return ((toCeiling / denom) * 100) - ((toFloor / denom) * 100);
+  }
+
+  function cellSortValue(rowElement, idx) {
+    const text = (rowElement.children[idx]?.innerText || '').trim();
+    const numeric = Number(text.replace('%', '').replace(/,/g, ''));
+    return Number.isFinite(numeric) ? numeric : text.toLowerCase();
+  }
+
+  function sortRenderedRows() {
+    const idx = Number(currentSort.column);
+    const dir = currentSort.direction === 'asc' ? 1 : -1;
+    const rows = [...table.closest('table').querySelectorAll('tbody tr')];
+    rows.sort((a, b) => {
+      const av = cellSortValue(a, idx);
+      const bv = cellSortValue(b, idx);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+    });
+    rows.forEach((r) => table.appendChild(r));
   }
 
   function renderTable() {
@@ -179,16 +200,19 @@ async function tickers() {
       const deltaFloorPct = pctDelta(chosenFloor, recent);
       const deltaCeilingPct = pctDelta(chosenCeiling, recent);
       const deltaM3Pct = pctDelta(Number(m3.floor), recent);
-      const score = rowScore(recent, chosenFloor, chosenCeiling);
+      const score = selectedHorizon === 'm3'
+        ? deltaM3Pct
+        : rowScore(recent, chosenFloor, chosenCeiling);
 
         return {
           symbol: s,
           score,
           html: `<tr><td><a href="tickers.html?ticker=${s}">${s}</a></td><td>${fmt(recent)}</td><td>${closeDaily == null ? '-' : fmt(closeDaily)}</td><td>${deltaRecentVsClosePct == null ? '-' : `${fmt(deltaRecentVsClosePct)}%`}</td><td>${fmt(chosenFloor)}</td><td>${deltaFloorPct == null ? '-' : `${fmt(deltaFloorPct)}%`}</td><td>${fmt(chosenCeiling)}</td><td>${deltaCeilingPct == null ? '-' : `${fmt(deltaCeilingPct)}%`}</td><td>${fmt(m3.floor)}</td><td>${deltaM3Pct == null ? '-' : `${fmt(deltaM3Pct)}%`}</td><td>${m3WeekHumanLabel(m3.week)}</td><td>${m3.start || '-'} → ${m3.end || '-'}</td><td>${fmt(score)}</td></tr>`,
         };
-      }).sort((a, b) => b.score - a.score);
+      }).sort((a, b) => (Number(b.score) - Number(a.score)));
 
     table.innerHTML = rowsForTable.map((x) => x.html).join('');
+    sortRenderedRows();
   }
 
   renderTable();
@@ -204,9 +228,13 @@ async function tickers() {
   document.querySelectorAll('th.sortable').forEach((th) => {
     th.addEventListener('click', () => {
       const idx = Number(th.dataset.col);
-      const rows = [...table.closest('table').querySelectorAll('tbody tr')];
-      rows.sort((a, b) => a.children[idx].innerText.localeCompare(b.children[idx].innerText, undefined, { numeric: true }));
-      rows.forEach((r) => table.appendChild(r));
+      if (currentSort.column === idx) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = idx;
+        currentSort.direction = 'asc';
+      }
+      sortRenderedRows();
     });
   });
 }
