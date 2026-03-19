@@ -313,3 +313,77 @@ def test_build_pages_data_includes_latest_intraday_and_latest_close(tmp_path: Pa
     assert latest_intraday["AAPL"]["price"] == 213.6
     assert latest_intraday["AAPL"]["as_of"] == "2026-03-18T20:00:00+00:00"
     assert latest_intraday["MSFT"]["price"] == 401.8
+
+
+def test_build_pages_data_uses_artifact_suite_when_review_summary_missing(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training" / "models").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(json.dumps({"latest_predictions": []}), encoding="utf-8")
+    (data_dir / "training" / "review_summary_latest.json").write_text(json.dumps({"models": {}}), encoding="utf-8")
+    (data_dir / "training" / "models" / "value_champion.json").write_text(
+        json.dumps({"model_name": "m3_value_linear", "version": "value-v7", "trained_at": "2026-03-19T10:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "models" / "timing_champion.json").write_text(
+        json.dumps({"model_name": "m3_timing_multiclass", "version": "timing-v4", "trained_at": "2026-03-19T10:00:00+00:00"}),
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("""symbols:
+  - AAPL
+""", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert models["champion"] == "value:m3_value_linear@value-v7|timing:m3_timing_multiclass@timing-v4"
+    assert models["sync_status"]["review_summary_stale"] is False
+
+
+def test_build_pages_data_marks_review_summary_stale_when_versions_diverge(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training" / "models").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(json.dumps({"latest_predictions": []}), encoding="utf-8")
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps(
+            {
+                "suite_version": "value:m3_value_linear@value-v6|timing:m3_timing_multiclass@timing-v3",
+                "suite_status": "GREEN",
+                "suite_recommendation": "SKIP_RETRAIN",
+                "models": {
+                    "value": {"current_version": "value-v6"},
+                    "timing": {"current_version": "timing-v3"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "models" / "value_champion.json").write_text(
+        json.dumps({"model_name": "m3_value_linear", "version": "value-v7", "trained_at": "2026-03-19T12:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "models" / "timing_champion.json").write_text(
+        json.dumps({"model_name": "m3_timing_multiclass", "version": "timing-v4", "trained_at": "2026-03-19T12:00:00+00:00"}),
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("""symbols:
+  - AAPL
+""", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert models["champion"] == "value:m3_value_linear@value-v7|timing:m3_timing_multiclass@timing-v4"
+    assert models["suite_status"] == "STALE_REVIEW"
+    assert models["suite_recommendation"] == "REBUILD_SITE_DATA"
+    assert models["sync_status"]["review_summary_stale"] is True
+    assert models["sync_status"]["latest_model_artifact_at"] == "2026-03-19T12:00:00+00:00"
