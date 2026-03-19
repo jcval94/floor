@@ -53,6 +53,11 @@ def generate_forecasts(
         model.is_available,
         model.version,
     )
+    logger.info(
+        "[forecasting][model-readout] selected_models=%s diagnostics=%s",
+        model.model_readout,
+        model.load_diagnostics,
+    )
 
     forecasts: list[dict] = []
     blocked: list[dict] = []
