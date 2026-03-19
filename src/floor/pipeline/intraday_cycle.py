@@ -23,6 +23,25 @@ EXPECTED_RETURN_THRESHOLD = 0.01
 
 
 LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
+MODEL_INPUT_FIELDS = (
+    "timestamp",
+    "symbol",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "vwap_distance",
+    "intraday_range_5",
+    "rolling_vol_20",
+    "atr_14",
+    "momentum_10",
+    "momentum_20",
+    "relative_volume_20",
+    "dist_to_low_20",
+    "dist_to_high_20",
+    "trend_context_m3",
+)
 
 
 def _looks_like_lfs_pointer(path: Path) -> bool:
@@ -69,6 +88,62 @@ def _log_model_registry_preflight(cfg: RuntimeConfig) -> None:
         models_file.exists(),
         diagnostics,
     )
+
+
+def _log_stage_start(step: str, detail: str) -> None:
+    logger.info("[predictions][stage] >>> %s START | %s", step, detail)
+
+
+def _log_stage_done(step: str, detail: str) -> None:
+    logger.info("[predictions][stage] <<< %s DONE  | %s", step, detail)
+
+
+def _model_input_snapshot(row: dict, ai_context: dict[str, Any] | None) -> dict[str, Any]:
+    model_inputs = {field: row.get(field) for field in MODEL_INPUT_FIELDS}
+    if ai_context:
+        model_inputs["ai_context"] = {
+            "ai_action": ai_context.get("ai_action"),
+            "ai_conviction": ai_context.get("ai_conviction"),
+            "ai_consensus_score": ai_context.get("ai_consensus_score"),
+            "ai_note": ai_context.get("ai_note"),
+        }
+    return model_inputs
+
+
+def _model_output_snapshot(row: dict) -> dict[str, Any]:
+    return {
+        "symbol": row.get("symbol"),
+        "model_version": row.get("model_version"),
+        "d1": {
+            "floor": row.get("floor_d1"),
+            "ceiling": row.get("ceiling_d1"),
+            "expected_return": row.get("expected_return_d1"),
+            "expected_range": row.get("expected_range_d1"),
+        },
+        "w1": {
+            "floor": row.get("floor_w1"),
+            "ceiling": row.get("ceiling_w1"),
+            "expected_return": row.get("expected_return_w1"),
+            "expected_range": row.get("expected_range_w1"),
+        },
+        "q1": {
+            "floor": row.get("floor_q1"),
+            "ceiling": row.get("ceiling_q1"),
+            "expected_return": row.get("expected_return_q1"),
+            "expected_range": row.get("expected_range_q1"),
+        },
+        "m3": {
+            "floor": row.get("floor_m3"),
+            "week": row.get("floor_week_m3"),
+            "week_confidence": row.get("floor_week_m3_confidence"),
+            "expected_return": row.get("expected_return_m3"),
+            "expected_range": row.get("expected_range_m3"),
+            "status": row.get("m3_status"),
+            "block_reason": row.get("m3_block_reason"),
+        },
+        "confidence_score": row.get("confidence_score"),
+        "composite_signal_score": row.get("composite_signal_score"),
+    }
 
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -393,20 +468,21 @@ def run_intraday_cycle(
     symbols: list[str],
     cfg: RuntimeConfig,
 ) -> None:
-    logger.info("[predictions] STEP 1/7 start intraday cycle event=%s symbols=%s", event_type, len(symbols))
+    _log_stage_start("STEP 1/7", f"intraday cycle bootstrap event={event_type} symbols={len(symbols)}")
     market_rows = _latest_feature_rows(cfg, symbols)
     if not market_rows:
         raise RuntimeError("No latest feature rows available in market_data.sqlite for requested symbols")
     _validate_feature_rows(market_rows)
-    logger.info("[predictions] STEP 1/7 DONE feature load + validation rows=%s", len(market_rows))
+    _log_stage_done("STEP 1/7", f"feature load + validation rows={len(market_rows)}")
 
+    _log_stage_start("STEP 2/7", "fetch external recommendations")
     try:
         external = {record.symbol: record for record in fetch_recommendations(cfg.recommendations_csv_url)}
         logger.info("[predictions] loaded external recommendations count=%s", len(external))
     except Exception as exc:
         logger.exception("[predictions] failed to fetch external recommendations: %s", exc)
         external = {}
-    logger.info("[predictions] STEP 2/7 DONE external recommendations count=%s", len(external))
+    _log_stage_done("STEP 2/7", f"external recommendations count={len(external)}")
 
     ai_by_symbol = {
         symbol: {
@@ -419,6 +495,15 @@ def run_intraday_cycle(
     }
 
     as_of = datetime.now(tz=ET)
+    _log_stage_start("STEP 3/7", "forecast generation")
+    logger.info("[predictions][model-io] INPUT batch_size=%s", len(market_rows))
+    for row in market_rows:
+        symbol = str(row.get("symbol", "")).upper()
+        logger.info(
+            "[predictions][model-io] INPUT symbol=%s values=%s",
+            symbol,
+            _model_input_snapshot(row, ai_by_symbol.get(symbol)),
+        )
     _log_model_registry_preflight(cfg)
     generated = run_forecast_pipeline(
         market_rows=market_rows,
@@ -434,6 +519,7 @@ def run_intraday_cycle(
         len(forecasts),
         len(blocked),
     )
+    _log_stage_done("STEP 3/7", f"forecast pipeline forecasts={len(forecasts)} blocked={len(blocked)}")
     if blocked:
         logger.warning(
             "[predictions] blocked forecasts count=%s sample=%s",
@@ -448,11 +534,22 @@ def run_intraday_cycle(
         )
         forecasts = _fallback_forecasts_from_blocked(market_rows, blocked)
 
+    _log_stage_start("STEP 4/7", "prediction persistence + signals/orders emission")
     for row in forecasts:
         symbol = str(row["symbol"]).upper()
-        logger.info("[predictions] processing symbol=%s model=%s", symbol, row.get("model_version"))
+        logger.info(
+            "[predictions][model-io] OUTPUT symbol=%s values=%s",
+            symbol,
+            _model_output_snapshot(row),
+        )
         for horizon, payload in _prediction_payloads(row, event_type):
             _validate_prediction_payload(symbol, horizon, payload)
+            logger.info(
+                "[predictions][model-io] OUTPUT horizon symbol=%s horizon=%s payload=%s",
+                symbol,
+                horizon,
+                payload,
+            )
             prediction = PredictionRecord(
                 symbol=symbol,
                 as_of=as_of,
@@ -506,10 +603,11 @@ def run_intraday_cycle(
                 if order:
                     append_jsonl(cfg.data_dir / "orders" / f"{symbol}.jsonl", order)
                     logger.info("[predictions] wrote order symbol=%s horizon=%s", symbol, horizon)
-    logger.info("[predictions] STEP 4/7 DONE payload validation + persistence")
+    _log_stage_done("STEP 4/7", "payload validation + persistence")
 
+    _log_stage_start("STEP 5/7", "prediction reconciliation")
     reconciliation = reconcile_predictions(cfg.data_dir)
-    logger.info("[predictions] STEP 5/7 DONE reconciliation run")
+    _log_stage_done("STEP 5/7", "reconciliation run")
     logger.info(
         "[predictions] reconciliation pending=%s reconciled=%s skipped=%s",
         reconciliation.get("pending", 0),
@@ -517,6 +615,8 @@ def run_intraday_cycle(
         reconciliation.get("skipped", 0),
     )
 
+    _log_stage_start("STEP 6/7", "cycle bookkeeping")
     logger.info("[predictions] finished intraday cycle event=%s forecasts=%s blocked=%s", event_type, len(forecasts), len(blocked))
-    logger.info("[predictions] STEP 6/7 DONE cycle bookkeeping")
-    logger.info("[predictions] STEP 7/7 DONE intraday cycle successful")
+    _log_stage_done("STEP 6/7", "cycle bookkeeping")
+    _log_stage_start("STEP 7/7", "finalization")
+    _log_stage_done("STEP 7/7", "intraday cycle successful")
