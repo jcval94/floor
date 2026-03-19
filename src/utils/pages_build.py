@@ -13,6 +13,7 @@ from datetime import timedelta
 from datetime import timezone
 from typing import Any
 
+from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.schemas import MULTI_HORIZON_PREDICTION_CONTRACT
 from floor.universe import parse_universe_yaml
 
@@ -84,6 +85,29 @@ def _read_jsonl(path: Path) -> list[dict]:
             if isinstance(payload, dict):
                 out.append(payload)
     return out
+
+
+def _latest_mtime(paths: list[Path]) -> float | None:
+    mtimes = [path.stat().st_mtime for path in paths if path.exists()]
+    return max(mtimes) if mtimes else None
+
+
+def _refresh_dashboard_snapshot_if_stale(data_dir: Path, dashboard_path: Path) -> None:
+    prediction_dir = data_dir / "predictions"
+    signal_dir = data_dir / "signals"
+    sqlite_path = data_dir / "persistence" / "app.sqlite"
+    refresh_inputs = [
+        *prediction_dir.glob("*.jsonl"),
+        *signal_dir.glob("*.jsonl"),
+        sqlite_path,
+    ]
+    latest_input_mtime = _latest_mtime(refresh_inputs)
+    dashboard_mtime = dashboard_path.stat().st_mtime if dashboard_path.exists() else None
+    if latest_input_mtime is None:
+        return
+    if dashboard_mtime is not None and dashboard_mtime >= latest_input_mtime:
+        return
+    build_dashboard_snapshot(data_dir, output_path=dashboard_path)
 
 
 def _latest_report_file(reports_dir: Path, pattern: str) -> Path | None:
@@ -513,6 +537,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     site_data_dir.mkdir(parents=True, exist_ok=True)
 
     dashboard_src = data_dir / "reports" / "dashboard.json"
+    _refresh_dashboard_snapshot_if_stale(data_dir, dashboard_src)
     dashboard_payload = {
         "prediction_files": 0,
         "signal_files": 0,
