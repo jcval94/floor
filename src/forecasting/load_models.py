@@ -86,6 +86,28 @@ class ChampionModelSet:
         """Only publish forecasts when both trained artifacts are available."""
         return all(artifact is not None for artifact in (self._d1_champion, self._w1_champion, self._q1_champion, self._value_champion, self._timing_champion))
 
+    @property
+    def load_diagnostics(self) -> dict[str, str]:
+        return dict(self._load_diagnostics)
+
+    @property
+    def model_readout(self) -> dict[str, dict[str, str]]:
+        artifacts = {
+            "d1": self._d1_champion,
+            "w1": self._w1_champion,
+            "q1": self._q1_champion,
+            "value": self._value_champion,
+            "timing": self._timing_champion,
+        }
+        return {
+            task: {
+                "status": "loaded" if artifact is not None else "missing",
+                "version": self._artifact_version(artifact),
+                "diagnostic": self._load_diagnostics.get(task, "unknown"),
+            }
+            for task, artifact in artifacts.items()
+        }
+
     @staticmethod
     def _load_json(path: Path) -> Any | None:
         if not path.exists():
