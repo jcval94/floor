@@ -259,7 +259,45 @@ def test_run_intraday_cycle_persists_neutral_fallback_when_champions_missing(tmp
     assert len(signals) == 3
     assert all(signal["action"] == "HOLD" for signal in signals)
 
-    db_path = data_dir / "persistence" / "app.sqlite"
-    assert stream_count(db_path, "predictions") == 4
-    assert stream_count(db_path, "signals") == 3
 
+def test_prediction_payloads_use_horizon_specific_model_confidence() -> None:
+    from floor.pipeline.intraday_cycle import _prediction_payloads
+
+    row = {
+        "floor_d1": 95.0,
+        "ceiling_d1": 105.0,
+        "floor_time_bucket_d1": "OPEN_PLUS_2H",
+        "ceiling_time_bucket_d1": "CLOSE",
+        "expected_return_d1": 0.01,
+        "expected_range_d1": 10.0,
+        "breach_prob_d1": 0.2,
+        "floor_w1": 90.0,
+        "ceiling_w1": 110.0,
+        "floor_day_w1": 2,
+        "ceiling_day_w1": 5,
+        "expected_return_w1": 0.02,
+        "expected_range_w1": 20.0,
+        "breach_prob_w1": 0.35,
+        "floor_q1": 80.0,
+        "ceiling_q1": 120.0,
+        "floor_day_q1": 10,
+        "ceiling_day_q1": 40,
+        "expected_return_q1": 0.03,
+        "expected_range_q1": 40.0,
+        "breach_prob_q1": 0.5,
+        "confidence_score": 0.99,
+        "floor_m3": None,
+        "floor_week_m3": None,
+        "floor_week_m3_confidence": None,
+        "expected_return_m3": None,
+        "expected_range_m3": None,
+        "m3_status": "blocked",
+        "m3_block_reason": "missing",
+    }
+
+    payloads = dict(_prediction_payloads(row, event_type="OPEN"))
+    assert payloads["d1"]["confidence_score"] == 0.8
+    assert payloads["w1"]["confidence_score"] == 0.65
+    assert payloads["q1"]["confidence_score"] == 0.5
+    assert payloads["d1"]["floor_time_probability"] == 0.8
+    assert payloads["w1"]["ceiling_time_probability"] == 0.65

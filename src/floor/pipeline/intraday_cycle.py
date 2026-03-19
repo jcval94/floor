@@ -161,6 +161,13 @@ def _to_optional_float(value: Any) -> float | None:
         return None
 
 
+def _horizon_confidence(row: dict, horizon: Literal["d1", "w1", "q1"], default: float) -> float:
+    breach_prob = _to_optional_float(row.get(f"breach_prob_{horizon}"))
+    if breach_prob is None:
+        return default
+    return max(0.0, min(1.0, 1.0 - breach_prob))
+
+
 def _signal_from_prediction(
     symbol: str,
     horizon: Literal["d1", "w1", "q1", "m3"],
@@ -304,6 +311,9 @@ def _validate_prediction_payload(symbol: str, horizon: str, payload: dict) -> No
 def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
     """Build normalized prediction payloads for d1/w1/q1/m3 horizons."""
     confidence = _to_float(row.get("confidence_score", 0.5), 0.5)
+    d1_confidence = _horizon_confidence(row, "d1", confidence)
+    w1_confidence = _horizon_confidence(row, "w1", confidence)
+    q1_confidence = _horizon_confidence(row, "q1", confidence)
     m3_payload = {
         "floor_m3": row.get("floor_m3"),
         "floor_week_m3": row.get("floor_week_m3"),
@@ -341,9 +351,9 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_value": _to_float(row.get("ceiling_d1")),
                 "floor_time_bucket": str(row["floor_time_bucket_d1"]),
                 "ceiling_time_bucket": str(row["ceiling_time_bucket_d1"]),
-                "floor_time_probability": confidence,
-                "ceiling_time_probability": confidence,
-                "confidence_score": confidence,
+                "floor_time_probability": d1_confidence,
+                "ceiling_time_probability": d1_confidence,
+                "confidence_score": d1_confidence,
                 "expected_return": _to_float(row.get("expected_return_d1", 0.0), 0.0),
                 "expected_range": _to_float(row.get("expected_range_d1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_d1", row.get("composite_signal_score")),
@@ -360,9 +370,9 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_value": _to_float(row.get("ceiling_w1")),
                 "floor_time_bucket": str(row["floor_day_w1"]),
                 "ceiling_time_bucket": str(row["ceiling_day_w1"]),
-                "floor_time_probability": confidence,
-                "ceiling_time_probability": confidence,
-                "confidence_score": confidence,
+                "floor_time_probability": w1_confidence,
+                "ceiling_time_probability": w1_confidence,
+                "confidence_score": w1_confidence,
                 "expected_return": _to_float(row.get("expected_return_w1", 0.0), 0.0),
                 "expected_range": _to_float(row.get("expected_range_w1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_w1", row.get("composite_signal_score")),
@@ -379,9 +389,9 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Literal["d1",
                 "ceiling_value": _to_float(row.get("ceiling_q1")),
                 "floor_time_bucket": str(row["floor_day_q1"]),
                 "ceiling_time_bucket": str(row["ceiling_day_q1"]),
-                "floor_time_probability": confidence,
-                "ceiling_time_probability": confidence,
-                "confidence_score": confidence,
+                "floor_time_probability": q1_confidence,
+                "ceiling_time_probability": q1_confidence,
+                "confidence_score": q1_confidence,
                 "expected_return": _to_float(row.get("expected_return_q1", 0.0), 0.0),
                 "expected_range": _to_float(row.get("expected_range_q1", 0.0), 0.0),
                 "composite_signal_score": row.get("composite_signal_score_q1", row.get("composite_signal_score")),
