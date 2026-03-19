@@ -277,6 +277,47 @@ def _champion_versions_from_artifacts(artifacts: dict[str, dict]) -> dict[str, d
     return champion_versions
 
 
+def _fallback_suite_version_from_artifacts(artifacts: dict[str, dict]) -> str:
+    value = artifacts.get("value", {}) if isinstance(artifacts, dict) else {}
+    timing = artifacts.get("timing", {}) if isinstance(artifacts, dict) else {}
+    value_version = str(value.get("version") or "").strip()
+    timing_version = str(timing.get("version") or "").strip()
+    if not value_version and not timing_version:
+        return ""
+    value_name = value.get("model_name", "m3_value_linear")
+    timing_name = timing.get("model_name", "m3_timing_multiclass")
+    return f"value:{value_name}@{(value_version or 'unknown')}|timing:{timing_name}@{(timing_version or 'unknown')}"
+
+
+def _review_summary_is_stale(review_models: dict[str, Any], artifacts: dict[str, dict]) -> bool:
+    if not isinstance(review_models, dict):
+        return False
+    for task in ("d1", "w1", "q1", "value", "timing"):
+        summary_model = review_models.get(task, {})
+        if not isinstance(summary_model, dict):
+            continue
+        summary_version = str(summary_model.get("current_version") or "").strip()
+        if not summary_version:
+            continue
+        artifact = artifacts.get(task, {}) if isinstance(artifacts, dict) else {}
+        artifact_version = str(artifact.get("version") or "").strip()
+        if artifact_version and summary_version != artifact_version:
+            return True
+    return False
+
+
+def _latest_model_artifact_timestamp(artifacts: dict[str, dict]) -> str | None:
+    latest: datetime | None = None
+    for task in ("d1", "w1", "q1", "value", "timing"):
+        artifact = artifacts.get(task, {}) if isinstance(artifacts, dict) else {}
+        parsed = _parse_iso_datetime(artifact.get("trained_at") or artifact.get("as_of"))
+        if parsed is None:
+            continue
+        if latest is None or parsed > latest:
+            latest = parsed
+    return latest.isoformat() if latest else None
+
+
 def _read_cadence_days(config_path: Path, default: int = 14) -> int:
     if not config_path.exists():
         return default
@@ -621,6 +662,8 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "timing": _read_json(data_dir / "training" / "models" / "timing_champion.json", {}),
     }
     fallback_champions = _champion_versions_from_artifacts(artifacts)
+    fallback_suite_version = _fallback_suite_version_from_artifacts(artifacts)
+    review_summary_stale = _review_summary_is_stale(review_models, artifacts)
     model_details = {
         model_key: _build_model_detail(model_key, review_models.get(model_key), artifacts.get(model_key))
         for model_key in ("d1", "w1", "q1", "value", "timing")
@@ -631,13 +674,30 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     if not last_review_at and model_timeline:
         last_review_at = model_timeline[-1].get("as_of")
 
+    champion_from_forecasts = latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown"
+    champion = review_summary.get("suite_version")
+    if not champion or review_summary_stale:
+        champion = fallback_suite_version if fallback_suite_version else champion_from_forecasts
+    if not champion:
+        champion = champion_from_forecasts
+
+    suite_status = review_summary.get("suite_status", "UNKNOWN")
+    suite_recommendation = review_summary.get("suite_recommendation", "PENDING")
+    if review_summary_stale:
+        suite_status = "STALE_REVIEW"
+        suite_recommendation = "REBUILD_SITE_DATA"
+
     models = {
-        "champion": review_summary.get("suite_version") or (latest_predictions[0].get("model_version", "unknown") if latest_predictions else "unknown"),
+        "champion": champion,
         "timeline": model_timeline,
         "health": metrics_payload,
         "champions": {**fallback_champions, **(review_summary.get("models", {}) if isinstance(review_summary.get("models"), dict) else {})},
-        "suite_status": review_summary.get("suite_status", "UNKNOWN"),
-        "suite_recommendation": review_summary.get("suite_recommendation", "PENDING"),
+        "suite_status": suite_status,
+        "suite_recommendation": suite_recommendation,
+        "sync_status": {
+            "review_summary_stale": review_summary_stale,
+            "latest_model_artifact_at": _latest_model_artifact_timestamp(artifacts),
+        },
         "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days),
         "details": model_details,
     }

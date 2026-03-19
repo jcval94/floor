@@ -21,6 +21,34 @@ function listItems(rows) {
   return rows.map((x) => `<li>${x}</li>`).join('');
 }
 
+function fmtMaybe(value, digits = 3) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  return Number.isFinite(n) ? fmt(n, digits) : String(value);
+}
+
+function normalizeState(state) {
+  return String(state || '-').trim().toUpperCase();
+}
+
+function stateTone(state) {
+  const normalized = normalizeState(state);
+  if ([
+    'RED', 'ALERT', 'ESCALATE', 'CRITICAL', 'HIGH', 'FAIL', 'FAILED', 'BAD', 'ERROR',
+  ].includes(normalized)) return 'bad';
+  if ([
+    'YELLOW', 'WARN', 'WARNING', 'MEDIUM', 'PENDING', 'REVIEW', 'UNKNOWN',
+  ].includes(normalized)) return 'warn';
+  return 'ok';
+}
+
+function stateChip(label, state, score) {
+  const tone = stateTone(state);
+  const normalized = normalizeState(state);
+  const scoreText = fmtMaybe(score, 2);
+  return `<span class="state-chip ${tone}"><strong>${label}</strong><span>${normalized}</span><span>${scoreText}</span></span>`;
+}
+
 function _selectPrimaryForecast(rows) {
   const safeRows = rows || [];
   return safeRows.find((r) => r.horizon === 'd1')
@@ -260,30 +288,48 @@ async function models() {
 
   const suiteRoot = document.getElementById('suiteStatus');
   if (suiteRoot) {
+    const sync = models.sync_status || {};
     suiteRoot.innerHTML = `
       <div class="small">Estado suite: ${badge(models.suite_status || 'UNKNOWN')}</div>
       <div class="small">Recomendación: ${badge(models.suite_recommendation || 'PENDING')}</div>
+      <div class="small">Sync modelos↔resumen: ${sync.review_summary_stale ? badge('STALE') : badge('OK')}</div>
+      <div class="small">Último artefacto modelo: ${sync.latest_model_artifact_at || '-'}</div>
     `;
   }
 
   const detailsRows = Object.values(models.details || {}).map((detail) => {
-    const metricKeys = Object.keys(detail?.metrics?.current || {});
+    const metricEntries = Object.entries(detail?.metrics?.current || {});
     const drift = detail?.drift_components || {};
-    const driftSummary = [
-      `shared=${drift.shared_data?.state || '-'} (${fmt(drift.shared_data?.score)})`,
-      `target=${drift.target?.state || '-'} (${fmt(drift.target?.score)})`,
-      `schema=${drift.schema?.state || '-'} (${fmt(drift.schema?.score)})`,
-      `perf=${drift.performance?.state || '-'} (${fmt(drift.performance?.score)})`,
-    ];
+    const paramsText = safeJSON(detail.artifact?.params || {});
+    const recommendationTone = stateTone(detail.recommendation || 'UNKNOWN');
     return `<tr>
       <td>${detail.model_key || '-'}</td>
-      <td>${detail.model_name || '-'}</td>
+      <td>
+        <div class="model-head">${detail.model_name || '-'}</div>
+        <div class="small">${detail.current_version || '-'}</div>
+      </td>
       <td>${detail.current_version || '-'}</td>
-      <td>${badge(detail.status || 'UNKNOWN')} ${badge(detail.drift_level || 'GREEN')}</td>
-      <td>${detail.recommendation || '-'}${detail.auto_retrain ? ' · auto' : ''}</td>
-      <td><ul class="small">${listItems(metricKeys.map((k) => `${k}: ${fmt(detail.metrics.current[k])}`))}</ul></td>
-      <td><pre class="small">${safeJSON(detail.artifact?.params || {})}</pre></td>
-      <td><ul class="small">${listItems(driftSummary)}</ul><div class="small">${detail.reason || '-'}</div></td>
+      <td><div class="status-group">${badge(detail.status || 'UNKNOWN')} ${badge(detail.drift_level || 'GREEN')}</div></td>
+      <td>
+        <div class="recommendation-pill ${recommendationTone}">${detail.recommendation || '-'}</div>
+        <div class="small">${detail.auto_retrain ? 'Auto-retrain habilitado' : 'Auto-retrain deshabilitado'}</div>
+      </td>
+      <td>
+        <div class="metrics-grid">${metricEntries.length
+          ? metricEntries.map(([k, v]) => `<div class="metric-pill"><span>${k}</span><strong>${fmtMaybe(v)}</strong></div>`).join('')
+          : '<div class="small">Sin métricas actuales.</div>'}
+        </div>
+      </td>
+      <td><pre class="small params-block">${paramsText}</pre></td>
+      <td>
+        <div class="drift-grid">
+          ${stateChip('shared', drift.shared_data?.state, drift.shared_data?.score)}
+          ${stateChip('target', drift.target?.state, drift.target?.score)}
+          ${stateChip('schema', drift.schema?.state, drift.schema?.score)}
+          ${stateChip('perf', drift.performance?.state, drift.performance?.score)}
+        </div>
+        <div class="small reason-text">${detail.reason || '-'}</div>
+      </td>
     </tr>`;
   }).join('');
   const detailsRoot = document.getElementById('modelDetails');
