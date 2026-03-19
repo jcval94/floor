@@ -369,11 +369,17 @@ def _latest_market_values(db_path: Path, symbols: list[str]) -> dict[str, dict[s
     }
 
 
-def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
+def _latest_intraday_values(
+    rows_path: Path,
+    symbols: list[str],
+    latest_close: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
     if not rows_path.exists() or not symbols:
         return {}
     allowed = {s.upper() for s in symbols}
-    latest: dict[str, tuple[str, int, dict[str, Any]]] = {}
+    close_refs = latest_close or {}
+    preferred: dict[str, tuple[str, int, dict[str, Any]]] = {}
+    fallback: dict[str, tuple[str, int, dict[str, Any]]] = {}
     for idx, row in enumerate(_read_jsonl(rows_path)):
         symbol = str(row.get("symbol", "")).upper()
         if symbol not in allowed:
@@ -388,18 +394,45 @@ def _latest_intraday_values(rows_path: Path, symbols: list[str]) -> dict[str, di
             close_value = float(str(close))
         except (TypeError, ValueError):
             continue
-        prev = latest.get(symbol)
-        if prev is None or (ts, idx) >= (prev[0], prev[1]):
-            latest[symbol] = (
+        payload = {
+            "as_of": ts,
+            "price": close_value,
+            "source": "training/yahoo_market_rows.jsonl",
+        }
+        prev_fallback = fallback.get(symbol)
+        if prev_fallback is None or (ts, idx) >= (prev_fallback[0], prev_fallback[1]):
+            fallback[symbol] = (
                 ts,
                 idx,
-                {
-                    "as_of": ts,
-                    "price": close_value,
-                    "source": "training/yahoo_market_rows.jsonl",
-                },
+                payload,
             )
-    return {symbol: payload for symbol, (_, __, payload) in latest.items()}
+
+        close_ref = close_refs.get(symbol) or {}
+        close_ts = str(close_ref.get("as_of") or "")
+        close_value_ref = close_ref.get("close")
+        try:
+            close_value_numeric = float(str(close_value_ref))
+        except (TypeError, ValueError):
+            close_value_numeric = None
+        is_same_as_close = (
+            close_ts
+            and ts == close_ts
+            and close_value_numeric is not None
+            and abs(close_value - close_value_numeric) < 1e-9
+        )
+        if is_same_as_close:
+            continue
+
+        prev_preferred = preferred.get(symbol)
+        if prev_preferred is None or (ts, idx) >= (prev_preferred[0], prev_preferred[1]):
+            preferred[symbol] = (
+                ts,
+                idx,
+                payload,
+            )
+
+    selected = preferred if preferred else fallback
+    return {symbol: payload for symbol, (_, __, payload) in selected.items()}
 
 
 def _latest_close_from_rows(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
@@ -476,7 +509,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             market_db_path,
             market_rows_path,
         )
-    latest_intraday = _latest_intraday_values(market_rows_path, symbols)
+    latest_intraday = _latest_intraday_values(market_rows_path, symbols, latest_close=latest_close)
 
     symbol_count = len(symbols)
     close_count = len(latest_close)
