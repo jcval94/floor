@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -68,6 +69,35 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert models["details"]["value"]["current_version"] == "v2"
     dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
     assert "api_key" not in json.dumps(dashboard)
+
+
+def test_build_pages_data_refreshes_stale_dashboard_from_predictions_stream(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True, exist_ok=True)
+    (data_dir / "predictions").mkdir(parents=True, exist_ok=True)
+    (data_dir / "signals").mkdir(parents=True, exist_ok=True)
+
+    stale_dashboard = data_dir / "reports" / "dashboard.json"
+    stale_dashboard.write_text(
+        json.dumps({"latest_predictions": [{"symbol": "OLD", "horizon": "d1", "as_of": "2026-01-01T00:00:00+00:00"}]}),
+        encoding="utf-8",
+    )
+    os.utime(stale_dashboard, (1, 1))
+
+    (data_dir / "predictions" / "AAPL.jsonl").write_text(
+        json.dumps({"symbol": "AAPL", "horizon": "d1", "as_of": "2026-03-19T12:00:00+00:00"}) + "\n",
+        encoding="utf-8",
+    )
+
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    dashboard = json.loads((site_data / "dashboard.json").read_text(encoding="utf-8"))
+    assert dashboard["latest_predictions"]
+    assert dashboard["latest_predictions"][0]["symbol"] == "AAPL"
 
 
 def test_build_pages_data_adds_retraining_countdown_from_summary_date(tmp_path: Path) -> None:
