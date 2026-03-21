@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["intraday_engine", "ingest", "eod", "monitoring", "retrain_assessment", "retrain_execute", "manual_train_all_models"]
+    workflows: ["intraday_engine"]
     types: [completed]
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-intraday-publish
   cancel-in-progress: true
 
 jobs:
@@ -20,17 +20,92 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Build static site data payloads
         run: |
-          PYTHONPATH=src python -m floor.main build-site
-          mkdir -p data/market data/training
-          PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
-          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
           PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data --universe-path config/universe.yaml
           touch site/.nojekyll
+      - name: Validate as_of coherence across report and site payloads
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def parse_iso(value: str | None, label: str) -> datetime:
+              if not value:
+                  raise SystemExit(f"{label} is missing")
+              normalized = value.replace("Z", "+00:00")
+              try:
+                  dt = datetime.fromisoformat(normalized)
+              except ValueError as exc:
+                  raise SystemExit(f"{label} is not valid ISO-8601: {value}") from exc
+              if dt.tzinfo is None:
+                  dt = dt.replace(tzinfo=timezone.utc)
+              return dt.astimezone(timezone.utc)
+
+          report = json.loads(Path("data/reports/dashboard.json").read_text(encoding="utf-8"))
+          site_dashboard = json.loads(Path("site/data/dashboard.json").read_text(encoding="utf-8"))
+          site_forecasts = json.loads(Path("site/data/forecasts.json").read_text(encoding="utf-8"))
+
+          if not report:
+              raise SystemExit("data/reports/dashboard.json is empty")
+          if not site_dashboard:
+              raise SystemExit("site/data/dashboard.json is empty")
+          if not site_forecasts:
+              raise SystemExit("site/data/forecasts.json is empty")
+
+          report_ref = report.get("as_of") or report.get("generated_at")
+          site_dashboard_ref = site_dashboard.get("as_of") or site_dashboard.get("generated_at")
+          site_forecasts_ref = site_forecasts.get("as_of") or site_forecasts.get("generated_at")
+
+          report_dt = parse_iso(report_ref, "data/reports/dashboard.json as_of|generated_at")
+          dashboard_dt = parse_iso(site_dashboard_ref, "site/data/dashboard.json as_of|generated_at")
+          forecasts_dt = parse_iso(site_forecasts_ref, "site/data/forecasts.json as_of|generated_at")
+
+          generated_at = report.get("generated_at")
+          generated_dt = parse_iso(generated_at, "data/reports/dashboard.json generated_at")
+          max_age_hours = 8
+          age_seconds = (datetime.now(timezone.utc) - generated_dt).total_seconds()
+          if age_seconds < 0:
+              raise SystemExit(
+                  "data/reports/dashboard.json generated_at is in the future "
+                  f"(generated_at={generated_dt.isoformat()})"
+              )
+          if age_seconds > max_age_hours * 3600:
+              raise SystemExit(
+                  "data/reports/dashboard.json is stale for publication "
+                  f"(age_hours={age_seconds/3600:.2f} max_age_hours={max_age_hours})"
+              )
+
+          if dashboard_dt != report_dt:
+              raise SystemExit(
+                  "site/data/dashboard.json timestamp is not coherent with data/reports/dashboard.json "
+                  f"(site={dashboard_dt.isoformat()} report={report_dt.isoformat()})"
+              )
+
+          skew_seconds = abs((report_dt - forecasts_dt).total_seconds())
+          if skew_seconds > 36 * 3600:
+              raise SystemExit(
+                  "site/data/forecasts.json timestamp is too far from data/reports/dashboard.json "
+                  f"(skew_hours={skew_seconds/3600:.2f})"
+              )
+
+          print("as_of coherence OK")
+          print(f"report={report_dt.isoformat()}")
+          print(f"site_dashboard={dashboard_dt.isoformat()}")
+          print(f"site_forecasts={forecasts_dt.isoformat()} skew_hours={skew_seconds/3600:.2f}")
+          print(
+              "publish_audit "
+              f"final_as_of={forecasts_dt.isoformat()} "
+              f"report_generated_at={generated_dt.isoformat()} "
+              f"report_age_hours={age_seconds/3600:.2f}"
+          )
+          PY
       - name: Show generated coverage metadata
         run: |
           python - <<'PY'

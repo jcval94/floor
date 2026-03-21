@@ -36,7 +36,6 @@ jobs:
       - name: Build site snapshot
         run: |
           PYTHONPATH=src python -m floor.main build-site
-          PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data --mirror-site-dir docs
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
       - name: Commit eod history
