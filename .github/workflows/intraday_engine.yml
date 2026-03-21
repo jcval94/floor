@@ -156,6 +156,27 @@ jobs:
             sleep $((i*30))
           done
 
+      - name: Validate dashboard snapshot JSON after run-cycle
+        run: |
+          set -euo pipefail
+          dashboard_json="data/reports/dashboard.json"
+          if [ ! -f "$dashboard_json" ]; then
+            echo "::error::Missing required dashboard snapshot: $dashboard_json"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("data/reports/dashboard.json")
+          with path.open("r", encoding="utf-8") as fh:
+              payload = json.load(fh)
+          if not isinstance(payload, dict):
+              raise SystemExit("dashboard.json must contain a JSON object at the top level")
+          print(f"dashboard snapshot OK: {path} keys={len(payload)}")
+          PY
+
       - name: Forecast diagnostics on failure
         if: failure()
         run: |
