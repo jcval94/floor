@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-06T19:35:38.601390+00:00",
-  "source": "sqlite",
+  "generated_at": "2026-04-06T20:03:56.180204+00:00",
+  "source": "jsonl",
   "prediction_files": 51,
   "signal_files": 51,
-  "prediction_count": 200,
-  "signal_count": 150,
+  "prediction_count": 66730,
+  "signal_count": 50631,
   "latest_predictions": [
     {
       "symbol": "AAPL",
@@ -10831,6 +10831,51 @@
       "model_version": "d1:20260318T223030Z|w1:20260318T223030Z|q1:20260318T223030Z|value:20260318T223030Z|timing:20260318T223030Z"
     },
     {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989571-04:00",
+      "event_type": "CLOSE",
+      "horizon": "d1",
+      "floor_value": 105.44,
+      "ceiling_value": 111.96,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "OPEN_PLUS_2H",
+      "ceiling_time_bucket": "CLOSE",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989976-04:00",
+      "event_type": "CLOSE",
+      "horizon": "q1",
+      "floor_value": 97.39,
+      "ceiling_value": 103.41,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "10",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
+      "symbol": "SPY",
+      "as_of": "2026-03-12T15:55:15.989767-04:00",
+      "event_type": "CLOSE",
+      "horizon": "w1",
+      "floor_value": 101.95,
+      "ceiling_value": 108.25,
+      "floor_quantile": 0.1,
+      "ceiling_quantile": 0.9,
+      "floor_time_bucket": "1",
+      "ceiling_time_bucket": "5",
+      "floor_time_probability": 0.62,
+      "ceiling_time_probability": 0.59,
+      "model_version": "champion-v0"
+    },
+    {
       "symbol": "TMO",
       "as_of": "2026-04-06T15:35:38.128467-04:00",
       "event_type": "OPEN",
@@ -13207,7 +13252,7 @@
       "model_version": "d1:20260318T223030Z|w1:20260318T223030Z|q1:20260318T223030Z|value:20260318T223030Z|timing:20260318T223030Z"
     }
   ],
-  "latest_predictions_source": "sqlite",
+  "latest_predictions_source": "jsonl",
   "prediction_contract": {
     "version": "v1",
     "horizons": [
