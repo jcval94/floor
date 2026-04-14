@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T20:30:31.255342+00:00",
+  "generated_at": "2026-04-14T21:26:46.837049+00:00",
   "source": "sqlite",
   "prediction_files": 51,
   "signal_files": 51,
@@ -8,7 +8,7 @@
   "latest_predictions": [
     {
       "symbol": "AAPL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 256.4086,
@@ -74,7 +74,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.0038,
@@ -140,7 +140,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 250.6328,
@@ -206,7 +206,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 253.525,
@@ -272,7 +272,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 208.2929,
@@ -287,7 +287,7 @@
       "expected_return": 0.000349,
       "expected_range": 4.0807,
       "m3_payload": {
-        "floor_m3": 274.1499,
+        "floor_m3": 274.1509,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -308,11 +308,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.03813,
-        "expected_range_m3": 68.1154,
+        "expected_range_m3": 68.0979,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.1499,
+      "floor_m3": 274.1509,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -338,10 +338,10 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 274.1499,
+      "floor_value": 274.1509,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -351,9 +351,9 @@
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
       "expected_return": -0.03813,
-      "expected_range": 68.1154,
+      "expected_range": 68.0979,
       "m3_payload": {
-        "floor_m3": 274.1499,
+        "floor_m3": 274.1509,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -374,11 +374,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.03813,
-        "expected_range_m3": 68.1154,
+        "expected_range_m3": 68.0979,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.1499,
+      "floor_m3": 274.1509,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -404,7 +404,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 203.601,
@@ -419,7 +419,7 @@
       "expected_return": 0.003015,
       "expected_range": 14.5861,
       "m3_payload": {
-        "floor_m3": 274.1499,
+        "floor_m3": 274.1509,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -440,11 +440,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.03813,
-        "expected_range_m3": 68.1154,
+        "expected_range_m3": 68.0979,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.1499,
+      "floor_m3": 274.1509,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -470,7 +470,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 205.9505,
@@ -485,7 +485,7 @@
       "expected_return": 0.002587,
       "expected_range": 9.7068,
       "m3_payload": {
-        "floor_m3": 274.1499,
+        "floor_m3": 274.1509,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -506,11 +506,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.03813,
-        "expected_range_m3": 68.1154,
+        "expected_range_m3": 68.0979,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.1499,
+      "floor_m3": 274.1509,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -536,7 +536,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 100.1046,
@@ -602,7 +602,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.4203,
@@ -668,7 +668,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 97.8497,
@@ -734,7 +734,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 98.9789,
@@ -800,7 +800,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 233.5148,
@@ -866,7 +866,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.9165,
@@ -932,7 +932,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 228.2547,
@@ -998,7 +998,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 230.8887,
@@ -1064,7 +1064,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 391.9387,
@@ -1130,7 +1130,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 266.8661,
@@ -1196,7 +1196,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 383.11,
@@ -1262,7 +1262,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 387.531,
@@ -1328,7 +1328,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 252.6838,
@@ -1394,7 +1394,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.6815,
@@ -1460,7 +1460,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 246.9919,
@@ -1526,7 +1526,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 249.8421,
@@ -1592,7 +1592,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 246.6903,
@@ -1658,7 +1658,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.0532,
@@ -1724,7 +1724,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 241.1335,
@@ -1790,7 +1790,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 243.9161,
@@ -1856,7 +1856,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 377.2177,
@@ -1922,7 +1922,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 269.7955,
@@ -1988,7 +1988,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 368.7206,
@@ -2054,7 +2054,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 372.9755,
@@ -2120,7 +2120,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 323.9012,
@@ -2186,7 +2186,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.3063,
@@ -2252,7 +2252,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 316.6051,
@@ -2318,7 +2318,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 320.2586,
@@ -2384,7 +2384,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 221.6766,
@@ -2450,7 +2450,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.618,
@@ -2516,7 +2516,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 216.6831,
@@ -2582,7 +2582,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 219.1836,
@@ -2648,7 +2648,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 52.8509,
@@ -2714,7 +2714,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 277.101,
@@ -2780,7 +2780,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 51.6604,
@@ -2846,7 +2846,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 52.2565,
@@ -2912,7 +2912,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 473.0725,
@@ -2927,7 +2927,7 @@
       "expected_return": 0.000349,
       "expected_range": 9.268,
       "m3_payload": {
-        "floor_m3": 273.9895,
+        "floor_m3": 273.9938,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -2948,11 +2948,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.020464,
-        "expected_range_m3": 71.4402,
+        "expected_range_m3": 71.3623,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 273.9895,
+      "floor_m3": 273.9938,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -2978,10 +2978,10 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 273.9895,
+      "floor_value": 273.9938,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -2991,9 +2991,9 @@
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
       "expected_return": -0.020464,
-      "expected_range": 71.4402,
+      "expected_range": 71.3623,
       "m3_payload": {
-        "floor_m3": 273.9895,
+        "floor_m3": 273.9938,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -3014,11 +3014,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.020464,
-        "expected_range_m3": 71.4402,
+        "expected_range_m3": 71.3623,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 273.9895,
+      "floor_m3": 273.9938,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -3044,7 +3044,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 462.4162,
@@ -3059,7 +3059,7 @@
       "expected_return": 0.003015,
       "expected_range": 33.1277,
       "m3_payload": {
-        "floor_m3": 273.9895,
+        "floor_m3": 273.9938,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -3080,11 +3080,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.020464,
-        "expected_range_m3": 71.4402,
+        "expected_range_m3": 71.3623,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 273.9895,
+      "floor_m3": 273.9938,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -3110,7 +3110,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 467.7523,
@@ -3125,7 +3125,7 @@
       "expected_return": 0.002587,
       "expected_range": 22.046,
       "m3_payload": {
-        "floor_m3": 273.9895,
+        "floor_m3": 273.9938,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -3146,11 +3146,11 @@
         "floor_week_m3_end_date": "2026-04-21",
         "floor_week_m3_label_human": "Semana 01 (2026-04-15 \u2192 2026-04-21) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
         "expected_return_m3": -0.020464,
-        "expected_range_m3": 71.4402,
+        "expected_range_m3": 71.3623,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 273.9895,
+      "floor_m3": 273.9938,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -3176,7 +3176,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 786.8196,
@@ -3242,7 +3242,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 261.7195,
@@ -3308,7 +3308,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 769.0958,
@@ -3374,7 +3374,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 777.971,
@@ -3440,7 +3440,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 965.6804,
@@ -3506,7 +3506,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 265.67,
@@ -3572,7 +3572,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 943.9277,
@@ -3638,7 +3638,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 954.8205,
@@ -3704,7 +3704,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 169.7073,
@@ -3770,7 +3770,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.9207,
@@ -3836,7 +3836,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 165.8846,
@@ -3902,7 +3902,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 167.7988,
@@ -3968,7 +3968,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 81.8372,
@@ -4034,7 +4034,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.4946,
@@ -4100,7 +4100,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 79.9937,
@@ -4166,7 +4166,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 80.9168,
@@ -4232,7 +4232,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 185.2704,
@@ -4298,7 +4298,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.3927,
@@ -4364,7 +4364,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 181.097,
@@ -4430,7 +4430,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 183.1868,
@@ -4496,7 +4496,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 101.6302,
@@ -4562,7 +4562,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.3678,
@@ -4628,7 +4628,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 99.3409,
@@ -4694,7 +4694,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 100.4873,
@@ -4760,7 +4760,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 315.025,
@@ -4826,7 +4826,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.6351,
@@ -4892,7 +4892,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 307.9288,
@@ -4958,7 +4958,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 311.4823,
@@ -5024,7 +5024,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 329.7955,
@@ -5090,7 +5090,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.7518,
@@ -5156,7 +5156,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 322.3666,
@@ -5222,7 +5222,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 326.0867,
@@ -5288,7 +5288,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 901.1201,
@@ -5354,7 +5354,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 260.2505,
@@ -5420,7 +5420,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 880.8217,
@@ -5486,7 +5486,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 890.9862,
@@ -5552,7 +5552,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 339.5038,
@@ -5618,7 +5618,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.8215,
@@ -5684,7 +5684,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 331.8562,
@@ -5750,7 +5750,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 335.6858,
@@ -5816,7 +5816,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 238.0222,
@@ -5882,7 +5882,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.3133,
@@ -5948,7 +5948,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 232.6606,
@@ -6014,7 +6014,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 235.3454,
@@ -6080,7 +6080,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 63.213,
@@ -6146,7 +6146,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.6516,
@@ -6212,7 +6212,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 61.7891,
@@ -6278,7 +6278,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 62.5022,
@@ -6344,7 +6344,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 363.3685,
@@ -6410,7 +6410,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 264.5362,
@@ -6476,7 +6476,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 355.1833,
@@ -6542,7 +6542,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 359.282,
@@ -6608,7 +6608,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 308.2094,
@@ -6674,7 +6674,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.4351,
@@ -6740,7 +6740,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 301.2667,
@@ -6806,7 +6806,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 304.7433,
@@ -6872,7 +6872,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 75.1899,
@@ -6938,7 +6938,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.9577,
@@ -7004,7 +7004,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 73.4962,
@@ -7070,7 +7070,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 74.3444,
@@ -7136,7 +7136,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 913.8697,
@@ -7202,7 +7202,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 259.7744,
@@ -7268,7 +7268,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 893.2841,
@@ -7334,7 +7334,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 903.5924,
@@ -7400,7 +7400,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 508.3592,
@@ -7466,7 +7466,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.3052,
@@ -7532,7 +7532,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 496.908,
@@ -7598,7 +7598,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 502.6422,
@@ -7664,7 +7664,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 300.3833,
@@ -7730,7 +7730,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.5976,
@@ -7796,7 +7796,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 293.6169,
@@ -7862,7 +7862,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 297.0052,
@@ -7928,7 +7928,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 656.2922,
@@ -7994,7 +7994,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 261.8011,
@@ -8060,7 +8060,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 641.5087,
@@ -8126,7 +8126,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 648.9116,
@@ -8192,7 +8192,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 118.8377,
@@ -8258,7 +8258,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.9787,
@@ -8324,7 +8324,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 116.1608,
@@ -8390,7 +8390,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 117.5013,
@@ -8456,7 +8456,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 181.6248,
@@ -8522,7 +8522,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.3588,
@@ -8588,7 +8588,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 177.5336,
@@ -8654,7 +8654,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 179.5823,
@@ -8720,7 +8720,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 389.4323,
@@ -8786,7 +8786,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.8369,
@@ -8852,7 +8852,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 380.6601,
@@ -8918,7 +8918,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 385.0528,
@@ -8984,7 +8984,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 105.2857,
@@ -9050,7 +9050,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.9595,
@@ -9116,7 +9116,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 102.9141,
@@ -9182,7 +9182,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 104.1017,
@@ -9248,7 +9248,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 194.6716,
@@ -9314,7 +9314,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.3156,
@@ -9380,7 +9380,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 190.2865,
@@ -9446,7 +9446,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 192.4823,
@@ -9512,7 +9512,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 161.4751,
@@ -9578,7 +9578,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.9799,
@@ -9644,7 +9644,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 157.8377,
@@ -9710,7 +9710,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 159.6591,
@@ -9776,7 +9776,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 143.0293,
@@ -9842,7 +9842,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2539,
@@ -9908,7 +9908,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 139.8074,
@@ -9974,7 +9974,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 141.4208,
@@ -10040,7 +10040,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 134.4305,
@@ -10106,7 +10106,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.4688,
@@ -10172,7 +10172,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 131.4023,
@@ -10238,7 +10238,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 132.9187,
@@ -10304,7 +10304,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 131.5972,
@@ -10370,7 +10370,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.51,
@@ -10436,7 +10436,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 128.6329,
@@ -10502,7 +10502,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 130.1173,
@@ -10568,7 +10568,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 200.9126,
@@ -10634,7 +10634,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.1472,
@@ -10700,7 +10700,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 196.3869,
@@ -10766,7 +10766,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 198.6532,
@@ -10832,7 +10832,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 522.2877,
@@ -10898,7 +10898,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 268.0143,
@@ -10964,7 +10964,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 510.5227,
@@ -11030,7 +11030,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 516.4141,
@@ -11096,7 +11096,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 360.7928,
@@ -11162,7 +11162,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 267.7947,
@@ -11228,7 +11228,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 352.6657,
@@ -11294,7 +11294,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 356.7354,
@@ -11360,7 +11360,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 216.8224,
@@ -11426,7 +11426,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.2427,
@@ -11492,7 +11492,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 211.9383,
@@ -11558,7 +11558,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 214.384,
@@ -11624,7 +11624,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 72.2279,
@@ -11690,7 +11690,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.3534,
@@ -11756,7 +11756,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 70.6009,
@@ -11822,7 +11822,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 71.4156,
@@ -11888,7 +11888,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 311.2507,
@@ -11954,7 +11954,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.7275,
@@ -12020,7 +12020,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 304.2395,
@@ -12086,7 +12086,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 307.7504,
@@ -12152,7 +12152,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 308.457,
@@ -12218,7 +12218,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.4593,
@@ -12284,7 +12284,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 301.5088,
@@ -12350,7 +12350,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 304.9881,
@@ -12416,7 +12416,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 80.9357,
@@ -12482,7 +12482,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2686,
@@ -12548,7 +12548,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 79.1125,
@@ -12614,7 +12614,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 80.0255,
@@ -12680,7 +12680,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 123.8801,
@@ -12746,7 +12746,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.066,
@@ -12812,7 +12812,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 121.0896,
@@ -12878,7 +12878,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 122.487,
@@ -12944,7 +12944,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 147.8438,
@@ -13010,7 +13010,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.8711,
@@ -13076,7 +13076,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 144.5135,
@@ -13142,7 +13142,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-04-14T16:30:30.748655-04:00",
+      "as_of": "2026-04-14T17:26:46.358276-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 146.1812,
