@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-04-01T08:51:14.005635-04:00",
+  "as_of": "2026-04-15T08:56:10.223043-04:00",
   "suite_status": "ALERT",
   "suite_recommendation": "RETRAIN_NOW",
   "suite_version": "value:20260318T223030Z|timing:20260318T223030Z",
@@ -9,7 +9,7 @@
   ],
   "models": {
     "value": {
-      "as_of": "2026-04-01T08:51:13.997958-04:00",
+      "as_of": "2026-04-15T08:56:10.217799-04:00",
       "model_key": "value",
       "model_name": "m3_value_linear",
       "champion_path": "data/training/models/value_champion.json",
@@ -393,7 +393,7 @@
       }
     },
     "timing": {
-      "as_of": "2026-04-01T08:51:13.998184-04:00",
+      "as_of": "2026-04-15T08:56:10.217983-04:00",
       "model_key": "timing",
       "model_name": "m3_timing_multiclass",
       "champion_path": "data/training/models/timing_champion.json",
