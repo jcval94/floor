@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-19T20:13:52.081546+00:00",
+  "generated_at": "2026-06-19T21:43:08.781186+00:00",
   "source": "sqlite",
   "prediction_files": 51,
   "signal_files": 51,
@@ -8,7 +8,7 @@
   "latest_predictions": [
     {
       "symbol": "AAPL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 295.222,
@@ -74,7 +74,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.4615,
@@ -140,7 +140,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 288.5719,
@@ -206,7 +206,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 291.902,
@@ -272,7 +272,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 214.4647,
@@ -338,7 +338,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.1172,
@@ -404,7 +404,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 209.6337,
@@ -470,7 +470,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 212.0528,
@@ -536,7 +536,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 87.5829,
@@ -602,7 +602,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2904,
@@ -668,7 +668,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 85.61,
@@ -734,7 +734,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 86.598,
@@ -800,7 +800,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 193.3342,
@@ -866,7 +866,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.0719,
@@ -932,7 +932,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 188.9792,
@@ -998,7 +998,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 191.16,
@@ -1064,7 +1064,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 611.3367,
@@ -1130,7 +1130,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 251.5636,
@@ -1196,7 +1196,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 597.5659,
@@ -1262,7 +1262,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 604.4617,
@@ -1328,7 +1328,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 532.3427,
@@ -1394,7 +1394,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 252.9778,
@@ -1460,7 +1460,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 520.3513,
@@ -1526,7 +1526,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 526.356,
@@ -1592,7 +1592,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 242.1037,
@@ -1658,7 +1658,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.3243,
@@ -1724,7 +1724,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 236.6501,
@@ -1790,7 +1790,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 239.381,
@@ -1856,7 +1856,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 407.5017,
@@ -1922,7 +1922,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 260.5511,
@@ -1988,7 +1988,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 398.3224,
@@ -2054,7 +2054,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 402.919,
@@ -2120,7 +2120,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 334.8379,
@@ -2186,7 +2186,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.3234,
@@ -2252,7 +2252,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 327.2954,
@@ -2318,7 +2318,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 331.0723,
@@ -2384,7 +2384,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 220.6364,
@@ -2450,7 +2450,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.6033,
@@ -2516,7 +2516,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 215.6664,
@@ -2582,7 +2582,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 218.1551,
@@ -2648,7 +2648,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 55.6742,
@@ -2714,7 +2714,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 277.0898,
@@ -2780,7 +2780,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 54.4201,
@@ -2846,7 +2846,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 55.0481,
@@ -2912,7 +2912,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 484.8809,
@@ -2978,7 +2978,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.9753,
@@ -3044,7 +3044,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 473.9586,
@@ -3110,7 +3110,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 479.428,
@@ -3176,7 +3176,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 976.5974,
@@ -3242,7 +3242,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 253.1801,
@@ -3308,7 +3308,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 954.5988,
@@ -3374,7 +3374,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 965.6146,
@@ -3440,7 +3440,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 942.5489,
@@ -3506,7 +3506,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 264.6269,
@@ -3572,7 +3572,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 921.3173,
@@ -3638,7 +3638,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 931.9491,
@@ -3704,7 +3704,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 150.3601,
@@ -3770,7 +3770,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.9013,
@@ -3836,7 +3836,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 146.9731,
@@ -3902,7 +3902,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 148.6691,
@@ -3968,7 +3968,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 118.4217,
@@ -4034,7 +4034,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.8176,
@@ -4100,7 +4100,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 115.7541,
@@ -4166,7 +4166,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 117.0899,
@@ -4232,7 +4232,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 172.0056,
@@ -4298,7 +4298,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.8266,
@@ -4364,7 +4364,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 168.1311,
@@ -4430,7 +4430,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 170.0713,
@@ -4496,7 +4496,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 102.9181,
@@ -4562,7 +4562,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.4395,
@@ -4628,7 +4628,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 100.5998,
@@ -4694,7 +4694,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 101.7607,
@@ -4760,7 +4760,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 354.2942,
@@ -4826,7 +4826,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.6199,
@@ -4892,7 +4892,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 346.3134,
@@ -4958,7 +4958,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 350.3098,
@@ -5024,7 +5024,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 364.587,
@@ -5090,7 +5090,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.1658,
@@ -5156,7 +5156,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 356.3744,
@@ -5222,7 +5222,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 360.4868,
@@ -5288,7 +5288,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 1086.3014,
@@ -5354,7 +5354,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 253.0517,
@@ -5420,7 +5420,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 1061.8316,
@@ -5486,7 +5486,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 1074.0849,
@@ -5552,7 +5552,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 331.1527,
@@ -5618,7 +5618,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.1766,
@@ -5684,7 +5684,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 323.6932,
@@ -5750,7 +5750,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 327.4286,
@@ -5816,7 +5816,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 246.7696,
@@ -5882,7 +5882,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 267.94,
@@ -5948,7 +5948,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 241.2109,
@@ -6014,7 +6014,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 243.9944,
@@ -6080,7 +6080,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 132.7365,
@@ -6146,7 +6146,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.2599,
@@ -6212,7 +6212,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 129.7465,
@@ -6278,7 +6278,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 131.2437,
@@ -6344,7 +6344,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 264.5021,
@@ -6410,7 +6410,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 266.7219,
@@ -6476,7 +6476,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 258.544,
@@ -6542,7 +6542,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 261.5276,
@@ -6608,7 +6608,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 322.1775,
@@ -6674,7 +6674,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.8911,
@@ -6740,7 +6740,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 314.9202,
@@ -6806,7 +6806,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 318.5543,
@@ -6872,7 +6872,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 78.6473,
@@ -6938,7 +6938,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.7352,
@@ -7004,7 +7004,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 76.8757,
@@ -7070,7 +7070,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 77.7628,
@@ -7136,7 +7136,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 1088.2925,
@@ -7202,7 +7202,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 253.4058,
@@ -7268,7 +7268,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 1063.7779,
@@ -7334,7 +7334,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 1076.0536,
@@ -7400,11 +7400,11 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
-      "floor_value": 488.3779,
-      "ceiling_value": 497.9458,
+      "floor_value": 485.2079,
+      "ceiling_value": 494.7137,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "OPEN_PLUS_2H",
@@ -7413,9 +7413,9 @@
       "ceiling_time_probability": 0.7935,
       "confidence_score": 0.7935,
       "expected_return": 0.000349,
-      "expected_range": 9.5679,
+      "expected_range": 9.5058,
       "m3_payload": {
-        "floor_m3": 270.3593,
+        "floor_m3": 270.3642,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -7435,12 +7435,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.01485,
-        "expected_range_m3": 137.7925,
+        "expected_return_m3": -0.018718,
+        "expected_range_m3": 137.7663,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 270.3593,
+      "floor_m3": 270.3642,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -7466,10 +7466,10 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 270.3593,
+      "floor_value": 270.3642,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -7478,10 +7478,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": -0.01485,
-      "expected_range": 137.7925,
+      "expected_return": -0.018718,
+      "expected_range": 137.7663,
       "m3_payload": {
-        "floor_m3": 270.3593,
+        "floor_m3": 270.3642,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -7501,12 +7501,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.01485,
-        "expected_range_m3": 137.7925,
+        "expected_return_m3": -0.018718,
+        "expected_range_m3": 137.7663,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 270.3593,
+      "floor_m3": 270.3642,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -7532,22 +7532,22 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
-      "floor_value": 477.3768,
-      "ceiling_value": 511.5763,
+      "floor_value": 474.2782,
+      "ceiling_value": 508.2557,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "15",
       "ceiling_time_bucket": "45",
-      "floor_time_probability": 0.7798,
-      "ceiling_time_probability": 0.7798,
-      "confidence_score": 0.7798,
+      "floor_time_probability": 0.7797000000000001,
+      "ceiling_time_probability": 0.7797000000000001,
+      "confidence_score": 0.7797000000000001,
       "expected_return": 0.003015,
-      "expected_range": 34.1995,
+      "expected_range": 33.9775,
       "m3_payload": {
-        "floor_m3": 270.3593,
+        "floor_m3": 270.3642,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -7567,12 +7567,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.01485,
-        "expected_range_m3": 137.7925,
+        "expected_return_m3": -0.018718,
+        "expected_range_m3": 137.7663,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 270.3593,
+      "floor_m3": 270.3642,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -7598,22 +7598,22 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
-      "floor_value": 482.8857,
-      "ceiling_value": 505.6449,
+      "floor_value": 479.7513,
+      "ceiling_value": 502.3628,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "2",
       "ceiling_time_bucket": "5",
-      "floor_time_probability": 0.7857000000000001,
-      "ceiling_time_probability": 0.7857000000000001,
-      "confidence_score": 0.7857000000000001,
+      "floor_time_probability": 0.7856,
+      "ceiling_time_probability": 0.7856,
+      "confidence_score": 0.7856,
       "expected_return": 0.002587,
-      "expected_range": 22.7593,
+      "expected_range": 22.6115,
       "m3_payload": {
-        "floor_m3": 270.3593,
+        "floor_m3": 270.3642,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -7633,12 +7633,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.01485,
-        "expected_range_m3": 137.7925,
+        "expected_return_m3": -0.018718,
+        "expected_range_m3": 137.7663,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 270.3593,
+      "floor_m3": 270.3642,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -7664,7 +7664,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 276.0035,
@@ -7730,7 +7730,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.2935,
@@ -7796,7 +7796,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 269.7863,
@@ -7862,7 +7862,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 272.8996,
@@ -7928,7 +7928,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 571.8199,
@@ -7994,7 +7994,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 262.5632,
@@ -8060,7 +8060,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 558.9392,
@@ -8126,7 +8126,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 565.3893,
@@ -8192,7 +8192,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 112.8047,
@@ -8258,7 +8258,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.6649,
@@ -8324,7 +8324,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 110.2637,
@@ -8390,7 +8390,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 111.5361,
@@ -8456,7 +8456,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 221.0822,
@@ -8522,7 +8522,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.6486,
@@ -8588,7 +8588,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 216.1021,
@@ -8654,7 +8654,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 218.5959,
@@ -8720,7 +8720,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 375.8506,
@@ -8786,7 +8786,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 269.4887,
@@ -8852,7 +8852,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 367.3843,
@@ -8918,7 +8918,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 371.6238,
@@ -8984,7 +8984,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 76.6561,
@@ -9050,7 +9050,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2619,
@@ -9116,7 +9116,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 74.9293,
@@ -9182,7 +9182,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 75.794,
@@ -9248,7 +9248,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 208.7189,
@@ -9314,7 +9314,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.1665,
@@ -9380,7 +9380,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 204.0174,
@@ -9446,7 +9446,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 206.3717,
@@ -9512,7 +9512,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 182.5659,
@@ -9578,7 +9578,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 267.7063,
@@ -9644,7 +9644,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 178.4535,
@@ -9710,7 +9710,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 180.5128,
@@ -9776,22 +9776,22 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
-      "floor_value": 149.1515,
-      "ceiling_value": 152.0735,
+      "floor_value": 148.9732,
+      "ceiling_value": 151.8917,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "OPEN_PLUS_2H",
       "ceiling_time_bucket": "CLOSE",
-      "floor_time_probability": 0.7787999999999999,
-      "ceiling_time_probability": 0.7787999999999999,
-      "confidence_score": 0.7787999999999999,
+      "floor_time_probability": 0.7787,
+      "ceiling_time_probability": 0.7787,
+      "confidence_score": 0.7787,
       "expected_return": 0.000349,
-      "expected_range": 2.922,
+      "expected_range": 2.9186,
       "m3_payload": {
-        "floor_m3": 275.878,
+        "floor_m3": 275.9056,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -9811,12 +9811,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.01737,
-        "expected_range_m3": 37.2784,
+        "expected_return_m3": 0.016633,
+        "expected_range_m3": 36.7703,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 275.878,
+      "floor_m3": 275.9056,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -9842,10 +9842,10 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 275.878,
+      "floor_value": 275.9056,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -9854,10 +9854,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": 0.01737,
-      "expected_range": 37.2784,
+      "expected_return": 0.016633,
+      "expected_range": 36.7703,
       "m3_payload": {
-        "floor_m3": 275.878,
+        "floor_m3": 275.9056,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -9877,12 +9877,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.01737,
-        "expected_range_m3": 37.2784,
+        "expected_return_m3": 0.016633,
+        "expected_range_m3": 36.7703,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 275.878,
+      "floor_m3": 275.9056,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -9908,22 +9908,22 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
-      "floor_value": 145.7917,
-      "ceiling_value": 156.2363,
+      "floor_value": 145.6174,
+      "ceiling_value": 156.0495,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "15",
       "ceiling_time_bucket": "45",
-      "floor_time_probability": 0.734,
-      "ceiling_time_probability": 0.734,
-      "confidence_score": 0.734,
+      "floor_time_probability": 0.7339,
+      "ceiling_time_probability": 0.7339,
+      "confidence_score": 0.7339,
       "expected_return": 0.003015,
-      "expected_range": 10.4446,
+      "expected_range": 10.4321,
       "m3_payload": {
-        "floor_m3": 275.878,
+        "floor_m3": 275.9056,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -9943,12 +9943,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.01737,
-        "expected_range_m3": 37.2784,
+        "expected_return_m3": 0.016633,
+        "expected_range_m3": 36.7703,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 275.878,
+      "floor_m3": 275.9056,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -9974,11 +9974,11 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
-      "floor_value": 147.4741,
-      "ceiling_value": 154.4248,
+      "floor_value": 147.2978,
+      "ceiling_value": 154.2402,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "2",
@@ -9987,9 +9987,9 @@
       "ceiling_time_probability": 0.7532,
       "confidence_score": 0.7532,
       "expected_return": 0.002587,
-      "expected_range": 6.9507,
+      "expected_range": 6.9424,
       "m3_payload": {
-        "floor_m3": 275.878,
+        "floor_m3": 275.9056,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -10009,12 +10009,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.01737,
-        "expected_range_m3": 37.2784,
+        "expected_return_m3": 0.016633,
+        "expected_range_m3": 36.7703,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 275.878,
+      "floor_m3": 275.9056,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -10040,7 +10040,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 127.2681,
@@ -10106,7 +10106,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.3321,
@@ -10172,7 +10172,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 124.4013,
@@ -10238,7 +10238,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 125.8369,
@@ -10304,7 +10304,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 223.9947,
@@ -10370,7 +10370,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 266.2245,
@@ -10436,7 +10436,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 218.949,
@@ -10502,7 +10502,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 221.4756,
@@ -10568,7 +10568,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 183.8637,
@@ -10634,7 +10634,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.3534,
@@ -10700,7 +10700,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 179.722,
@@ -10766,7 +10766,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 181.7959,
@@ -10832,11 +10832,11 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
-      "floor_value": 457.3708,
-      "ceiling_value": 466.3312,
+      "floor_value": 460.2634,
+      "ceiling_value": 469.2805,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "OPEN_PLUS_2H",
@@ -10845,9 +10845,9 @@
       "ceiling_time_probability": 0.7931,
       "confidence_score": 0.7931,
       "expected_return": 0.000349,
-      "expected_range": 8.9604,
+      "expected_range": 9.0171,
       "m3_payload": {
-        "floor_m3": 268.4274,
+        "floor_m3": 268.8582,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -10867,12 +10867,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.037601,
-        "expected_range_m3": 174.252,
+        "expected_return_m3": -0.033602,
+        "expected_range_m3": 166.1932,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 268.4274,
+      "floor_m3": 268.8582,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -10898,10 +10898,10 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 268.4274,
+      "floor_value": 268.8582,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -10910,10 +10910,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": -0.037601,
-      "expected_range": 174.252,
+      "expected_return": -0.033602,
+      "expected_range": 166.1932,
       "m3_payload": {
-        "floor_m3": 268.4274,
+        "floor_m3": 268.8582,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -10933,12 +10933,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.037601,
-        "expected_range_m3": 174.252,
+        "expected_return_m3": -0.033602,
+        "expected_range_m3": 166.1932,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 268.4274,
+      "floor_m3": 268.8582,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -10964,22 +10964,22 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
-      "floor_value": 447.0681,
-      "ceiling_value": 479.0963,
+      "floor_value": 449.8956,
+      "ceiling_value": 482.1264,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "15",
       "ceiling_time_bucket": "45",
-      "floor_time_probability": 0.7785,
-      "ceiling_time_probability": 0.7785,
-      "confidence_score": 0.7785,
+      "floor_time_probability": 0.7786,
+      "ceiling_time_probability": 0.7786,
+      "confidence_score": 0.7786,
       "expected_return": 0.003015,
-      "expected_range": 32.0282,
+      "expected_range": 32.2307,
       "m3_payload": {
-        "floor_m3": 268.4274,
+        "floor_m3": 268.8582,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -10999,12 +10999,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.037601,
-        "expected_range_m3": 174.252,
+        "expected_return_m3": -0.033602,
+        "expected_range_m3": 166.1932,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 268.4274,
+      "floor_m3": 268.8582,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -11030,22 +11030,22 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
-      "floor_value": 452.2272,
-      "ceiling_value": 473.5415,
+      "floor_value": 455.0873,
+      "ceiling_value": 476.5364,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
       "floor_time_bucket": "2",
       "ceiling_time_bucket": "5",
-      "floor_time_probability": 0.7847,
-      "ceiling_time_probability": 0.7847,
-      "confidence_score": 0.7847,
+      "floor_time_probability": 0.7847999999999999,
+      "ceiling_time_probability": 0.7847999999999999,
+      "confidence_score": 0.7847999999999999,
       "expected_return": 0.002587,
-      "expected_range": 21.3143,
+      "expected_range": 21.4491,
       "m3_payload": {
-        "floor_m3": 268.4274,
+        "floor_m3": 268.8582,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -11065,12 +11065,12 @@
         "floor_week_m3_start_date": "2026-06-22",
         "floor_week_m3_end_date": "2026-06-26",
         "floor_week_m3_label_human": "Semana 01 (2026-06-22 \u2192 2026-06-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.037601,
-        "expected_range_m3": 174.252,
+        "expected_return_m3": -0.033602,
+        "expected_range_m3": 166.1932,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 268.4274,
+      "floor_m3": 268.8582,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -11096,7 +11096,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 396.7433,
@@ -11162,7 +11162,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 265.6539,
@@ -11228,7 +11228,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 387.8063,
@@ -11294,7 +11294,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 392.2815,
@@ -11360,7 +11360,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 319.8395,
@@ -11426,7 +11426,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 268.1698,
@@ -11492,7 +11492,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 312.6349,
@@ -11558,7 +11558,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 316.2426,
@@ -11624,7 +11624,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 70.9698,
@@ -11690,7 +11690,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.321,
@@ -11756,7 +11756,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 69.3711,
@@ -11822,7 +11822,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 70.1717,
@@ -11888,7 +11888,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 397.2089,
@@ -11954,7 +11954,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.2173,
@@ -12020,7 +12020,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 388.2615,
@@ -12086,7 +12086,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 392.7419,
@@ -12152,7 +12152,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 324.1786,
@@ -12218,7 +12218,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.9375,
@@ -12284,7 +12284,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 316.8762,
@@ -12350,7 +12350,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 320.5329,
@@ -12416,7 +12416,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 81.431,
@@ -12482,7 +12482,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.4459,
@@ -12548,7 +12548,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 79.5967,
@@ -12614,7 +12614,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 80.5152,
@@ -12680,7 +12680,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 116.0837,
@@ -12746,7 +12746,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.004,
@@ -12812,7 +12812,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 113.4689,
@@ -12878,7 +12878,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 114.7783,
@@ -12944,7 +12944,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 136.5207,
@@ -13010,7 +13010,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.0691,
@@ -13076,7 +13076,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 133.4455,
@@ -13142,7 +13142,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-06-19T16:13:51.636203-04:00",
+      "as_of": "2026-06-19T17:43:08.315518-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 134.9854,
