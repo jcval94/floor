@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-19T21:20:28.969363+00:00",
+  "generated_at": "2026-08-19T21:50:10.301810+00:00",
   "source": "sqlite",
   "prediction_files": 51,
   "signal_files": 51,
@@ -8,7 +8,7 @@
   "latest_predictions": [
     {
       "symbol": "AAPL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 313.8659,
@@ -74,7 +74,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.3081,
@@ -140,7 +140,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 306.7959,
@@ -206,7 +206,7 @@
     },
     {
       "symbol": "AAPL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 310.3362,
@@ -272,7 +272,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 263.4818,
@@ -338,7 +338,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.7496,
@@ -404,7 +404,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 257.5466,
@@ -470,7 +470,7 @@
     },
     {
       "symbol": "ABBV",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 260.5187,
@@ -536,7 +536,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 113.3595,
@@ -602,7 +602,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2407,
@@ -668,7 +668,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 110.806,
@@ -734,7 +734,7 @@
     },
     {
       "symbol": "ABT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 112.0846,
@@ -800,7 +800,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 269.921,
@@ -866,7 +866,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.4064,
@@ -932,7 +932,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 263.8408,
@@ -998,7 +998,7 @@
     },
     {
       "symbol": "ADBE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 266.8855,
@@ -1064,7 +1064,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 491.5282,
@@ -1130,7 +1130,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 258.2885,
@@ -1196,7 +1196,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 480.4561,
@@ -1262,7 +1262,7 @@
     },
     {
       "symbol": "AMAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 486.0005,
@@ -1328,7 +1328,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 462.0565,
@@ -1394,7 +1394,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 260.1346,
@@ -1460,7 +1460,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 451.6483,
@@ -1526,7 +1526,7 @@
     },
     {
       "symbol": "AMD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 456.8603,
@@ -1592,7 +1592,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 263.353,
@@ -1658,7 +1658,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.615,
@@ -1724,7 +1724,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 257.4208,
@@ -1790,7 +1790,7 @@
     },
     {
       "symbol": "AMZN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 260.3913,
@@ -1856,7 +1856,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 359.0889,
@@ -1922,7 +1922,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 266.7733,
@@ -1988,7 +1988,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 351.0001,
@@ -2054,7 +2054,7 @@
     },
     {
       "symbol": "AVGO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 355.0506,
@@ -2120,7 +2120,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 336.7201,
@@ -2186,7 +2186,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.9464,
@@ -2252,7 +2252,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 329.1352,
@@ -2318,7 +2318,7 @@
     },
     {
       "symbol": "AXP",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 332.9334,
@@ -2384,7 +2384,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 220.1212,
@@ -2450,7 +2450,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.6934,
@@ -2516,7 +2516,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 215.1628,
@@ -2582,7 +2582,7 @@
     },
     {
       "symbol": "BA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 217.6458,
@@ -2648,7 +2648,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 62.579,
@@ -2714,7 +2714,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 277.2155,
@@ -2780,7 +2780,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 61.1694,
@@ -2846,7 +2846,7 @@
     },
     {
       "symbol": "BAC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 61.8753,
@@ -2912,7 +2912,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 494.9459,
@@ -2978,7 +2978,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.2194,
@@ -3044,7 +3044,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 483.7969,
@@ -3110,7 +3110,7 @@
     },
     {
       "symbol": "BRK.B",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 489.3798,
@@ -3176,7 +3176,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 808.5147,
@@ -3242,7 +3242,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 254.3373,
@@ -3308,7 +3308,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 790.3023,
@@ -3374,7 +3374,7 @@
     },
     {
       "symbol": "CAT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 799.4222,
@@ -3440,7 +3440,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 948.0371,
@@ -3506,7 +3506,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 266.9094,
@@ -3572,7 +3572,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 926.6818,
@@ -3638,7 +3638,7 @@
     },
     {
       "symbol": "COST",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 937.3755,
@@ -3704,7 +3704,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 204.162,
@@ -3770,7 +3770,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.4455,
@@ -3836,7 +3836,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 199.5631,
@@ -3902,7 +3902,7 @@
     },
     {
       "symbol": "CRM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 201.866,
@@ -3968,7 +3968,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 109.5158,
@@ -4034,7 +4034,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.9423,
@@ -4100,7 +4100,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 107.0488,
@@ -4166,7 +4166,7 @@
     },
     {
       "symbol": "CSCO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 108.2842,
@@ -4232,7 +4232,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 203.835,
@@ -4298,7 +4298,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.9153,
@@ -4364,7 +4364,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 199.2435,
@@ -4430,7 +4430,7 @@
     },
     {
       "symbol": "CVX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 201.5427,
@@ -4496,7 +4496,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 105.9296,
@@ -4562,7 +4562,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.4137,
@@ -4628,7 +4628,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 103.5435,
@@ -4694,7 +4694,7 @@
     },
     {
       "symbol": "DIS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 104.7384,
@@ -4760,7 +4760,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 352.8974,
@@ -4826,7 +4826,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.5322,
@@ -4892,7 +4892,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 344.9481,
@@ -4958,7 +4958,7 @@
     },
     {
       "symbol": "GE",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 348.9287,
@@ -5024,7 +5024,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 341.495,
@@ -5090,7 +5090,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.7347,
@@ -5156,7 +5156,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 333.8026,
@@ -5222,7 +5222,7 @@
     },
     {
       "symbol": "GOOGL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 337.6546,
@@ -5288,7 +5288,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 1012.0922,
@@ -5354,7 +5354,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 261.9319,
@@ -5420,7 +5420,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 989.294,
@@ -5486,7 +5486,7 @@
     },
     {
       "symbol": "GS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 1000.7103,
@@ -5552,7 +5552,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 341.079,
@@ -5567,7 +5567,7 @@
       "expected_return": 0.000349,
       "expected_range": 6.6821,
       "m3_payload": {
-        "floor_m3": 272.0492,
+        "floor_m3": 272.0645,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -5587,12 +5587,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.012058,
+        "expected_return_m3": 0.011242,
         "expected_range_m3": 106.0359,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 272.0492,
+      "floor_m3": 272.0645,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -5618,10 +5618,10 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 272.0492,
+      "floor_value": 272.0645,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -5630,10 +5630,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": 0.012058,
+      "expected_return": 0.011242,
       "expected_range": 106.0359,
       "m3_payload": {
-        "floor_m3": 272.0492,
+        "floor_m3": 272.0645,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -5653,12 +5653,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.012058,
+        "expected_return_m3": 0.011242,
         "expected_range_m3": 106.0359,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 272.0492,
+      "floor_m3": 272.0645,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -5684,7 +5684,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 333.3959,
@@ -5699,7 +5699,7 @@
       "expected_return": 0.003015,
       "expected_range": 23.8846,
       "m3_payload": {
-        "floor_m3": 272.0492,
+        "floor_m3": 272.0645,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -5719,12 +5719,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.012058,
+        "expected_return_m3": 0.011242,
         "expected_range_m3": 106.0359,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 272.0492,
+      "floor_m3": 272.0645,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -5750,7 +5750,7 @@
     },
     {
       "symbol": "HD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 337.2432,
@@ -5765,7 +5765,7 @@
       "expected_return": 0.002587,
       "expected_range": 15.8949,
       "m3_payload": {
-        "floor_m3": 272.0492,
+        "floor_m3": 272.0645,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -5785,12 +5785,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.012058,
+        "expected_return_m3": 0.011242,
         "expected_range_m3": 106.0359,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 272.0492,
+      "floor_m3": 272.0645,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -5816,7 +5816,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 234.9413,
@@ -5882,7 +5882,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.1948,
@@ -5948,7 +5948,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 229.6491,
@@ -6014,7 +6014,7 @@
     },
     {
       "symbol": "IBM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 232.2992,
@@ -6080,7 +6080,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 91.9318,
@@ -6146,7 +6146,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.4388,
@@ -6212,7 +6212,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 89.861,
@@ -6278,7 +6278,7 @@
     },
     {
       "symbol": "INTC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 90.898,
@@ -6344,7 +6344,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 359.079,
@@ -6410,7 +6410,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 268.4701,
@@ -6476,7 +6476,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 350.9905,
@@ -6542,7 +6542,7 @@
     },
     {
       "symbol": "INTU",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 355.0408,
@@ -6608,7 +6608,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 353.9177,
@@ -6674,7 +6674,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 274.2503,
@@ -6740,7 +6740,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 345.9455,
@@ -6806,7 +6806,7 @@
     },
     {
       "symbol": "JPM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 349.9376,
@@ -6872,7 +6872,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 89.5047,
@@ -6938,7 +6938,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 277.0057,
@@ -7004,7 +7004,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 87.4886,
@@ -7070,7 +7070,7 @@
     },
     {
       "symbol": "KO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 88.4982,
@@ -7136,7 +7136,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 1268.362,
@@ -7202,7 +7202,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 247.4813,
@@ -7268,7 +7268,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 1239.7912,
@@ -7334,7 +7334,7 @@
     },
     {
       "symbol": "LLY",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 1254.0981,
@@ -7400,7 +7400,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 568.3526,
@@ -7466,7 +7466,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.9819,
@@ -7532,7 +7532,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 555.5501,
@@ -7598,7 +7598,7 @@
     },
     {
       "symbol": "MA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 561.961,
@@ -7664,7 +7664,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 264.9479,
@@ -7730,7 +7730,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.9282,
@@ -7796,7 +7796,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 258.9798,
@@ -7862,7 +7862,7 @@
     },
     {
       "symbol": "MCD",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 261.9684,
@@ -7928,7 +7928,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 540.9218,
@@ -7994,7 +7994,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 264.6731,
@@ -8060,7 +8060,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 528.7371,
@@ -8126,7 +8126,7 @@
     },
     {
       "symbol": "META",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 534.8386,
@@ -8192,7 +8192,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 150.7761,
@@ -8258,7 +8258,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.0745,
@@ -8324,7 +8324,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 147.3798,
@@ -8390,7 +8390,7 @@
     },
     {
       "symbol": "MRK",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 149.0805,
@@ -8456,7 +8456,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 212.2258,
@@ -8471,7 +8471,7 @@
       "expected_return": 0.000349,
       "expected_range": 4.1577,
       "m3_payload": {
-        "floor_m3": 274.9417,
+        "floor_m3": 274.944,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -8491,12 +8491,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.008068,
+        "expected_return_m3": -0.008929,
         "expected_range_m3": 53.2734,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.9417,
+      "floor_m3": 274.944,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -8522,10 +8522,10 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 274.9417,
+      "floor_value": 274.944,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -8534,10 +8534,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": -0.008068,
+      "expected_return": -0.008929,
       "expected_range": 53.2734,
       "m3_payload": {
-        "floor_m3": 274.9417,
+        "floor_m3": 274.944,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -8557,12 +8557,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.008068,
+        "expected_return_m3": -0.008929,
         "expected_range_m3": 53.2734,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.9417,
+      "floor_m3": 274.944,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -8588,7 +8588,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 207.4453,
@@ -8603,7 +8603,7 @@
       "expected_return": 0.003015,
       "expected_range": 14.8615,
       "m3_payload": {
-        "floor_m3": 274.9417,
+        "floor_m3": 274.944,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -8623,12 +8623,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.008068,
+        "expected_return_m3": -0.008929,
         "expected_range_m3": 53.2734,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.9417,
+      "floor_m3": 274.944,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -8654,7 +8654,7 @@
     },
     {
       "symbol": "MS",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 209.8391,
@@ -8669,7 +8669,7 @@
       "expected_return": 0.002587,
       "expected_range": 9.8901,
       "m3_payload": {
-        "floor_m3": 274.9417,
+        "floor_m3": 274.944,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -8689,12 +8689,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": -0.008068,
+        "expected_return_m3": -0.008929,
         "expected_range_m3": 53.2734,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 274.9417,
+      "floor_m3": 274.944,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -8720,7 +8720,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 479.7791,
@@ -8786,7 +8786,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 269.3876,
@@ -8852,7 +8852,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 468.9717,
@@ -8918,7 +8918,7 @@
     },
     {
       "symbol": "MSFT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 474.3836,
@@ -8984,7 +8984,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 79.4695,
@@ -9050,7 +9050,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.2706,
@@ -9116,7 +9116,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 77.6794,
@@ -9182,7 +9182,7 @@
     },
     {
       "symbol": "NFLX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 78.5758,
@@ -9248,7 +9248,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 215.5247,
@@ -9314,7 +9314,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.5865,
@@ -9380,7 +9380,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 210.6698,
@@ -9446,7 +9446,7 @@
     },
     {
       "symbol": "NVDA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 213.1009,
@@ -9512,7 +9512,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 142.4646,
@@ -9578,7 +9578,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 272.8166,
@@ -9644,7 +9644,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 139.2555,
@@ -9710,7 +9710,7 @@
     },
     {
       "symbol": "ORCL",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 140.8625,
@@ -9776,7 +9776,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 143.0293,
@@ -9842,7 +9842,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.1761,
@@ -9908,7 +9908,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 139.8074,
@@ -9974,7 +9974,7 @@
     },
     {
       "symbol": "PG",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 141.4208,
@@ -10040,7 +10040,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 173.551,
@@ -10106,7 +10106,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.7744,
@@ -10172,7 +10172,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 169.6417,
@@ -10238,7 +10238,7 @@
     },
     {
       "symbol": "PLTR",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 171.5993,
@@ -10304,7 +10304,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 160.3953,
@@ -10370,7 +10370,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.3539,
@@ -10436,7 +10436,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 156.7823,
@@ -10502,7 +10502,7 @@
     },
     {
       "symbol": "QCOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 158.5915,
@@ -10568,7 +10568,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 218.2886,
@@ -10634,7 +10634,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.1279,
@@ -10700,7 +10700,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 213.3714,
@@ -10766,7 +10766,7 @@
     },
     {
       "symbol": "RTX",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 215.8337,
@@ -10832,7 +10832,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 607.8001,
@@ -10898,7 +10898,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 268.6935,
@@ -10964,7 +10964,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 594.109,
@@ -11030,7 +11030,7 @@
     },
     {
       "symbol": "TMO",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 600.9648,
@@ -11096,7 +11096,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 347.8352,
@@ -11162,7 +11162,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 270.3527,
@@ -11228,7 +11228,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 339.9999,
@@ -11294,7 +11294,7 @@
     },
     {
       "symbol": "TSLA",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 343.9234,
@@ -11360,7 +11360,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 264.9479,
@@ -11426,7 +11426,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.085,
@@ -11492,7 +11492,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 258.9798,
@@ -11558,7 +11558,7 @@
     },
     {
       "symbol": "TXN",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 261.9684,
@@ -11624,7 +11624,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 77.3099,
@@ -11690,7 +11690,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.0215,
@@ -11756,7 +11756,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 75.5684,
@@ -11822,7 +11822,7 @@
     },
     {
       "symbol": "UBER",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 76.4405,
@@ -11888,7 +11888,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 384.9744,
@@ -11954,7 +11954,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 271.6544,
@@ -12020,7 +12020,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 376.3026,
@@ -12086,7 +12086,7 @@
     },
     {
       "symbol": "UNH",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 380.645,
@@ -12152,7 +12152,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 362.1203,
@@ -12218,7 +12218,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 273.5074,
@@ -12284,7 +12284,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 353.9632,
@@ -12350,7 +12350,7 @@
     },
     {
       "symbol": "V",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 358.0479,
@@ -12416,7 +12416,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 85.136,
@@ -12431,7 +12431,7 @@
       "expected_return": 0.000349,
       "expected_range": 1.6679,
       "m3_payload": {
-        "floor_m3": 276.7702,
+        "floor_m3": 276.769,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -12451,12 +12451,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.007211,
+        "expected_return_m3": 0.005867,
         "expected_range_m3": 19.9329,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 276.7702,
+      "floor_m3": 276.769,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -12482,10 +12482,10 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
-      "floor_value": 276.7702,
+      "floor_value": 276.769,
       "ceiling_value": null,
       "floor_quantile": 0.1,
       "ceiling_quantile": 0.9,
@@ -12494,10 +12494,10 @@
       "floor_time_probability": 0.078715,
       "ceiling_time_probability": 0.0,
       "confidence_score": 0.078715,
-      "expected_return": 0.007211,
+      "expected_return": 0.005867,
       "expected_range": 19.9329,
       "m3_payload": {
-        "floor_m3": 276.7702,
+        "floor_m3": 276.769,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -12517,12 +12517,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.007211,
+        "expected_return_m3": 0.005867,
         "expected_range_m3": 19.9329,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 276.7702,
+      "floor_m3": 276.769,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -12548,7 +12548,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 83.2183,
@@ -12563,7 +12563,7 @@
       "expected_return": 0.003015,
       "expected_range": 5.9618,
       "m3_payload": {
-        "floor_m3": 276.7702,
+        "floor_m3": 276.769,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -12583,12 +12583,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.007211,
+        "expected_return_m3": 0.005867,
         "expected_range_m3": 19.9329,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 276.7702,
+      "floor_m3": 276.769,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -12614,7 +12614,7 @@
     },
     {
       "symbol": "WFC",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 84.1786,
@@ -12629,7 +12629,7 @@
       "expected_return": 0.002587,
       "expected_range": 3.9675,
       "m3_payload": {
-        "floor_m3": 276.7702,
+        "floor_m3": 276.769,
         "floor_week_m3": 1,
         "floor_week_m3_confidence": 0.078715,
         "floor_week_m3_top3": [
@@ -12649,12 +12649,12 @@
         "floor_week_m3_start_date": "2026-08-20",
         "floor_week_m3_end_date": "2026-08-26",
         "floor_week_m3_label_human": "Semana 01 (2026-08-20 \u2192 2026-08-26) dentro del horizonte m3 (1..13 semanas burs\u00e1tiles relativas)",
-        "expected_return_m3": 0.007211,
+        "expected_return_m3": 0.005867,
         "expected_range_m3": 19.9329,
         "m3_status": "ok",
         "m3_block_reason": null
       },
-      "floor_m3": 276.7702,
+      "floor_m3": 276.769,
       "floor_week_m3": 1,
       "floor_week_m3_confidence": 0.078715,
       "floor_week_m3_top3": [
@@ -12680,7 +12680,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 113.2307,
@@ -12746,7 +12746,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 276.3301,
@@ -12812,7 +12812,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 110.6801,
@@ -12878,7 +12878,7 @@
     },
     {
       "symbol": "WMT",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 111.9573,
@@ -12944,7 +12944,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "d1",
       "floor_value": 163.2285,
@@ -13010,7 +13010,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "m3",
       "floor_value": 275.4076,
@@ -13076,7 +13076,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "q1",
       "floor_value": 159.5517,
@@ -13142,7 +13142,7 @@
     },
     {
       "symbol": "XOM",
-      "as_of": "2026-08-19T17:20:28.504922-04:00",
+      "as_of": "2026-08-19T17:50:09.828219-04:00",
       "event_type": "OPEN",
       "horizon": "w1",
       "floor_value": 161.3929,
