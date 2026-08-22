@@ -10,6 +10,8 @@ from floor.prediction_reconciliation import reconcile_predictions
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.training.review import run_training_review
 from floor.universe import parse_universe_yaml
+from utils.market_data_guard import validate_market_data_freshness
+from utils.prediction_batch_guard import validate_latest_prediction_batch
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,22 @@ def main() -> None:
                 symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
             else:
                 symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
+
+            freshness_symbols = sorted(set(symbols + ["SPY"]))
+            freshness = validate_market_data_freshness(
+                cfg.data_dir / "market" / "market_data.sqlite",
+                freshness_symbols,
+                max_age_days=7,
+            )
+            logger.info("[main] market freshness OK summary=%s", freshness)
             logger.info("[main] running run-cycle event=%s symbols=%s", event, len(symbols))
             run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
+            batch = validate_latest_prediction_batch(
+                cfg.data_dir,
+                symbols,
+                event_type=event,
+            )
+            logger.info("[main] prediction batch completeness OK summary=%s", batch)
             build_dashboard_snapshot(cfg.data_dir, output_path=cfg.data_dir / "reports" / "dashboard.json")
             logger.info("[main] refreshed dashboard snapshot after run-cycle")
         elif args.cmd == "review-training":

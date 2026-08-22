@@ -1,5 +1,14 @@
 {
   "generated_at": "2026-08-21T23:49:43.902103",
-  "status": "OK",
-  "series": []
+  "status": "DEGRADED",
+  "series": [
+    {
+      "name": "legacy_monitoring_snapshot",
+      "status": "DEGRADED",
+      "detail": "Previous synthetic OK status invalidated; regenerate with monitoring.health_snapshot after stabilization merge"
+    }
+  ],
+  "alerts": [
+    "Legacy monitoring snapshot was synthetic and must not be interpreted as operational health"
+  ]
 }
