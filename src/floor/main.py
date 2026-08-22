@@ -5,7 +5,7 @@ import logging
 
 from floor.calendar import nearest_event_type
 from floor.config import RuntimeConfig
-from floor.pipeline.intraday_cycle import run_intraday_cycle
+from floor.pipeline.canonical_intraday_cycle import run_intraday_cycle
 from floor.prediction_reconciliation import reconcile_predictions
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.training.review import run_training_review
@@ -50,7 +50,7 @@ def main() -> None:
                 max_age_days=7,
             )
             logger.info("[main] market freshness OK summary=%s", freshness)
-            logger.info("[main] running run-cycle event=%s symbols=%s", event, len(symbols))
+            logger.info("[main] running canonical signal-only cycle event=%s symbols=%s", event, len(symbols))
             run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
             batch = validate_latest_prediction_batch(
                 cfg.data_dir,
