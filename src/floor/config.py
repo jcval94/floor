@@ -20,7 +20,7 @@ class RuntimeConfig:
             )
 
     @staticmethod
-    def from_env() -> "RuntimeConfig":
+    def from_env() -> RuntimeConfig:
         return RuntimeConfig(
             root_dir=Path(os.getenv("FLOOR_ROOT_DIR", ".")),
             data_dir=Path(os.getenv("FLOOR_DATA_DIR", "data")),
