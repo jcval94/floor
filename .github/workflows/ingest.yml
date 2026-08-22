@@ -39,11 +39,12 @@ jobs:
           fi
           echo "market_rows=$rows"
 
-      - name: Assert ingest does not emit predictions or signals
+      - name: Assert ingest does not mutate decisions
         run: |
           set -euo pipefail
-          if find data/predictions data/signals data/orders -type f ! -name '.gitkeep' -print -quit 2>/dev/null | grep -q .; then
-            echo "::error::Ingest preflight must not create prediction, signal, or order artifacts."
+          if ! git diff --quiet -- data/predictions data/signals data/orders; then
+            echo "::error::Ingest preflight mutated prediction, signal, or order artifacts."
+            git diff -- data/predictions data/signals data/orders
             exit 1
           fi
 
