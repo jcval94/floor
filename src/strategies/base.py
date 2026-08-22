@@ -224,7 +224,7 @@ def build_order_payload(decision: StrategyDecision, strategy_cfg: dict, global_c
         "strategy_id": decision.strategy_id,
         "symbol": decision.symbol,
         "side": decision.side,
-        "qty": decision.qty,
+        "quantity": decision.qty,
         "score": round(decision.score, 6),
         "horizon": decision.horizon,
         "stop_price": round(decision.stop_price, 4),
