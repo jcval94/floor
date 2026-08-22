@@ -42,7 +42,11 @@ def _check(name: str, status: str, detail: str) -> dict[str, str]:
 
 
 def _max_status(checks: list[dict[str, str]]) -> str:
-    return max((item["status"] for item in checks), key=lambda status: _STATUS_RANK[status], default="CRITICAL")
+    return max(
+        (item["status"] for item in checks),
+        key=lambda status: _STATUS_RANK[status],
+        default="CRITICAL",
+    )
 
 
 def _dashboard_checks(data_dir: Path, now_utc: datetime) -> list[dict[str, str]]:
@@ -74,13 +78,17 @@ def _dashboard_checks(data_dir: Path, now_utc: datetime) -> list[dict[str, str]]
         checks.append(_check("prediction_recency", "CRITICAL", "latest_predictions is empty"))
         return checks
 
-    timestamps = [_parse_dt(item.get("as_of")) for item in predictions if isinstance(item, dict)]
-    timestamps = [value for value in timestamps if value is not None]
-    if not timestamps:
+    parsed_timestamps = [
+        _parse_dt(item.get("as_of"))
+        for item in predictions
+        if isinstance(item, dict)
+    ]
+    valid_timestamps = [value for value in parsed_timestamps if value is not None]
+    if not valid_timestamps:
         checks.append(_check("prediction_recency", "CRITICAL", "prediction timestamps missing or invalid"))
         return checks
 
-    latest = max(timestamps)
+    latest = max(valid_timestamps)
     age = now_utc - latest
     if age < timedelta(minutes=-5):
         checks.append(_check("prediction_recency", "CRITICAL", "latest prediction timestamp is in the future"))
@@ -132,13 +140,21 @@ def _checkpoint_check(data_dir: Path, now_et: datetime) -> dict[str, str]:
 
     day = info.session_day.isoformat()
     marker_dir = data_dir / "snapshots" / "workflow_runs"
-    missing = [event for event in expected if not (marker_dir / f"intraday_{day}_{event}.json").exists()]
+    missing = [
+        event
+        for event in expected
+        if not (marker_dir / f"intraday_{day}_{event}.json").exists()
+    ]
     if not missing:
         return _check("checkpoint_completeness", "OK", "all elapsed checkpoints are marked complete")
 
     after_close = bool(info.market_close and now_et >= info.market_close + timedelta(minutes=60))
     status = "CRITICAL" if after_close else "DEGRADED"
-    return _check("checkpoint_completeness", status, f"missing elapsed checkpoints: {','.join(missing)}")
+    return _check(
+        "checkpoint_completeness",
+        status,
+        f"missing elapsed checkpoints: {','.join(missing)}",
+    )
 
 
 def build_health_snapshot(data_dir: Path, now: datetime | None = None) -> dict[str, Any]:
@@ -170,7 +186,11 @@ def _semantic_state(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def write_health_snapshot(data_dir: Path, output_path: Path, now: datetime | None = None) -> dict[str, Any]:
+def write_health_snapshot(
+    data_dir: Path,
+    output_path: Path,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     payload = build_health_snapshot(data_dir=data_dir, now=now)
     previous = _read_json(output_path)
     if previous is not None and _semantic_state(previous) == _semantic_state(payload):
@@ -179,7 +199,10 @@ def write_health_snapshot(data_dir: Path, output_path: Path, now: datetime | Non
             payload["generated_at"] = previous_generated_at
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return payload
 
 
