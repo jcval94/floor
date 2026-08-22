@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.error import URLError
 
 import pytest
 
@@ -29,7 +30,7 @@ def test_fetch_recommendations_returns_empty_on_none_url() -> None:
 
 def test_fetch_recommendations_returns_empty_when_url_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(*_: object, **__: object):
-        raise RuntimeError("unavailable")
+        raise URLError("unavailable")
 
     monkeypatch.setattr("floor.external.google_sheets.urlopen", _boom)
 
@@ -45,8 +46,8 @@ def test_fetch_recommendations_requires_expected_headers(monkeypatch: pytest.Mon
     assert fetch_recommendations("http://example") == []
 
 
-def test_fetch_recommendations_parses_and_normalizes(monkeypatch: pytest.MonkeyPatch) -> None:
-    csv_data = "symbol,action,confidence,note\naapl,buy,0.75,first\nmsft,sell,0.25,second\n"
+def test_fetch_recommendations_parses_only_high_confidence_valid_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    csv_data = "symbol,action,confidence,note\naapl,buy,0.85,first\nmsft,sell,0.25,second\n"
     monkeypatch.setattr(
         "floor.external.google_sheets.urlopen",
         lambda *_args, **_kwargs: _FakeResp(csv_data),
@@ -55,8 +56,7 @@ def test_fetch_recommendations_parses_and_normalizes(monkeypatch: pytest.MonkeyP
     rows = fetch_recommendations("http://example")
 
     assert rows == [
-        ExternalRecommendation(symbol="AAPL", action="BUY", confidence=0.75, note="first"),
-        ExternalRecommendation(symbol="MSFT", action="SELL", confidence=0.25, note="second"),
+        ExternalRecommendation(symbol="AAPL", action="BUY", confidence=0.85, note="first"),
     ]
 
 

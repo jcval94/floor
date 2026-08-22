@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+
 import pytest
 
 from floor import db_health, main as floor_main
@@ -162,29 +163,59 @@ def test_floor_main_run_cycle_without_session(monkeypatch: pytest.MonkeyPatch, c
 
 def test_floor_main_run_cycle_uses_symbols_arg(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, object] = {}
+    freshness_calls: list[list[str]] = []
+    batch_calls: list[tuple[list[str], str]] = []
 
     monkeypatch.setattr("sys.argv", ["floor", "run-cycle", "--event", "OPEN", "--symbols", "aapl, msft "])
     monkeypatch.setattr(floor_main.RuntimeConfig, "from_env", staticmethod(lambda: RuntimeConfig()))
+    monkeypatch.setattr(
+        floor_main,
+        "validate_market_data_freshness",
+        lambda _db, symbols, **_kwargs: freshness_calls.append(list(symbols)) or {"status": "OK"},
+    )
+    monkeypatch.setattr(
+        floor_main,
+        "validate_latest_prediction_batch",
+        lambda _data, symbols, **kwargs: batch_calls.append((list(symbols), str(kwargs["event_type"]))) or {"status": "OK"},
+    )
     monkeypatch.setattr(floor_main, "run_intraday_cycle", lambda **kwargs: called.update(kwargs))
+    monkeypatch.setattr(floor_main, "build_dashboard_snapshot", lambda *_args, **_kwargs: None)
 
     floor_main.main()
 
     assert called["event_type"] == "OPEN"
     assert called["symbols"] == ["AAPL", "MSFT"]
+    assert freshness_calls == [["AAPL", "MSFT", "SPY"]]
+    assert batch_calls == [(["AAPL", "MSFT"], "OPEN")]
 
 
 def test_floor_main_run_cycle_uses_universe_when_symbols_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, object] = {}
+    freshness_calls: list[list[str]] = []
+    batch_calls: list[tuple[list[str], str]] = []
 
     monkeypatch.setattr("sys.argv", ["floor", "run-cycle", "--event", "OPEN"])
     monkeypatch.setattr(floor_main.RuntimeConfig, "from_env", staticmethod(lambda: RuntimeConfig()))
     monkeypatch.setattr(floor_main, "parse_universe_yaml", lambda _: ["SPY", "QQQ"])
+    monkeypatch.setattr(
+        floor_main,
+        "validate_market_data_freshness",
+        lambda _db, symbols, **_kwargs: freshness_calls.append(list(symbols)) or {"status": "OK"},
+    )
+    monkeypatch.setattr(
+        floor_main,
+        "validate_latest_prediction_batch",
+        lambda _data, symbols, **kwargs: batch_calls.append((list(symbols), str(kwargs["event_type"]))) or {"status": "OK"},
+    )
     monkeypatch.setattr(floor_main, "run_intraday_cycle", lambda **kwargs: called.update(kwargs))
+    monkeypatch.setattr(floor_main, "build_dashboard_snapshot", lambda *_args, **_kwargs: None)
 
     floor_main.main()
 
     assert called["event_type"] == "OPEN"
     assert called["symbols"] == ["SPY", "QQQ"]
+    assert freshness_calls == [["QQQ", "SPY"]]
+    assert batch_calls == [(["SPY", "QQQ"], "OPEN")]
 
 
 def test_floor_main_subcommands_and_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
