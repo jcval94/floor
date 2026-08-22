@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -109,6 +111,23 @@ def test_retraining_governance_preserves_diagnosis_but_clears_auto_tasks(tmp_pat
     assert payload["auto_retrain_enabled"] is False
     assert payload["models"]["value"]["auto_retrain_requested"] is True
     assert payload["models"]["value"]["auto_retrain"] is False
+
+
+def test_retrain_script_blocks_workflow_run_before_touching_models() -> None:
+    env = os.environ.copy()
+    env["GITHUB_EVENT_NAME"] = "workflow_run"
+
+    completed = subprocess.run(
+        ["bash", "scripts/retrain_models.sh", "does-not-exist.json"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 42
+    assert "Automatic retraining execution is blocked" in completed.stderr
+    assert "Dataset not found" not in completed.stderr
 
 
 def _seed_training_db(path: Path, rows_by_symbol: dict[str, int]) -> None:
