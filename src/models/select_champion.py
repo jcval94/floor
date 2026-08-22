@@ -67,7 +67,6 @@ def _write_json_atomic(path: Path, payload: dict, *, task: str) -> None:
 
 
 def _value_score(metrics: dict) -> float:
-    # lower is better
     return (
         metrics.get("pinball_loss", 999)
         + metrics.get("mae_realized_floor", 999)
@@ -78,7 +77,6 @@ def _value_score(metrics: dict) -> float:
 
 
 def _timing_score(metrics: dict) -> float:
-    # higher acc and lower losses/dist are better
     return (
         (1 - metrics.get("top1_accuracy", 0.0))
         + (1 - metrics.get("top3_accuracy", 0.0))
@@ -90,7 +88,6 @@ def _timing_score(metrics: dict) -> float:
 
 
 def _horizon_score(metrics: dict) -> float:
-    # lower is better
     return (
         float(metrics.get("mae_proxy", 999.0))
         + abs(float(metrics.get("breach_rate_proxy", 0.2)) - 0.2)
@@ -108,6 +105,25 @@ def _task_score(task: str, metrics: dict) -> float:
     raise ValueError(f"Unsupported champion task for scoring: {task}")
 
 
+def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
+    """Return True when old/new scores are not statistically comparable."""
+    params = artifact.get("params")
+    if not isinstance(params, dict):
+        return task in {"value", "timing"}
+    if task == "value":
+        return not (
+            int(params.get("schema_version") or 0) == 2
+            and params.get("target_space") == "relative_floor_delta"
+        )
+    if task == "timing":
+        return not (
+            int(params.get("schema_version") or 0) == 2
+            and params.get("model_type") == "multinomial_logistic"
+            and int(params.get("class_count") or 0) == 13
+        )
+    return False
+
+
 def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: str) -> dict:
     registry_dir.mkdir(parents=True, exist_ok=True)
     payload = _to_dict(new_artifact)
@@ -118,29 +134,46 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     existing = _load_json(champion_path)
     new_score = _task_score(task, payload["metrics"])
+    old_score: float | None = None
 
     decision = "promote_first"
     reason = "No champion exists; bootstrap champion with first valid artifact."
     previous_champion_version = None
     archived_path = None
+    archived: Path | None = None
 
     if existing is not None:
         previous_champion_version = existing.get("version")
-        old_score = _task_score(task, existing["metrics"])
-        logger.info(
-            "[champion-selection] task=%s old_score=%.6f new_score=%.6f criterion=lower_is_better",
-            task,
-            old_score,
-            new_score,
-        )
-        if new_score + 1e-9 < old_score:
+        if _incompatible_champion_schema(task, existing):
             decision = "promote"
-            reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
+            reason = (
+                "Existing champion uses an incompatible/deprecated statistical schema; "
+                "archive it and promote the first valid v2 artifact without comparing scores."
+            )
             archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
             archived_path = str(archived)
+            logger.warning(
+                "[champion-selection] task=%s force schema migration old_version=%s new_score=%.6f",
+                task,
+                previous_champion_version,
+                new_score,
+            )
         else:
-            decision = "challenger_only"
-            reason = f"Existing champion kept (score {old_score:.6f} <= {new_score:.6f})."
+            old_score = _task_score(task, existing["metrics"])
+            logger.info(
+                "[champion-selection] task=%s old_score=%.6f new_score=%.6f criterion=lower_is_better",
+                task,
+                old_score,
+                new_score,
+            )
+            if new_score + 1e-9 < old_score:
+                decision = "promote"
+                reason = f"New artifact improved score from {old_score:.6f} to {new_score:.6f}."
+                archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
+                archived_path = str(archived)
+            else:
+                decision = "challenger_only"
+                reason = f"Existing champion kept (score {old_score:.6f} <= {new_score:.6f})."
     else:
         logger.info(
             "[champion-selection] task=%s old_score=none new_score=%.6f criterion=lower_is_better",
@@ -151,18 +184,17 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
     payload["selection"] = {
         "decision": decision,
         "reason": reason,
-        "scoring_version": "m3-v1",
+        "scoring_version": "m3-v2" if task in {"value", "timing"} else "m3-v1",
         "evaluated_at": now,
         "new_score": new_score,
-        "existing_score": old_score if existing is not None else None,
+        "existing_score": old_score,
         "objective": "minimize_weighted_error",
     }
     try:
         if decision == "promote":
-            if existing is None:
+            if existing is None or archived is None:
                 raise RuntimeError("Promotion decision requires an existing champion artifact.")
-            existing_payload: dict = existing
-            _write_json_atomic(archived, existing_payload, task=task)
+            _write_json_atomic(archived, existing, task=task)
         _write_json_atomic(challenger_path, payload, task=task)
         if decision in {"promote_first", "promote"}:
             _write_json_atomic(champion_path, payload, task=task)

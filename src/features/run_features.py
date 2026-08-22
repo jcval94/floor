@@ -4,12 +4,13 @@ import argparse
 import csv
 import json
 import logging
-from datetime import datetime
+from collections import Counter
+from datetime import date, datetime
 from pathlib import Path
 
 from features.feature_builder import build_features
 from features.feature_registry import build_missingness_report, get_feature_registry
-from features.labels import build_labels
+from features.labels import HORIZON_SESSIONS, build_labels
 from features.model_competition import build_model_competition_plan
 
 logger = logging.getLogger(__name__)
@@ -23,14 +24,13 @@ def _to_datetime(value: str | datetime) -> datetime:
 
 def _load_rows(path: Path) -> list[dict]:
     logger.info("[etl:features] loading input path=%s", path)
-    if path.suffix == ".json" or path.suffix == ".jsonl":
+    if path.suffix in {".json", ".jsonl"}:
         rows = []
         with path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if not line:
-                    continue
-                rows.append(json.loads(line))
+                if line:
+                    rows.append(json.loads(line))
         logger.info("[etl:features] loaded json/jsonl rows=%s", len(rows))
         return rows
 
@@ -71,20 +71,42 @@ def _coerce_numeric(rows: list[dict]) -> list[dict]:
                 elif col in row:
                     row[col] = float(row[col])
             except (TypeError, ValueError) as exc:
-                logger.warning("[etl:features] numeric cast failed row=%s col=%s value=%s error=%s", idx, col, row.get(col), exc)
+                logger.warning(
+                    "[etl:features] numeric cast failed row=%s col=%s value=%s error=%s",
+                    idx,
+                    col,
+                    row.get(col),
+                    exc,
+                )
                 row[col] = None
     return rows
 
 
-def build_walk_forward_splits(rows: list[dict], train_days: int = 40, valid_days: int = 10, test_days: int = 10, step_days: int = 10) -> list[dict]:
+def build_walk_forward_splits(
+    rows: list[dict],
+    train_days: int = 40,
+    valid_days: int = 10,
+    test_days: int = 10,
+    step_days: int = 10,
+) -> list[dict]:
+    """Describe chronological folds.
+
+    The production trainers rely on per-horizon ``split_eligible_*`` flags for
+    leakage protection. These fold descriptors are retained for audit/reporting.
+    """
     ordered_days = sorted({_to_datetime(r["timestamp"]).date() for r in rows})
     folds = []
     start = 0
     fold_id = 1
     while start + train_days + valid_days + test_days <= len(ordered_days):
         train_slice = ordered_days[start : start + train_days]
-        valid_slice = ordered_days[start + train_days : start + train_days + valid_days]
-        test_slice = ordered_days[start + train_days + valid_days : start + train_days + valid_days + test_days]
+        valid_slice = ordered_days[
+            start + train_days : start + train_days + valid_days
+        ]
+        test_slice = ordered_days[
+            start + train_days + valid_days :
+            start + train_days + valid_days + test_days
+        ]
         folds.append(
             {
                 "fold": fold_id,
@@ -94,6 +116,7 @@ def build_walk_forward_splits(rows: list[dict], train_days: int = 40, valid_days
                 "valid_end": str(valid_slice[-1]),
                 "test_start": str(test_slice[0]),
                 "test_end": str(test_slice[-1]),
+                "eligibility_contract": "use split_eligible_<horizon> before fitting/evaluation",
             }
         )
         start += step_days
@@ -101,13 +124,62 @@ def build_walk_forward_splits(rows: list[dict], train_days: int = 40, valid_days
     return folds
 
 
-def assign_split(rows: list[dict], train_ratio: float = 0.7, valid_ratio: float = 0.15) -> list[dict]:
+def _date_from_iso(value: object) -> date | None:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _annotate_split_eligibility(rows: list[dict], split_end: dict[str, date]) -> None:
+    """Mark rows whose full forward label remains inside their own split.
+
+    This is the purge/embargo contract used by training. A row can retain its
+    chronological split label for reporting while being ineligible for one or
+    more horizons.
+    """
+    for row in rows:
+        split = str(row.get("split") or "")
+        boundary = split_end.get(split)
+        for horizon in HORIZON_SESSIONS:
+            complete = bool(row.get(f"horizon_complete_{horizon}", False))
+            target_end = _date_from_iso(row.get(f"target_end_date_{horizon}"))
+            eligible = bool(
+                boundary is not None
+                and complete
+                and target_end is not None
+                and target_end <= boundary
+            )
+            row[f"split_eligible_{horizon}"] = eligible
+            if eligible:
+                row[f"split_ineligible_reason_{horizon}"] = None
+            elif not complete:
+                row[f"split_ineligible_reason_{horizon}"] = "incomplete_future_horizon"
+            elif target_end is None:
+                row[f"split_ineligible_reason_{horizon}"] = "missing_target_end"
+            else:
+                row[f"split_ineligible_reason_{horizon}"] = "target_crosses_split_boundary"
+
+
+def assign_split(
+    rows: list[dict],
+    train_ratio: float = 0.7,
+    valid_ratio: float = 0.15,
+) -> list[dict]:
+    """Assign chronological splits and horizon-specific leakage-safe eligibility."""
     days = sorted({_to_datetime(r["timestamp"]).date() for r in rows})
     n = len(days)
-    train_end = int(n * train_ratio)
-    valid_end = int(n * (train_ratio + valid_ratio))
-    train_days = set(days[:train_end])
-    valid_days = set(days[train_end:valid_end])
+    if n == 0:
+        return rows
+
+    train_end_idx = max(1, min(n, int(n * train_ratio)))
+    valid_end_idx = max(train_end_idx, min(n, int(n * (train_ratio + valid_ratio))))
+
+    train_days = set(days[:train_end_idx])
+    valid_days = set(days[train_end_idx:valid_end_idx])
+    test_days = set(days[valid_end_idx:])
 
     for row in rows:
         day = _to_datetime(row["timestamp"]).date()
@@ -117,6 +189,16 @@ def assign_split(rows: list[dict], train_ratio: float = 0.7, valid_ratio: float 
             row["split"] = "validation"
         else:
             row["split"] = "test"
+
+    split_end: dict[str, date] = {}
+    if train_days:
+        split_end["train"] = max(train_days)
+    if valid_days:
+        split_end["validation"] = max(valid_days)
+    if test_days:
+        split_end["test"] = max(test_days)
+
+    _annotate_split_eligibility(rows, split_end)
     return rows
 
 
@@ -125,7 +207,13 @@ def _horizon_coverage(rows: list[dict], horizon: str, columns: list[str]) -> dic
     return {
         "horizon": horizon,
         "rows": len(rows),
-        "coverage": {c: sum(1 for r in rows if r.get(c) is not None) / total for c in columns},
+        "coverage": {
+            c: sum(1 for r in rows if r.get(c) is not None) / total
+            for c in columns
+        },
+        "split_eligible_rows": sum(
+            1 for r in rows if r.get(f"split_eligible_{horizon}") is True
+        ),
     }
 
 
@@ -154,13 +242,32 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
     missingness = build_missingness_report(labeled_rows, final_columns)
 
     target_definitions = {
-        "floor_targets": "floor_h = min(low) in forward horizon h where h in {d1,w1,q1,m3}.",
-        "ceiling_targets": "ceiling_h = max(high) in forward horizon h where h in {d1,w1,q1}.",
+        "floor_targets": (
+            "floor_h = min(low) over the complete forward horizon h. "
+            "Rows without the full horizon are right-censored and receive null targets."
+        ),
+        "ceiling_targets": (
+            "ceiling_h = max(high) over the complete forward horizon h. "
+            "Rows without the full horizon are right-censored and receive null targets."
+        ),
+        "split_integrity": {
+            "rule": (
+                "A row is fit/evaluation eligible for horizon h only when "
+                "target_end_date_h remains inside the row's chronological split."
+            ),
+            "fields": [
+                "split_eligible_d1",
+                "split_eligible_w1",
+                "split_eligible_q1",
+                "split_eligible_m3",
+            ],
+        },
         "m3_target": {
-            "floor_m3": "realized minimum low over next 13 relative market weeks (up to 65 future sessions).",
-            "floor_week_m3": "relative week class 1..13 containing the realized floor_m3.",
-            "week_assignment": "build contiguous future week chunks of up to 5 trading sessions; holidays/incomplete weeks keep available sessions.",
-            "tie_break_rule": "if two weeks share identical floor low, choose earliest relative week index for stability.",
+            "floor_m3": "realized minimum low over exactly 65 future trading sessions.",
+            "floor_delta_m3": "(close_t - floor_m3) / close_t, clipped to [0, 0.95].",
+            "floor_week_m3": "relative week class 1..13 containing floor_m3.",
+            "week_assignment": "13 contiguous chunks of exactly 5 future trading sessions.",
+            "tie_break_rule": "identical minima choose the earliest relative week.",
             "extra_outputs": [
                 "realized_range_m3",
                 "forward_return_m3",
@@ -170,9 +277,12 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
             ],
         },
         "temporal_targets": {
-            "d1": "Event timestamp is labeled at bar resolution, then mapped to OPEN/OPEN_PLUS_2H/OPEN_PLUS_4H/OPEN_PLUS_6H/CLOSE.",
-            "w1": "Relative business day index (1..5) where floor/ceiling occurs within next 5 trading days.",
-            "q1": "Relative business day index (1..10) where floor/ceiling occurs within next 10 trading days.",
+            "d1": (
+                "Intraday timing is emitted only when the source has multiple bars "
+                "inside the next session; daily OHLC input leaves timing null."
+            ),
+            "w1": "Relative business-day index 1..5 of the realized extreme.",
+            "q1": "Relative business-day index 1..10 of the realized extreme.",
         },
         "calculation_windows": {
             "returns": [1, 2, 5, 10],
@@ -185,21 +295,20 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         },
     }
 
-    m3_coverage = _horizon_coverage(
-        labeled_rows,
-        horizon="m3",
-        columns=[
-            "floor_m3",
-            "realized_floor_m3",
-            "floor_week_m3",
-            "realized_range_m3",
-            "forward_return_m3",
-            "floor_breach_flag_m3",
-            "floor_week_m3_start_date",
-            "floor_week_m3_end_date",
-        ],
-    )
+    horizon_coverage = {
+        horizon: _horizon_coverage(
+            labeled_rows,
+            horizon,
+            (
+                ["floor_m3", "floor_delta_m3", "floor_week_m3"]
+                if horizon == "m3"
+                else [f"floor_{horizon}", f"ceiling_{horizon}"]
+            ),
+        )
+        for horizon in ("d1", "w1", "q1", "m3")
+    }
 
+    split_counts = Counter(str(r.get("split") or "") for r in labeled_rows)
     artifact = {
         "rows": labeled_rows,
         "feature_registry": registry,
@@ -208,17 +317,27 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         "target_documentation": target_definitions,
         "final_model_columns": final_columns,
         "model_competition": competition_plan,
-        "horizon_coverage": {"m3": m3_coverage},
+        "horizon_coverage": horizon_coverage,
+        "split_counts": dict(split_counts),
     }
-    logger.info("[etl:features] artifact ready rows=%s folds=%s columns=%s", len(labeled_rows), len(wf), len(final_columns))
-    if labeled_rows:
-        logger.info("[etl:features] sample labeled row=%s", labeled_rows[0])
+    logger.info(
+        "[etl:features] artifact ready rows=%s folds=%s columns=%s split_counts=%s",
+        len(labeled_rows),
+        len(wf),
+        len(final_columns),
+        dict(split_counts),
+    )
     return artifact
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
-    parser = argparse.ArgumentParser(description="Build floor/ceiling modelable dataset")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    parser = argparse.ArgumentParser(
+        description="Build leakage-safe floor/ceiling modelable dataset"
+    )
     parser.add_argument("--input", required=True, help="Input path (.csv|.jsonl)")
     parser.add_argument("--output", required=True, help="Output JSON path")
     args = parser.parse_args()
@@ -226,7 +345,10 @@ def main() -> None:
     try:
         rows = _load_rows(Path(args.input))
         artifact = build_modelable_dataset(rows)
-        Path(args.output).write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+        Path(args.output).write_text(
+            json.dumps(artifact, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         logger.info("[etl:features] wrote modelable dataset path=%s", args.output)
     except Exception as exc:
         logger.exception("[etl:features] CLI failed: %s", exc)
