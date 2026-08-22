@@ -67,7 +67,7 @@ strategies:
       max_breach_prob_d1: 0.70
     position_sizing:
       risk_budget_pct_nav: 0.012
-      max_notional_usd: 60000
+      max_notional_usd: 50000
     risk:
       stop_type: expected_floor_or_ceiling
     exits:
@@ -92,7 +92,7 @@ strategies:
       min_consensus_score: 0.06
     position_sizing:
       risk_budget_pct_nav: 0.015
-      max_notional_usd: 80000
+      max_notional_usd: 50000
     risk:
       stop_type: expected_floor_or_ceiling
     exits:
