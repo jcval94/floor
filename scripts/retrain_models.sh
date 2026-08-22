@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${GITHUB_EVENT_NAME:-}" == "workflow_run" ]]; then
+  echo "::error::Automatic retraining execution is blocked until train/serve parity and promotion governance are validated." >&2
+  exit 42
+fi
+
 DATASET_PATH="${1:-data/training/modelable_dataset.json}"
 OUTPUT_DIR="${2:-data/training}"
 VERSION_TAG="${3:-$(date -u +%Y%m%dT%H%M%SZ)}"
