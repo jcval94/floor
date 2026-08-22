@@ -102,7 +102,22 @@ def approve_signal_batch(
         items = grouped[symbol]
         sides = {item["action"] for item in items}
         if len(sides) > 1:
-            rejected.extend({**item, "reason": "cross_horizon_side_conflict"} for item in items)
+            position_qty = int(existing_qty.get(symbol, 0))
+            reducing_side = "SELL" if position_qty > 0 else "BUY" if position_qty < 0 else None
+            reducing_items = [item for item in items if reducing_side and item["action"] == reducing_side]
+            if not reducing_items:
+                rejected.extend({**item, "reason": "cross_horizon_side_conflict"} for item in items)
+                continue
+            winner = sorted(
+                reducing_items,
+                key=lambda item: (-float(item["confidence"]), horizon_rank.get(str(item["horizon"]), 99)),
+            )[0]
+            selected.append(winner)
+            rejected.extend(
+                {**item, "reason": "cross_horizon_conflict_prefer_decrease"}
+                for item in items
+                if item is not winner
+            )
             continue
         winner = sorted(
             items,
@@ -125,9 +140,9 @@ def approve_signal_batch(
         if row is None:
             rejected.append({**signal, "reason": "missing_market_row"})
             continue
-        price = _positive_float(row.get("close"))
-        if price is None:
-            rejected.append({**signal, "reason": "invalid_close_price"})
+        risk_price = _risk_reference_price(row)
+        if risk_price is None:
+            rejected.append({**signal, "reason": "invalid_market_price"})
             continue
 
         sector = str(row.get("sector") or "UNKNOWN")
@@ -140,11 +155,11 @@ def approve_signal_batch(
 
         if reducing:
             quantity = abs(current_quantity)
-            approved_notional = quantity * price
+            approved_notional = quantity * risk_price
             order = _build_order(
                 signal,
                 sector=sector,
-                price=price,
+                price=risk_price,
                 quantity=quantity,
                 approved_notional=approved_notional,
                 policy=policy,
@@ -169,17 +184,17 @@ def approve_signal_batch(
         gross_room = max(0.0, policy.max_gross_exposure_usd - gross)
         sector_room = max(0.0, policy.nav_usd * policy.max_sector_weight - current_sector)
         allowed_notional = min(symbol_room, gross_room, sector_room)
-        quantity = floor(allowed_notional / price)
+        quantity = floor(allowed_notional / risk_price)
 
         if quantity <= 0:
             rejected.append({**signal, "reason": "risk_capacity_exhausted"})
             continue
 
-        approved_notional = quantity * price
+        approved_notional = quantity * risk_price
         order = _build_order(
             signal,
             sector=sector,
-            price=price,
+            price=risk_price,
             quantity=quantity,
             approved_notional=approved_notional,
             policy=policy,
@@ -215,7 +230,7 @@ def _build_order(
             "confidence": signal["confidence"],
             "rationale": signal["rationale"],
             "sector": sector,
-            "reference_price": price,
+            "risk_reference_price": price,
             "approved_notional_usd": round(approved_notional, 2),
             "risk_action": risk_action,
             "risk_policy": {
@@ -259,6 +274,14 @@ def _validate_policy(policy: RiskPolicy) -> None:
         raise ValueError("max_sector_weight must be in (0, 1]")
     if policy.daily_loss_limit_bps <= 0:
         raise ValueError("daily_loss_limit_bps must be > 0")
+
+
+def _risk_reference_price(row: dict[str, Any]) -> float | None:
+    """Use a conservative upper price so OHLC4 fills cannot exceed risk notional."""
+
+    prices = [_positive_float(row.get(key)) for key in ("open", "high", "low", "close")]
+    valid = [price for price in prices if price is not None]
+    return max(valid) if valid else None
 
 
 def _positive_float(value: Any) -> float | None:
