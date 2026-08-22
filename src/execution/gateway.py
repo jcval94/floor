@@ -63,6 +63,7 @@ class PaperExecutionGateway:
             existing_gross_notional_usd=exposure["gross_notional_usd"],
             existing_symbol_notional_usd=exposure["symbol_notional_usd"],
             existing_sector_notional_usd=exposure["sector_notional_usd"],
+            existing_symbol_quantity=exposure["symbol_quantity"],
         )
         execution = self.executor.run_cycle(
             cycle_id=cycle_id,
@@ -100,6 +101,7 @@ def _current_exposure(
     gross = 0.0
     by_symbol: dict[str, float] = {}
     by_sector: dict[str, float] = {}
+    by_quantity: dict[str, int] = {}
     for symbol, position in executor.portfolio.positions.items():
         row = market_data.get(symbol, {})
         price = float(row.get("close") or position.avg_cost)
@@ -108,10 +110,12 @@ def _current_exposure(
         gross += notional
         by_symbol[symbol] = notional
         by_sector[sector] = by_sector.get(sector, 0.0) + notional
+        by_quantity[symbol] = int(position.quantity)
     return {
         "gross_notional_usd": gross,
         "symbol_notional_usd": by_symbol,
         "sector_notional_usd": by_sector,
+        "symbol_quantity": by_quantity,
     }
 
 
