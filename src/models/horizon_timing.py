@@ -28,6 +28,8 @@ TARGET_COLUMNS = {
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -64,6 +66,8 @@ def _normalize_label(value: object, horizon: str) -> str | None:
     if horizon == "d1":
         label = str(value)
     else:
+        if not isinstance(value, (int, float, str, bytes, bytearray)):
+            return None
         try:
             label = str(int(value))
         except (TypeError, ValueError):
@@ -72,7 +76,6 @@ def _normalize_label(value: object, horizon: str) -> str | None:
 
 
 def _distribution(counts: Counter[str], classes: tuple[str, ...]) -> dict[str, float]:
-    # Laplace smoothing keeps serving deterministic even for sparse states.
     total = sum(counts.values()) + len(classes)
     return {label: (counts.get(label, 0) + 1) / total for label in classes}
 
