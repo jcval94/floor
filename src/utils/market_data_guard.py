@@ -25,13 +25,17 @@ def validate_market_data_freshness(
 ) -> dict[str, object]:
     """Fail closed when market data is missing, malformed, stale, or future-dated."""
 
-    requested = sorted({str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()})
+    requested = sorted(
+        {str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()}
+    )
     if not requested:
         raise RuntimeError("Market freshness validation refused: no symbols requested")
     if max_age_days < 0:
         raise ValueError("max_age_days must be >= 0")
     if not db_path.exists():
-        raise RuntimeError(f"Market freshness validation refused: DB missing at {db_path}")
+        raise RuntimeError(
+            f"Market freshness validation refused: DB missing at {db_path}"
+        )
 
     now = now or datetime.now(tz=timezone.utc)
     if now.tzinfo is None:
@@ -49,7 +53,9 @@ def validate_market_data_freshness(
         with sqlite3.connect(db_path) as conn:
             rows = conn.execute(query, requested).fetchall()
     except sqlite3.Error as exc:
-        raise RuntimeError(f"Market freshness validation failed reading {db_path}: {exc}") from exc
+        raise RuntimeError(
+            f"Market freshness validation failed reading {db_path}: {exc}"
+        ) from exc
 
     latest_by_symbol = {str(symbol).upper(): str(ts) for symbol, ts in rows if ts}
     missing = [symbol for symbol in requested if symbol not in latest_by_symbol]
@@ -69,20 +75,31 @@ def validate_market_data_freshness(
 
         age_days = (now_utc.date() - timestamp.date()).days
         if age_days < 0:
-            future.append({"symbol": symbol, "timestamp": raw, "age_days": age_days})
+            future.append(
+                {"symbol": symbol, "timestamp": raw, "age_days": age_days}
+            )
         elif age_days > max_age_days:
-            stale.append({"symbol": symbol, "timestamp": raw, "age_days": age_days})
+            stale.append(
+                {"symbol": symbol, "timestamp": raw, "age_days": age_days}
+            )
 
     problems: list[str] = []
     if missing:
         problems.append(f"missing={','.join(missing)}")
     if malformed:
-        problems.append("malformed=" + ",".join(item["symbol"] for item in malformed))
+        problems.append(
+            "malformed=" + ",".join(str(item["symbol"]) for item in malformed)
+        )
     if future:
-        problems.append("future=" + ",".join(item["symbol"] for item in future))
+        problems.append(
+            "future=" + ",".join(str(item["symbol"]) for item in future)
+        )
     if stale:
         problems.append(
-            "stale=" + ",".join(f"{item['symbol']}:{item['age_days']}d" for item in stale)
+            "stale="
+            + ",".join(
+                f"{item['symbol']}:{item['age_days']}d" for item in stale
+            )
         )
 
     summary: dict[str, object] = {
@@ -97,18 +114,24 @@ def validate_market_data_freshness(
         "stale": stale,
     }
     if problems:
-        raise RuntimeError("Market freshness validation refused inference: " + "; ".join(problems))
+        raise RuntimeError(
+            "Market freshness validation refused inference: " + "; ".join(problems)
+        )
     return summary
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate market DB freshness before inference")
+    parser = argparse.ArgumentParser(
+        description="Validate market DB freshness before inference"
+    )
     parser.add_argument("--db", default="data/market/market_data.sqlite")
     parser.add_argument("--symbols", required=True, help="Comma-separated symbols")
     parser.add_argument("--max-age-days", type=int, default=7)
     args = parser.parse_args()
 
-    symbols = [item.strip().upper() for item in args.symbols.split(",") if item.strip()]
+    symbols = [
+        item.strip().upper() for item in args.symbols.split(",") if item.strip()
+    ]
     try:
         summary = validate_market_data_freshness(
             Path(args.db),
@@ -116,7 +139,12 @@ def main() -> int:
             max_age_days=args.max_age_days,
         )
     except RuntimeError as exc:
-        print(json.dumps({"status": "CRITICAL", "error": str(exc)}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {"status": "CRITICAL", "error": str(exc)},
+                ensure_ascii=False,
+            )
+        )
         return 1
 
     print(json.dumps(summary, ensure_ascii=False))
