@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 
 def _parse_timestamp(value: str) -> datetime:
