@@ -76,8 +76,11 @@ def validate_family_params(family: str, params: dict[str, Any]) -> None:
         cuts = params.get("vol_cuts")
         if not isinstance(cuts, list) or not all(_is_number(value) for value in cuts):
             raise ValueError("EVT params vol_cuts must be a numeric list")
-        bins = params.get("bins")
-        if not _is_number(bins) or int(float(bins)) <= 0:
+        bins_raw = params.get("bins")
+        if not _is_number(bins_raw):
+            raise ValueError("EVT params bins must be a positive integer")
+        bins_value = _to_float(bins_raw, 0.0)
+        if bins_value <= 0 or bins_value != float(int(bins_value)):
             raise ValueError("EVT params bins must be a positive integer")
         return
 
