@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
 
 import pytest
 
@@ -13,7 +12,7 @@ class _FakeResponse:
     def __init__(self, text: str) -> None:
         self._text = text
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> _FakeResponse:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
