@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -113,7 +113,7 @@ def test_retraining_governance_preserves_diagnosis_but_clears_auto_tasks(tmp_pat
 
 def _seed_training_db(path: Path, rows_by_symbol: dict[str, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(tz=timezone.utc).isoformat()
+    now = datetime.now(tz=timezone.utc)
     with sqlite3.connect(path) as conn:
         conn.execute(
             """
@@ -131,12 +131,13 @@ def _seed_training_db(path: Path, rows_by_symbol: dict[str, int]) -> None:
         )
         for symbol, count in rows_by_symbol.items():
             for index in range(count):
+                timestamp = (now - timedelta(days=index)).isoformat()
                 conn.execute(
                     """
                     INSERT INTO daily_bars(symbol, ts_utc, open, high, low, close, volume)
                     VALUES(?, ?, 1, 1, 1, 1, 1)
                     """,
-                    (symbol, f"{now}|{index:03d}" if index else now),
+                    (symbol, timestamp),
                 )
 
 
