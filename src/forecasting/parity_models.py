@@ -14,10 +14,10 @@ from models.classic_horizon_predictor import (
 class ParityChampionModelSet(ChampionModelSet):
     """Champion set that executes serialized classic-horizon params at serving time.
 
-    Older heuristic artifacts without nested floor/ceiling params continue through
-    the compatibility implementation in ChampionModelSet. Competition artifacts
-    produced by train_classic_horizons are executed from their actual learned
-    parameters rather than their aggregate median deltas.
+    Older non-competition heuristic artifacts continue through the compatibility
+    implementation in ChampionModelSet. Once an artifact identifies itself as one
+    of the classic competition families, its learned floor/ceiling parameter
+    contract is mandatory and malformed artifacts fail closed.
     """
 
     def _predict_classic_horizon(
@@ -30,14 +30,16 @@ class ParityChampionModelSet(ChampionModelSet):
             return None
 
         family = model_family(str(artifact.get("model_name") or ""))
-        params = artifact.get("params")
-        if not family or not isinstance(params, dict):
+        if not family:
             return super()._predict_classic_horizon(row, artifact, horizon)
 
+        params = artifact.get("params")
+        if not isinstance(params, dict):
+            raise ValueError(f"Classic champion {horizon} missing params mapping")
         floor_params = params.get("floor")
         ceiling_params = params.get("ceiling")
         if not isinstance(floor_params, dict) or not isinstance(ceiling_params, dict):
-            return super()._predict_classic_horizon(row, artifact, horizon)
+            raise ValueError(f"Classic champion {horizon} missing floor/ceiling trained params")
 
         features = build_runtime_features(row)
         floor_delta = predict_family_delta(family, floor_params, features)
