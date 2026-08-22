@@ -42,9 +42,10 @@ def main() -> None:
             else:
                 symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
 
+            freshness_symbols = sorted(set(symbols + ["SPY"]))
             freshness = validate_market_data_freshness(
                 cfg.data_dir / "market" / "market_data.sqlite",
-                symbols,
+                freshness_symbols,
                 max_age_days=7,
             )
             logger.info("[main] market freshness OK summary=%s", freshness)
