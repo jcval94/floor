@@ -27,6 +27,8 @@ FEATURE_NAMES = (
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -86,7 +88,7 @@ def _fit_linear_delta(
 
     weights = {name: 0.0 for name in FEATURE_NAMES}
     targets = [_target_delta(row) for row in rows]
-    y = [float(value) for value in targets if value is not None]
+    y = [value for value in targets if value is not None]
     bias = _mean(y)
     n = float(len(rows))
 
@@ -129,12 +131,6 @@ def _expanding_time_folds(
     rows: list[dict],
     folds: int,
 ) -> list[tuple[list[dict], list[dict]]]:
-    """Compatibility CV for synthetic fixtures only.
-
-    Real ABT rows include target-end metadata. Until fold-specific purge logic is
-    present, CV is deliberately disabled for those rows rather than leaking
-    future labels across fold boundaries.
-    """
     if _has_point_in_time_integrity_metadata(rows):
         return []
 
@@ -252,11 +248,11 @@ def train_floor_m3_value_model(
         predict_floor_delta(row, weights, bias)
         for row in usable_valid
     ]
-    valid_delta_true = [
-        float(_target_delta(row))
-        for row in usable_valid
-        if _target_delta(row) is not None
-    ]
+    valid_delta_true: list[float] = []
+    for row in usable_valid:
+        target = _target_delta(row)
+        if target is not None:
+            valid_delta_true.append(target)
 
     calibrator = QuantileCalibrator(alpha=0.2).fit(
         valid_delta_raw,
