@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from io import StringIO
+from urllib.error import URLError
 from urllib.request import urlopen
 
 ALLOWED_ACTIONS = {"BUY", "SELL", "HOLD"}
@@ -30,7 +31,7 @@ def fetch_recommendations(csv_url: str | None) -> list[ExternalRecommendation]:
     try:
         with urlopen(csv_url, timeout=10) as response:
             raw = response.read().decode("utf-8")
-    except Exception:
+    except (URLError, TimeoutError, UnicodeDecodeError, ValueError):
         return []
 
     reader = csv.DictReader(StringIO(raw))
