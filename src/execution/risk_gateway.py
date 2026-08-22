@@ -58,12 +58,14 @@ def approve_signal_batch(
     existing_gross_notional_usd: float = 0.0,
     existing_symbol_notional_usd: dict[str, float] | None = None,
     existing_sector_notional_usd: dict[str, float] | None = None,
+    existing_symbol_quantity: dict[str, int] | None = None,
 ) -> RiskApprovalResult:
     """Convert model signals into executor-compatible order intents after risk approval.
 
     `config/risk.yaml` is authoritative. Strategy-level position limits may be more
-    conservative, but they can never enlarge these global caps. This gateway emits
-    `quantity`, matching execution.order_models.Order/PaperExecutor.
+    conservative, but they can never enlarge these global caps. Exposure-increasing
+    orders obey every cap. Exposure-reducing orders are allowed to close an existing
+    position even when a capacity or daily-loss limit is already breached.
     """
 
     if live_trading_enabled:
@@ -76,23 +78,17 @@ def approve_signal_batch(
     }
     existing_symbol = {str(k).upper(): float(v) for k, v in (existing_symbol_notional_usd or {}).items()}
     existing_sector = {str(k): float(v) for k, v in (existing_sector_notional_usd or {}).items()}
+    existing_qty = {str(k).upper(): int(v) for k, v in (existing_symbol_quantity or {}).items()}
 
     normalized = [_normalize_signal(signal) for signal in signals]
     normalized = [signal for signal in normalized if signal["action"] in {"BUY", "SELL"}]
     rejected: list[dict[str, Any]] = []
 
+    # Stale prices make both sizing and simulated fills unsafe, including exits.
     if policy.kill_switch_enabled and not market_data_fresh:
         return RiskApprovalResult(
             orders=[],
             rejected=[{**signal, "reason": "kill_switch: stale_data"} for signal in normalized],
-            policy=policy,
-        )
-
-    daily_loss_limit = policy.nav_usd * policy.daily_loss_limit_bps / 10_000.0
-    if policy.kill_switch_enabled and realized_pnl_usd <= -daily_loss_limit:
-        return RiskApprovalResult(
-            orders=[],
-            rejected=[{**signal, "reason": "kill_switch: daily_loss_limit"} for signal in normalized],
             policy=policy,
         )
 
@@ -119,6 +115,9 @@ def approve_signal_batch(
     gross = max(0.0, float(existing_gross_notional_usd))
     projected_symbol = dict(existing_symbol)
     projected_sector = dict(existing_sector)
+    projected_qty = dict(existing_qty)
+    daily_loss_limit = policy.nav_usd * policy.daily_loss_limit_bps / 10_000.0
+    daily_loss_hit = policy.kill_switch_enabled and realized_pnl_usd <= -daily_loss_limit
 
     for signal in sorted(selected, key=lambda item: (-float(item["confidence"]), item["symbol"])):
         symbol = signal["symbol"]
@@ -132,8 +131,35 @@ def approve_signal_batch(
             continue
 
         sector = str(row.get("sector") or "UNKNOWN")
+        current_quantity = int(projected_qty.get(symbol, 0))
         current_symbol = max(0.0, projected_symbol.get(symbol, 0.0))
         current_sector = max(0.0, projected_sector.get(sector, 0.0))
+        reducing = (current_quantity > 0 and signal["action"] == "SELL") or (
+            current_quantity < 0 and signal["action"] == "BUY"
+        )
+
+        if reducing:
+            quantity = abs(current_quantity)
+            approved_notional = quantity * price
+            order = _build_order(
+                signal,
+                sector=sector,
+                price=price,
+                quantity=quantity,
+                approved_notional=approved_notional,
+                policy=policy,
+                risk_action="decrease_exposure",
+            )
+            orders.append(order)
+            gross = max(0.0, gross - current_symbol)
+            projected_symbol[symbol] = 0.0
+            projected_sector[sector] = max(0.0, current_sector - current_symbol)
+            projected_qty[symbol] = 0
+            continue
+
+        if daily_loss_hit:
+            rejected.append({**signal, "reason": "kill_switch: daily_loss_limit"})
+            continue
 
         global_position_cap = min(
             policy.max_position_notional_usd,
@@ -150,32 +176,56 @@ def approve_signal_batch(
             continue
 
         approved_notional = quantity * price
-        order = {
-            "strategy_id": "canonical_model_signal",
-            "symbol": symbol,
-            "side": signal["action"],
-            "quantity": quantity,
-            "metadata": {
-                "horizon": signal["horizon"],
-                "confidence": signal["confidence"],
-                "rationale": signal["rationale"],
-                "sector": sector,
-                "reference_price": price,
-                "approved_notional_usd": round(approved_notional, 2),
-                "risk_policy": {
-                    "max_position_notional_usd": policy.max_position_notional_usd,
-                    "max_gross_exposure_usd": policy.max_gross_exposure_usd,
-                    "max_single_name_weight": policy.max_single_name_weight,
-                    "max_sector_weight": policy.max_sector_weight,
-                },
-            },
-        }
+        order = _build_order(
+            signal,
+            sector=sector,
+            price=price,
+            quantity=quantity,
+            approved_notional=approved_notional,
+            policy=policy,
+            risk_action="increase_exposure",
+        )
         orders.append(order)
         gross += approved_notional
         projected_symbol[symbol] = current_symbol + approved_notional
         projected_sector[sector] = current_sector + approved_notional
+        signed_delta = quantity if signal["action"] == "BUY" else -quantity
+        projected_qty[symbol] = current_quantity + signed_delta
 
     return RiskApprovalResult(orders=orders, rejected=rejected, policy=policy)
+
+
+def _build_order(
+    signal: dict[str, Any],
+    *,
+    sector: str,
+    price: float,
+    quantity: int,
+    approved_notional: float,
+    policy: RiskPolicy,
+    risk_action: str,
+) -> dict[str, Any]:
+    return {
+        "strategy_id": "canonical_model_signal",
+        "symbol": signal["symbol"],
+        "side": signal["action"],
+        "quantity": quantity,
+        "metadata": {
+            "horizon": signal["horizon"],
+            "confidence": signal["confidence"],
+            "rationale": signal["rationale"],
+            "sector": sector,
+            "reference_price": price,
+            "approved_notional_usd": round(approved_notional, 2),
+            "risk_action": risk_action,
+            "risk_policy": {
+                "max_position_notional_usd": policy.max_position_notional_usd,
+                "max_gross_exposure_usd": policy.max_gross_exposure_usd,
+                "max_single_name_weight": policy.max_single_name_weight,
+                "max_sector_weight": policy.max_sector_weight,
+            },
+        },
+    }
 
 
 def _normalize_signal(signal: Any) -> dict[str, Any]:
