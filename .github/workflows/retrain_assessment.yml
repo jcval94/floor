@@ -72,14 +72,16 @@ jobs:
       - name: Run retrain assessment
         run: PYTHONPATH=src python -m floor.main review-training
 
-      - name: Commit assessment history
+      - name: Commit assessment history only
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/training data/persistence
+          git add \
+            data/training/reviews.jsonl \
+            data/training/review_summary_latest.json
           if git diff --cached --quiet; then
-            echo "No retrain assessment changes to commit."
+            echo "No retrain assessment state changes to commit."
             exit 0
           fi
 
@@ -96,7 +98,7 @@ jobs:
             git rebase "origin/${GITHUB_REF_NAME}"
           done
 
-      - name: Upload assessment artifacts
+      - name: Upload reconstructable assessment artifacts
         uses: actions/upload-artifact@v4
         with:
           name: retrain-assessment-artifacts
@@ -104,6 +106,7 @@ jobs:
             data/training/reviews.jsonl
             data/training/review_summary_latest.json
             data/training/modelable_dataset.json
+            data/training/yahoo_market_rows.jsonl
             data/market/market_data.sqlite
             data/persistence/app.sqlite
           if-no-files-found: error
