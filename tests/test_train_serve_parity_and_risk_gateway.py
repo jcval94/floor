@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from backtest.cost_model import CostModelConfig
 from execution.gateway import PaperExecutionGateway
 from execution.risk_gateway import RiskPolicy, approve_signal_batch
@@ -97,6 +99,25 @@ def test_parity_model_uses_nested_trained_params_not_aggregate_median() -> None:
     assert forecast.ceiling != 140.0
 
 
+def test_trained_nested_params_fail_closed_when_malformed() -> None:
+    model = object.__new__(ParityChampionModelSet)
+    artifact = {
+        "model_name": "evt_cp_d1",
+        "floor_delta": 0.02,
+        "ceiling_delta": 0.03,
+        "params": {
+            "floor": {"table": {}, "vol_cuts": [0.01], "bins": 2},
+            "ceiling": {"global": 0.03, "table": {}, "vol_cuts": [0.01], "bins": 2},
+        },
+    }
+    with pytest.raises(ValueError, match="EVT params missing numeric global"):
+        model._predict_classic_horizon(
+            {"close": 100.0, "atr_14": 2.0, "trend_context_m3": 1.0},
+            artifact,
+            "d1",
+        )
+
+
 def _policy() -> RiskPolicy:
     return RiskPolicy(
         nav_usd=1_000_000.0,
@@ -133,6 +154,7 @@ def test_risk_gateway_collapses_same_side_horizons_and_caps_global_notional() ->
     assert "qty" not in order
     assert order["metadata"]["approved_notional_usd"] == 50_000.0
     assert order["metadata"]["horizon"] == "w1"
+    assert order["metadata"]["risk_action"] == "increase_exposure"
     assert any(item["reason"] == "lower_priority_same_symbol" for item in result.rejected)
 
 
@@ -163,19 +185,33 @@ def test_risk_gateway_kill_switches_on_stale_data_and_daily_loss() -> None:
     assert loss.rejected[0]["reason"] == "kill_switch: daily_loss_limit"
 
 
+def test_daily_loss_limit_allows_existing_position_to_be_closed() -> None:
+    sell = {"symbol": "AAPL", "action": "SELL", "horizon": "d1", "confidence": 0.9, "rationale": "exit"}
+    result = approve_signal_batch(
+        [sell],
+        [_market()],
+        policy=_policy(),
+        realized_pnl_usd=-20_000.0,
+        existing_gross_notional_usd=50_000.0,
+        existing_symbol_notional_usd={"AAPL": 50_000.0},
+        existing_sector_notional_usd={"Technology": 50_000.0},
+        existing_symbol_quantity={"AAPL": 500},
+    )
+    assert len(result.orders) == 1
+    assert result.orders[0]["side"] == "SELL"
+    assert result.orders[0]["quantity"] == 500
+    assert result.orders[0]["metadata"]["risk_action"] == "decrease_exposure"
+
+
 def test_live_cannot_enter_risk_gateway() -> None:
     signal = {"symbol": "AAPL", "action": "BUY", "horizon": "d1", "confidence": 0.9, "rationale": "x"}
-    try:
+    with pytest.raises(RuntimeError, match="LIVE execution is blocked"):
         approve_signal_batch(
             [signal],
             [_market()],
             policy=_policy(),
             live_trading_enabled=True,
         )
-    except RuntimeError as exc:
-        assert "LIVE execution is blocked" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("LIVE must be blocked")
 
 
 def test_stateful_paper_gateway_executes_only_risk_approved_quantity() -> None:
@@ -183,13 +219,13 @@ def test_stateful_paper_gateway_executes_only_risk_approved_quantity() -> None:
         policy=_policy(),
         cost_config=CostModelConfig(commission_bps=0.0, slippage_bps=0.0),
     )
-    signals = [
+    buy = [
         {"symbol": "AAPL", "action": "BUY", "horizon": "d1", "confidence": 0.9, "rationale": "first"},
     ]
     first = gateway.run_cycle(
         cycle_id="c1",
         timestamp="2026-08-21T14:30:00+00:00",
-        signals=signals,
+        signals=buy,
         market_rows=[_market()],
     )
     assert first["approval"]["orders"][0]["quantity"] == 500
@@ -199,11 +235,26 @@ def test_stateful_paper_gateway_executes_only_risk_approved_quantity() -> None:
     second = gateway.run_cycle(
         cycle_id="c2",
         timestamp="2026-08-21T16:30:00+00:00",
-        signals=signals,
+        signals=buy,
         market_rows=[_market()],
     )
     assert second["approval"]["orders"] == []
     assert any(item["reason"] == "risk_capacity_exhausted" for item in second["approval"]["rejected"])
+
+    gateway.executor.portfolio.realized_pnl = -20_000.0
+    sell = [
+        {"symbol": "AAPL", "action": "SELL", "horizon": "d1", "confidence": 0.95, "rationale": "defensive exit"},
+    ]
+    third = gateway.run_cycle(
+        cycle_id="c3",
+        timestamp="2026-08-21T18:30:00+00:00",
+        signals=sell,
+        market_rows=[_market()],
+    )
+    assert third["approval"]["orders"][0]["quantity"] == 500
+    assert third["approval"]["orders"][0]["metadata"]["risk_action"] == "decrease_exposure"
+    assert third["execution"]["fills"][0]["quantity"] == 500
+    assert "AAPL" not in gateway.executor.portfolio.positions
 
 
 def test_strategy_payloads_use_executor_quantity_contract() -> None:
