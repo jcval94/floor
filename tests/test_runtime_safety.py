@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -12,7 +13,7 @@ class _FakeResponse:
     def __init__(self, text: str) -> None:
         self._text = text
 
-    def __enter__(self) -> "_FakeResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -28,7 +29,11 @@ def test_runtime_config_hard_blocks_live_trading() -> None:
 
 
 def test_runtime_config_allows_paper_mode() -> None:
-    cfg = RuntimeConfig(root_dir=Path("."), data_dir=Path("data"), live_trading_enabled=False)
+    cfg = RuntimeConfig(
+        root_dir=Path("."),
+        data_dir=Path("data"),
+        live_trading_enabled=False,
+    )
     assert cfg.live_trading_enabled is False
 
 
@@ -41,9 +46,15 @@ META,HOLD,1.20,out of range
 ORCL,SELL,not-a-number,bad confidence
 ,BUY,0.99,missing symbol
 """
-    monkeypatch.setattr(google_sheets, "urlopen", lambda *_args, **_kwargs: _FakeResponse(csv_text))
+    monkeypatch.setattr(
+        google_sheets,
+        "urlopen",
+        lambda *_args, **_kwargs: _FakeResponse(csv_text),
+    )
 
-    rows = google_sheets.fetch_recommendations("https://example.invalid/recommendations.csv")
+    rows = google_sheets.fetch_recommendations(
+        "https://example.invalid/recommendations.csv"
+    )
 
     assert len(rows) == 1
     assert rows[0].symbol == "AAPL"
@@ -58,4 +69,9 @@ def test_external_recommendations_require_expected_schema(monkeypatch) -> None:
         lambda *_args, **_kwargs: _FakeResponse("symbol,action\nAAPL,BUY\n"),
     )
 
-    assert google_sheets.fetch_recommendations("https://example.invalid/recommendations.csv") == []
+    assert (
+        google_sheets.fetch_recommendations(
+            "https://example.invalid/recommendations.csv"
+        )
+        == []
+    )
