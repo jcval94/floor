@@ -12,6 +12,13 @@ class RuntimeConfig:
     recommendations_csv_url: str | None = None
     live_trading_enabled: bool = False
 
+    def __post_init__(self) -> None:
+        if self.live_trading_enabled:
+            raise RuntimeError(
+                "LIVE trading is blocked in the current pipeline until signal -> risk -> execution "
+                "is enforced through a single audited gateway. Keep LIVE_TRADING_ENABLED=false."
+            )
+
     @staticmethod
     def from_env() -> "RuntimeConfig":
         return RuntimeConfig(
