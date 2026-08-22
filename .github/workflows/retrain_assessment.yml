@@ -41,6 +41,16 @@ jobs:
           fi
           echo "assessment_source_rows=$rows"
 
+      - name: Validate complete market universe coverage
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.training_data_guard \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --min-rows-per-symbol 60 \
+            --max-age-days 7
+
       - name: Build current modelable dataset from populated DB
         run: |
           set -euo pipefail
@@ -71,6 +81,12 @@ jobs:
 
       - name: Run retrain assessment
         run: PYTHONPATH=src python -m floor.main review-training
+
+      - name: Block automatic champion replacement
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m floor.training.governance \
+            --summary data/training/review_summary_latest.json
 
       - name: Commit assessment history only
         run: |
