@@ -6,7 +6,7 @@ import logging
 
 from pathlib import Path
 
-from forecasting.load_models import load_champion_models
+from forecasting.parity_models import load_champion_models
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
 from forecasting.render_time_labels import render_horizon_time_labels
 
