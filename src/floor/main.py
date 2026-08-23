@@ -39,7 +39,7 @@ def main() -> None:
                 print("No market session today; skipping run-cycle")
                 return
             if args.symbols:
-                symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+                symbols = [symbol.strip().upper() for symbol in args.symbols.split(",") if symbol.strip()]
             else:
                 symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
 
@@ -47,18 +47,17 @@ def main() -> None:
             freshness = validate_market_data_freshness(
                 cfg.data_dir / "market" / "market_data.sqlite",
                 freshness_symbols,
-                max_age_days=7,
+                max_stale_sessions=0,
             )
-            logger.info("[main] market freshness OK summary=%s", freshness)
+            logger.info("[main] market-session freshness OK summary=%s", freshness)
             logger.info("[main] running canonical signal-only cycle event=%s symbols=%s", event, len(symbols))
             run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
-            batch = validate_latest_prediction_batch(
-                cfg.data_dir,
-                symbols,
-                event_type=event,
-            )
+            batch = validate_latest_prediction_batch(cfg.data_dir, symbols, event_type=event)
             logger.info("[main] prediction batch completeness OK summary=%s", batch)
-            build_dashboard_snapshot(cfg.data_dir, output_path=cfg.data_dir / "reports" / "dashboard.json")
+            build_dashboard_snapshot(
+                cfg.data_dir,
+                output_path=cfg.data_dir / "reports" / "dashboard.json",
+            )
             logger.info("[main] refreshed dashboard snapshot after run-cycle")
         elif args.cmd == "review-training":
             logger.info("[main] running review-training")
@@ -73,7 +72,10 @@ def main() -> None:
             reconcile_predictions(cfg.data_dir)
         elif args.cmd == "build-site":
             logger.info("[main] running build-site")
-            build_dashboard_snapshot(cfg.data_dir, output_path=cfg.data_dir / "reports" / "dashboard.json")
+            build_dashboard_snapshot(
+                cfg.data_dir,
+                output_path=cfg.data_dir / "reports" / "dashboard.json",
+            )
     except Exception as exc:
         logger.exception("[main] command failed cmd=%s error=%s", args.cmd, exc)
         raise
