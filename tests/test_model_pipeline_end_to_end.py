@@ -17,7 +17,10 @@ def _seed_market_db(db_path: Path) -> None:
     init_market_db(db_path)
     bars: list[DailyBar] = []
     start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-    for idx in range(140):
+    # m3 requires a complete 65-session future label. Keep enough history so
+    # the explicit validation split also contains matured m3 labels instead of
+    # weakening the training guard or borrowing the test holdout.
+    for idx in range(320):
         ts = (start + timedelta(days=idx)).isoformat()
         aapl = 180.0 + idx * 0.35
         spy = 500.0 + idx * 0.2
