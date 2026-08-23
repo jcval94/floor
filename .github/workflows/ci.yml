@@ -38,6 +38,37 @@ jobs:
         run: |
           python scripts/validate_repo.py --smoke
 
+      - name: Dry-run audited GitHub Pages build
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/pages-site"
+          cp -R site "$RUNNER_TEMP/pages-site"
+          PYTHONPATH=src python -m utils.pages_publish \
+            --data-dir data \
+            --site-data-dir "$RUNNER_TEMP/pages-site/data" \
+            --universe-path config/universe.yaml \
+            --source-commit "${GITHUB_SHA}"
+          PYTHONPATH=src python -m utils.pages_publish \
+            --site-data-dir "$RUNNER_TEMP/pages-site/data" \
+            --validate-only
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'pages-site' / 'data'
+          audit = json.loads((root / 'audit.json').read_text(encoding='utf-8'))
+          forecasts = json.loads((root / 'forecasts.json').read_text(encoding='utf-8'))
+          assert audit['safe_to_deploy'] is True
+          if audit['publishable_forecasts']:
+              assert len(forecasts['rows']) == audit['expected_prediction_rows']
+          else:
+              assert forecasts['rows'] == []
+          print('pages_dry_run_status=', audit['status'])
+          print('pages_publishable_forecasts=', audit['publishable_forecasts'])
+          print('pages_blockers=', audit.get('blockers', []))
+          PY
+
       - name: Enforce minimum coverage
         run: |
           pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60
