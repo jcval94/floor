@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import time
 from dataclasses import asdict, is_dataclass
@@ -67,23 +68,37 @@ def _write_json_atomic(path: Path, payload: dict, *, task: str) -> None:
 
 
 def _value_score(metrics: dict) -> float:
+    """Score m3 value on scale-free quantities only.
+
+    The old score mixed dollar MAE with probabilities and therefore favored or
+    punished models depending on the price mix of the validation universe. The
+    new score is entirely relative to price and explicitly rewards the desired
+    20% floor-breach calibration.
+    """
+
     return (
-        metrics.get("pinball_loss", 999)
-        + metrics.get("mae_realized_floor", 999)
-        + abs(metrics.get("breach_rate", 0.2) - 0.2)
-        + metrics.get("calibration_error", 999)
-        + (1 - metrics.get("temporal_stability", 0.0))
+        float(metrics.get("pinball_loss_delta", 999.0))
+        + float(metrics.get("mae_delta", 999.0))
+        + 2.0 * float(metrics.get("breach_rate_error", 999.0))
+        + 0.25 * float(metrics.get("calibration_error", 999.0))
+        + 0.10 * (1.0 - float(metrics.get("temporal_stability", 0.0)))
     )
 
 
 def _timing_score(metrics: dict) -> float:
+    uniform_log_loss = float(metrics.get("uniform_log_loss", math.log(13)))
+    log_loss = float(metrics.get("log_loss", 999.0))
+    normalized_log_loss = log_loss / max(uniform_log_loss, 1e-9)
+    negative_skill_penalty = max(0.0, -float(metrics.get("log_loss_skill", -999.0)))
     return (
-        (1 - metrics.get("top1_accuracy", 0.0))
-        + (1 - metrics.get("top3_accuracy", 0.0))
-        + metrics.get("log_loss", 999)
-        + metrics.get("brier_score", 999)
-        + metrics.get("expected_week_distance", 999) / 13
-        + metrics.get("calibration_error", 999)
+        (1.0 - float(metrics.get("top1_accuracy", 0.0)))
+        + (1.0 - float(metrics.get("top3_accuracy", 0.0)))
+        + normalized_log_loss
+        + float(metrics.get("brier_score", 999.0))
+        + float(metrics.get("expected_week_distance", 999.0)) / 13.0
+        + float(metrics.get("calibration_error", 999.0))
+        + 0.50 * float(metrics.get("abstention_rate", 1.0))
+        + negative_skill_penalty
     )
 
 
@@ -108,18 +123,26 @@ def _task_score(task: str, metrics: dict) -> float:
 def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
     """Return True when old/new scores are not statistically comparable."""
     params = artifact.get("params")
+    metrics = artifact.get("metrics")
     if not isinstance(params, dict):
+        return task in {"value", "timing"}
+    if not isinstance(metrics, dict):
         return task in {"value", "timing"}
     if task == "value":
         return not (
             int(params.get("schema_version") or 0) == 2
             and params.get("target_space") == "relative_floor_delta"
+            and all(
+                key in metrics
+                for key in ("pinball_loss_delta", "mae_delta", "breach_rate_error")
+            )
         )
     if task == "timing":
         return not (
             int(params.get("schema_version") or 0) == 2
             and params.get("model_type") == "multinomial_logistic"
             and int(params.get("class_count") or 0) == 13
+            and all(key in metrics for key in ("log_loss_skill", "abstention_rate"))
         )
     return False
 
@@ -147,13 +170,13 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         if _incompatible_champion_schema(task, existing):
             decision = "promote"
             reason = (
-                "Existing champion uses an incompatible/deprecated statistical schema; "
-                "archive it and promote the first valid v2 artifact without comparing scores."
+                "Existing champion uses an incompatible/deprecated statistical quality schema; "
+                "archive it and promote the first valid artifact without comparing scores."
             )
             archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
             archived_path = str(archived)
             logger.warning(
-                "[champion-selection] task=%s force schema migration old_version=%s new_score=%.6f",
+                "[champion-selection] task=%s force quality-schema migration old_version=%s new_score=%.6f",
                 task,
                 previous_champion_version,
                 new_score,
@@ -184,11 +207,11 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
     payload["selection"] = {
         "decision": decision,
         "reason": reason,
-        "scoring_version": "m3-v2" if task in {"value", "timing"} else "m3-v1",
+        "scoring_version": "m3-quality-v3" if task in {"value", "timing"} else "m3-v1",
         "evaluated_at": now,
         "new_score": new_score,
         "existing_score": old_score,
-        "objective": "minimize_weighted_error",
+        "objective": "minimize_scale_free_out_of_time_error",
     }
     try:
         if decision == "promote":
