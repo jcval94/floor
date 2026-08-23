@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 import logging
-
-from pathlib import Path
 
 from forecasting.parity_models import load_champion_models
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
@@ -17,24 +16,35 @@ REQUIRED_M3_COLUMNS = ["close", "atr_14", "trend_context_m3", "drawdown_13w"]
 
 
 def _blocked_reason(row: dict) -> str | None:
-    missing = [c for c in REQUIRED_MARKET_COLUMNS if row.get(c) in (None, "")]
-    if missing:
-        return f"Missing market fields: {','.join(missing)}"
-    return None
+    missing = [column for column in REQUIRED_MARKET_COLUMNS if row.get(column) in (None, "")]
+    return f"Missing market fields: {','.join(missing)}" if missing else None
 
 
-def _safe_float(x: Any, default: float = 0.0) -> float:
+def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
-        return float(x)
+        return float(value)
     except (TypeError, ValueError):
         return default
 
 
 def _m3_block_reason(row: dict) -> str | None:
-    missing = [c for c in REQUIRED_M3_COLUMNS if row.get(c) in (None, "")]
-    if missing:
-        return f"Missing m3 fields: {','.join(missing)}"
-    return None
+    missing = [column for column in REQUIRED_M3_COLUMNS if row.get(column) in (None, "")]
+    return f"Missing m3 fields: {','.join(missing)}" if missing else None
+
+
+def _model_confidence(*breach_probs: float) -> float:
+    values = [max(0.0, min(1.0, 1.0 - float(prob))) for prob in breach_probs]
+    return sum(values) / len(values) if values else 0.0
+
+
+def _blended_confidence(model_confidence: float, ai_present: bool, ai_weight: float, ai_effective: float) -> float:
+    """AI may modify confidence only when a real AI observation exists."""
+    model_confidence = max(0.0, min(1.0, model_confidence))
+    if not ai_present or ai_weight <= 0:
+        return model_confidence
+    ai_quality = max(0.0, min(1.0, abs(ai_effective)))
+    blend = min(0.20, 0.20 * max(0.0, min(1.0, ai_weight)))
+    return (1.0 - blend) * model_confidence + blend * ai_quality
 
 
 def generate_forecasts(
@@ -61,17 +71,11 @@ def generate_forecasts(
 
     forecasts: list[dict] = []
     blocked: list[dict] = []
-
     if not model.is_available:
-        logger.error(
-            "[forecasting] forecast generation blocked: trained champions unavailable model_registry_dir=%s",
-            model_registry_dir,
-        )
         for raw in market_rows:
-            symbol = str(raw.get("symbol", "")).upper()
             blocked.append(
                 {
-                    "symbol": symbol,
+                    "symbol": str(raw.get("symbol", "")).upper(),
                     "reason": "Pronóstico no disponible: faltan artefactos entrenados (d1_champion.json, w1_champion.json, q1_champion.json, value_champion.json y timing_champion.json)",
                 }
             )
@@ -81,7 +85,6 @@ def generate_forecasts(
         symbol = str(raw.get("symbol", "")).upper()
         reason = _blocked_reason(raw)
         if reason:
-            logger.warning("[forecasting] blocked symbol=%s reason=%s", symbol, reason)
             blocked.append({"symbol": symbol, "reason": reason})
             continue
 
@@ -96,13 +99,14 @@ def generate_forecasts(
             continue
 
         ai_eff = _safe_float(row.get("ai_effective_score"), 0.0)
-        ai_weight = _safe_float(row.get("ai_weight"), 0.5)
+        ai_weight = _safe_float(row.get("ai_weight"), 0.0)
+        ai_present = bool(row.get("ai_present", False))
         model_expected = (d1.expected_return + w1.expected_return + q1.expected_return) / 3
         expected_range_avg = (d1.expected_range + w1.expected_range + q1.expected_range) / 3
-
-        confidence = max(0.05, min(0.99, 0.55 + 0.25 * ai_weight + 0.2 * max(0.0, 1 - d1.breach_prob)))
-        alignment = max(-1.0, min(1.0, ai_eff + model_expected))
-        composite = max(-1.0, min(1.0, 0.6 * model_expected + 0.4 * ai_eff))
+        model_conf = _model_confidence(d1.breach_prob, w1.breach_prob, q1.breach_prob)
+        confidence = max(0.05, min(0.99, _blended_confidence(model_conf, ai_present, ai_weight, ai_eff)))
+        alignment = max(-1.0, min(1.0, model_expected + (ai_eff if ai_present else 0.0)))
+        composite = max(-1.0, min(1.0, 0.6 * model_expected + (0.4 * ai_eff if ai_present else 0.0)))
         rr = (max(0.0, model_expected) + 1e-6) / max(0.01, d1.breach_prob)
 
         out = {
@@ -132,6 +136,8 @@ def generate_forecasts(
             "expected_return_q1": q1.expected_return,
             "expected_range_q1": q1.expected_range,
             "confidence_score": round(confidence, 4),
+            "model_confidence_score": round(model_conf, 4),
+            "ai_present": ai_present,
             "ai_alignment_score": round(alignment, 6),
             "composite_signal_score": round(composite, 6),
             "reward_risk_ratio": round(rr, 6),
@@ -150,7 +156,6 @@ def generate_forecasts(
                 m3 = None
                 m3_reason = f"M3 prediction failed: {exc}"
         else:
-            logger.warning("[forecasting] m3 blocked symbol=%s reason=%s", symbol, m3_reason)
             m3 = None
 
         if m3 is None:
@@ -180,11 +185,11 @@ def generate_forecasts(
 
         out["explanation_compact"] = (
             f"{symbol}: signal={out['composite_signal_score']:.3f}, conf={out['confidence_score']:.2f}, "
-            f"ai_w={out['ai_weight']:.2f}, d1_range={out['expected_range_d1']:.2f}, rr={out['reward_risk_ratio']:.2f}. "
-            f"m3 week 1..13 = semanas bursátiles relativas hacia adelante."
+            f"ai_present={out['ai_present']}, ai_w={out['ai_weight']:.2f}, "
+            f"d1_range={out['expected_range_d1']:.2f}, rr={out['reward_risk_ratio']:.2f}. "
+            "m3 week 1..13 = semanas bursátiles relativas hacia adelante."
         )
         forecasts.append(render_horizon_time_labels(out, as_of=as_of))
 
     logger.info("[forecasting] generation completed forecasts=%s blocked=%s", len(forecasts), len(blocked))
-
     return {"forecasts": forecasts, "blocked": blocked}
