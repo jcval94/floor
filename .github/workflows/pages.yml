@@ -61,6 +61,7 @@ jobs:
             --site-data-dir site/data \
             --universe-path config/universe.yaml \
             --source-commit "$SOURCE_COMMIT"
+          PYTHONPATH=src python -m utils.pages_security --site-dir site
           touch site/.nojekyll
 
       - name: Validate publication contract after generation
@@ -68,6 +69,9 @@ jobs:
           set -euo pipefail
           PYTHONPATH=src python -m utils.pages_publish \
             --site-data-dir site/data \
+            --validate-only
+          PYTHONPATH=src python -m utils.pages_security \
+            --site-dir site \
             --validate-only
 
           python - <<'PY'
@@ -139,6 +143,8 @@ jobs:
               text = html.read_text(encoding='utf-8')
               if 'assets/audit.js' not in text:
                   raise SystemExit(f'audit overlay missing from {html}')
+              if 'Content-Security-Policy' not in text:
+                  raise SystemExit(f'CSP missing from {html}')
               for match in re.findall(r'(?:src|href)="([^"]+)"', text):
                   if match.startswith(('http://', 'https://', '#')):
                       continue
