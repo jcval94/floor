@@ -24,6 +24,7 @@ jobs:
           set +e
           PYTHONPATH=src python -m monitoring.health_snapshot \
             --data-dir data \
+            --universe config/universe.yaml \
             --output data/metrics/public_metrics.json
           rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
