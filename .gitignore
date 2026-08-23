@@ -8,3 +8,8 @@ data/market/*.sqlite-shm
 data/persistence/*.sqlite
 data/persistence/*.sqlite-wal
 data/persistence/*.sqlite-shm
+
+# GitHub Pages JSON is generated and audited at deployment time.
+# Keeping snapshots in git creates a second stale source of truth.
+site/data/*.json
+docs/data/*.json

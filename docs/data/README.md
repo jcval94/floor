@@ -1,23 +1,9 @@
-# site/data
+# docs/data
 
-Este directorio contiene **artefactos estáticos** consumidos por el dashboard de GitHub Pages.
+Este directorio **no es una fuente de producción de GitHub Pages**.
 
-## Contrato
-- Formato principal: `*.json`.
-- Fuente: generación offline desde workflows (`utils.pages_build`).
-- No depende de APIs client-side externas.
-- No incluir secretos ni credenciales.
+Los payloads `*.json` se excluyen deliberadamente de Git para impedir que un mirror histórico de `docs/` pueda mostrar forecasts obsoletos si la configuración de Pages cambia accidentalmente a “Deploy from branch”.
 
-## Archivos esperados
-- `dashboard.json`: overview del sistema.
-- `forecasts.json`: forecasts y oportunidades.
-- `universe.json`: universo inicial (50 tickers).
-- `opportunities.json`: ranking por spread esperado.
-- `strategy.json`: equity/drawdown y estado estrategia.
-- `metrics.json`: métricas públicas/model health.
-- `models.json`: campeón actual + timeline.
-- `drift.json`: semáforo y decisión de retraining.
-- `incidents.json`: incidente más reciente y su impacto.
+La única publicación autoritativa es `.github/workflows/pages.yml` mediante GitHub Actions / `deploy-pages`, que genera y audita `site/data/*.json` en cada deploy.
 
-## Actualización
-Se actualiza automáticamente por GitHub Actions y se publica en `gh-pages` como project site.
+Si este directorio aparece sin JSON, es el comportamiento esperado y seguro.
