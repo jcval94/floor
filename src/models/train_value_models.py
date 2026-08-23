@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from models.calibration import QuantileCalibrator
-from models.evaluate import value_metrics
+from models.evaluate import pinball_loss, value_metrics
+from models.temporal_cv import chronological_calibration_split, purged_expanding_folds
 
 
 @dataclass
@@ -24,6 +24,8 @@ FEATURE_NAMES = (
     "drawdown_13w",
     "dist_to_low_3m",
 )
+TARGET_BREACH_RATE = 0.20
+TARGET_DELTA_QUANTILE = 1.0 - TARGET_BREACH_RATE
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
@@ -75,13 +77,29 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _quantile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(float(value) for value in values)
+    idx = max(0, min(len(ordered) - 1, int(round((len(ordered) - 1) * q))))
+    return ordered[idx]
+
+
 def _fit_linear_delta(
     train_rows: list[dict],
     *,
     l2: float = 0.01,
-    lr: float = 0.05,
-    epochs: int = 240,
+    lr: float = 0.03,
+    epochs: int = 320,
+    quantile: float = TARGET_DELTA_QUANTILE,
 ) -> tuple[dict[str, float], float]:
+    """Fit a linear conditional quantile of 65-session drawdown.
+
+    A 20% desired floor-breach rate means the drawdown delta should target its
+    80th conditional quantile. MSE estimates the mean and is therefore the wrong
+    objective for a risk floor.
+    """
+
     rows = _usable(train_rows)
     if not rows:
         raise ValueError("No leakage-safe m3 rows with complete floor target")
@@ -89,7 +107,7 @@ def _fit_linear_delta(
     weights = {name: 0.0 for name in FEATURE_NAMES}
     targets = [_target_delta(row) for row in rows]
     y = [value for value in targets if value is not None]
-    bias = _mean(y)
+    bias = _quantile(y, quantile)
     n = float(len(rows))
 
     for _ in range(epochs):
@@ -101,10 +119,11 @@ def _fit_linear_delta(
                 continue
             feat = _features(row)
             pred = bias + sum(weights[name] * feat[name] for name in FEATURE_NAMES)
-            err = pred - target
-            grad_bias += (2.0 / n) * err
+            # d pinball(y - pred) / d pred
+            derivative = -quantile if target > pred else (1.0 - quantile)
+            grad_bias += derivative / n
             for name in FEATURE_NAMES:
-                grad[name] += (2.0 / n) * err * feat[name]
+                grad[name] += derivative * feat[name] / n
 
         for name in FEATURE_NAMES:
             grad[name] += 2.0 * l2 * weights[name]
@@ -116,10 +135,7 @@ def _fit_linear_delta(
 
 def predict_floor_delta(row: dict, weights: dict[str, float], bias: float) -> float:
     feat = _features(row)
-    raw = bias + sum(
-        _to_float(weights.get(name)) * feat[name]
-        for name in FEATURE_NAMES
-    )
+    raw = bias + sum(_to_float(weights.get(name)) * feat[name] for name in FEATURE_NAMES)
     return max(0.0001, min(0.95, raw))
 
 
@@ -131,10 +147,15 @@ def _expanding_time_folds(
     rows: list[dict],
     folds: int,
 ) -> list[tuple[list[dict], list[dict]]]:
-    if _has_point_in_time_integrity_metadata(rows):
-        return []
-
     valid_rows = _usable(rows)
+    if _has_point_in_time_integrity_metadata(valid_rows):
+        return purged_expanding_folds(
+            valid_rows,
+            target_end_field="target_end_date_m3",
+            folds=folds,
+            min_train_dates=20,
+        )
+
     if len(valid_rows) < max(12, folds * 2):
         return []
 
@@ -150,18 +171,16 @@ def _expanding_time_folds(
     return result
 
 
-def _score_delta_model(
-    rows: list[dict],
-    weights: dict[str, float],
-    bias: float,
-) -> float:
-    errors: list[float] = []
+def _score_delta_model(rows: list[dict], weights: dict[str, float], bias: float) -> float:
+    true: list[float] = []
+    predicted: list[float] = []
     for row in _usable(rows):
         target = _target_delta(row)
         if target is None:
             continue
-        errors.append(abs(predict_floor_delta(row, weights, bias) - target))
-    return _mean(errors) if errors else float("inf")
+        true.append(target)
+        predicted.append(predict_floor_delta(row, weights, bias))
+    return pinball_loss(true, predicted, alpha=TARGET_DELTA_QUANTILE) if true else float("inf")
 
 
 def _select_hyperparameters_with_cv(
@@ -170,23 +189,14 @@ def _select_hyperparameters_with_cv(
 ) -> tuple[float, float, dict]:
     folds_data = _expanding_time_folds(train_rows, folds=folds)
     if not folds_data:
-        reason = (
-            "disabled_to_prevent_fold_leakage"
-            if _has_point_in_time_integrity_metadata(train_rows)
-            else "insufficient_rows"
-        )
-        return 0.01, 0.05, {
+        return 0.01, 0.03, {
             "cv_enabled": False,
-            "reason": reason,
+            "reason": "insufficient_purged_temporal_folds",
             "folds": 0,
             "grid_size": 0,
         }
 
-    grid = [
-        (0.001, 0.03),
-        (0.01, 0.05),
-        (0.05, 0.03),
-    ]
+    grid = [(0.001, 0.02), (0.01, 0.03), (0.05, 0.02)]
     best = grid[0]
     best_score = float("inf")
     for l2, lr in grid:
@@ -196,7 +206,7 @@ def _select_hyperparameters_with_cv(
                 fold_train,
                 l2=l2,
                 lr=lr,
-                epochs=180,
+                epochs=240,
             )
             scores.append(_score_delta_model(fold_valid, weights, bias))
         score = _mean(scores)
@@ -208,8 +218,19 @@ def _select_hyperparameters_with_cv(
         "cv_enabled": True,
         "folds": len(folds_data),
         "grid_size": len(grid),
-        "best_cv_score": round(best_score, 8),
+        "best_cv_pinball_delta": round(best_score, 8),
     }
+
+
+def _calibration_scale(rows: list[dict], weights: dict[str, float], bias: float) -> float:
+    ratios: list[float] = []
+    for row in _usable(rows):
+        target = _target_delta(row)
+        raw = predict_floor_delta(row, weights, bias)
+        if target is not None and raw > 1e-9:
+            ratios.append(target / raw)
+    # Choose the ratio quantile that corresponds to the desired 20% breach rate.
+    return max(0.25, min(4.0, _quantile(ratios, TARGET_DELTA_QUANTILE) if ratios else 1.0))
 
 
 def train_floor_m3_value_model(
@@ -223,66 +244,56 @@ def train_floor_m3_value_model(
     usable_valid = _usable(valid_rows)
     if not usable_train:
         raise ValueError("m3 value training requires complete leakage-safe horizons")
+    if not usable_valid:
+        raise ValueError("m3 value validation requires complete leakage-safe horizons")
 
     l2 = 0.01
-    lr = 0.05
-    tuning_summary = {
-        "cv_enabled": False,
-        "folds": 0,
-        "grid_size": 0,
-    }
+    lr = 0.03
+    tuning_summary = {"cv_enabled": False, "folds": 0, "grid_size": 0, "reason": "not_requested"}
     if training_mode == "retrain":
-        l2, lr, tuning_summary = _select_hyperparameters_with_cv(
-            usable_train,
-            folds=3,
-        )
+        l2, lr, tuning_summary = _select_hyperparameters_with_cv(usable_train, folds=3)
 
-    weights, bias = _fit_linear_delta(
-        usable_train,
-        l2=l2,
-        lr=lr,
-        epochs=260,
-    )
+    weights, bias = _fit_linear_delta(usable_train, l2=l2, lr=lr, epochs=360)
 
-    valid_delta_raw = [
-        predict_floor_delta(row, weights, bias)
-        for row in usable_valid
-    ]
-    valid_delta_true: list[float] = []
-    for row in usable_valid:
-        target = _target_delta(row)
-        if target is not None:
-            valid_delta_true.append(target)
+    calibration_rows, evaluation_rows = chronological_calibration_split(usable_valid)
+    scale = _calibration_scale(calibration_rows, weights, bias)
+    evaluation_rows = _usable(evaluation_rows)
+    if not evaluation_rows:
+        evaluation_rows = usable_valid
 
-    calibrator = QuantileCalibrator(alpha=0.2).fit(
-        valid_delta_raw,
-        valid_delta_true,
-    )
     calibrated_delta = [
-        max(0.0001, min(0.95, value))
-        for value in calibrator.transform(valid_delta_raw)
+        max(0.0001, min(0.95, predict_floor_delta(row, weights, bias) * scale))
+        for row in evaluation_rows
     ]
-
+    true_delta = [float(_target_delta(row) or 0.0) for row in evaluation_rows]
     predicted_floors = [
         _to_float(row.get("close")) * (1.0 - delta)
-        for row, delta in zip(usable_valid, calibrated_delta)
+        for row, delta in zip(evaluation_rows, calibrated_delta)
     ]
-    true_floors = [_to_float(row.get("floor_m3")) for row in usable_valid]
-    confidences = [
-        0.5
-        + min(
-            0.45,
-            abs(_to_float(row.get("ai_conviction_long")) * 0.4),
-        )
-        for row in usable_valid
-    ]
+    true_floors = [_to_float(row.get("floor_m3")) for row in evaluation_rows]
 
+    # Confidence now represents the actual modeled breach event, rather than an
+    # unrelated AI conviction field. A calibrated 20% floor breach gets p=0.20.
+    confidences = [TARGET_BREACH_RATE] * len(evaluation_rows)
     metrics = value_metrics(true_floors, predicted_floors, confidences)
-    metrics["target"] = "floor_m3"
-    metrics["training_target"] = "floor_delta_m3"
-    metrics["horizon"] = "m3"
-    metrics["train_rows"] = len(usable_train)
-    metrics["validation_rows"] = len(usable_valid)
+    metrics.update(
+        {
+            "pinball_loss_delta": pinball_loss(
+                true_delta,
+                calibrated_delta,
+                alpha=TARGET_DELTA_QUANTILE,
+            ),
+            "mae_delta": _mean([abs(t - p) for t, p in zip(true_delta, calibrated_delta)]),
+            "target_breach_rate": TARGET_BREACH_RATE,
+            "breach_rate_error": abs(float(metrics.get("breach_rate", 0.0)) - TARGET_BREACH_RATE),
+            "target": "floor_m3",
+            "training_target": "floor_delta_m3",
+            "horizon": "m3",
+            "train_rows": len(usable_train),
+            "calibration_rows": len(calibration_rows),
+            "validation_rows": len(evaluation_rows),
+        }
+    )
 
     return ValueModelArtifact(
         model_name=model_name,
@@ -292,17 +303,21 @@ def train_floor_m3_value_model(
         params={
             "schema_version": 2,
             "target_space": "relative_floor_delta",
+            "loss": "pinball_quantile",
+            "target_delta_quantile": TARGET_DELTA_QUANTILE,
+            "target_breach_rate": TARGET_BREACH_RATE,
             "features": list(FEATURE_NAMES),
             "weights": weights,
             "bias": bias,
-            "calibration_scale": calibrator.scale,
+            "calibration_scale": scale,
+            "calibration_method": "chronological_holdout_quantile_ratio",
             "delta_clip": [0.0001, 0.95],
             "l2": l2,
             "learning_rate": lr,
             "tuning_summary": tuning_summary,
             "hyperparameter_grid": {
                 "l2": [0.001, 0.01, 0.05],
-                "learning_rate": [0.03, 0.05],
+                "learning_rate": [0.02, 0.03],
             },
         },
         metrics=metrics,
