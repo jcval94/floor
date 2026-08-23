@@ -12,6 +12,7 @@ from utils.pages_publish import (
     validate_prediction_contract,
     validate_published_site,
 )
+from utils.pages_security import CSP_META, harden_site_html, validate_site_html_security
 
 
 def _row(symbol: str, horizon: str, as_of: str) -> dict:
@@ -200,9 +201,49 @@ def test_audit_overlay_is_injected_once(tmp_path: Path) -> None:
     assert text.count("assets/audit.js") == 1
 
 
+def test_pages_security_injects_strict_csp_once(tmp_path: Path) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    html = site / "index.html"
+    html.write_text(
+        '<html><head><meta charset="utf-8"/></head><body><script type="module" src="assets/app.js"></script></body></html>',
+        encoding="utf-8",
+    )
+
+    assert harden_site_html(site)["changed"] == 1
+    assert harden_site_html(site)["changed"] == 0
+    assert validate_site_html_security(site)["validated"] == 1
+    text = html.read_text(encoding="utf-8")
+    assert text.count(CSP_META) == 1
+    assert "script-src 'self'" in text
+    assert "object-src 'none'" in text
+
+
+def test_pages_security_rejects_inline_event_handler(tmp_path: Path) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    html = site / "index.html"
+    html.write_text(
+        '<html><head></head><body><img src="x" onerror="alert(1)"></body></html>',
+        encoding="utf-8",
+    )
+    harden_site_html(site)
+    with pytest.raises(RuntimeError, match="inline event handler forbidden"):
+        validate_site_html_security(site)
+
+
+def test_generated_pages_json_is_not_versioned_source_of_truth() -> None:
+    ignore = Path(".gitignore").read_text(encoding="utf-8")
+    assert "site/data/*.json" in ignore
+    assert "docs/data/*.json" in ignore
+    assert not Path("site/data/forecasts.json").exists()
+    assert not Path("docs/data/forecasts.json").exists()
+
+
 def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
     assert "github.event.workflow_run.head_branch" in workflow
     assert "git reset --hard origin/main" in workflow
     assert "utils.pages_publish" in workflow
+    assert "utils.pages_security" in workflow
     assert "workflow_run.head_sha || github.sha" not in workflow
