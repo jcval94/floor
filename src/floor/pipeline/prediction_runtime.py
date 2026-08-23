@@ -14,28 +14,17 @@ from floor.schemas import PredictionRecord, SignalRecord
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 
+Horizon = Literal["d1", "w1", "q1", "m3"]
+StandardHorizon = Literal["d1", "w1", "q1"]
 MIN_SIGNAL_CONFIDENCE = 0.55
 EXPECTED_RETURN_THRESHOLD = 0.01
 LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
 D1_TIMING = {"", "OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"}
 MODEL_INPUT_FIELDS = (
-    "timestamp",
-    "symbol",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "vwap_distance",
-    "intraday_range_5",
-    "rolling_vol_20",
-    "atr_14",
-    "momentum_10",
-    "momentum_20",
-    "relative_volume_20",
-    "dist_to_low_20",
-    "dist_to_high_20",
-    "trend_context_m3",
+    "timestamp", "symbol", "open", "high", "low", "close", "volume",
+    "vwap_distance", "intraday_range_5", "rolling_vol_20", "atr_14",
+    "momentum_10", "momentum_20", "relative_volume_20", "dist_to_low_20",
+    "dist_to_high_20", "trend_context_m3",
 )
 
 
@@ -53,34 +42,23 @@ def _log_model_registry_preflight(cfg: RuntimeConfig) -> None:
     registry = cfg.data_dir / "training" / "models"
     models_file = cfg.data_dir / "training" / "models_file"
     candidates = [
-        registry / "d1_champion.json",
-        registry / "w1_champion.json",
-        registry / "q1_champion.json",
-        registry / "value_champion.json",
-        registry / "timing_champion.json",
-        models_file / "d1_champion.pkl",
-        models_file / "w1_champion.pkl",
-        models_file / "q1_champion.pkl",
-        models_file / "value_champion.pkl",
-        models_file / "timing_champion.pkl",
+        registry / "d1_champion.json", registry / "w1_champion.json",
+        registry / "q1_champion.json", registry / "value_champion.json",
+        registry / "timing_champion.json", models_file / "d1_champion.pkl",
+        models_file / "w1_champion.pkl", models_file / "q1_champion.pkl",
+        models_file / "value_champion.pkl", models_file / "timing_champion.pkl",
     ]
     diagnostics: list[dict[str, object]] = []
     for path in candidates:
-        diagnostics.append(
-            {
-                "path": str(path),
-                "exists": path.exists(),
-                "is_lfs_pointer": _looks_like_lfs_pointer(path),
-                "size": path.stat().st_size if path.exists() else None,
-            }
-        )
+        diagnostics.append({
+            "path": str(path),
+            "exists": path.exists(),
+            "is_lfs_pointer": _looks_like_lfs_pointer(path),
+            "size": path.stat().st_size if path.exists() else None,
+        })
     logger.info(
         "[predictions][model-preflight] registry=%s registry_exists=%s models_file=%s models_file_exists=%s diagnostics=%s",
-        registry,
-        registry.exists(),
-        models_file,
-        models_file.exists(),
-        diagnostics,
+        registry, registry.exists(), models_file, models_file.exists(), diagnostics,
     )
 
 
@@ -104,10 +82,8 @@ def _model_output_snapshot(row: dict) -> dict[str, Any]:
         "w1": {"floor": row.get("floor_w1"), "ceiling": row.get("ceiling_w1")},
         "q1": {"floor": row.get("floor_q1"), "ceiling": row.get("ceiling_q1")},
         "m3": {
-            "floor": row.get("floor_m3"),
-            "week": row.get("floor_week_m3"),
-            "status": row.get("m3_status"),
-            "block_reason": row.get("m3_block_reason"),
+            "floor": row.get("floor_m3"), "week": row.get("floor_week_m3"),
+            "status": row.get("m3_status"), "block_reason": row.get("m3_block_reason"),
         },
         "confidence_score": row.get("confidence_score"),
         "composite_signal_score": row.get("composite_signal_score"),
@@ -134,7 +110,7 @@ def _time_text(value: object) -> str:
     return "" if value in (None, "") else str(value)
 
 
-def _horizon_confidence(row: dict, horizon: Literal["d1", "w1", "q1"], default: float) -> float:
+def _horizon_confidence(row: dict, horizon: StandardHorizon, default: float) -> float:
     breach_prob = _to_optional_float(row.get(f"breach_prob_{horizon}"))
     if breach_prob is None:
         return max(0.0, min(1.0, default))
@@ -143,14 +119,14 @@ def _horizon_confidence(row: dict, horizon: Literal["d1", "w1", "q1"], default: 
 
 def _signal_from_prediction(
     symbol: str,
-    horizon: Literal["d1", "w1", "q1", "m3"],
+    horizon: Horizon,
     floor: float,
     ceiling: float,
     expected_return: float | None,
     confidence_score: float | None,
     composite_signal_score: float | None,
 ) -> SignalRecord:
-    del composite_signal_score  # directional score is not a calibrated probability
+    del floor, ceiling, composite_signal_score
     confidence = max(0.0, min(_to_float(confidence_score, 0.0), 1.0))
     expected_ret = _to_float(expected_return, 0.0)
     action: Literal["BUY", "SELL", "HOLD"] = "HOLD"
@@ -211,9 +187,7 @@ def _validate_timing_domain(horizon: str, payload: dict) -> None:
     ceiling_time = _time_text(payload.get("ceiling_time_bucket"))
     if horizon == "d1":
         if floor_time not in D1_TIMING or ceiling_time not in D1_TIMING:
-            raise RuntimeError(
-                f"Prediction timing invalid horizon=d1 floor={floor_time!r} ceiling={ceiling_time!r}"
-            )
+            raise RuntimeError(f"Prediction timing invalid horizon=d1 floor={floor_time!r} ceiling={ceiling_time!r}")
         return
     if horizon in {"w1", "q1"}:
         upper = 5 if horizon == "w1" else 10
@@ -221,13 +195,9 @@ def _validate_timing_domain(horizon: str, payload: dict) -> None:
             try:
                 value = int(raw)
             except (TypeError, ValueError) as exc:
-                raise RuntimeError(
-                    f"Prediction timing invalid horizon={horizon} side={side}: {raw!r}"
-                ) from exc
+                raise RuntimeError(f"Prediction timing invalid horizon={horizon} side={side}: {raw!r}") from exc
             if not 1 <= value <= upper:
-                raise RuntimeError(
-                    f"Prediction timing out of domain horizon={horizon} side={side}: {value} not in 1..{upper}"
-                )
+                raise RuntimeError(f"Prediction timing out of domain horizon={horizon} side={side}: {value} not in 1..{upper}")
         return
     if horizon == "m3" and str(payload.get("m3_status") or "").lower() == "ok":
         try:
@@ -256,20 +226,15 @@ def _validate_prediction_payload(symbol: str, horizon: str, payload: dict) -> No
     _validate_timing_domain(horizon, payload)
 
 
-def _prediction_payloads(
-    row: dict,
-    event_type: str,
-) -> list[tuple[Literal["d1", "w1", "q1", "m3"], dict]]:
+def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Horizon, dict]]:
     confidence = _to_float(row.get("confidence_score"), 0.0)
     d1_confidence = _horizon_confidence(row, "d1", confidence)
     w1_confidence = _horizon_confidence(row, "w1", confidence)
     q1_confidence = _horizon_confidence(row, "q1", confidence)
-
     d1_floor_time = _time_text(row.get("floor_time_bucket_d1"))
     d1_ceiling_time = _time_text(row.get("ceiling_time_bucket_d1"))
     m3_payload = {
-        "floor_m3": row.get("floor_m3"),
-        "floor_week_m3": row.get("floor_week_m3"),
+        "floor_m3": row.get("floor_m3"), "floor_week_m3": row.get("floor_week_m3"),
         "floor_week_m3_confidence": row.get("floor_week_m3_confidence"),
         "floor_week_m3_top3": row.get("floor_week_m3_top3", []),
         "floor_week_m3_start_date": row.get("floor_week_m3_start_date"),
@@ -277,65 +242,45 @@ def _prediction_payloads(
         "floor_week_m3_label_human": row.get("floor_week_m3_label_human"),
         "expected_return_m3": row.get("expected_return_m3"),
         "expected_range_m3": row.get("expected_range_m3"),
-        "m3_status": row.get("m3_status"),
-        "m3_block_reason": row.get("m3_block_reason"),
+        "m3_status": row.get("m3_status"), "m3_block_reason": row.get("m3_block_reason"),
     }
     shared_m3 = dict(m3_payload)
-    payloads: list[tuple[Literal["d1", "w1", "q1", "m3"], dict]] = []
-    for horizon, floor_key, ceiling_key, floor_time, ceiling_time, horizon_conf in (
+    payloads: list[tuple[Horizon, dict]] = []
+    specs: list[tuple[StandardHorizon, str, str, str, str, float]] = [
         ("d1", "floor_d1", "ceiling_d1", d1_floor_time, d1_ceiling_time, d1_confidence),
         ("w1", "floor_w1", "ceiling_w1", _time_text(row.get("floor_day_w1")), _time_text(row.get("ceiling_day_w1")), w1_confidence),
         ("q1", "floor_q1", "ceiling_q1", _time_text(row.get("floor_day_q1")), _time_text(row.get("ceiling_day_q1")), q1_confidence),
-    ):
+    ]
+    for horizon, floor_key, ceiling_key, floor_time, ceiling_time, horizon_conf in specs:
         time_probability = 0.0 if horizon == "d1" and (not floor_time or not ceiling_time) else horizon_conf
-        payloads.append(
-            (
-                horizon,
-                {
-                    "floor_value": _to_optional_float(row.get(floor_key)),
-                    "ceiling_value": _to_optional_float(row.get(ceiling_key)),
-                    "floor_time_bucket": floor_time,
-                    "ceiling_time_bucket": ceiling_time,
-                    "floor_time_probability": time_probability,
-                    "ceiling_time_probability": time_probability,
-                    "confidence_score": horizon_conf,
-                    "expected_return": _to_optional_float(row.get(f"expected_return_{horizon}")),
-                    "expected_range": _to_optional_float(row.get(f"expected_range_{horizon}")),
-                    "composite_signal_score": row.get(f"composite_signal_score_{horizon}", row.get("composite_signal_score")),
-                    "event_type": event_type,
-                    "emit_signal": True,
-                    "m3_payload": m3_payload,
-                    **shared_m3,
-                },
-            )
-        )
-    payloads.append(
-        (
-            "m3",
-            {
-                "floor_value": _to_optional_float(m3_payload.get("floor_m3")),
-                "ceiling_value": None,
-                "floor_time_bucket": _time_text(m3_payload.get("floor_week_m3")),
-                "ceiling_time_bucket": "",
-                "floor_time_probability": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
-                "ceiling_time_probability": 0.0,
-                "confidence_score": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
-                "expected_return": _to_optional_float(m3_payload.get("expected_return_m3")),
-                "expected_range": _to_optional_float(m3_payload.get("expected_range_m3")),
-                "event_type": event_type,
-                "emit_signal": False,
-                "m3_payload": m3_payload,
-                **shared_m3,
-            },
-        )
-    )
+        payloads.append((horizon, {
+            "floor_value": _to_optional_float(row.get(floor_key)),
+            "ceiling_value": _to_optional_float(row.get(ceiling_key)),
+            "floor_time_bucket": floor_time, "ceiling_time_bucket": ceiling_time,
+            "floor_time_probability": time_probability, "ceiling_time_probability": time_probability,
+            "confidence_score": horizon_conf,
+            "expected_return": _to_optional_float(row.get(f"expected_return_{horizon}")),
+            "expected_range": _to_optional_float(row.get(f"expected_range_{horizon}")),
+            "composite_signal_score": row.get(f"composite_signal_score_{horizon}", row.get("composite_signal_score")),
+            "event_type": event_type, "emit_signal": True, "m3_payload": m3_payload, **shared_m3,
+        }))
+    payloads.append(("m3", {
+        "floor_value": _to_optional_float(m3_payload.get("floor_m3")), "ceiling_value": None,
+        "floor_time_bucket": _time_text(m3_payload.get("floor_week_m3")), "ceiling_time_bucket": "",
+        "floor_time_probability": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
+        "ceiling_time_probability": 0.0,
+        "confidence_score": _to_float(m3_payload.get("floor_week_m3_confidence"), 0.0),
+        "expected_return": _to_optional_float(m3_payload.get("expected_return_m3")),
+        "expected_range": _to_optional_float(m3_payload.get("expected_range_m3")),
+        "event_type": event_type, "emit_signal": False, "m3_payload": m3_payload, **shared_m3,
+    }))
     return payloads
 
 
 def build_prediction_record(
     symbol: str,
     as_of: datetime,
-    horizon: Literal["d1", "w1", "q1", "m3"],
+    horizon: Horizon,
     payload: dict,
     model_version: str,
 ) -> PredictionRecord:
