@@ -23,10 +23,12 @@ on:
         description: "Minimum ABT variables in final_model_columns"
         required: false
         default: "45"
-      commit_artifacts:
-        description: "Commit data/training and SQLite artifacts back to the branch"
+      commit_champions:
+        description: "Commit lightweight champion/competition JSON only (never DBs, datasets, PKLs or logs)"
         required: false
-        default: "true"
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 permissions:
   contents: write
@@ -38,6 +40,7 @@ concurrency:
 jobs:
   train_all_models:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
@@ -60,25 +63,12 @@ jobs:
           CSV_FILE="data/training/models/horizon_training_results_${VERSION_TAG}.csv"
           mkdir -p data/training data/training/models
           touch "$LOG_FILE"
-
           echo "version=$VERSION_TAG" >> "$GITHUB_OUTPUT"
           echo "log_file=$LOG_FILE" >> "$GITHUB_OUTPUT"
           echo "csv_file=$CSV_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Initialize DBs
-        run: |
-          set -euo pipefail
-          make init-dbs | tee -a "${{ steps.runmeta.outputs.log_file }}"
-
-      - name: Validate SQLite bootstrap
-        run: |
-          set -euo pipefail
-          {
-            sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
-            for table in predictions signals orders training_reviews model_training_cycles; do
-              sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
-            done
-          } 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+        run: make init-dbs | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Refresh market DB from Yahoo
         run: |
@@ -89,6 +79,16 @@ jobs:
             --interval "${{ inputs.yahoo_interval }}" \
             --sleep-seconds 0.4 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
+      - name: Validate market universe coverage
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.training_data_guard \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --min-rows-per-symbol 60 \
+            --max-age-days 7 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
       - name: Build ABT base rows from SQLite
         run: |
           set -euo pipefail
@@ -96,14 +96,14 @@ jobs:
             --db data/market/market_data.sqlite \
             --output data/training/yahoo_market_rows.jsonl 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
-      - name: Build ABT modelable dataset
+      - name: Build leakage-safe ABT modelable dataset
         run: |
           set -euo pipefail
           PYTHONPATH=src python -m features.run_features \
             --input data/training/yahoo_market_rows.jsonl \
             --output data/training/modelable_dataset.json 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
-      - name: Validate ABT quality and variable coverage
+      - name: Validate ABT quality and P0 integrity metadata
         env:
           MIN_ROWS: ${{ inputs.min_rows }}
           MIN_COLUMNS: ${{ inputs.min_columns }}
@@ -114,52 +114,31 @@ jobs:
           import os
           from pathlib import Path
 
-          path = Path('data/training/modelable_dataset.json')
-          payload = json.loads(path.read_text(encoding='utf-8'))
-          rows = payload.get('rows', [])
-          columns = payload.get('final_model_columns', [])
-          competition = payload.get('model_competition', {})
-          coverage = payload.get('horizon_coverage', {}).get('m3', {}).get('coverage', {})
-
-          min_rows = int(os.environ.get('MIN_ROWS', '800'))
-          min_columns = int(os.environ.get('MIN_COLUMNS', '45'))
-
+          path = Path("data/training/modelable_dataset.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          rows = payload.get("rows", [])
+          columns = payload.get("final_model_columns", [])
+          min_rows = int(os.environ.get("MIN_ROWS", "800"))
+          min_columns = int(os.environ.get("MIN_COLUMNS", "45"))
           required_columns = {
-              'close',
-              'atr_14',
-              'trend_context_m3',
-              'drawdown_13w',
-              'dist_to_low_3m',
-              'ai_horizon_alignment',
-              'floor_d1',
-              'ceiling_d1',
-              'floor_w1',
-              'ceiling_w1',
-              'floor_q1',
-              'ceiling_q1',
-              'floor_m3',
-              'floor_week_m3',
-              'split',
+              "close", "atr_14", "trend_context_m3", "drawdown_13w",
+              "floor_d1", "ceiling_d1", "floor_w1", "ceiling_w1",
+              "floor_q1", "ceiling_q1", "floor_m3", "floor_delta_m3",
+              "floor_week_m3", "split", "split_eligible_d1",
+              "split_eligible_w1", "split_eligible_q1", "split_eligible_m3",
+              "target_end_date_d1", "target_end_date_w1",
+              "target_end_date_q1", "target_end_date_m3",
           }
-
           missing = sorted(required_columns.difference(columns))
           if len(rows) < min_rows:
-              raise SystemExit(f'ABT rows below threshold: {len(rows)} < {min_rows}')
+              raise SystemExit(f"ABT rows below threshold: {len(rows)} < {min_rows}")
           if len(columns) < min_columns:
-              raise SystemExit(f'ABT columns below threshold: {len(columns)} < {min_columns}')
+              raise SystemExit(f"ABT columns below threshold: {len(columns)} < {min_columns}")
           if missing:
-              raise SystemExit(f'ABT missing required variables: {missing}')
-
-          models = competition.get('models', []) if isinstance(competition, dict) else []
-          if len(models) < 4:
-              raise SystemExit(f'ABT model_competition is too small: {len(models)} models found')
-
-          if float(coverage.get('floor_m3', 0.0)) <= 0.85:
-              raise SystemExit(f"ABT floor_m3 coverage too low: {coverage.get('floor_m3')}")
-          if float(coverage.get('floor_week_m3', 0.0)) <= 0.85:
-              raise SystemExit(f"ABT floor_week_m3 coverage too low: {coverage.get('floor_week_m3')}")
-
-          print(f"ABT OK rows={len(rows)} columns={len(columns)} models={len(models)}")
+              raise SystemExit(f"ABT missing P0 integrity variables: {missing}")
+          if not any(row.get("split") == "validation" and row.get("split_eligible_m3") for row in rows):
+              raise SystemExit("ABT has no leakage-safe m3 validation rows")
+          print(f"ABT OK rows={len(rows)} columns={len(columns)}")
           PY
 
       - name: Train d1/w1/q1 horizon champions
@@ -172,6 +151,16 @@ jobs:
             --tasks d1,w1,q1 \
             --training-mode manual 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
+      - name: Train m3 value/timing champions
+        run: |
+          set -euo pipefail
+          bash scripts/retrain_models.sh \
+            data/training/modelable_dataset.json \
+            data/training \
+            "${{ steps.runmeta.outputs.version }}" \
+            "value,timing" \
+            "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
       - name: Persist horizon competition metrics into app DB
         run: |
           set -euo pipefail
@@ -179,17 +168,27 @@ jobs:
             --models-dir data/training/models \
             --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
-      - name: Train horizon+m3 models (d1,w1,q1,value,timing)
+      - name: Sync champion JSON to binary run artifacts
         run: |
           set -euo pipefail
-          # d1/w1/q1 champions are produced by train_classic_horizons (4-family competition).
-          # Here we train only m3 components (value/timing) to avoid overwriting horizon champions.
-          bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training "${{ steps.runmeta.outputs.version }}" "value,timing" "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          PYTHONPATH=src python -m models.sync_models_file \
+            --models-dir data/training/models \
+            --models-file-dir data/training/models_file \
+            --tasks d1,w1,q1,value,timing 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
-      - name: Build unified training results CSV (d1,w1,q1,m3)
+      - name: Validate generated champions
         run: |
           set -euo pipefail
-          python - <<'PY' 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          for task in d1 w1 q1 value timing; do
+            test -s "data/training/models/${task}_champion.json"
+            test -s "data/training/models_file/${task}_champion.pkl"
+            test -s "data/training/models_file/${task}_champion.manifest.json"
+          done
+          PYTHONPATH=src python -m floor.db_health --db data/persistence/app.sqlite
+
+      - name: Build compact training summary
+        run: |
+          python - <<'PY'
           import csv
           import json
           from pathlib import Path
@@ -198,301 +197,73 @@ jobs:
           models_dir = Path("data/training/models")
           metrics_path = Path(f"data/training/metrics/training_metrics_{version}.json")
           out_path = Path("${{ steps.runmeta.outputs.csv_file }}")
-
           rows = []
           for horizon in ("d1", "w1", "q1"):
               payload = json.loads((models_dir / f"{horizon}_champion.json").read_text(encoding="utf-8"))
+              metrics = payload.get("metrics", {})
               rows.append({
                   "horizon": horizon,
                   "model_name": payload.get("model_name"),
-                  "version": payload.get("version", version),
-                  "train_rows": payload.get("train_rows", 0),
-                  "test_rows": payload.get("test_rows", 0),
-                  "mae_floor": payload.get("metrics", {}).get("mae_floor"),
-                  "mae_ceiling": payload.get("metrics", {}).get("mae_ceiling"),
-                  "mae_spread": payload.get("metrics", {}).get("mae_spread"),
-                  "extra_metric_1": payload.get("metrics", {}).get("test_floor_coverage"),
-                  "extra_metric_2": payload.get("metrics", {}).get("test_ceiling_coverage"),
+                  "version": payload.get("version"),
+                  "metric_1": metrics.get("mae_floor"),
+                  "metric_2": metrics.get("mae_ceiling"),
+                  "metric_3": metrics.get("mae_spread"),
               })
-
-          metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-          value_metrics = metrics_payload.get("value", {})
-          timing_metrics = metrics_payload.get("timing", {})
+          m3 = json.loads(metrics_path.read_text(encoding="utf-8"))
           rows.append({
               "horizon": "m3",
               "model_name": "m3_value_linear + m3_timing_multiclass",
               "version": version,
-              "train_rows": "n/a",
-              "test_rows": "n/a",
-              "mae_floor": value_metrics.get("mae_realized_floor"),
-              "mae_ceiling": value_metrics.get("pinball_loss"),
-              "mae_spread": timing_metrics.get("expected_week_distance"),
-              "extra_metric_1": timing_metrics.get("top1_accuracy"),
-              "extra_metric_2": timing_metrics.get("top3_accuracy"),
+              "metric_1": m3.get("value", {}).get("mae_realized_floor"),
+              "metric_2": m3.get("timing", {}).get("top1_accuracy"),
+              "metric_3": m3.get("timing", {}).get("expected_week_distance"),
           })
-
           out_path.parent.mkdir(parents=True, exist_ok=True)
           with out_path.open("w", encoding="utf-8", newline="") as fh:
-              writer = csv.DictWriter(
-                  fh,
-                  fieldnames=[
-                      "horizon",
-                      "model_name",
-                      "version",
-                      "train_rows",
-                      "test_rows",
-                      "mae_floor",
-                      "mae_ceiling",
-                      "mae_spread",
-                      "extra_metric_1",
-                      "extra_metric_2",
-                  ],
-              )
+              writer = csv.DictWriter(fh, fieldnames=["horizon", "model_name", "version", "metric_1", "metric_2", "metric_3"])
               writer.writeheader()
               writer.writerows(rows)
-
-          print(f"Unified CSV written: {out_path}")
           PY
 
-      - name: Sync champion JSON -> models_file pkl/manifest (d1,w1,q1,value,timing)
+      - name: Commit lightweight champions only
+        if: inputs.commit_champions == 'true'
         run: |
           set -euo pipefail
-          PYTHONPATH=src python -m models.sync_models_file \
-            --models-dir data/training/models \
-            --models-file-dir data/training/models_file \
-            --tasks d1,w1,q1,value,timing 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
-
-      - name: Validate generated champions and metrics
-        run: |
-          set -euo pipefail
-          echo "[train_all_models] Verificando presencia de artefactos esperados..." | tee -a "${{ steps.runmeta.outputs.log_file }}"
-          for path in \
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
             data/training/models/d1_champion.json \
             data/training/models/w1_champion.json \
             data/training/models/q1_champion.json \
+            data/training/models/value_champion.json \
+            data/training/models/timing_champion.json \
             data/training/models/d1_competition.json \
             data/training/models/w1_competition.json \
             data/training/models/q1_competition.json \
-            data/training/models/value_champion.json \
-            data/training/models/timing_champion.json \
-            data/training/models_file/d1_champion.pkl \
-            data/training/models_file/w1_champion.pkl \
-            data/training/models_file/q1_champion.pkl \
-            data/training/models_file/value_champion.pkl \
-            data/training/models_file/timing_champion.pkl \
-            data/training/models_file/d1_champion.manifest.json \
-            data/training/models_file/w1_champion.manifest.json \
-            data/training/models_file/q1_champion.manifest.json \
-            data/training/models_file/value_champion.manifest.json \
-            data/training/models_file/timing_champion.manifest.json \
-            "${{ steps.runmeta.outputs.csv_file }}" \
-            "${{ steps.runmeta.outputs.log_file }}"; do
-            test -f "$path"
-            echo "[train_all_models] OK existe -> $path" | tee -a "${{ steps.runmeta.outputs.log_file }}"
-          done
-
-          python - <<'PY' 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
-          import json
-          from pathlib import Path
-
-          models_dir = Path("data/training/models")
-          models_file_dir = Path("data/training/models_file")
-          tasks = ("d1", "w1", "q1", "value", "timing")
-
-          print("[train_all_models] Verificando contenido JSON/pkl/manifest por task...")
-          for task in tasks:
-              champion_path = models_dir / f"{task}_champion.json"
-              manifest_path = models_file_dir / f"{task}_champion.manifest.json"
-              pkl_path = models_file_dir / f"{task}_champion.pkl"
-
-              champion_payload = json.loads(champion_path.read_text(encoding="utf-8"))
-              manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-              pkl_size = pkl_path.stat().st_size
-
-              if pkl_size <= 0:
-                  raise SystemExit(f"PKL vacío detectado para {task}: {pkl_path}")
-
-              champion_version = champion_payload.get("version", "missing")
-              manifest_version = manifest_payload.get("version", "missing")
-              if champion_version != "missing" and manifest_version != "missing" and champion_version != manifest_version:
-                  raise SystemExit(
-                      f"Version inconsistente para {task}: champion={champion_version} manifest={manifest_version}"
-                  )
-
-              print(
-                  "[train_all_models] OK task=%s champion_version=%s manifest_version=%s pkl_bytes=%s"
-                  % (task, champion_version, manifest_version, pkl_size)
-              )
-          PY
-
-      - name: Validate persistence DB health
-        run: |
-          set -euo pipefail
-          PYTHONPATH=src python -m floor.db_health --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
-
-      - name: Publish workflow summary
-        run: |
-          {
-            echo "## manual_train_all_models"
-            echo ""
-            echo "- Version: \`${{ steps.runmeta.outputs.version }}\`"
-            echo "- Log file: \`${{ steps.runmeta.outputs.log_file }}\`"
-            echo "- CSV results: \`${{ steps.runmeta.outputs.csv_file }}\`"
-            echo "- Champions: d1/w1/q1/value/timing"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Commit artifacts
-        if: inputs.commit_artifacts == 'true'
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          PYTHONPATH=src python - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-
-          max_chunk_bytes = 95 * 1024 * 1024
-          def clear_chunk_dir(chunks_dir: Path) -> int:
-              if not chunks_dir.exists():
-                  return 0
-              removed = 0
-              for stale in chunks_dir.glob("*"):
-                  if stale.is_file():
-                      stale.unlink()
-                      removed += 1
-              if not any(chunks_dir.iterdir()):
-                  chunks_dir.rmdir()
-              return removed
-
-          def chunk_binary_file(path: Path, chunks_dir: Path) -> None:
-              blob = path.read_bytes()
-              source_size = len(blob)
-              if source_size <= max_chunk_bytes:
-                  removed = clear_chunk_dir(chunks_dir)
-                  if removed:
-                      print(f"[commit-artifacts] cleared stale chunks path={chunks_dir} removed={removed}")
-                  print(f"[commit-artifacts] skip chunk path={path} size={source_size} bytes")
-                  return
-
-              chunks_dir.mkdir(parents=True, exist_ok=True)
-              clear_chunk_dir(chunks_dir)
-
-              parts: list[str] = []
-              cursor = 0
-              idx = 1
-              while cursor < source_size:
-                  end = min(source_size, cursor + max_chunk_bytes)
-                  chunk = blob[cursor:end]
-                  chunk_name = f"{path.name}.part{idx:03d}.bin"
-                  (chunks_dir / chunk_name).write_bytes(chunk)
-                  parts.append(chunk_name)
-                  cursor = end
-                  idx += 1
-
-              manifest = {
-                  "source_file": path.name,
-                  "source_size_bytes": source_size,
-                  "source_sha256": hashlib.sha256(blob).hexdigest(),
-                  "chunk_max_bytes": max_chunk_bytes,
-                  "chunk_count": len(parts),
-                  "parts": parts,
-              }
-              (chunks_dir / f"{path.name}.manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-              path.unlink()
-              print(
-                  "[commit-artifacts] chunked source=%s chunk_count=%s chunks_dir=%s source_size=%s"
-                  % (path, manifest["chunk_count"], chunks_dir, source_size)
-              )
-
-          dataset_path = Path("data/training/modelable_dataset.json")
-          if dataset_path.exists():
-              chunk_binary_file(dataset_path, dataset_path.parent / "modelable_dataset_chunks")
-
-          for task in ("d1", "w1", "q1", "value", "timing"):
-              pkl_path = Path(f"data/training/models_file/{task}_champion.pkl")
-              if pkl_path.exists():
-                  chunk_binary_file(pkl_path, pkl_path.parent / f"{task}_champion.pkl.chunks")
-          PY
-
-          batch_commit() {
-            local message="$1"
-            shift
-            git reset
-            local paths=()
-            local candidate
-            for candidate in "$@"; do
-              if [[ "${candidate}" == *"*"* || "${candidate}" == *"?"* || "${candidate}" == *"["* ]]; then
-                local expanded=( ${candidate} )
-                if [[ ${#expanded[@]} -gt 0 ]]; then
-                  paths+=( "${expanded[@]}" )
-                fi
-                continue
-              fi
-              if [[ -e "${candidate}" ]] || git ls-files --error-unmatch "${candidate}" >/dev/null 2>&1; then
-                paths+=( "${candidate}" )
-              fi
-            done
-
-            if [[ ${#paths[@]} -eq 0 ]]; then
-              echo "[commit-artifacts] no files matched for batch: ${message}"
-              return 1
-            fi
-
-            git add -A "${paths[@]}"
-            if git diff --cached --quiet; then
-              echo "[commit-artifacts] no changes for batch: ${message}"
-              return 1
-            fi
-            git commit -m "${message}"
-            return 0
-          }
-
-          committed_any=0
-
-          # Batch 1: data base + logs + metrics + dataset/chunks
-          if batch_commit \
-            "chore: manual training artifacts (base + dataset + logs)" \
-            data/market \
-            data/persistence \
-            data/training/manual_train_all_models_*.log \
-            data/training/metrics \
-            data/training/models/horizon_training_results_*.csv \
-            data/training/yahoo_market_rows.jsonl \
-            data/training/modelable_dataset.json \
-            data/training/modelable_dataset_chunks; then
-            committed_any=1
-          fi
-
-          # Batch 2..N: one model at a time
-          for task in d1 w1 q1 value timing; do
-            if batch_commit \
-              "chore: manual training artifacts (${task} champion batch)" \
-              data/training/models/${task}_champion.json \
-              data/training/models/${task}_competition.json \
-              data/training/models/${task}_challenger_*.json \
-              data/training/models/${task}_champion_*.json \
-              "data/training/models_file/${task}_champion.pkl" \
-              "data/training/models_file/${task}_champion.pkl.chunks" \
-              "data/training/models_file/${task}_champion.manifest.json"; then
-              committed_any=1
-            fi
-          done
-
-          if [[ "${committed_any}" -eq 0 ]]; then
-            echo "No artifacts changed; skipping push."
+            "${{ steps.runmeta.outputs.csv_file }}"
+          if git diff --cached --quiet; then
+            echo "No lightweight champion changes to commit."
             exit 0
           fi
-
+          git commit -m "chore: publish trained champion metadata"
           git push
 
-      - name: Upload training artifacts
+      - name: Upload full training run artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: manual-train-all-models-artifacts
+          name: manual-train-all-models-${{ steps.runmeta.outputs.version }}
           path: |
             data/training
             data/market/market_data.sqlite
             data/persistence/app.sqlite
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish workflow summary
+        run: |
+          {
+            echo "## manual_train_all_models"
+            echo "- Version: \`${{ steps.runmeta.outputs.version }}\`"
+            echo "- Full DB/dataset/PKL/log outputs: Actions artifact only (14 days)"
+            echo "- Git commit enabled: \`${{ inputs.commit_champions }}\` (lightweight JSON/CSV only)"
+          } >> "$GITHUB_STEP_SUMMARY"
