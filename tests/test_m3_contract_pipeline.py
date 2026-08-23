@@ -11,6 +11,43 @@ from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
 from utils.pages_build import build_pages_data
 
 
+def _m3_value_params() -> dict:
+    return {
+        "schema_version": 2,
+        "target_space": "relative_floor_delta",
+        "features": ["atr_ratio_14", "trend_context_m3", "drawdown_13w", "dist_to_low_3m"],
+        "weights": {
+            "atr_ratio_14": 0.0,
+            "trend_context_m3": 0.0,
+            "drawdown_13w": 0.0,
+            "dist_to_low_3m": 0.0,
+        },
+        "bias": 0.08,
+        "calibration_scale": 1.0,
+    }
+
+
+def _m3_timing_params() -> dict:
+    feature_names = [
+        "atr_ratio_14",
+        "trend_context_m3",
+        "drawdown_13w",
+        "dist_to_low_3m",
+        "momentum_20",
+    ]
+    return {
+        "schema_version": 2,
+        "model_type": "multinomial_logistic",
+        "class_count": 13,
+        "feature_names": feature_names,
+        "feature_means": {name: 0.0 for name in feature_names},
+        "feature_scales": {name: 1.0 for name in feature_names},
+        "weights": [[0.0] * len(feature_names) for _ in range(13)],
+        "bias": [0.0] * 13,
+        "calibrator_reliability": {},
+    }
+
+
 def _seed_market_db(db_path: Path) -> None:
     init_market_db(db_path)
     bars: list[DailyBar] = []
@@ -30,11 +67,11 @@ def _seed_models(models_dir: Path) -> None:
             encoding="utf-8",
         )
     (models_dir / "value_champion.json").write_text(
-        json.dumps({"model_name": "m3_value_linear", "version": "v-train", "params": {"weights": {}, "bias": 95.0}, "metrics": {}}),
+        json.dumps({"model_name": "m3_value_relative", "version": "v-train", "params": _m3_value_params(), "metrics": {}}),
         encoding="utf-8",
     )
     (models_dir / "timing_champion.json").write_text(
-        json.dumps({"model_name": "m3_timing_multiclass", "version": "t-train", "params": {"calibrator_reliability": {}}, "metrics": {}}),
+        json.dumps({"model_name": "m3_timing_multiclass", "version": "t-train", "params": _m3_timing_params(), "metrics": {}}),
         encoding="utf-8",
     )
 
@@ -66,7 +103,6 @@ def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     assert len(m3_rows) == 1
 
     d1_row = next(row for row in forecasts if row.get("horizon") == "d1")
-    # m3 must survive as flattened fields, not only nested payload, for all horizons.
     assert "floor_m3" in d1_row
     assert "floor_week_m3" in d1_row
     assert "m3_status" in d1_row
