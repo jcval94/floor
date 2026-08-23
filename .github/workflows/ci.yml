@@ -48,8 +48,13 @@ jobs:
             --site-data-dir "$RUNNER_TEMP/pages-site/data" \
             --universe-path config/universe.yaml \
             --source-commit "${GITHUB_SHA}"
+          PYTHONPATH=src python -m utils.pages_security \
+            --site-dir "$RUNNER_TEMP/pages-site"
           PYTHONPATH=src python -m utils.pages_publish \
             --site-data-dir "$RUNNER_TEMP/pages-site/data" \
+            --validate-only
+          PYTHONPATH=src python -m utils.pages_security \
+            --site-dir "$RUNNER_TEMP/pages-site" \
             --validate-only
           python - <<'PY'
           import json
