@@ -31,3 +31,11 @@ addopts = "-q"
 # rule families can be enabled incrementally without making dependency upgrades
 # rewrite the repository-wide lint contract.
 select = ["E4", "E7", "E9", "F"]
+
+# The backtest runner intentionally builds a heterogeneous nested runtime config
+# consumed by the existing backtest engine. Mypy cannot narrow one nested
+# dictionary-unpack expression, while the same benchmark path is executed by a
+# dedicated regression test. Keep the exception local to this module/error code.
+[[tool.mypy.overrides]]
+module = "reporting.retrain_backtest_report"
+disable_error_code = ["dict-item"]
