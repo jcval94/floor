@@ -1,3 +1,24 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Tickers</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="tickers"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>Universe (50 tickers)</h1><p class="small">Incluye contexto m3: floor_m3 y semana 1..13 con etiqueta humana.</p><div class="card" style="margin-bottom:12px"><label for="horizonFilter"><strong>Modelo a mostrar:</strong></label> <select id="horizonFilter"><option value="d1">d1</option><option value="w1">w1</option><option value="q1">q1</option><option value="m3">m3</option></select> <span class="small" style="margin-left:8px">Valor reciente: artefacto intraday más reciente (yahoo_market_rows). También se muestra el último close diario de market_data.sqlite.</span></div><div class="table-wrap"><table><thead><tr><th class="sortable" data-col="0">Ticker</th><th class="sortable" data-col="1">Valor reciente (intraday)</th><th class="sortable" data-col="2">Último close diario</th><th class="sortable" data-col="3">Δ% intraday vs close</th><th class="sortable" data-col="4">Floor modelo</th><th class="sortable" data-col="5">Δ% vs reciente (floor)</th><th class="sortable" data-col="6">Ceiling modelo</th><th class="sortable" data-col="7">Δ% vs reciente (ceiling)</th><th class="sortable" data-col="8">floor_m3</th><th class="sortable" data-col="9">Δ% vs reciente (m3)</th><th>Semana m3</th><th>Rango semana m3</th><th class="sortable" data-col="12">Score</th></tr></thead><tbody id="tickersTable"></tbody></table></div><div id="tickerDetail" style="margin-top:12px"></div></main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="robots" content="noindex,nofollow"/>
+  <meta name="referrer" content="no-referrer"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"/>
+  <title>Floor · mirror no autoritativo</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:760px;margin:64px auto;padding:0 20px;line-height:1.55;color:#171717}
+    .box{border:2px solid #9b2c2c;border-radius:10px;padding:20px;background:#fff7f7}
+    code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <main class="box">
+    <h1>Publicación bloqueada en <code>docs/</code></h1>
+    <p>Este directorio es un mirror no autoritativo y no publica datos de inversión.</p>
+    <p>La única versión oficial de GitHub Pages se genera mediante <strong>GitHub Actions / deploy-pages</strong> desde <code>site/</code>, con auditoría de batch, frescura, contratos de modelos y manifiesto de publicación.</p>
+    <p>Si esta página aparece como sitio principal, la configuración de GitHub Pages es incorrecta. No interpretes este mirror como estado del sistema ni como señal de inversión.</p>
+  </main>
+</body>
+</html>
