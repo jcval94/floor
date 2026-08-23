@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import product
-from typing import TypedDict
 
 from models.calibration import QuantileCalibrator
 from models.evaluate import value_metrics
@@ -20,38 +18,123 @@ class ValueModelArtifact:
     confidences: list[float]
 
 
-class HyperparameterConfig(TypedDict):
-    weights: dict[str, float]
-    bias: float
+FEATURE_NAMES = (
+    "atr_ratio_14",
+    "trend_context_m3",
+    "drawdown_13w",
+    "dist_to_low_3m",
+)
+
+
+def _to_float(value: object, default: float = 0.0) -> float:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _eligible(row: dict) -> bool:
+    return row.get("split_eligible_m3", True) is not False
+
+
+def _target_delta(row: dict) -> float | None:
+    direct = row.get("floor_delta_m3")
+    if direct not in (None, ""):
+        return max(0.0, min(0.95, _to_float(direct)))
+
+    close = _to_float(row.get("close"))
+    floor = row.get("floor_m3")
+    if close <= 0 or floor in (None, ""):
+        return None
+    return max(0.0, min(0.95, (close - _to_float(floor)) / close))
+
+
+def _features(row: dict) -> dict[str, float]:
+    close = max(_to_float(row.get("close")), 1e-9)
+    return {
+        "atr_ratio_14": abs(_to_float(row.get("atr_14"))) / close,
+        "trend_context_m3": _to_float(row.get("trend_context_m3")),
+        "drawdown_13w": _to_float(row.get("drawdown_13w")),
+        "dist_to_low_3m": _to_float(row.get("dist_to_low_3m")),
+    }
+
+
+def _usable(rows: list[dict]) -> list[dict]:
+    return [
+        row
+        for row in rows
+        if _eligible(row)
+        and _target_delta(row) is not None
+        and _to_float(row.get("close")) > 0
+    ]
 
 
 def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
-def _linear_predict(row: dict, weights: dict[str, float], bias: float) -> float:
-    return bias + sum(float(row.get(k, 0.0) or 0.0) * w for k, w in weights.items())
+def _fit_linear_delta(
+    train_rows: list[dict],
+    *,
+    l2: float = 0.01,
+    lr: float = 0.05,
+    epochs: int = 240,
+) -> tuple[dict[str, float], float]:
+    rows = _usable(train_rows)
+    if not rows:
+        raise ValueError("No leakage-safe m3 rows with complete floor target")
 
-
-def _fit_baseline(train_rows: list[dict], target: str) -> tuple[dict[str, float], float]:
-    y = [float(r[target]) for r in train_rows if r.get(target) is not None]
+    weights = {name: 0.0 for name in FEATURE_NAMES}
+    targets = [_target_delta(row) for row in rows]
+    y = [value for value in targets if value is not None]
     bias = _mean(y)
-    # Stable, leakage-safe hand-crafted weights aligned with current feature stack.
-    return ({"atr_14": -0.6, "trend_context_m3": 0.8, "drawdown_13w": 0.4, "dist_to_low_3m": -0.5}, bias)
+    n = float(len(rows))
+
+    for _ in range(epochs):
+        grad = {name: 0.0 for name in FEATURE_NAMES}
+        grad_bias = 0.0
+        for row in rows:
+            target = _target_delta(row)
+            if target is None:
+                continue
+            feat = _features(row)
+            pred = bias + sum(weights[name] * feat[name] for name in FEATURE_NAMES)
+            err = pred - target
+            grad_bias += (2.0 / n) * err
+            for name in FEATURE_NAMES:
+                grad[name] += (2.0 / n) * err * feat[name]
+
+        for name in FEATURE_NAMES:
+            grad[name] += 2.0 * l2 * weights[name]
+            weights[name] -= lr * grad[name]
+        bias -= lr * grad_bias
+
+    return weights, float(bias)
 
 
-def _value_composite_score(metrics: dict) -> float:
-    return (
-        float(metrics.get("pinball_loss", 999.0))
-        + float(metrics.get("mae_realized_floor", 999.0))
-        + abs(float(metrics.get("breach_rate", 0.2)) - 0.2)
-        + float(metrics.get("calibration_error", 999.0))
-        + (1 - float(metrics.get("temporal_stability", 0.0)))
+def predict_floor_delta(row: dict, weights: dict[str, float], bias: float) -> float:
+    feat = _features(row)
+    raw = bias + sum(
+        _to_float(weights.get(name)) * feat[name]
+        for name in FEATURE_NAMES
     )
+    return max(0.0001, min(0.95, raw))
 
 
-def _expanding_time_folds(rows: list[dict], folds: int) -> list[tuple[list[dict], list[dict]]]:
-    valid_rows = [r for r in rows if r.get("floor_m3") is not None]
+def _has_point_in_time_integrity_metadata(rows: list[dict]) -> bool:
+    return any("target_end_date_m3" in row for row in rows)
+
+
+def _expanding_time_folds(
+    rows: list[dict],
+    folds: int,
+) -> list[tuple[list[dict], list[dict]]]:
+    if _has_point_in_time_integrity_metadata(rows):
+        return []
+
+    valid_rows = _usable(rows)
     if len(valid_rows) < max(12, folds * 2):
         return []
 
@@ -67,74 +150,66 @@ def _expanding_time_folds(rows: list[dict], folds: int) -> list[tuple[list[dict]
     return result
 
 
-def _hyperparameter_grid(base_weights: dict[str, float], base_bias: float) -> list[HyperparameterConfig]:
-    atr_weights = [-0.8, -0.6, -0.4]
-    trend_weights = [0.6, 0.8, 1.0]
-    drawdown_weights = [0.2, 0.4, 0.6]
-    dist_weights = [-0.7, -0.5, -0.3]
-    bias_offsets = [-0.5, 0.0, 0.5]
-
-    return [
-        {
-            "weights": {
-                "atr_14": atr_w,
-                "trend_context_m3": trend_w,
-                "drawdown_13w": dd_w,
-                "dist_to_low_3m": dist_w,
-            },
-            "bias": base_bias + b_off,
-        }
-        for atr_w, trend_w, dd_w, dist_w, b_off in product(
-            atr_weights,
-            trend_weights,
-            drawdown_weights,
-            dist_weights,
-            bias_offsets,
-        )
-    ]
+def _score_delta_model(
+    rows: list[dict],
+    weights: dict[str, float],
+    bias: float,
+) -> float:
+    errors: list[float] = []
+    for row in _usable(rows):
+        target = _target_delta(row)
+        if target is None:
+            continue
+        errors.append(abs(predict_floor_delta(row, weights, bias) - target))
+    return _mean(errors) if errors else float("inf")
 
 
-def _select_hyperparameters_with_cv(train_rows: list[dict], base_weights: dict[str, float], base_bias: float, folds: int = 3) -> tuple[dict[str, float], float, dict]:
+def _select_hyperparameters_with_cv(
+    train_rows: list[dict],
+    folds: int = 3,
+) -> tuple[float, float, dict]:
     folds_data = _expanding_time_folds(train_rows, folds=folds)
     if not folds_data:
-        return base_weights, base_bias, {"cv_enabled": False, "reason": "insufficient_rows", "folds": folds}
+        reason = (
+            "disabled_to_prevent_fold_leakage"
+            if _has_point_in_time_integrity_metadata(train_rows)
+            else "insufficient_rows"
+        )
+        return 0.01, 0.05, {
+            "cv_enabled": False,
+            "reason": reason,
+            "folds": 0,
+            "grid_size": 0,
+        }
 
-    grid = _hyperparameter_grid(base_weights, base_bias)
-    best_weights = base_weights
-    best_bias = base_bias
+    grid = [
+        (0.001, 0.03),
+        (0.01, 0.05),
+        (0.05, 0.03),
+    ]
+    best = grid[0]
     best_score = float("inf")
-
-    for config in grid:
-        fold_scores: list[float] = []
-        for _, fold_valid in folds_data:
-            y_true = [float(r["floor_m3"]) for r in fold_valid if r.get("floor_m3") is not None]
-            raw_pred = [_linear_predict(r, config["weights"], config["bias"]) for r in fold_valid if r.get("floor_m3") is not None]
-            if not y_true:
-                continue
-            calibrator = QuantileCalibrator(alpha=0.2).fit(raw_pred, y_true)
-            pred = calibrator.transform(raw_pred)
-            confidences = [0.5 + min(0.45, abs(float(r.get("ai_conviction_long") or 0.0) * 0.4)) for r in fold_valid if r.get("floor_m3") is not None]
-            metrics = value_metrics(y_true, pred, confidences)
-            fold_scores.append(_value_composite_score(metrics))
-
-        if not fold_scores:
-            continue
-        score = sum(fold_scores) / len(fold_scores)
+    for l2, lr in grid:
+        scores: list[float] = []
+        for fold_train, fold_valid in folds_data:
+            weights, bias = _fit_linear_delta(
+                fold_train,
+                l2=l2,
+                lr=lr,
+                epochs=180,
+            )
+            scores.append(_score_delta_model(fold_valid, weights, bias))
+        score = _mean(scores)
         if score < best_score:
             best_score = score
-            best_weights = config["weights"]
-            best_bias = float(config["bias"])
+            best = (l2, lr)
 
-    return (
-        best_weights,
-        best_bias,
-        {
-            "cv_enabled": True,
-            "folds": len(folds_data),
-            "grid_size": len(grid),
-            "best_cv_score": round(best_score, 8) if best_score < float("inf") else None,
-        },
-    )
+    return best[0], best[1], {
+        "cv_enabled": True,
+        "folds": len(folds_data),
+        "grid_size": len(grid),
+        "best_cv_score": round(best_score, 8),
+    }
 
 
 def train_floor_m3_value_model(
@@ -144,43 +219,93 @@ def train_floor_m3_value_model(
     version: str,
     training_mode: str = "standard",
 ) -> ValueModelArtifact:
-    target = "floor_m3"
-    weights, bias = _fit_baseline(train_rows, target)
+    usable_train = _usable(train_rows)
+    usable_valid = _usable(valid_rows)
+    if not usable_train:
+        raise ValueError("m3 value training requires complete leakage-safe horizons")
 
-    tuning_summary = {"cv_enabled": False, "folds": 0, "grid_size": 0}
+    l2 = 0.01
+    lr = 0.05
+    tuning_summary = {
+        "cv_enabled": False,
+        "folds": 0,
+        "grid_size": 0,
+    }
     if training_mode == "retrain":
-        weights, bias, tuning_summary = _select_hyperparameters_with_cv(train_rows, weights, bias, folds=3)
+        l2, lr, tuning_summary = _select_hyperparameters_with_cv(
+            usable_train,
+            folds=3,
+        )
 
-    valid_y = [float(r[target]) for r in valid_rows if r.get(target) is not None]
-    raw_pred = [_linear_predict(r, weights, bias) for r in valid_rows if r.get(target) is not None]
+    weights, bias = _fit_linear_delta(
+        usable_train,
+        l2=l2,
+        lr=lr,
+        epochs=260,
+    )
 
-    calibrator = QuantileCalibrator(alpha=0.2).fit(raw_pred, valid_y)
-    pred = calibrator.transform(raw_pred)
-    confidences = [0.5 + min(0.45, abs(float(r.get("ai_conviction_long") or 0.0) * 0.4)) for r in valid_rows if r.get(target) is not None]
+    valid_delta_raw = [
+        predict_floor_delta(row, weights, bias)
+        for row in usable_valid
+    ]
+    valid_delta_true: list[float] = []
+    for row in usable_valid:
+        target = _target_delta(row)
+        if target is not None:
+            valid_delta_true.append(target)
 
-    metrics = value_metrics(valid_y, pred, confidences)
-    metrics["target"] = target
+    calibrator = QuantileCalibrator(alpha=0.2).fit(
+        valid_delta_raw,
+        valid_delta_true,
+    )
+    calibrated_delta = [
+        max(0.0001, min(0.95, value))
+        for value in calibrator.transform(valid_delta_raw)
+    ]
+
+    predicted_floors = [
+        _to_float(row.get("close")) * (1.0 - delta)
+        for row, delta in zip(usable_valid, calibrated_delta)
+    ]
+    true_floors = [_to_float(row.get("floor_m3")) for row in usable_valid]
+    confidences = [
+        0.5
+        + min(
+            0.45,
+            abs(_to_float(row.get("ai_conviction_long")) * 0.4),
+        )
+        for row in usable_valid
+    ]
+
+    metrics = value_metrics(true_floors, predicted_floors, confidences)
+    metrics["target"] = "floor_m3"
+    metrics["training_target"] = "floor_delta_m3"
     metrics["horizon"] = "m3"
+    metrics["train_rows"] = len(usable_train)
+    metrics["validation_rows"] = len(usable_valid)
 
     return ValueModelArtifact(
         model_name=model_name,
         horizon="m3",
-        target=target,
+        target="floor_m3",
         version=version,
         params={
+            "schema_version": 2,
+            "target_space": "relative_floor_delta",
+            "features": list(FEATURE_NAMES),
             "weights": weights,
             "bias": bias,
             "calibration_scale": calibrator.scale,
+            "delta_clip": [0.0001, 0.95],
+            "l2": l2,
+            "learning_rate": lr,
             "tuning_summary": tuning_summary,
             "hyperparameter_grid": {
-                "atr_14": [-0.8, -0.6, -0.4],
-                "trend_context_m3": [0.6, 0.8, 1.0],
-                "drawdown_13w": [0.2, 0.4, 0.6],
-                "dist_to_low_3m": [-0.7, -0.5, -0.3],
-                "bias_offset": [-0.5, 0.0, 0.5],
+                "l2": [0.001, 0.01, 0.05],
+                "learning_rate": [0.03, 0.05],
             },
         },
         metrics=metrics,
-        predictions=pred,
+        predictions=predicted_floors,
         confidences=confidences,
     )
