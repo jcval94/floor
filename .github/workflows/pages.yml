@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["intraday_engine"]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,130 +18,183 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout latest audited branch state
+        uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          # workflow_run.head_sha is the commit that STARTED intraday_engine.
+          # intraday_engine writes/pushes outputs during the run, so publishing
+          # that SHA can deploy stale pre-run data. Resolve the branch head.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || 'main' }}
+          fetch-depth: 2
+
+      - name: Verify workflow_run checkout includes upstream starting commit
+        if: github.event_name == 'workflow_run'
+        env:
+          UPSTREAM_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=50
+          git reset --hard origin/main
+          git merge-base --is-ancestor "$UPSTREAM_HEAD_SHA" HEAD || {
+            echo "::error::Current main does not contain the intraday_engine starting commit."
+            exit 1
+          }
+          echo "upstream_start=$UPSTREAM_HEAD_SHA"
+          echo "publication_head=$(git rev-parse HEAD)"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Build static site data payloads
+
+      - name: Build and aggressively audit static site payloads
         run: |
-          PYTHONPATH=src python -m utils.pages_build --data-dir data --site-data-dir site/data --universe-path config/universe.yaml
+          set -euo pipefail
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          PYTHONPATH=src python -m utils.pages_publish \
+            --data-dir data \
+            --site-data-dir site/data \
+            --universe-path config/universe.yaml \
+            --source-commit "$SOURCE_COMMIT"
           touch site/.nojekyll
-      - name: Validate as_of coherence across report and site payloads
+
+      - name: Validate publication contract after generation
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.pages_publish \
+            --site-data-dir site/data \
+            --validate-only
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          audit = json.loads(Path('site/data/audit.json').read_text(encoding='utf-8'))
+          forecasts = json.loads(Path('site/data/forecasts.json').read_text(encoding='utf-8'))
+          dashboard = json.loads(Path('site/data/dashboard.json').read_text(encoding='utf-8'))
+          models = json.loads(Path('site/data/models.json').read_text(encoding='utf-8'))
+
+          if not audit.get('safe_to_deploy'):
+              raise SystemExit('audit.safe_to_deploy is false')
+
+          publishable = bool(audit.get('publishable_forecasts'))
+          rows = forecasts.get('rows', [])
+          expected = int(audit.get('expected_prediction_rows') or 0)
+          if publishable and len(rows) != expected:
+              raise SystemExit(f'publishable forecast row mismatch rows={len(rows)} expected={expected}')
+          if not publishable and rows:
+              raise SystemExit('blocked publication leaked actionable forecast rows')
+
+          batch_as_of = (audit.get('batch') or {}).get('as_of')
+          dashboard_audit = dashboard.get('publication_audit') or {}
+          model_audit = models.get('publication_audit') or {}
+          if dashboard_audit.get('batch_as_of') != batch_as_of:
+              raise SystemExit('dashboard publication audit is not batch-coherent')
+          if model_audit.get('batch_as_of') != batch_as_of:
+              raise SystemExit('models publication audit is not batch-coherent')
+
+          print('publication_status=', audit.get('status'))
+          print('publishable_forecasts=', publishable)
+          print('batch_as_of=', batch_as_of)
+          print('expected_rows=', expected)
+          print('published_rows=', len(rows))
+          print('model_compatibility=', (audit.get('models') or {}).get('status'))
+          print('freshness=', (audit.get('freshness') or {}).get('status'))
+          print('blockers=', audit.get('blockers', []))
+          print('warnings=', audit.get('warnings', []))
+          PY
+
+      - name: Static-site integrity and secret-key scan
+        run: |
+          set -euo pipefail
+          node --check site/assets/app.js
+          node --check site/assets/audit.js
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          sensitive = ('api_key', 'secret', 'token', 'password', 'authorization')
+
+          def walk(value, path='root'):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      lowered = str(key).lower()
+                      if any(term in lowered for term in sensitive):
+                          raise SystemExit(f'sensitive-looking key published: {path}.{key}')
+                      walk(item, f'{path}.{key}')
+              elif isinstance(value, list):
+                  for idx, item in enumerate(value):
+                      walk(item, f'{path}[{idx}]')
+
+          for path in sorted(Path('site/data').glob('*.json')):
+              walk(json.loads(path.read_text(encoding='utf-8')), path.name)
+
+          for html in sorted(Path('site').glob('*.html')):
+              text = html.read_text(encoding='utf-8')
+              if 'assets/audit.js' not in text:
+                  raise SystemExit(f'audit overlay missing from {html}')
+              for match in re.findall(r'(?:src|href)="([^"]+)"', text):
+                  if match.startswith(('http://', 'https://', '#')):
+                      continue
+                  target = (html.parent / match.split('?', 1)[0]).resolve()
+                  if not target.exists():
+                      raise SystemExit(f'broken local asset reference {html}: {match}')
+          print('static-site integrity OK')
+          PY
+
+      - name: Create publication manifest
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from datetime import datetime, timezone
           from pathlib import Path
 
-          def parse_iso(value: str | None, label: str) -> datetime:
-              if not value:
-                  raise SystemExit(f"{label} is missing")
-              normalized = value.replace("Z", "+00:00")
-              try:
-                  dt = datetime.fromisoformat(normalized)
-              except ValueError as exc:
-                  raise SystemExit(f"{label} is not valid ISO-8601: {value}") from exc
-              if dt.tzinfo is None:
-                  dt = dt.replace(tzinfo=timezone.utc)
-              return dt.astimezone(timezone.utc)
-
-          report = json.loads(Path("data/reports/dashboard.json").read_text(encoding="utf-8"))
-          site_dashboard = json.loads(Path("site/data/dashboard.json").read_text(encoding="utf-8"))
-          site_forecasts = json.loads(Path("site/data/forecasts.json").read_text(encoding="utf-8"))
-
-          if not report:
-              raise SystemExit("data/reports/dashboard.json is empty")
-          if not site_dashboard:
-              raise SystemExit("site/data/dashboard.json is empty")
-          if not site_forecasts:
-              raise SystemExit("site/data/forecasts.json is empty")
-
-          report_ref = report.get("as_of") or report.get("generated_at")
-          site_dashboard_ref = site_dashboard.get("as_of") or site_dashboard.get("generated_at")
-          site_forecasts_ref = site_forecasts.get("as_of") or site_forecasts.get("generated_at")
-
-          report_dt = parse_iso(report_ref, "data/reports/dashboard.json as_of|generated_at")
-          dashboard_dt = parse_iso(site_dashboard_ref, "site/data/dashboard.json as_of|generated_at")
-          forecasts_dt = parse_iso(site_forecasts_ref, "site/data/forecasts.json as_of|generated_at")
-
-          generated_at = report.get("generated_at")
-          generated_dt = parse_iso(generated_at, "data/reports/dashboard.json generated_at")
-          max_age_hours = 8
-          age_seconds = (datetime.now(timezone.utc) - generated_dt).total_seconds()
-          if age_seconds < 0:
-              raise SystemExit(
-                  "data/reports/dashboard.json generated_at is in the future "
-                  f"(generated_at={generated_dt.isoformat()})"
-              )
-          if age_seconds > max_age_hours * 3600:
-              raise SystemExit(
-                  "data/reports/dashboard.json is stale for publication "
-                  f"(age_hours={age_seconds/3600:.2f} max_age_hours={max_age_hours})"
-              )
-
-          if dashboard_dt != report_dt:
-              raise SystemExit(
-                  "site/data/dashboard.json timestamp is not coherent with data/reports/dashboard.json "
-                  f"(site={dashboard_dt.isoformat()} report={report_dt.isoformat()})"
-              )
-
-          skew_seconds = abs((report_dt - forecasts_dt).total_seconds())
-          if skew_seconds > 36 * 3600:
-              raise SystemExit(
-                  "site/data/forecasts.json timestamp is too far from data/reports/dashboard.json "
-                  f"(skew_hours={skew_seconds/3600:.2f})"
-              )
-
-          print("as_of coherence OK")
-          print(f"report={report_dt.isoformat()}")
-          print(f"site_dashboard={dashboard_dt.isoformat()}")
-          print(f"site_forecasts={forecasts_dt.isoformat()} skew_hours={skew_seconds/3600:.2f}")
-          print(
-              "publish_audit "
-              f"final_as_of={forecasts_dt.isoformat()} "
-              f"report_generated_at={generated_dt.isoformat()} "
-              f"report_age_hours={age_seconds/3600:.2f}"
-          )
+          root = Path('site')
+          entries = {}
+          for path in sorted(p for p in root.rglob('*') if p.is_file() and p.name != 'publication_manifest.json'):
+              rel = path.relative_to(root).as_posix()
+              raw = path.read_bytes()
+              entries[rel] = {
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'bytes': len(raw),
+              }
+          payload = {
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'source_commit': __import__('subprocess').check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'files': entries,
+          }
+          (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          print(f'publication manifest files={len(entries)}')
           PY
-      - name: Show generated coverage metadata
+
+      - name: Publish audit summary
         run: |
           python - <<'PY'
           import json
-          from pathlib import Path
-          forecasts = json.loads(Path('site/data/forecasts.json').read_text(encoding='utf-8'))
-          health = forecasts.get('data_health', {})
-          latest_close = (health.get('sources', {}) or {}).get('latest_close', {})
-          intraday = (health.get('sources', {}) or {}).get('latest_intraday', {})
-          print('site/data/forecasts.json as_of:', forecasts.get('as_of'))
-          print('latest_close coverage %:', latest_close.get('coverage_pct'))
-          print('latest_intraday coverage %:', intraday.get('coverage_pct'))
-          print('alerts:', health.get('alerts', []))
-          PY
-      - name: Warn when docs mirror looks stale (branch-based Pages risk)
-        run: |
-          python - <<'PY'
-          import json
+          import os
           from pathlib import Path
 
-          site_forecasts = Path('site/data/forecasts.json')
-          docs_forecasts = Path('docs/data/forecasts.json')
-          if not site_forecasts.exists() or not docs_forecasts.exists():
-            print('docs/site forecasts file missing; skipping stale mirror warning')
-            raise SystemExit(0)
-
-          site_rows = json.loads(site_forecasts.read_text(encoding='utf-8')).get('rows', [])
-          docs_rows = json.loads(docs_forecasts.read_text(encoding='utf-8')).get('rows', [])
-          if len(docs_rows) < len(site_rows):
-            print('::warning::docs/data/forecasts.json has fewer rows than generated site/data/forecasts.json.')
-            print('::warning::If GitHub Pages source is set to Deploy from branch/docs, users can see stale data.')
-            print('::warning::Set Pages source to GitHub Actions to publish the artifact generated by this workflow.')
-          else:
-            print('docs mirror row count is not behind site artifact')
+          audit = json.loads(Path('site/data/audit.json').read_text(encoding='utf-8'))
+          batch = audit.get('batch') or {}
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('## GitHub Pages publication audit\n')
+              out.write(f"- Status: **{audit.get('status')}**\n")
+              out.write(f"- Forecasts publishable: `{audit.get('publishable_forecasts')}`\n")
+              out.write(f"- Global batch: `{batch.get('as_of')}`\n")
+              out.write(f"- Rows: `{batch.get('observed_rows')}/{batch.get('expected_rows')}`\n")
+              out.write(f"- Model suite: `{(audit.get('models') or {}).get('status')}`\n")
+              out.write(f"- Freshness: `{(audit.get('freshness') or {}).get('status')}`\n")
+              out.write(f"- Blockers: `{audit.get('blockers', [])}`\n")
+              out.write(f"- Warnings: `{audit.get('warnings', [])}`\n")
           PY
+
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
         with:
