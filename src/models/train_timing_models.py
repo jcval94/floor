@@ -355,15 +355,31 @@ def train_floor_week_m3_timing_model(
     evaluation_rows = _eligible_rows(evaluation_rows)
     if not evaluation_rows:
         evaluation_rows = valid_eligible
+
+    # Quality/selection metrics come only from the later out-of-time evaluation
+    # half. Monitoring compatibility keys are computed over the complete
+    # explicit validation split so a review of the same dataset does not look
+    # like performance decay merely because calibration was introduced.
     probabilities = [predict_week_probabilities(row, params) for row in evaluation_rows]
     y_true = [int(row["floor_week_m3"]) for row in evaluation_rows]
-    metrics = timing_metrics(y_true, probabilities)
+    quality_metrics = timing_metrics(y_true, probabilities)
+
+    monitoring_probabilities = [predict_week_probabilities(row, params) for row in valid_eligible]
+    monitoring_y_true = [int(row["floor_week_m3"]) for row in valid_eligible]
+    metrics = timing_metrics(monitoring_y_true, monitoring_probabilities)
+
     uniform_log_loss = math.log(N_CLASSES)
     confidences = [max(probs) for probs in probabilities]
     metrics.update(
         {
+            "quality_top1_accuracy": float(quality_metrics.get("top1_accuracy", 0.0)),
+            "quality_top3_accuracy": float(quality_metrics.get("top3_accuracy", 0.0)),
+            "quality_log_loss": float(quality_metrics.get("log_loss", uniform_log_loss)),
+            "quality_brier_score": float(quality_metrics.get("brier_score", 0.0)),
+            "quality_expected_week_distance": float(quality_metrics.get("expected_week_distance", 0.0)),
+            "quality_calibration_error": float(quality_metrics.get("calibration_error", 0.0)),
             "uniform_log_loss": uniform_log_loss,
-            "log_loss_skill": 1.0 - (float(metrics.get("log_loss", uniform_log_loss)) / uniform_log_loss),
+            "log_loss_skill": 1.0 - (float(quality_metrics.get("log_loss", uniform_log_loss)) / uniform_log_loss),
             "mean_max_probability": sum(confidences) / len(confidences) if confidences else 0.0,
             "abstention_threshold": ABSTAIN_CONFIDENCE,
             "abstention_rate": (
@@ -376,6 +392,7 @@ def train_floor_week_m3_timing_model(
             "train_rows": len(train_eligible),
             "calibration_rows": len(calibration_rows),
             "validation_rows": len(evaluation_rows),
+            "monitoring_validation_rows": len(valid_eligible),
         }
     )
 
