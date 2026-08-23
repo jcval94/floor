@@ -68,35 +68,28 @@ def _write_json_atomic(path: Path, payload: dict, *, task: str) -> None:
 
 
 def _value_score(metrics: dict) -> float:
-    """Score m3 value on scale-free quantities only.
-
-    The old score mixed dollar MAE with probabilities and therefore favored or
-    punished models depending on the price mix of the validation universe. The
-    new score is entirely relative to price and explicitly rewards the desired
-    20% floor-breach calibration.
-    """
-
+    """Score m3 value on out-of-time, scale-free quantities only."""
     return (
         float(metrics.get("pinball_loss_delta", 999.0))
         + float(metrics.get("mae_delta", 999.0))
         + 2.0 * float(metrics.get("breach_rate_error", 999.0))
-        + 0.25 * float(metrics.get("calibration_error", 999.0))
-        + 0.10 * (1.0 - float(metrics.get("temporal_stability", 0.0)))
+        + 0.25 * float(metrics.get("quality_calibration_error", 999.0))
+        + 0.10 * (1.0 - float(metrics.get("quality_temporal_stability", 0.0)))
     )
 
 
 def _timing_score(metrics: dict) -> float:
     uniform_log_loss = float(metrics.get("uniform_log_loss", math.log(13)))
-    log_loss = float(metrics.get("log_loss", 999.0))
-    normalized_log_loss = log_loss / max(uniform_log_loss, 1e-9)
+    quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
+    normalized_log_loss = quality_log_loss / max(uniform_log_loss, 1e-9)
     negative_skill_penalty = max(0.0, -float(metrics.get("log_loss_skill", -999.0)))
     return (
-        (1.0 - float(metrics.get("top1_accuracy", 0.0)))
-        + (1.0 - float(metrics.get("top3_accuracy", 0.0)))
+        (1.0 - float(metrics.get("quality_top1_accuracy", 0.0)))
+        + (1.0 - float(metrics.get("quality_top3_accuracy", 0.0)))
         + normalized_log_loss
-        + float(metrics.get("brier_score", 999.0))
-        + float(metrics.get("expected_week_distance", 999.0)) / 13.0
-        + float(metrics.get("calibration_error", 999.0))
+        + float(metrics.get("quality_brier_score", 999.0))
+        + float(metrics.get("quality_expected_week_distance", 999.0)) / 13.0
+        + float(metrics.get("quality_calibration_error", 999.0))
         + 0.50 * float(metrics.get("abstention_rate", 1.0))
         + negative_skill_penalty
     )
@@ -134,7 +127,13 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
             and params.get("target_space") == "relative_floor_delta"
             and all(
                 key in metrics
-                for key in ("pinball_loss_delta", "mae_delta", "breach_rate_error")
+                for key in (
+                    "pinball_loss_delta",
+                    "mae_delta",
+                    "breach_rate_error",
+                    "quality_calibration_error",
+                    "quality_temporal_stability",
+                )
             )
         )
     if task == "timing":
@@ -142,7 +141,19 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
             int(params.get("schema_version") or 0) == 2
             and params.get("model_type") == "multinomial_logistic"
             and int(params.get("class_count") or 0) == 13
-            and all(key in metrics for key in ("log_loss_skill", "abstention_rate"))
+            and all(
+                key in metrics
+                for key in (
+                    "quality_top1_accuracy",
+                    "quality_top3_accuracy",
+                    "quality_log_loss",
+                    "quality_brier_score",
+                    "quality_expected_week_distance",
+                    "quality_calibration_error",
+                    "log_loss_skill",
+                    "abstention_rate",
+                )
+            )
         )
     return False
 
