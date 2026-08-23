@@ -26,7 +26,6 @@ def _latest_completed_session(now: datetime) -> date:
     today = now_et.date()
     if is_market_session(today):
         close_at = time(hour=13) if is_early_close(today) else time(hour=16)
-        # Give EOD vendors a short settlement window before requiring today's bar.
         if now_et.time() >= (
             datetime.combine(today, close_at, tzinfo=ET) + timedelta(minutes=20)
         ).time():
@@ -56,8 +55,10 @@ def validate_market_data_freshness(
 ) -> dict[str, object]:
     """Fail closed on missing/future/stale market data.
 
-    ``max_stale_sessions`` is the canonical guard and is market-calendar aware.
-    ``max_age_days`` remains for backwards-compatible callers and tests.
+    ``max_stale_sessions`` is the canonical, market-calendar-aware mode and also
+    rejects bars stamped on non-session dates. ``max_age_days`` remains for
+    backwards-compatible historical/training checks where synthetic fixtures
+    may use calendar dates.
     """
     requested = sorted(
         {str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()}
@@ -112,11 +113,13 @@ def validate_market_data_freshness(
         if local_day > now_et.date():
             future.append({"symbol": symbol, "timestamp": raw})
             continue
-        if not is_market_session(local_day):
-            non_session.append({"symbol": symbol, "timestamp": raw, "date": local_day.isoformat()})
-            continue
 
         if max_stale_sessions is not None:
+            if not is_market_session(local_day):
+                non_session.append(
+                    {"symbol": symbol, "timestamp": raw, "date": local_day.isoformat()}
+                )
+                continue
             missed = _missed_market_sessions(local_day, required_session)
             if missed > max_stale_sessions:
                 stale.append(
