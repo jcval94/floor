@@ -119,7 +119,6 @@ def _fit_linear_delta(
                 continue
             feat = _features(row)
             pred = bias + sum(weights[name] * feat[name] for name in FEATURE_NAMES)
-            # d pinball(y - pred) / d pred
             derivative = -quantile if target > pred else (1.0 - quantile)
             grad_bias += derivative / n
             for name in FEATURE_NAMES:
@@ -229,8 +228,16 @@ def _calibration_scale(rows: list[dict], weights: dict[str, float], bias: float)
         raw = predict_floor_delta(row, weights, bias)
         if target is not None and raw > 1e-9:
             ratios.append(target / raw)
-    # Choose the ratio quantile that corresponds to the desired 20% breach rate.
     return max(0.25, min(4.0, _quantile(ratios, TARGET_DELTA_QUANTILE) if ratios else 1.0))
+
+
+def _predicted_floor(row: dict, weights: dict[str, float], bias: float, scale: float) -> tuple[float, float]:
+    delta = max(0.0001, min(0.95, predict_floor_delta(row, weights, bias) * scale))
+    return _to_float(row.get("close")) * (1.0 - delta), delta
+
+
+def _monitoring_confidence(row: dict) -> float:
+    return 0.5 + min(0.45, abs(_to_float(row.get("ai_conviction_long")) * 0.4))
 
 
 def train_floor_m3_value_model(
@@ -261,21 +268,30 @@ def train_floor_m3_value_model(
     if not evaluation_rows:
         evaluation_rows = usable_valid
 
-    calibrated_delta = [
-        max(0.0001, min(0.95, predict_floor_delta(row, weights, bias) * scale))
-        for row in evaluation_rows
-    ]
-    true_delta = [float(_target_delta(row) or 0.0) for row in evaluation_rows]
-    predicted_floors = [
-        _to_float(row.get("close")) * (1.0 - delta)
-        for row, delta in zip(evaluation_rows, calibrated_delta)
-    ]
+    evaluation_pairs = [_predicted_floor(row, weights, bias, scale) for row in evaluation_rows]
+    predicted_floors = [pair[0] for pair in evaluation_pairs]
+    calibrated_delta = [pair[1] for pair in evaluation_pairs]
     true_floors = [_to_float(row.get("floor_m3")) for row in evaluation_rows]
+    true_delta = [float(_target_delta(row) or 0.0) for row in evaluation_rows]
 
-    # Confidence now represents the actual modeled breach event, rather than an
-    # unrelated AI conviction field. A calibrated 20% floor breach gets p=0.20.
-    confidences = [TARGET_BREACH_RATE] * len(evaluation_rows)
-    metrics = value_metrics(true_floors, predicted_floors, confidences)
+    quality_metrics = value_metrics(
+        true_floors,
+        predicted_floors,
+        [TARGET_BREACH_RATE] * len(evaluation_rows),
+    )
+
+    # Keep the legacy monitoring keys comparable with the review job, which
+    # evaluates the full explicit validation split. Champion selection below
+    # uses only the out-of-time scale-free quality metrics.
+    full_pairs = [_predicted_floor(row, weights, bias, scale) for row in usable_valid]
+    full_predicted_floors = [pair[0] for pair in full_pairs]
+    legacy_metrics = value_metrics(
+        [_to_float(row.get("floor_m3")) for row in usable_valid],
+        full_predicted_floors,
+        [_monitoring_confidence(row) for row in usable_valid],
+    )
+
+    metrics = dict(legacy_metrics)
     metrics.update(
         {
             "pinball_loss_delta": pinball_loss(
@@ -285,13 +301,17 @@ def train_floor_m3_value_model(
             ),
             "mae_delta": _mean([abs(t - p) for t, p in zip(true_delta, calibrated_delta)]),
             "target_breach_rate": TARGET_BREACH_RATE,
-            "breach_rate_error": abs(float(metrics.get("breach_rate", 0.0)) - TARGET_BREACH_RATE),
+            "breach_rate_error": abs(float(quality_metrics.get("breach_rate", 0.0)) - TARGET_BREACH_RATE),
+            "quality_calibration_error": float(quality_metrics.get("calibration_error", 0.0)),
+            "quality_temporal_stability": float(quality_metrics.get("temporal_stability", 0.0)),
+            "quality_breach_rate": float(quality_metrics.get("breach_rate", 0.0)),
             "target": "floor_m3",
             "training_target": "floor_delta_m3",
             "horizon": "m3",
             "train_rows": len(usable_train),
             "calibration_rows": len(calibration_rows),
             "validation_rows": len(evaluation_rows),
+            "monitoring_validation_rows": len(usable_valid),
         }
     )
 
@@ -322,5 +342,5 @@ def train_floor_m3_value_model(
         },
         metrics=metrics,
         predictions=predicted_floors,
-        confidences=confidences,
+        confidences=[TARGET_BREACH_RATE] * len(evaluation_rows),
     )
