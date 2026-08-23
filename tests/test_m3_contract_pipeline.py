@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from floor.config import RuntimeConfig
-from floor.pipeline.intraday_cycle import run_intraday_cycle
+from floor.pipeline.canonical_intraday_cycle import run_intraday_cycle
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
 from utils.pages_build import build_pages_data
