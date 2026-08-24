@@ -27,7 +27,11 @@ def _load_json(path: Path) -> dict:
     return payload
 
 
-def _decision_targets(decisions: list[Any], rows_by_symbol: dict[str, dict], strategies_cfg: dict) -> dict[str, dict]:
+def _decision_targets(
+    decisions: list[Any],
+    rows_by_symbol: dict[str, dict],
+    strategies_cfg: dict,
+) -> dict[str, dict]:
     global_nav = float(strategies_cfg.get("portfolio", {}).get("nav_usd", 1.0) or 1.0)
     targets: dict[str, dict] = {}
     for decision in decisions:
@@ -43,6 +47,30 @@ def _decision_targets(decisions: list[Any], rows_by_symbol: dict[str, dict], str
             "score": float(decision.score),
         }
     return targets
+
+
+def _equal_weight_capped_targets(
+    targets: dict[str, dict],
+    max_weight: float,
+) -> dict[str, dict]:
+    """Apply the research contract min(1 / n_selected, max_weight).
+
+    The helper is deliberately applied after candidate validation so ``n`` is
+    the number of actually investable Weekly names. This prevents dictionary
+    order or cash exhaustion from deciding which selected names receive capital.
+    """
+    if not targets:
+        return {}
+    cap = max(0.0, min(1.0, float(max_weight)))
+    weight = min(1.0 / len(targets), cap)
+    normalized = {
+        symbol: {**spec, "weight": weight}
+        for symbol, spec in targets.items()
+    }
+    gross = sum(float(spec["weight"]) for spec in normalized.values())
+    if gross > 1.0 + 1e-9:
+        raise RuntimeError(f"Weekly target gross exposure exceeds 100%: {gross:.8f}")
+    return normalized
 
 
 def _strategy_targets(
@@ -64,11 +92,22 @@ def _strategy_targets(
     if include_weekly:
         cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
         decisions = generate_weekly_opportunity_orders(scored, strategies_cfg, cfg, "CLOSE")
-        targets["weekly_opportunity_ridge"] = _decision_targets(decisions, rows_by_symbol, strategies_cfg)
+        raw_targets = _decision_targets(decisions, rows_by_symbol, strategies_cfg)
+        max_weight = float(
+            cfg.get("position_sizing", {}).get("max_weight_pct_nav", 0.20) or 0.20
+        )
+        targets["weekly_opportunity_ridge"] = _equal_weight_capped_targets(
+            raw_targets,
+            max_weight,
+        )
 
     breakout_cfg = strategies_cfg["strategies"]["breakout_protected_by_floor"]
     breakout = generate_breakout_floor_orders(scored, strategies_cfg, breakout_cfg, "CLOSE")
-    targets["breakout_protected_by_floor"] = _decision_targets(breakout, rows_by_symbol, strategies_cfg)
+    targets["breakout_protected_by_floor"] = _decision_targets(
+        breakout,
+        rows_by_symbol,
+        strategies_cfg,
+    )
     return targets
 
 
@@ -98,7 +137,10 @@ def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> di
         "rows": [],
     }
     root.mkdir(parents=True, exist_ok=True)
-    (root / "leaderboard.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (root / "leaderboard.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return payload
 
 
@@ -110,7 +152,12 @@ def run_league_eod(
 ) -> dict:
     league_cfg = _load_json(league_config_path)
     if league_cfg.get("enabled") is not True:
-        return _write_waiting(data_dir / "metrics" / "strategy_league", league_cfg, "DISABLED", "league.enabled is not true")
+        return _write_waiting(
+            data_dir / "metrics" / "strategy_league",
+            league_cfg,
+            "DISABLED",
+            "league.enabled is not true",
+        )
     if str(league_cfg.get("mode")) != "shadow_paper":
         raise RuntimeError("Strategy League only supports shadow_paper mode")
 
@@ -119,10 +166,28 @@ def run_league_eod(
     if not model_path.is_absolute():
         model_path = league_config_path.parent.parent / model_path
     if not model_path.exists():
-        return _write_waiting(root, league_cfg, "WAITING_FOR_WEEKLY_MODEL", f"missing frozen challenger: {model_path}")
+        return _write_waiting(
+            root,
+            league_cfg,
+            "WAITING_FOR_WEEKLY_MODEL",
+            f"missing frozen challenger: {model_path}",
+        )
 
     weekly_artifact = _load_json(model_path)
     strategies_cfg = load_simple_yaml(strategies_config_path)
+    weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
+    max_holding_sessions = int(
+        weekly_cfg.get("exits", {}).get("temporal_exit_business_days", 10) or 10
+    )
+    if max_holding_sessions <= 0:
+        raise RuntimeError("Weekly Strategy League max holding sessions must be positive")
+    runtime_league_cfg = {
+        **league_cfg,
+        "strategy_max_holding_sessions": {
+            "weekly_opportunity_ridge": max_holding_sessions,
+        },
+    }
+
     symbols = parse_universe_yaml(universe_path)
     spy = str(league_cfg.get("benchmark_spy") or "SPY").upper()
     snapshot = build_league_market_snapshot(
@@ -137,7 +202,12 @@ def run_league_eod(
     state = load_state(run_dir)
 
     if not session:
-        return _write_waiting(root, league_cfg, "WAITING_FOR_MARKET_DATA", "no current SPY market session")
+        return _write_waiting(
+            root,
+            league_cfg,
+            "WAITING_FOR_MARKET_DATA",
+            "no current SPY market session",
+        )
     if state is None and snapshot.get("status") != "OK":
         return _write_waiting(
             root,
@@ -169,21 +239,30 @@ def run_league_eod(
             **next_targets,
             **_benchmark_targets(symbols, spy),
         }
-        state = initialize_league(run_dir, league_cfg, session, frozen_contract, initial_targets)
+        state = initialize_league(
+            run_dir,
+            runtime_league_cfg,
+            session,
+            frozen_contract,
+            initial_targets,
+        )
     elif session > str(state.get("last_session") or ""):
         state = advance_league(
             run_dir,
             state,
-            league_cfg,
+            runtime_league_cfg,
             session,
             dict(snapshot.get("bars", {})),
             frozen_contract,
             next_targets,
         )
 
-    payload = write_leaderboard(run_dir, state, league_cfg)
+    payload = write_leaderboard(run_dir, state, runtime_league_cfg)
     root.mkdir(parents=True, exist_ok=True)
-    (root / "leaderboard.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    (root / "leaderboard.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     status_payload = {
         "status": payload["status"],
         "league_id": league_id,
@@ -192,13 +271,19 @@ def run_league_eod(
         "market_input_status": snapshot.get("status"),
         "live_execution_enabled": False,
         "operational_paper_gateway_used": False,
+        "weekly_max_holding_sessions": max_holding_sessions,
     }
-    (root / "status.json").write_text(json.dumps(status_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (root / "status.json").write_text(
+        json.dumps(status_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return payload
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Update the prospective Strategy League once at EOD")
+    parser = argparse.ArgumentParser(
+        description="Update the prospective Strategy League once at EOD"
+    )
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument("--strategies-config", default="config/strategies.yaml")

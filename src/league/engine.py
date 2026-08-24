@@ -119,6 +119,9 @@ def _execute_target(
     bars: dict[str, dict],
     execution_cfg: dict,
     trades: list[dict],
+    *,
+    session: str,
+    session_number: int,
 ) -> None:
     open_prices = {
         symbol: float(bar.get("open", 0.0) or 0.0)
@@ -153,7 +156,7 @@ def _execute_target(
         current = int(member.get("positions", {}).get(symbol, {}).get("qty", 0))
         desired = desired_qty[symbol]
         if desired > current:
-            _trade(
+            filled = _trade(
                 member,
                 symbol,
                 desired - current,
@@ -163,6 +166,11 @@ def _execute_target(
                 trades,
                 "signal_t_to_open_t_plus_1",
             )
+            if filled > 0 and current == 0:
+                position = member.get("positions", {}).get(symbol)
+                if position is not None:
+                    position["entry_session"] = session
+                    position["entry_session_number"] = session_number
         position = member.get("positions", {}).get(symbol)
         if position is not None:
             spec = target.get(symbol, {})
@@ -177,6 +185,8 @@ def _apply_strategy_exits(
     trades: list[dict],
     *,
     force_close: bool,
+    current_session_number: int,
+    max_holding_sessions: int = 0,
 ) -> None:
     for symbol in list(member.get("positions", {})):
         position = member["positions"].get(symbol, {})
@@ -187,6 +197,16 @@ def _apply_strategy_exits(
         close = float(bar.get("close", 0.0) or 0.0)
         stop = float(position.get("stop_price", 0.0) or 0.0)
         take = float(position.get("take_profit_price", 0.0) or 0.0)
+        entry_number = int(position.get("entry_session_number", 0) or 0)
+        held_sessions = (
+            current_session_number - entry_number + 1
+            if entry_number > 0 and current_session_number >= entry_number
+            else 0
+        )
+        timeout_due = (
+            max_holding_sessions > 0 and held_sessions >= max_holding_sessions
+        )
+
         exit_price = 0.0
         reason = ""
         if stop > 0 and low > 0 and low <= stop:
@@ -195,11 +215,23 @@ def _apply_strategy_exits(
         elif take > 0 and high >= take:
             exit_price = take
             reason = "take_profit_touched"
+        elif timeout_due and close > 0:
+            exit_price = close
+            reason = f"max_holding_sessions_{max_holding_sessions}"
         elif force_close and close > 0:
             exit_price = close
             reason = "strategy_session_timeout"
         if exit_price > 0:
-            _trade(member, symbol, qty, exit_price, "SELL", execution_cfg, trades, reason)
+            _trade(
+                member,
+                symbol,
+                qty,
+                exit_price,
+                "SELL",
+                execution_cfg,
+                trades,
+                reason,
+            )
 
 
 def _mark_member(member: dict, session: str, bars: dict[str, dict]) -> float:
@@ -212,7 +244,9 @@ def _mark_member(member: dict, session: str, bars: dict[str, dict]) -> float:
         if symbol in prices:
             position["last_price"] = prices[symbol]
     nav = _portfolio_nav(member, prices)
-    member.setdefault("daily_nav", []).append({"session": session, "nav": round(nav, 6)})
+    member.setdefault("daily_nav", []).append(
+        {"session": session, "nav": round(nav, 6)}
+    )
     return nav
 
 
@@ -279,7 +313,9 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             "strategy": member_id,
             **member_metrics,
             "vs_spy": ret - float(spy_return) if spy_return is not None else None,
-            "vs_equal_weight": ret - float(equal_return) if equal_return is not None else None,
+            "vs_equal_weight": (
+                ret - float(equal_return) if equal_return is not None else None
+            ),
             "promotion_review_eligible": False,
             "promotion_checks": {},
         }
@@ -446,20 +482,44 @@ def advance_league(
         )
 
     execution_cfg = league_cfg.get("execution", {})
+    max_holding_by_strategy = league_cfg.get("strategy_max_holding_sessions", {})
+    current_session_number = int(state.get("session_count", 0)) + 1
     trades: list[dict] = []
     for member_id, member in state["members"].items():
         pending = member.get("pending_targets")
         if isinstance(pending, dict):
-            _execute_target(member, pending, bars, execution_cfg, trades)
+            _execute_target(
+                member,
+                pending,
+                bars,
+                execution_cfg,
+                trades,
+                session=session,
+                session_number=current_session_number,
+            )
         member["pending_targets"] = None
 
         if member_id == "weekly_opportunity_ridge":
+            max_holding_sessions = int(
+                max_holding_by_strategy.get(member_id, 0) or 0
+            )
             _apply_strategy_exits(
-                member, bars, execution_cfg, trades, force_close=False
+                member,
+                bars,
+                execution_cfg,
+                trades,
+                force_close=False,
+                current_session_number=current_session_number,
+                max_holding_sessions=max_holding_sessions,
             )
         elif member_id == "breakout_protected_by_floor":
             _apply_strategy_exits(
-                member, bars, execution_cfg, trades, force_close=True
+                member,
+                bars,
+                execution_cfg,
+                trades,
+                force_close=True,
+                current_session_number=current_session_number,
             )
         _mark_member(member, session, bars)
 
@@ -468,13 +528,15 @@ def advance_league(
             state["members"][member_id]["pending_targets"] = target
 
     state["last_session"] = session
-    state["session_count"] = int(state.get("session_count", 0)) + 1
+    state["session_count"] = current_session_number
     _append_record(state_dir, "EOD", state, trades, next_targets)
     return state
 
 
 def write_leaderboard(
-    state_dir: Path, state: dict, league_cfg: dict
+    state_dir: Path,
+    state: dict,
+    league_cfg: dict,
 ) -> dict[str, Any]:
     payload = build_leaderboard(state, league_cfg)
     path = state_dir / "leaderboard.json"
