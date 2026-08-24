@@ -24,17 +24,7 @@ allowed_entry() {
   [[ "$entry" != /* ]] || return 1
   [[ "$entry" != *"../"* && "$entry" != ".." ]] || return 1
   case "$entry" in
-    data/market|data/market/*|
-    data/predictions|data/predictions/*|
-    data/signals|data/signals/*|
-    data/orders|data/orders/*|
-    data/trades|data/trades/*|
-    data/snapshots|data/snapshots/*|
-    data/reports|data/reports/*|
-    data/metrics|data/metrics/*|
-    data/persistence|data/persistence/*|
-    data/training/reviews.jsonl|
-    data/training/review_summary_latest.json)
+    data/market|data/market/*|data/predictions|data/predictions/*|data/signals|data/signals/*|data/orders|data/orders/*|data/trades|data/trades/*|data/snapshots|data/snapshots/*|data/reports|data/reports/*|data/metrics|data/metrics/*|data/persistence|data/persistence/*|data/training/reviews.jsonl|data/training/review_summary_latest.json)
       return 0
       ;;
     *)
