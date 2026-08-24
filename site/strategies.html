@@ -1,3 +1,30 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Strategies</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="strategies"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>Strategies & Portfolio</h1><div id="strategyStatus"></div><p id="strategyHint" class="small"></p><div class="grid"><div class="card"><h3>Equity curve</h3><div id="equityCurve"></div></div><div class="card"><h3>Drawdown chart</h3><div id="drawdownCurve"></div></div></div></main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Analítica histórica y backtest de Floor." />
+  <title>Floor · Analítica</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="strategies">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest y riesgo con contexto.</h1><p class="lead">Esta sección resume el reporte histórico disponible. Los resultados pasados son evidencia de evaluación, no una promesa de rendimiento futuro.</p></div><div id="strategyStatus"></div></section>
+  <section id="strategyMetrics" class="metrics-grid"></section>
+  <p id="strategyHint" class="small" aria-live="polite"></p>
+  <section class="section two-column">
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva de equity</h2></div></div><div id="equityCurve"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown</h2></div></div><div id="drawdownCurve"></div></article>
+  </section>
+  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">La curva solo se muestra cuando existe un reporte de estrategia publicable. Si falta, el estado será explícitamente desconocido o no disponible; nunca se asumirá rendimiento positivo por defecto.</p></section>
+</main>
+<footer class="site-footer"><span>Floor · Analítica histórica</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
