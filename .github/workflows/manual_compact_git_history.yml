@@ -1,0 +1,157 @@
+name: manual_compact_git_history
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PURGE_GENERATED_DATA_HISTORY exactly"
+        required: true
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: destructive-history-compaction
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+
+      - name: Safety preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRM" = "PURGE_GENERATED_DATA_HISTORY" ] || {
+            echo "::error::Confirmation phrase does not match."
+            exit 1
+          }
+          protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.protected')
+          [ "$protected" = "false" ] || {
+            echo "::error::main is protected. Temporarily allow force-push or use a fresh-repo migration instead."
+            exit 1
+          }
+          open_prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number --jq 'length')
+          [ "$open_prs" = "0" ] || {
+            echo "::error::History compaction requires zero open PRs; found $open_prs. Merge/close them first."
+            exit 1
+          }
+          echo "Safety preflight OK. This run WILL rewrite every branch/tag commit SHA."
+
+      - name: Install pinned history rewrite tool
+        run: python -m pip install git-filter-repo==2.47.0
+
+      - name: Preserve current operational state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
+      - name: Save lightweight model registry and pre-rewrite audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LIGHT="$RUNNER_TEMP/lightweight"
+          mkdir -p "$LIGHT/data/training/models" "$RUNNER_TEMP/history-audit"
+          cp -a data/training/models/*.json "$LIGHT/data/training/models/"
+          : > "$LIGHT/data/.gitkeep"
+          gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_before.json"
+          git ls-remote --heads --tags origin > "$RUNNER_TEMP/history-audit/refs_before.txt"
+          printf '%s\n' \
+            'Generated data under data/ is intentionally removed from Git history.' \
+            'The latest operational state is preserved in release runtime-state-v1.' \
+            'Per-run historical outputs remain available through their Actions retention window.' \
+            > "$RUNNER_TEMP/history-audit/README.txt"
+
+      - name: Mirror repository and remove generated data from every advertised ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --mirror "$AUTH_URL" "$MIRROR"
+          du -sk "$MIRROR" | tee "$RUNNER_TEMP/history-audit/mirror_before_kb.txt"
+
+          git -C "$MIRROR" filter-repo \
+            --force \
+            --path data \
+            --invert-paths
+
+          # git-filter-repo intentionally removes remotes after a destructive rewrite.
+          git -C "$MIRROR" remote add origin "$AUTH_URL"
+          du -sk "$MIRROR" | tee "$RUNNER_TEMP/history-audit/mirror_after_filter_kb.txt"
+
+      - name: Restore only current lightweight champion JSON on rewritten main
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          WORK="$RUNNER_TEMP/rewritten-main"
+          LIGHT="$RUNNER_TEMP/lightweight"
+          git --git-dir="$MIRROR" worktree add "$WORK" main
+          mkdir -p "$WORK/data/training/models"
+          cp -a "$LIGHT/data/.gitkeep" "$WORK/data/.gitkeep"
+          cp -a "$LIGHT/data/training/models/"*.json "$WORK/data/training/models/"
+          git -C "$WORK" config user.name "github-actions[bot]"
+          git -C "$WORK" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "$WORK" add -f data/.gitkeep data/training/models/*.json
+          if ! git -C "$WORK" diff --cached --quiet; then
+            git -C "$WORK" commit -m "chore: restore lightweight model registry after history compaction"
+          fi
+          git --git-dir="$MIRROR" worktree remove "$WORK"
+
+      - name: Force-push rewritten branches and tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          git -C "$MIRROR" push --force origin 'refs/heads/*:refs/heads/*'
+          git -C "$MIRROR" push --force origin 'refs/tags/*:refs/tags/*'
+          gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_after_push.json"
+          git -C "$MIRROR" show-ref > "$RUNNER_TEMP/history-audit/refs_after.txt"
+
+      - name: Report compaction result
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'history-audit'
+          before = json.loads((root / 'repo_before.json').read_text())
+          after = json.loads((root / 'repo_after_push.json').read_text())
+          before_kb = int((root / 'mirror_before_kb.txt').read_text().split()[0])
+          after_kb = int((root / 'mirror_after_filter_kb.txt').read_text().split()[0])
+          reduction = 1.0 - (after_kb / before_kb) if before_kb else 0.0
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('## Destructive Git history compaction\n')
+              out.write(f'- GitHub reported size before: `{before.get("size")} KB`\n')
+              out.write(f'- Local mirror before filter: `{before_kb} KB`\n')
+              out.write(f'- Local mirror after filter: `{after_kb} KB`\n')
+              out.write(f'- Local object reduction: `{reduction:.1%}`\n')
+              out.write(f'- GitHub reported size immediately after push: `{after.get("size")} KB`\n')
+              out.write('- Runtime state preserved in release: `runtime-state-v1`\n')
+              out.write('- All old clones must be re-cloned because branch/tag SHAs changed.\n')
+              if int(after.get('size') or 0) > 500_000:
+                  out.write('- Warning: GitHub may still retain unreachable/PR-ref objects until server GC. If the reported size remains high after GC, migrate current main to a fresh repository and archive this repository.\n')
+          PY
+
+      - name: Upload rewrite audit evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-compaction-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/history-audit
+          if-no-files-found: error
+          retention-days: 90

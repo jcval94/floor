@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: eod-${{ github.ref }}-${{ github.run_id }}
-  cancel-in-progress: false
-
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -22,7 +18,12 @@ jobs:
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
       - name: Detect close window
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
@@ -31,25 +32,45 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+      - name: Initialize DBs
+        run: make init-dbs
       - name: Build site snapshot
-        run: |
-          PYTHONPATH=src python -m floor.main build-site
+        run: PYTHONPATH=src python -m floor.main build-site
       - name: Mark run
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
-      - name: Commit eod history
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/reports data/snapshots site/data docs
-          git diff --cached --quiet || git commit -m "chore: eod artifacts"
-          git push
+      - name: Publish rolling runtime state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+      - name: Upload immutable EOD audit artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: eod-audit-${{ github.run_id }}
+          path: |
+            data/reports
+            data/snapshots
+            data/metrics
+          if-no-files-found: warn
+          retention-days: 30
 
   eod_info:
     needs: [gate, eod_critical]
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Summary
-        run: echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"
+        run: |
+          echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"
+          echo "git_operational_writes=disabled"
