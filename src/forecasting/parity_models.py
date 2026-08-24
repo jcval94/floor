@@ -38,10 +38,13 @@ class ParityChampionModelSet(ChampionModelSet):
             if isinstance(metrics, dict)
             else None
         )
-        try:
-            threshold = float(raw)
-        except (TypeError, ValueError):
+        if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
             threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
+        else:
+            try:
+                threshold = float(raw)
+            except (TypeError, ValueError):
+                threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
         if not 0.0 <= threshold <= 1.0:
             threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
         return threshold
