@@ -24,6 +24,7 @@ allowed_entry() {
   [[ "$entry" != /* ]] || return 1
   [[ "$entry" != *"../"* && "$entry" != ".." ]] || return 1
   case "$entry" in
+    data/market|data/market/*|
     data/predictions|data/predictions/*|
     data/signals|data/signals/*|
     data/orders|data/orders/*|
@@ -70,6 +71,7 @@ publish_state() {
   local paths=()
   local candidate
   for candidate in \
+    data/market \
     data/predictions \
     data/signals \
     data/orders \
