@@ -12,8 +12,10 @@ permissions:
   contents: write
   pull-requests: read
 
+# Share the runtime-state writer lock so no automated writer can mutate the
+# authoritative release while the destructive rewrite is being prepared.
 concurrency:
-  group: destructive-history-compaction
+  group: floor-runtime-state-writer
   cancel-in-progress: false
 
 jobs:
@@ -37,25 +39,34 @@ jobs:
             echo "::error::Confirmation phrase does not match."
             exit 1
           }
-          protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.protected')
-          [ "$protected" = "false" ] || {
-            echo "::error::main is protected. Temporarily allow force-push or use a fresh-repo migration instead."
+
+          protected_branches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
+            --jq '.[] | select(.protected == true) | .name')
+          [ -z "$protected_branches" ] || {
+            echo "::error::History compaction requires force-push access to every branch. Protected branches:"
+            printf '%s\n' "$protected_branches"
             exit 1
           }
+
           open_prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number --jq 'length')
           [ "$open_prs" = "0" ] || {
             echo "::error::History compaction requires zero open PRs; found $open_prs. Merge/close them first."
             exit 1
           }
-          echo "Safety preflight OK. This run WILL rewrite every branch/tag commit SHA."
+          echo "Safety preflight OK. This run WILL rewrite every advertised branch/tag commit SHA."
 
       - name: Install pinned history rewrite tool
         run: python -m pip install git-filter-repo==2.47.0
 
-      - name: Preserve current operational state outside Git
+      - name: Preserve latest operational state outside Git
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/runtime_state.sh publish
+        run: |
+          set -euo pipefail
+          # Never overwrite a fresher rolling release with stale data still
+          # present in the pre-compaction checkout. Restore first, then republish.
+          bash scripts/runtime_state.sh restore
+          bash scripts/runtime_state.sh publish
 
       - name: Save lightweight model registry and pre-rewrite audit
         env:
@@ -67,7 +78,7 @@ jobs:
           cp -a data/training/models/*.json "$LIGHT/data/training/models/"
           : > "$LIGHT/data/.gitkeep"
           gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_before.json"
-          git ls-remote --heads --tags origin > "$RUNNER_TEMP/history-audit/refs_before.txt"
+          git ls-remote --heads --tags origin | sort > "$RUNNER_TEMP/history-audit/refs_before.txt"
           printf '%s\n' \
             'Generated data under data/ is intentionally removed from Git history.' \
             'The latest operational state is preserved in release runtime-state-v1.' \
@@ -111,14 +122,32 @@ jobs:
           fi
           git --git-dir="$MIRROR" worktree remove "$WORK"
 
-      - name: Force-push rewritten branches and tags
+      - name: Verify remote refs did not move during rewrite
+        run: |
+          set -euo pipefail
+          git ls-remote --heads --tags origin | sort > "$RUNNER_TEMP/history-audit/refs_pre_push.txt"
+          if ! cmp -s "$RUNNER_TEMP/history-audit/refs_before.txt" "$RUNNER_TEMP/history-audit/refs_pre_push.txt"; then
+            echo "::error::Remote branch/tag refs changed while compaction was being prepared. Aborting before any force-push."
+            diff -u "$RUNNER_TEMP/history-audit/refs_before.txt" "$RUNNER_TEMP/history-audit/refs_pre_push.txt" || true
+            exit 1
+          fi
+
+      - name: Atomically force-push rewritten branches and tags
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           MIRROR="$RUNNER_TEMP/floor-mirror.git"
-          git -C "$MIRROR" push --force origin 'refs/heads/*:refs/heads/*'
-          git -C "$MIRROR" push --force origin 'refs/tags/*:refs/tags/*'
+
+          # --prune removes remote branches/tags that became empty after filtering.
+          # --atomic guarantees all advertised branch/tag updates succeed together or none do.
+          git -C "$MIRROR" push --dry-run --atomic --force --prune origin \
+            'refs/heads/*:refs/heads/*' \
+            'refs/tags/*:refs/tags/*'
+          git -C "$MIRROR" push --atomic --force --prune origin \
+            'refs/heads/*:refs/heads/*' \
+            'refs/tags/*:refs/tags/*'
+
           gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_after_push.json"
           git -C "$MIRROR" show-ref > "$RUNNER_TEMP/history-audit/refs_after.txt"
 
