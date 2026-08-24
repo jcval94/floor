@@ -83,7 +83,7 @@ def _benchmark_targets(symbols: list[str], spy: str) -> dict[str, dict[str, dict
 
 
 def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> dict:
-    payload = {
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "league_id": league_cfg.get("league_id"),
         "mode": "shadow_paper",
