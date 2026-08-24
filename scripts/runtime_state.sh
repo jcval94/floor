@@ -77,6 +77,27 @@ with tarfile.open(archive, "r:gz") as tf:
 PY
 }
 
+validate_sqlite_state() {
+  local checkpoint="${1:-false}"
+  python - "$checkpoint" <<'PY'
+import sqlite3
+import sys
+from pathlib import Path
+
+checkpoint = sys.argv[1].lower() == "true"
+for path in (Path("data/market/market_data.sqlite"), Path("data/persistence/app.sqlite")):
+    if not path.exists():
+        continue
+    with sqlite3.connect(path) as conn:
+        if checkpoint:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        rows = conn.execute("PRAGMA quick_check").fetchall()
+    if not rows or any(str(row[0]).lower() != "ok" for row in rows):
+        raise SystemExit(f"SQLite quick_check failed for {path}: {rows[:10]}")
+    print(f"sqlite_ok={path} checkpointed={checkpoint}")
+PY
+}
+
 restore_state() {
   if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     echo "No runtime-state release exists yet; using checkout/bootstrap state."
@@ -105,6 +126,7 @@ restore_state() {
 
   clear_runtime_state
   tar -xzf "$TMP/$ASSET" -C .
+  validate_sqlite_state false
   echo "Restored authoritative runtime state from release tag=$TAG asset=$ASSET"
 }
 
@@ -137,6 +159,11 @@ publish_state() {
       exit 1
     fi
   done
+
+  # Fold committed WAL pages into the main DB files before archiving. This
+  # keeps the rolling release smaller and ensures the archived DBs are
+  # independently integrity-checked before replacing the previous state.
+  validate_sqlite_state true
 
   tar -czf "$TMP/$ASSET" "${paths[@]}"
   validate_archive "$TMP/$ASSET"
