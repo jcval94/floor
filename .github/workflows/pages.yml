@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["intraday_engine"]
+    workflows: ["eod"]
     types: [completed]
     branches: [main]
   push:
@@ -15,6 +15,7 @@ on:
       - 'src/utils/pages_publish.py'
       - 'src/utils/pages_security.py'
       - 'src/league/publish_site.py'
+      - 'src/league/experiment_observation.py'
       - 'config/universe.yaml'
   workflow_dispatch:
 
@@ -24,7 +25,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-intraday-publish
+  group: pages-eod-publish
   cancel-in-progress: true
 
 jobs:
@@ -52,7 +53,7 @@ jobs:
           git fetch origin main --depth=50
           git reset --hard origin/main
           git merge-base --is-ancestor "$UPSTREAM_HEAD_SHA" HEAD || {
-            echo "::error::Current main does not contain the intraday_engine starting commit."
+            echo "::error::Current main does not contain the upstream workflow starting commit."
             exit 1
           }
           echo "upstream_start=$UPSTREAM_HEAD_SHA"
@@ -77,7 +78,8 @@ jobs:
             --source-commit "$SOURCE_COMMIT"
           PYTHONPATH=src python -m league.publish_site \
             --data-dir data \
-            --output site/data/strategy_league.json
+            --output site/data/strategy_league.json \
+            --observation-output site/data/experiment_observation.json
           PYTHONPATH=src python -m utils.pages_security --site-dir site
           touch site/.nojekyll
 
@@ -100,6 +102,7 @@ jobs:
           dashboard = json.loads(Path('site/data/dashboard.json').read_text(encoding='utf-8'))
           models = json.loads(Path('site/data/models.json').read_text(encoding='utf-8'))
           league = json.loads(Path('site/data/strategy_league.json').read_text(encoding='utf-8'))
+          observation = json.loads(Path('site/data/experiment_observation.json').read_text(encoding='utf-8'))
 
           if not audit.get('safe_to_deploy'):
               raise SystemExit('audit.safe_to_deploy is false')
@@ -122,6 +125,14 @@ jobs:
           if league.get('automatic_promotion') is not False:
               raise SystemExit('Strategy League must never auto-promote')
 
+          safety = observation.get('safety') or {}
+          if safety.get('live_execution_enabled') is not False:
+              raise SystemExit('Experiment observation must never publish LIVE as enabled')
+          if safety.get('operational_paper_gateway_used') is not False:
+              raise SystemExit('Experiment observation must not use operational PAPER gateway')
+          if safety.get('automatic_promotion') is not False:
+              raise SystemExit('Experiment observation must never auto-promote')
+
           print('publication_status=', audit.get('status'))
           print('publishable_forecasts=', publishable)
           print('batch_as_of=', batch_as_of)
@@ -131,6 +142,8 @@ jobs:
           print('freshness=', (audit.get('freshness') or {}).get('status'))
           print('league_status=', league.get('status'))
           print('league_sessions=', league.get('sessions'))
+          print('observation_status=', observation.get('status'))
+          print('observation_reconciled=', (observation.get('evidence') or {}).get('reconciled_count_since_genesis'))
           print('blockers=', audit.get('blockers', []))
           print('warnings=', audit.get('warnings', []))
           PY
@@ -141,6 +154,7 @@ jobs:
           node --check site/assets/app.js
           node --check site/assets/audit.js
           node --check site/assets/league.js
+          node --check site/assets/experiment.js
           python - <<'PY'
           import json
           import re
@@ -210,6 +224,7 @@ jobs:
           from pathlib import Path
 
           audit = json.loads(Path('site/data/audit.json').read_text(encoding='utf-8'))
+          observation = json.loads(Path('site/data/experiment_observation.json').read_text(encoding='utf-8'))
           batch = audit.get('batch') or {}
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
               out.write('## GitHub Pages publication audit\n')
@@ -219,6 +234,7 @@ jobs:
               out.write(f"- Rows: `{batch.get('observed_rows')}/{batch.get('expected_rows')}`\n")
               out.write(f"- Model suite: `{(audit.get('models') or {}).get('status')}`\n")
               out.write(f"- Freshness: `{(audit.get('freshness') or {}).get('status')}`\n")
+              out.write(f"- Experiment: `{observation.get('status')}` sessions=`{observation.get('sessions')}`\n")
               out.write('- Runtime state: `github_release:runtime-state-v1`\n')
               out.write(f"- Blockers: `{audit.get('blockers', [])}`\n")
               out.write(f"- Warnings: `{audit.get('warnings', [])}`\n")
