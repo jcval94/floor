@@ -8,15 +8,15 @@ on:
         required: false
         default: "false"
       dataset_path:
-        description: "Path to modelable dataset JSON committed in the repo"
+        description: "Ephemeral modelable dataset path"
         required: false
         default: "data/training/modelable_dataset.json"
       version:
-        description: "Version tag for metrics artifact (optional)"
+        description: "Version tag for generated candidates"
         required: false
         default: ""
       tasks:
-        description: "Comma-separated model tasks for manual force runs"
+        description: "Comma-separated tasks"
         required: false
         default: "d1,w1,q1,value,timing"
   workflow_run:
@@ -26,21 +26,25 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: retrain-execute-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   retrain_critical:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
-
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
 
       - name: Decide retrain gate
         id: gate
@@ -55,70 +59,51 @@ jobs:
           import os
           from pathlib import Path
 
-          event_name = os.environ.get('EVENT_NAME', 'workflow_dispatch')
-          force = os.environ.get('FORCE', 'false').lower() == 'true'
-          requested_tasks = [x.strip() for x in os.environ.get('INPUT_TASKS', 'd1,w1,q1,value,timing').split(',') if x.strip()]
-          dataset_path = os.environ.get('INPUT_DATASET_PATH', '').strip() or 'data/training/modelable_dataset.json'
-          summary_path = Path('data/training/review_summary_latest.json')
-
-          tasks: list[str] = []
-          reason = 'no_summary'
-          if event_name == 'workflow_dispatch' and force:
-              tasks = requested_tasks or ['d1', 'w1', 'q1', 'value', 'timing']
-              reason = 'manual_force'
+          event_name = os.environ.get("EVENT_NAME", "workflow_dispatch")
+          force = os.environ.get("FORCE", "false").lower() == "true"
+          requested = [x.strip() for x in os.environ.get("INPUT_TASKS", "d1,w1,q1,value,timing").split(",") if x.strip()]
+          dataset_path = os.environ.get("INPUT_DATASET_PATH", "").strip() or "data/training/modelable_dataset.json"
+          summary_path = Path("data/training/review_summary_latest.json")
+          tasks = []
+          reason = "no_summary"
+          if event_name == "workflow_dispatch" and force:
+              tasks = requested
+              reason = "manual_force"
           elif summary_path.exists():
-              payload = json.loads(summary_path.read_text(encoding='utf-8'))
-              tasks = [str(task).strip() for task in payload.get('tasks_for_auto_retrain', []) if str(task).strip()]
-              reason = 'summary_tasks' if tasks else 'summary_no_retrain_now'
-          elif event_name == 'workflow_dispatch':
-              reason = 'manual_without_force_or_summary'
-          else:
-              reason = 'workflow_run_without_summary'
-
-          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as fh:
-              fh.write(f"run={'true' if bool(tasks) else 'false'}\n")
+              payload = json.loads(summary_path.read_text(encoding="utf-8"))
+              tasks = [str(x).strip() for x in payload.get("tasks_for_auto_retrain", []) if str(x).strip()]
+              reason = "summary_tasks" if tasks else "summary_no_retrain_now"
+          elif event_name == "workflow_dispatch":
+              reason = "manual_without_force_or_summary"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"run={'true' if tasks else 'false'}\n")
               fh.write(f"tasks={','.join(tasks)}\n")
               fh.write(f"reason={reason}\n")
               fh.write(f"dataset_path={dataset_path}\n")
           PY
 
-
       - name: Initialize DBs
         run: make init-dbs
 
-      - name: Normalize DB permissions
-        run: |
-          find data/market data/persistence -type d -exec chmod u+rwx {} +
-          find data/market data/persistence -type f -exec chmod u+rw {} +
-
-      - name: Validate SQLite bootstrap
-        run: |
-          sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
-          for table in predictions signals orders training_reviews model_training_cycles; do
-            sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
-          done
-
-      - name: Ensure market data is populated before retraining
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          market_rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
-          if [ "${market_rows:-0}" = "0" ]; then
-            echo "::warning::Market DB daily_bars is empty (COUNT(*)=0). Triggering Yahoo ingest preflight."
-            PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
-          fi
-      - name: Refresh in-repo market DB from Yahoo (responsible polling)
-        if: steps.gate.outputs.run == 'true'
-        run: PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
-
-      - name: Build modelable dataset from in-repo DB
+      - name: Refresh market data and rebuild ephemeral dataset
         if: steps.gate.outputs.run == 'true'
         env:
           DATASET_PATH: ${{ steps.gate.outputs.dataset_path }}
         run: |
-          PYTHONPATH=src python -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
-          PYTHONPATH=src python -m features.run_features --input data/training/yahoo_market_rows.jsonl --output "$DATASET_PATH"
+          set -euo pipefail
+          PYTHONPATH=src python -m storage.yahoo_ingest \
+            --db data/market/market_data.sqlite \
+            --range 2y \
+            --interval 1d \
+            --sleep-seconds 0.4
+          PYTHONPATH=src python -m features.build_training_from_db \
+            --db data/market/market_data.sqlite \
+            --output data/training/yahoo_market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features \
+            --input data/training/yahoo_market_rows.jsonl \
+            --output "$DATASET_PATH"
 
-      - name: Run model retraining (replace in-repo model artifacts)
+      - name: Retrain selected models
         if: steps.gate.outputs.run == 'true'
         env:
           DATASET_PATH: ${{ steps.gate.outputs.dataset_path }}
@@ -127,156 +112,69 @@ jobs:
         run: |
           set -euo pipefail
           VERSION_TAG="$VERSION_INPUT"
-          if [ -z "$VERSION_TAG" ]; then
-            VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
-          fi
-          bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN" "retrain"
-
-          d1_champion="data/training/models/d1_champion.json"
-          w1_champion="data/training/models/w1_champion.json"
-          q1_champion="data/training/models/q1_champion.json"
-          value_champion="data/training/models/value_champion.json"
-          timing_champion="data/training/models/timing_champion.json"
-          missing=0
-          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
-            if [ ! -f "$champion" ]; then
-              echo "::error::Missing champion artifact after scripts/retrain_models.sh: $champion"
-              missing=1
-            fi
+          [ -n "$VERSION_TAG" ] || VERSION_TAG="$(date -u +%Y%m%dT%H%M%SZ)"
+          bash scripts/retrain_models.sh "$DATASET_PATH" data/training "$VERSION_TAG" "$TASKS_TO_RUN" retrain
+          for champion in \
+            data/training/models/d1_champion.json \
+            data/training/models/w1_champion.json \
+            data/training/models/q1_champion.json \
+            data/training/models/value_champion.json \
+            data/training/models/timing_champion.json; do
+            test -s "$champion" || { echo "::error::Missing champion: $champion"; exit 1; }
           done
-          if [ "$missing" -ne 0 ]; then
-            echo "Champion artifacts were not created by retraining. Failing retrain_execute explicitly."
-            exit 1
-          fi
 
-      - name: Validate champion artifacts and publish summary
+      - name: Validate champion payloads
         if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
-          d1_champion="data/training/models/d1_champion.json"
-          w1_champion="data/training/models/w1_champion.json"
-          q1_champion="data/training/models/q1_champion.json"
-          value_champion="data/training/models/value_champion.json"
-          timing_champion="data/training/models/timing_champion.json"
-
-          missing=0
-          lfs_header='version https://git-lfs.github.com/spec/v1'
-          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
-            attr=$(git check-attr filter -- "$champion" | awk -F": " '{print $3}')
-            if [ "$attr" = "lfs" ]; then
-              echo "::error::Champion artifact is tracked by Git LFS: $champion"
-              missing=1
-            fi
-            if [ ! -f "$champion" ]; then
-              echo "::error::Missing champion artifact after retraining: $champion"
-              missing=1
-              continue
-            fi
-            head=$(head -c 120 "$champion" 2>/dev/null || true)
-            if [ "${head#${lfs_header}}" != "$head" ]; then
-              echo "::error::Champion artifact persisted as unresolved LFS pointer: $champion"
-              missing=1
-            fi
+          for champion in \
+            data/training/models/d1_champion.json \
+            data/training/models/w1_champion.json \
+            data/training/models/q1_champion.json \
+            data/training/models/value_champion.json \
+            data/training/models/timing_champion.json; do
+            PYTHONPATH=src python -m utils.workflow_validations validate-json-file \
+              --path "$champion" \
+              --required-fields model_name,version
           done
-          if [ "$missing" -ne 0 ]; then
-            echo "Champion artifacts were not created. Failing retrain_execute explicitly."
-            exit 1
-          fi
+          sqlite3 data/persistence/app.sqlite "PRAGMA quick_check;" | grep -qx ok
 
-          db="data/persistence/app.sqlite"
-          integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
-          [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
-
-          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$d1_champion"             --required-fields model_name,version
-          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$w1_champion"             --required-fields model_name,version
-          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$q1_champion"             --required-fields model_name,version
-          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$value_champion"             --required-fields model_name,version
-          PYTHONPATH=src python -m utils.workflow_validations validate-json-file             --path "$timing_champion"             --required-fields model_name,version
-
-          d1_decision=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('data/training/models/d1_champion.json')
-          payload = json.loads(p.read_text(encoding='utf-8'))
-          print(payload.get('selection', {}).get('decision', 'unknown'))
-          PY
-          )
-          w1_decision=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('data/training/models/w1_champion.json')
-          payload = json.loads(p.read_text(encoding='utf-8'))
-          print(payload.get('selection', {}).get('decision', 'unknown'))
-          PY
-          )
-          q1_decision=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('data/training/models/q1_champion.json')
-          payload = json.loads(p.read_text(encoding='utf-8'))
-          print(payload.get('selection', {}).get('decision', 'unknown'))
-          PY
-          )
-          value_decision=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('data/training/models/value_champion.json')
-          payload = json.loads(p.read_text(encoding='utf-8'))
-          print(payload.get('selection', {}).get('decision', 'unknown'))
-          PY
-          )
-          timing_decision=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('data/training/models/timing_champion.json')
-          payload = json.loads(p.read_text(encoding='utf-8'))
-          print(payload.get('selection', {}).get('decision', 'unknown'))
-          PY
-          )
-
-          {
-            echo "## retrain_execute champion artifacts"
-            echo ""
-            echo "- \`$value_champion\`: selection.decision=\`$value_decision\`"
-            echo "- \`$timing_champion\`: selection.decision=\`$timing_decision\`"
-            echo "- \`$db\`: quick_check=\`$integrity\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Commit retrain artifacts
+      - name: Commit lightweight model registry only
         if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/training data/market data/persistence
+          git add -f data/training/models/*.json
           if git diff --cached --quiet; then
-            echo "No retrain artifacts changed; skipping commit/push."
-            exit 0
+            echo "No lightweight model registry changes."
+          else
+            git commit -m "chore: publish retrained champion registry"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              [ "$attempt" -lt 3 ] || exit 1
+              git fetch origin "${GITHUB_REF_NAME}"
+              git rebase "origin/${GITHUB_REF_NAME}"
+            done
           fi
 
-          git commit -m "chore: retrain selected model artifacts"
-          for attempt in 1 2 3; do
-            if git push; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "::error::Failed to push after 3 attempts (non-fast-forward persisted)."
-              exit 1
-            fi
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
-          done
-
-      - name: Upload retrain artifacts
+      - name: Publish rolling runtime state outside Git
         if: steps.gate.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
+      - name: Upload full retraining run as artifact
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: retrain-execute-artifacts
+          name: retrain-execute-${{ github.run_id }}
           path: |
             data/training
             data/market/market_data.sqlite
             data/persistence/app.sqlite
-          if-no-files-found: ignore
+          if-no-files-found: error
+          retention-days: 30
 
   retrain_info:
     needs: retrain_critical
@@ -285,4 +183,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - run: echo "retrain_execute finished"
+      - name: Summary
+        run: |
+          echo "retrain_execute result=${{ needs.retrain_critical.result }}"
+          echo "git_payload=lightweight_model_json_only"
