@@ -106,7 +106,7 @@ def test_mixed_model_versions_are_rejected() -> None:
     assert any("mixed_or_missing_model_versions" in item for item in result["errors"])
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -182,9 +182,13 @@ def test_blocked_publication_must_not_expose_forecast_rows(tmp_path: Path) -> No
         },
     )
     _write_json(site_data / "forecasts.json", {"rows": []})
+    _write_json(site_data / "opportunities.json", [])
     assert validate_published_site(site_data)["status"] == "BLOCKED"
 
-    _write_json(site_data / "forecasts.json", {"rows": [_row("AAA", "d1", "2026-08-21T20:00:00+00:00")]})
+    _write_json(
+        site_data / "forecasts.json",
+        {"rows": [_row("AAA", "d1", "2026-08-21T20:00:00+00:00")]},
+    )
     with pytest.raises(RuntimeError, match="must suppress actionable forecast rows"):
         validate_published_site(site_data)
 
