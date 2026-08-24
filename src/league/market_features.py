@@ -9,7 +9,7 @@ from floor.persistence_db import latest_predictions
 from storage.market_db import load_daily_bars
 
 
-def _safe_float(value: object, default: float = 0.0) -> float:
+def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
