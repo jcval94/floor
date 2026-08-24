@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Analítica histórica y backtest de Floor." />
+  <meta name="description" content="Analítica histórica y Strategy League prospectiva de Floor." />
   <title>Floor · Analítica</title>
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
@@ -15,16 +15,33 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest y riesgo con contexto.</h1><p class="lead">Esta sección resume el reporte histórico disponible. Los resultados pasados son evidencia de evaluación, no una promesa de rendimiento futuro.</p></div><div id="strategyStatus"></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest y riesgo con contexto.</h1><p class="lead">Esta sección separa evidencia histórica de evidencia prospectiva. Los resultados pasados o simulados no son una promesa de rendimiento futuro.</p></div><div id="strategyStatus"></div></section>
   <section id="strategyMetrics" class="metrics-grid"></section>
   <p id="strategyHint" class="small" aria-live="polite"></p>
   <section class="section two-column">
-    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva de equity</h2></div></div><div id="equityCurve"></div></article>
-    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown</h2></div></div><div id="drawdownCurve"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva de equity histórica</h2></div></div><div id="equityCurve"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown histórico</h2></div></div><div id="drawdownCurve"></div></article>
   </section>
-  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">La curva solo se muestra cuando existe un reporte de estrategia publicable. Si falta, el estado será explícitamente desconocido o no disponible; nunca se asumirá rendimiento positivo por defecto.</p></section>
+
+  <section class="section">
+    <div class="section-heading"><div><span class="eyebrow">Prospective shadow-paper</span><h2>Strategy League</h2><p class="lead">Cuatro carteras virtuales arrancan con $100,000 USD el mismo día. Las decisiones de hoy solo pueden ejecutarse en la apertura de la siguiente sesión.</p></div></div>
+    <div id="leagueStatus"></div>
+    <p id="leagueNote" class="small" aria-live="polite"></p>
+    <article class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Estrategia</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th></tr></thead>
+          <tbody id="leagueTable"></tbody>
+        </table>
+      </div>
+    </article>
+    <div id="leagueCurves" class="section two-column"></div>
+  </section>
+
+  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">El backtest es retrospectivo. La Strategy League es prospectiva y conserva reglas y modelo congelados mediante hashes. Que una estrategia supere los umbrales solo la hace elegible para revisión humana; nunca activa PAPER operativo ni LIVE automáticamente.</p></section>
 </main>
-<footer class="site-footer"><span>Floor · Analítica histórica</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
+<footer class="site-footer"><span>Floor · Analítica histórica y prospectiva</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
 <script type="module" src="assets/app.js"></script>
+<script type="module" src="assets/league.js"></script>
 </body>
 </html>
