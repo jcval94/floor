@@ -2,7 +2,7 @@ name: monitoring
 
 on:
   schedule:
-    - cron: "*/30 * * * 1-5"
+    - cron: "55 13-21 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -75,4 +75,5 @@ jobs:
       - name: Summary
         run: |
           echo "monitoring result=${{ needs.monitor_critical.result }}"
+          echo "polling=hourly-market-window"
           echo "git_operational_writes=disabled"
