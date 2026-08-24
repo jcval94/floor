@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "${GITHUB_EVENT_NAME:-}" == "workflow_run" ]]; then
-  echo "::error::Automatic retraining execution remains intentionally blocked; use an explicitly approved manual retrain until automatic promotion is separately enabled." >&2
+  echo "::error::Automatic retraining execution is blocked; automatic promotion remains intentionally disabled, so use an explicitly approved manual retrain." >&2
   exit 42
 fi
 
