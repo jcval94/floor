@@ -2,6 +2,14 @@ name: strategy_league_bootstrap
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/strategy_league_bootstrap.yml'
+      - 'config/strategy_league.json'
+      - 'config/strategies.yaml'
+      - 'src/league/bootstrap_weekly_model.py'
+      - 'src/models/train_weekly_opportunity.py'
 
 permissions:
   contents: write
@@ -12,8 +20,9 @@ concurrency:
 
 jobs:
   bootstrap:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -31,10 +40,42 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
+      - name: Check frozen challenger
+        id: challenger
+        run: |
+          if [ -s data/metrics/strategy_league/models/weekly_opportunity_challenger.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Frozen challenger already exists; heavy bootstrap will be skipped."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Initialize DBs
+        if: steps.challenger.outputs.exists != 'true'
         run: make init-dbs
 
+      - name: Ensure enough local history for one-time bootstrap
+        if: steps.challenger.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          if ! PYTHONPATH=src python -m utils.training_data_guard \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --min-rows-per-symbol 80 \
+            --max-age-days 7; then
+            echo "Retained history is insufficient; refreshing 2y once for bootstrap."
+            PYTHONPATH=src python -m storage.yahoo_ingest \
+              --db data/market/market_data.sqlite \
+              --universe config/universe.yaml \
+              --benchmark SPY \
+              --range 2y \
+              --interval 1d \
+              --sleep-seconds 0.2
+          fi
+
       - name: Build local-only bootstrap dataset
+        if: steps.challenger.outputs.exists != 'true'
         run: |
           set -euo pipefail
           mkdir -p data/metrics/strategy_league/bootstrap
@@ -48,6 +89,7 @@ jobs:
             --output data/metrics/strategy_league/bootstrap/modelable_dataset.json
 
       - name: Train only Weekly Opportunity challenger
+        if: steps.challenger.outputs.exists != 'true'
         run: |
           set -euo pipefail
           VERSION="league-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -57,14 +99,17 @@ jobs:
             --version "$VERSION"
 
       - name: Remove temporary bootstrap rows
+        if: always() && steps.challenger.outputs.exists != 'true'
         run: rm -rf data/metrics/strategy_league/bootstrap
 
       - name: Publish compact runtime state
+        if: steps.challenger.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
 
       - name: Upload frozen challenger for audit
+        if: steps.challenger.outputs.exists != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: strategy-league-weekly-model-${{ github.run_id }}
@@ -76,8 +121,10 @@ jobs:
         run: |
           {
             echo "## Strategy League bootstrap"
-            echo "- Network market-data download: \`false\`"
-            echo "- Models trained: \`weekly_opportunity_ridge only\`"
+            echo "- Challenger already existed: \`${{ steps.challenger.outputs.exists }}\`"
+            echo "- Heavy training runs only when the frozen challenger is absent."
+            echo "- Normal market-data refresh: \`none\`"
+            echo "- One-time 2y fallback: only if retained history is insufficient."
             echo "- Operational PAPER gateway: \`disabled\`"
             echo "- LIVE execution: \`disabled\`"
           } >> "$GITHUB_STEP_SUMMARY"
