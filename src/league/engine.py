@@ -22,13 +22,6 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _cost_rate(execution_cfg: dict, side: str) -> float:
-    commission = float(execution_cfg.get("commission_bps", 0.0))
-    slippage = float(execution_cfg.get("slippage_bps", 0.0))
-    sell_fee = float(execution_cfg.get("sell_fee_bps", 0.0)) if side == "SELL" else 0.0
-    return (commission + slippage + sell_fee) / 10000.0
-
-
 def _fill_price(raw_price: float, execution_cfg: dict, side: str) -> float:
     slippage = float(execution_cfg.get("slippage_bps", 0.0)) / 10000.0
     return raw_price * (1.0 + slippage if side == "BUY" else 1.0 - slippage)
@@ -37,52 +30,74 @@ def _fill_price(raw_price: float, execution_cfg: dict, side: str) -> float:
 def _portfolio_nav(member: dict, prices: dict[str, float]) -> float:
     nav = float(member.get("cash", 0.0))
     for symbol, position in member.get("positions", {}).items():
-        nav += int(position.get("qty", 0)) * float(prices.get(symbol, position.get("last_price", 0.0)))
+        fallback = float(position.get("last_price", 0.0) or 0.0)
+        nav += int(position.get("qty", 0)) * float(prices.get(symbol, fallback))
     return nav
 
 
-def _trade(member: dict, symbol: str, qty: int, raw_price: float, side: str, execution_cfg: dict, trades: list[dict], reason: str) -> int:
+def _trade(
+    member: dict,
+    symbol: str,
+    qty: int,
+    raw_price: float,
+    side: str,
+    execution_cfg: dict,
+    trades: list[dict],
+    reason: str,
+) -> int:
     if qty <= 0 or raw_price <= 0:
         return 0
     positions = member.setdefault("positions", {})
-    position = positions.setdefault(symbol, {"qty": 0, "last_price": raw_price})
-    owned = int(position.get("qty", 0))
+    current = positions.get(symbol, {})
+    owned = int(current.get("qty", 0))
     if side == "SELL":
         qty = min(qty, owned)
     if qty <= 0:
         return 0
 
     fill = _fill_price(raw_price, execution_cfg, side)
+    commission_rate = float(execution_cfg.get("commission_bps", 0.0)) / 10000.0
+    sell_fee_rate = (
+        float(execution_cfg.get("sell_fee_bps", 0.0)) / 10000.0
+        if side == "SELL"
+        else 0.0
+    )
     notional = qty * fill
-    commission = notional * float(execution_cfg.get("commission_bps", 0.0)) / 10000.0
-    sell_fee = notional * float(execution_cfg.get("sell_fee_bps", 0.0)) / 10000.0 if side == "SELL" else 0.0
-    costs = commission + sell_fee + abs(fill - raw_price) * qty
+    commission = notional * commission_rate
+    sell_fee = notional * sell_fee_rate
 
     if side == "BUY":
-        total = notional + commission
-        if total > float(member.get("cash", 0.0)):
-            unit_total = fill * (1.0 + float(execution_cfg.get("commission_bps", 0.0)) / 10000.0)
-            qty = int(float(member.get("cash", 0.0)) / max(unit_total, 1e-9))
-            if qty <= 0:
-                return 0
-            notional = qty * fill
-            commission = notional * float(execution_cfg.get("commission_bps", 0.0)) / 10000.0
-            costs = commission + abs(fill - raw_price) * qty
-            total = notional + commission
-        member["cash"] = float(member.get("cash", 0.0)) - total
-        old_qty = owned
-        old_basis = float(position.get("cost_basis", fill))
-        new_qty = old_qty + qty
-        position["qty"] = new_qty
-        position["cost_basis"] = ((old_qty * old_basis) + (qty * fill)) / max(new_qty, 1)
+        unit_total = fill * (1.0 + commission_rate)
+        affordable = int(float(member.get("cash", 0.0)) / max(unit_total, 1e-9))
+        qty = min(qty, affordable)
+        if qty <= 0:
+            return 0
+        notional = qty * fill
+        commission = notional * commission_rate
+        sell_fee = 0.0
+        member["cash"] = float(member.get("cash", 0.0)) - notional - commission
+        old_basis = float(current.get("cost_basis", fill))
+        new_qty = owned + qty
+        positions[symbol] = {
+            **current,
+            "qty": new_qty,
+            "cost_basis": ((owned * old_basis) + (qty * fill)) / max(new_qty, 1),
+            "last_price": raw_price,
+        }
     else:
         member["cash"] = float(member.get("cash", 0.0)) + notional - commission - sell_fee
-        position["qty"] = owned - qty
-        if position["qty"] <= 0:
+        remaining = owned - qty
+        if remaining <= 0:
             positions.pop(symbol, None)
+        else:
+            current["qty"] = remaining
+            current["last_price"] = raw_price
+            positions[symbol] = current
 
+    slippage_cost = abs(fill - raw_price) * qty
+    total_cost = commission + sell_fee + slippage_cost
     member["trade_count"] = int(member.get("trade_count", 0)) + 1
-    member["costs_paid"] = float(member.get("costs_paid", 0.0)) + costs
+    member["costs_paid"] = float(member.get("costs_paid", 0.0)) + total_cost
     trades.append(
         {
             "member": member.get("id"),
@@ -91,14 +106,20 @@ def _trade(member: dict, symbol: str, qty: int, raw_price: float, side: str, exe
             "qty": qty,
             "raw_price": round(raw_price, 6),
             "fill_price": round(fill, 6),
-            "costs": round(costs, 6),
+            "costs": round(total_cost, 6),
             "reason": reason,
         }
     )
     return qty
 
 
-def _execute_target(member: dict, target: dict[str, dict], bars: dict[str, dict], execution_cfg: dict, trades: list[dict]) -> None:
+def _execute_target(
+    member: dict,
+    target: dict[str, dict],
+    bars: dict[str, dict],
+    execution_cfg: dict,
+    trades: list[dict],
+) -> None:
     open_prices = {
         symbol: float(bar.get("open", 0.0) or 0.0)
         for symbol, bar in bars.items()
@@ -116,27 +137,47 @@ def _execute_target(member: dict, target: dict[str, dict], bars: dict[str, dict]
     for symbol in sorted(current_symbols | set(desired_qty)):
         current = int(member.get("positions", {}).get(symbol, {}).get("qty", 0))
         desired = desired_qty.get(symbol, 0)
-        price = open_prices.get(symbol, 0.0)
         if desired < current:
-            _trade(member, symbol, current - desired, price, "SELL", execution_cfg, trades, "rebalance_at_next_open")
+            _trade(
+                member,
+                symbol,
+                current - desired,
+                open_prices.get(symbol, 0.0),
+                "SELL",
+                execution_cfg,
+                trades,
+                "rebalance_at_next_open",
+            )
 
     for symbol in sorted(desired_qty):
         current = int(member.get("positions", {}).get(symbol, {}).get("qty", 0))
         desired = desired_qty[symbol]
-        price = open_prices.get(symbol, 0.0)
         if desired > current:
-            bought = _trade(member, symbol, desired - current, price, "BUY", execution_cfg, trades, "signal_t_to_open_t_plus_1")
-            if bought > 0 and symbol in member.get("positions", {}):
-                spec = target.get(symbol, {})
-                member["positions"][symbol]["stop_price"] = spec.get("stop_price")
-                member["positions"][symbol]["take_profit_price"] = spec.get("take_profit_price")
-        elif symbol in member.get("positions", {}):
+            _trade(
+                member,
+                symbol,
+                desired - current,
+                open_prices.get(symbol, 0.0),
+                "BUY",
+                execution_cfg,
+                trades,
+                "signal_t_to_open_t_plus_1",
+            )
+        position = member.get("positions", {}).get(symbol)
+        if position is not None:
             spec = target.get(symbol, {})
-            member["positions"][symbol]["stop_price"] = spec.get("stop_price")
-            member["positions"][symbol]["take_profit_price"] = spec.get("take_profit_price")
+            position["stop_price"] = spec.get("stop_price")
+            position["take_profit_price"] = spec.get("take_profit_price")
 
 
-def _apply_strategy_exits(member: dict, bars: dict[str, dict], execution_cfg: dict, trades: list[dict], *, force_close: bool) -> None:
+def _apply_strategy_exits(
+    member: dict,
+    bars: dict[str, dict],
+    execution_cfg: dict,
+    trades: list[dict],
+    *,
+    force_close: bool,
+) -> None:
     for symbol in list(member.get("positions", {})):
         position = member["positions"].get(symbol, {})
         qty = int(position.get("qty", 0))
@@ -177,7 +218,11 @@ def _mark_member(member: dict, session: str, bars: dict[str, dict]) -> float:
 
 def _returns(points: list[dict]) -> list[float]:
     values = [float(point.get("nav", 0.0)) for point in points]
-    return [values[idx] / values[idx - 1] - 1.0 for idx in range(1, len(values)) if values[idx - 1] > 0]
+    return [
+        values[idx] / values[idx - 1] - 1.0
+        for idx in range(1, len(values))
+        if values[idx - 1] > 0
+    ]
 
 
 def _sharpe(points: list[dict]) -> float | None:
@@ -204,11 +249,10 @@ def _max_drawdown(points: list[dict]) -> float:
 def _member_metrics(member: dict, initial_nav: float) -> dict[str, Any]:
     points = member.get("daily_nav", [])
     nav = float(points[-1]["nav"]) if points else initial_nav
-    total_return = nav / initial_nav - 1.0
     costs = float(member.get("costs_paid", 0.0))
     return {
         "nav": nav,
-        "return": total_return,
+        "return": nav / initial_nav - 1.0,
         "sharpe": _sharpe(points),
         "max_drawdown": _max_drawdown(points),
         "trades": int(member.get("trade_count", 0)),
@@ -221,7 +265,10 @@ def _member_metrics(member: dict, initial_nav: float) -> dict[str, Any]:
 
 def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
     initial_nav = float(league_cfg["initial_nav_usd"])
-    metrics = {member_id: _member_metrics(member, initial_nav) for member_id, member in state["members"].items()}
+    metrics = {
+        member_id: _member_metrics(member, initial_nav)
+        for member_id, member in state["members"].items()
+    }
     spy_return = metrics.get("benchmark_spy", {}).get("return")
     equal_return = metrics.get("benchmark_equal_weight", {}).get("return")
     review_cfg = league_cfg.get("promotion_review", {})
@@ -238,13 +285,23 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         }
         if member_id in STRATEGY_MEMBERS:
             checks = {
-                "min_sessions": int(state.get("session_count", 0)) >= int(review_cfg.get("min_sessions", 63)),
-                "min_trades": int(member_metrics["trades"]) >= int(review_cfg.get("min_trades", 10)),
-                "max_drawdown": abs(float(member_metrics["max_drawdown"])) <= float(review_cfg.get("max_drawdown_abs", 0.15)),
-                "min_sharpe": member_metrics["sharpe"] is not None and float(member_metrics["sharpe"]) >= float(review_cfg.get("min_sharpe", 0.5)),
-                "positive_excess_vs_spy": row["vs_spy"] is not None and float(row["vs_spy"]) > 0,
-                "positive_excess_vs_equal_weight": row["vs_equal_weight"] is not None and float(row["vs_equal_weight"]) > 0,
-                "positive_after_3x_cost_estimate": float(member_metrics["nav_if_3x_costs_estimate"]) > initial_nav,
+                "min_sessions": int(state.get("session_count", 0))
+                >= int(review_cfg.get("min_sessions", 63)),
+                "min_trades": int(member_metrics["trades"])
+                >= int(review_cfg.get("min_trades", 10)),
+                "max_drawdown": abs(float(member_metrics["max_drawdown"]))
+                <= float(review_cfg.get("max_drawdown_abs", 0.15)),
+                "min_sharpe": member_metrics["sharpe"] is not None
+                and float(member_metrics["sharpe"])
+                >= float(review_cfg.get("min_sharpe", 0.5)),
+                "positive_excess_vs_spy": row["vs_spy"] is not None
+                and float(row["vs_spy"]) > 0,
+                "positive_excess_vs_equal_weight": row["vs_equal_weight"] is not None
+                and float(row["vs_equal_weight"]) > 0,
+                "positive_after_3x_cost_estimate": float(
+                    member_metrics["nav_if_3x_costs_estimate"]
+                )
+                > initial_nav,
             }
             row["promotion_checks"] = checks
             row["promotion_review_eligible"] = all(checks.values())
@@ -259,15 +316,11 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         "last_session": state["last_session"],
         "sessions": state["session_count"],
         "initial_nav_usd": initial_nav,
-        "automatic_promotion": false_value(),
-        "live_execution_enabled": false_value(),
+        "automatic_promotion": False,
+        "live_execution_enabled": False,
         "rows": rows,
         "audit_hash": state.get("last_hash"),
     }
-
-
-def false_value() -> bool:
-    return False
 
 
 def _validate_history(history_path: Path) -> tuple[dict | None, str]:
@@ -275,20 +328,29 @@ def _validate_history(history_path: Path) -> tuple[dict | None, str]:
         return None, ""
     previous = ""
     last_state: dict | None = None
-    for line_number, line in enumerate(history_path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, line in enumerate(
+        history_path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not line.strip():
             continue
         record = json.loads(line)
         if str(record.get("prev_hash") or "") != previous:
-            raise RuntimeError(f"Strategy League audit chain broken at line {line_number}: prev_hash mismatch")
+            raise RuntimeError(
+                f"Strategy League audit chain broken at line {line_number}: prev_hash mismatch"
+            )
         expected = str(record.get("record_hash") or "")
         unsigned = dict(record)
         unsigned.pop("record_hash", None)
         actual = sha256_text(_canonical_json(unsigned))
         if expected != actual:
-            raise RuntimeError(f"Strategy League audit chain broken at line {line_number}: hash mismatch")
+            raise RuntimeError(
+                f"Strategy League audit chain broken at line {line_number}: hash mismatch"
+            )
         previous = expected
-        last_state = record.get("state_after")
+        state_after = record.get("state_after")
+        last_state = dict(state_after) if isinstance(state_after, dict) else None
+    if last_state is not None:
+        last_state["last_hash"] = previous
     return last_state, previous
 
 
@@ -297,17 +359,25 @@ def load_state(state_dir: Path) -> dict | None:
     return state
 
 
-def _append_record(state_dir: Path, event: str, state: dict, trades: list[dict], decisions: dict[str, Any]) -> None:
+def _append_record(
+    state_dir: Path,
+    event: str,
+    state: dict,
+    trades: list[dict],
+    decisions: dict[str, Any],
+) -> None:
     state_dir.mkdir(parents=True, exist_ok=True)
     history_path = state_dir / "history.jsonl"
     _, previous = _validate_history(history_path)
+    state_snapshot = json.loads(json.dumps(state, ensure_ascii=False))
+    state_snapshot["last_hash"] = previous
     unsigned = {
         "event": event,
         "session": state["last_session"],
         "prev_hash": previous,
         "trades": trades,
         "decisions_for_next_open": decisions,
-        "state_after": state,
+        "state_after": state_snapshot,
     }
     record_hash = sha256_text(_canonical_json(unsigned))
     record = {**unsigned, "record_hash": record_hash}
@@ -315,7 +385,10 @@ def _append_record(state_dir: Path, event: str, state: dict, trades: list[dict],
         handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
     state["last_hash"] = record_hash
     tmp = state_dir / "state.json.tmp"
-    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     tmp.replace(state_dir / "state.json")
 
 
@@ -368,7 +441,9 @@ def advance_league(
     if session <= str(state.get("last_session") or ""):
         return state
     if state.get("frozen_contract") != frozen_contract:
-        raise RuntimeError("Strategy League frozen contract changed; create a new league_id instead of rewriting history")
+        raise RuntimeError(
+            "Strategy League frozen contract changed; create a new league_id instead of rewriting history"
+        )
 
     execution_cfg = league_cfg.get("execution", {})
     trades: list[dict] = []
@@ -379,9 +454,13 @@ def advance_league(
         member["pending_targets"] = None
 
         if member_id == "weekly_opportunity_ridge":
-            _apply_strategy_exits(member, bars, execution_cfg, trades, force_close=False)
+            _apply_strategy_exits(
+                member, bars, execution_cfg, trades, force_close=False
+            )
         elif member_id == "breakout_protected_by_floor":
-            _apply_strategy_exits(member, bars, execution_cfg, trades, force_close=True)
+            _apply_strategy_exits(
+                member, bars, execution_cfg, trades, force_close=True
+            )
         _mark_member(member, session, bars)
 
     for member_id, target in next_targets.items():
@@ -394,8 +473,13 @@ def advance_league(
     return state
 
 
-def write_leaderboard(state_dir: Path, state: dict, league_cfg: dict) -> dict[str, Any]:
+def write_leaderboard(
+    state_dir: Path, state: dict, league_cfg: dict
+) -> dict[str, Any]:
     payload = build_leaderboard(state, league_cfg)
     path = state_dir / "leaderboard.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return payload
