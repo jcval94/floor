@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   ingest_critical:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -22,6 +23,25 @@ jobs:
         run: bash scripts/runtime_state.sh restore
       - name: Initialize market DB
         run: make init-dbs
+      - name: Capture decision-state fingerprint before ingest
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          roots = [Path('data/predictions'), Path('data/signals'), Path('data/orders')]
+          snapshot = {}
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in sorted(p for p in root.rglob('*') if p.is_file()):
+                  snapshot[path.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+          out = Path(os.environ['RUNNER_TEMP']) / 'ingest_decision_before.json'
+          out.write_text(json.dumps(snapshot, sort_keys=True), encoding='utf-8')
+          print(f'decision_files_before={len(snapshot)}')
+          PY
       - name: Refresh market DB from Yahoo
         run: |
           set -euo pipefail
@@ -38,11 +58,32 @@ jobs:
           echo "market_rows=$rows"
       - name: Assert ingest does not mutate decisions
         run: |
-          set -euo pipefail
-          if ! git diff --quiet -- data/predictions data/signals data/orders; then
-            echo "::error::Ingest mutated prediction, signal, or order artifacts."
-            exit 1
-          fi
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          before_path = Path(os.environ['RUNNER_TEMP']) / 'ingest_decision_before.json'
+          before = json.loads(before_path.read_text(encoding='utf-8'))
+          roots = [Path('data/predictions'), Path('data/signals'), Path('data/orders')]
+          after = {}
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in sorted(p for p in root.rglob('*') if p.is_file()):
+                  after[path.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+          if before != after:
+              before_keys = set(before)
+              after_keys = set(after)
+              changed = sorted(k for k in before_keys & after_keys if before[k] != after[k])
+              added = sorted(after_keys - before_keys)
+              removed = sorted(before_keys - after_keys)
+              raise SystemExit(
+                  f'Ingest mutated decision state: added={added[:10]} removed={removed[:10]} changed={changed[:10]}'
+              )
+          print(f'decision_files_unchanged={len(after)}')
+          PY
       - name: Publish refreshed market state outside Git
         env:
           GH_TOKEN: ${{ github.token }}
