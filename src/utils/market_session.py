@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import calendar as pycalendar
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+
+from floor.calendar import is_early_close as calendar_is_early_close
+from floor.calendar import is_market_session
 
 ET = ZoneInfo("America/New_York")
 
@@ -21,70 +23,17 @@ class SessionInfo:
     market_close: datetime | None
 
 
-def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
-    count = 0
-    for day in range(1, 32):
-        try:
-            d = date(year, month, day)
-        except ValueError:
-            break
-        if d.weekday() == weekday:
-            count += 1
-            if count == n:
-                return d
-    raise ValueError("Invalid nth weekday")
-
-
-def _last_weekday(year: int, month: int, weekday: int) -> date:
-    last_day = pycalendar.monthrange(year, month)[1]
-    for day in range(last_day, 0, -1):
-        d = date(year, month, day)
-        if d.weekday() == weekday:
-            return d
-    raise ValueError("Invalid last weekday")
-
-
-def _observed(d: date) -> date:
-    if d.weekday() == 5:
-        return d - timedelta(days=1)
-    if d.weekday() == 6:
-        return d + timedelta(days=1)
-    return d
-
-
-def is_us_market_holiday(d: date) -> bool:
-    y = d.year
-    holidays = {
-        _observed(date(y, 1, 1)),
-        _nth_weekday(y, 1, 0, 3),
-        _nth_weekday(y, 2, 0, 3),
-        _last_weekday(y, 5, 0),
-        _observed(date(y, 7, 4)),
-        _nth_weekday(y, 9, 0, 1),
-        _nth_weekday(y, 11, 3, 4),
-        _observed(date(y, 12, 25)),
-    }
-    return d in holidays
-
-
-def is_early_close(d: date) -> bool:
-    y = d.year
-    thanksgiving = _nth_weekday(y, 11, 3, 4)
-    day_after_thanksgiving = thanksgiving + timedelta(days=1)
-    christmas_eve = date(y, 12, 24)
-    return d in {day_after_thanksgiving, christmas_eve} and d.weekday() < 5
-
-
 def get_session_info(now: datetime | None = None) -> SessionInfo:
     now = now or datetime.now(tz=ET)
     day = now.date()
-    if day.weekday() >= 5 or is_us_market_holiday(day):
+    if not is_market_session(day):
         return SessionInfo(day, False, False, None, None)
 
     market_open = datetime.combine(day, time(9, 30), tzinfo=ET)
-    close_t = time(13, 0) if is_early_close(day) else time(16, 0)
+    early_close = calendar_is_early_close(day)
+    close_t = time(13, 0) if early_close else time(16, 0)
     market_close = datetime.combine(day, close_t, tzinfo=ET)
-    return SessionInfo(day, True, is_early_close(day), market_open, market_close)
+    return SessionInfo(day, True, early_close, market_open, market_close)
 
 
 def checkpoint_times(info: SessionInfo) -> dict[str, datetime]:

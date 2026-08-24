@@ -13,12 +13,12 @@ from floor.pipeline.prediction_runtime import (
     _model_input_snapshot,
     _model_output_snapshot,
     _prediction_payloads,
-    _signal_from_prediction,
     _validate_feature_rows,
     _validate_prediction_payload,
     build_prediction_record,
 )
 from floor.prediction_reconciliation import reconcile_predictions
+from floor.schemas import SignalRecord
 from floor.storage import append_jsonl
 from forecasting.run_forecast import run_forecast_pipeline
 
@@ -34,13 +34,18 @@ def _validate_forecast_batch(
     expected_symbols: list[str],
 ) -> None:
     """Refuse partial, duplicate, extra, or synthetically substituted forecast batches."""
+
     expected = {symbol.strip().upper() for symbol in expected_symbols if symbol.strip()}
-    observed_symbols = [str(row.get("symbol") or "").strip().upper() for row in forecasts]
+    observed_symbols = [
+        str(row.get("symbol") or "").strip().upper() for row in forecasts
+    ]
     counts = Counter(observed_symbols)
     observed = {symbol for symbol in observed_symbols if symbol}
     missing = sorted(expected - observed)
     extra = sorted(observed - expected)
-    duplicates = sorted(symbol for symbol, count in counts.items() if symbol and count != 1)
+    duplicates = sorted(
+        symbol for symbol, count in counts.items() if symbol and count != 1
+    )
 
     problems: list[str] = []
     if blocked:
@@ -60,8 +65,15 @@ def _validate_forecast_batch(
         problems.append("duplicates=" + ",".join(duplicates[:20]))
     if problems:
         raise RuntimeError(
-            "Canonical intraday cycle refused incomplete forecast batch: " + "; ".join(problems)
+            "Canonical intraday cycle refused incomplete forecast batch: "
+            + "; ".join(problems)
         )
+
+
+def _batch_id(as_of: datetime, event_type: EventType) -> str:
+    """Stable logical checkpoint identity used across retries."""
+
+    return f"{as_of.astimezone(ET).date().isoformat()}:{event_type}"
 
 
 def run_intraday_cycle(
@@ -69,10 +81,13 @@ def run_intraday_cycle(
     symbols: list[str],
     cfg: RuntimeConfig,
 ) -> None:
-    """Canonical prediction/signal cycle. No external override and no order creation."""
+    """Canonical range-forecast cycle. No external override or directional orders."""
+
     market_rows = _latest_feature_rows(cfg, symbols)
     if len(market_rows) != len(symbols):
-        observed = {str(row.get("symbol") or "").strip().upper() for row in market_rows}
+        observed = {
+            str(row.get("symbol") or "").strip().upper() for row in market_rows
+        }
         missing = sorted({symbol.upper() for symbol in symbols} - observed)
         raise RuntimeError(
             "Canonical intraday cycle refused incomplete feature batch: missing="
@@ -81,9 +96,12 @@ def run_intraday_cycle(
     _validate_feature_rows(market_rows)
 
     as_of = datetime.now(tz=ET)
+    batch_id = _batch_id(as_of, event_type)
     logger.info(
-        "[canonical-intraday] start event=%s symbols=%s external_recommendations=disabled order_generation=disabled",
+        "[canonical-intraday] start event=%s batch_id=%s symbols=%s "
+        "directional_signals=disabled order_generation=disabled",
         event_type,
+        batch_id,
         len(symbols),
     )
     for row in market_rows:
@@ -122,24 +140,37 @@ def run_intraday_cycle(
                 payload=payload,
                 model_version=str(row.get("model_version", "unknown")),
             )
-            append_jsonl(cfg.data_dir / "predictions" / f"{symbol}.jsonl", prediction)
+            append_jsonl(
+                cfg.data_dir / "predictions" / f"{symbol}.jsonl",
+                prediction,
+                batch_id=batch_id,
+            )
 
             if payload.get("emit_signal", True):
-                signal = _signal_from_prediction(
-                    symbol,
-                    horizon,
-                    float(prediction.floor_value or 0.0),
-                    float(prediction.ceiling_value or 0.0),
-                    prediction.expected_return,
-                    prediction.confidence_score,
-                    payload.get("composite_signal_score"),
+                # Range models do not estimate directional alpha. Persist an
+                # explicit HOLD readiness record rather than manufacturing BUY/SELL.
+                signal = SignalRecord(
+                    symbol=symbol,
+                    as_of=as_of,
+                    horizon=horizon,
+                    action="HOLD",
+                    confidence=round(float(prediction.confidence_score or 0.0), 4),
+                    rationale=(
+                        "Directional alpha unavailable; HOLD emitted. "
+                        "Confidence describes validation interval coverage only."
+                    ),
                 )
-                append_jsonl(cfg.data_dir / "signals" / f"{symbol}.jsonl", signal)
+                append_jsonl(
+                    cfg.data_dir / "signals" / f"{symbol}.jsonl",
+                    signal,
+                    batch_id=batch_id,
+                )
 
     reconciliation = reconcile_predictions(cfg.data_dir)
     logger.info(
-        "[canonical-intraday] complete event=%s forecasts=%s reconciliation=%s",
+        "[canonical-intraday] complete event=%s batch_id=%s forecasts=%s reconciliation=%s",
         event_type,
+        batch_id,
         len(forecasts),
         reconciliation,
     )

@@ -4,6 +4,7 @@ set -euo pipefail
 MODE="${1:-}"
 TAG="${RUNTIME_STATE_TAG:-runtime-state-v1}"
 ASSET="${RUNTIME_STATE_ASSET:-floor-runtime-state.tar.gz}"
+MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"
 REPO="${GITHUB_REPOSITORY:-}"
 
 if [[ -z "$MODE" || -z "$REPO" ]]; then
@@ -16,49 +17,100 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 2
 fi
 
+if ! [[ "$MAX_MB" =~ ^[1-9][0-9]*$ ]]; then
+  echo "RUNTIME_STATE_MAX_MB must be a positive integer, got: $MAX_MB" >&2
+  exit 2
+fi
+export RUNTIME_STATE_MAX_MB="$MAX_MB"
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-allowed_entry() {
-  local entry="$1"
-  [[ "$entry" != /* ]] || return 1
-  [[ "$entry" != *"../"* && "$entry" != ".." ]] || return 1
-  case "$entry" in
-    data/market|data/market/*|data/predictions|data/predictions/*|data/signals|data/signals/*|data/orders|data/orders/*|data/trades|data/trades/*|data/snapshots|data/snapshots/*|data/reports|data/reports/*|data/metrics|data/metrics/*|data/persistence|data/persistence/*|data/training/reviews.jsonl|data/training/review_summary_latest.json)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+clear_runtime_state() {
+  # A release restore is authoritative. Remove only operational paths; never
+  # touch Git-managed champion JSON under data/training/models/.
+  rm -rf \
+    data/market \
+    data/predictions \
+    data/signals \
+    data/orders \
+    data/trades \
+    data/snapshots \
+    data/reports \
+    data/metrics \
+    data/persistence
+  rm -f \
+    data/training/reviews.jsonl \
+    data/training/review_summary_latest.json
 }
 
-restore_state() {
-  if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-    echo "No runtime-state release exists yet; using checkout/bootstrap state."
-    return 0
-  fi
+validate_archive() {
+  local archive="$1"
+  python - "$archive" <<'PY'
+import sys
+import tarfile
+from pathlib import PurePosixPath
 
-  gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber
-  gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.sha256" --dir "$TMP" --clobber
-  (
-    cd "$TMP"
-    sha256sum -c "$ASSET.sha256"
-  )
-
-  while IFS= read -r entry; do
-    if ! allowed_entry "$entry"; then
-      echo "Refusing unsafe/unexpected runtime-state archive entry: $entry" >&2
-      exit 1
-    fi
-  done < <(tar -tzf "$TMP/$ASSET")
-
-  tar -xzf "$TMP/$ASSET" -C .
-  echo "Restored runtime state from release tag=$TAG asset=$ASSET"
+archive = sys.argv[1]
+allowed_dirs = {
+    "data/market",
+    "data/predictions",
+    "data/signals",
+    "data/orders",
+    "data/trades",
+    "data/snapshots",
+    "data/reports",
+    "data/metrics",
+    "data/persistence",
+}
+allowed_files = {
+    "data/training/reviews.jsonl",
+    "data/training/review_summary_latest.json",
 }
 
-publish_state() {
-  local paths=()
+with tarfile.open(archive, "r:gz") as tf:
+    for member in tf.getmembers():
+        name = member.name.rstrip("/")
+        path = PurePosixPath(name)
+        if not name or path.is_absolute() or ".." in path.parts:
+            raise SystemExit(f"unsafe runtime-state archive entry: {member.name}")
+        if member.issym() or member.islnk():
+            raise SystemExit(f"links are forbidden in runtime-state archive: {member.name}")
+        if not (member.isdir() or member.isfile()):
+            raise SystemExit(
+                f"unsupported runtime-state archive member type: {member.name}"
+            )
+        allowed = name in allowed_files or any(
+            name == root or name.startswith(root + "/") for root in allowed_dirs
+        )
+        if not allowed:
+            raise SystemExit(f"unexpected runtime-state archive entry: {member.name}")
+PY
+}
+
+validate_sqlite_state() {
+  local checkpoint="${1:-false}"
+  python - "$checkpoint" <<'PY'
+import sqlite3
+import sys
+from pathlib import Path
+
+checkpoint = sys.argv[1].lower() == "true"
+for path in (Path("data/market/market_data.sqlite"), Path("data/persistence/app.sqlite")):
+    if not path.exists():
+        continue
+    with sqlite3.connect(path) as conn:
+        if checkpoint:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        rows = conn.execute("PRAGMA quick_check").fetchall()
+    if not rows or any(str(row[0]).lower() != "ok" for row in rows):
+        raise SystemExit(f"SQLite quick_check failed for {path}: {rows[:10]}")
+    print(f"sqlite_ok={path} checkpointed={checkpoint}")
+PY
+}
+
+collect_paths() {
+  paths=()
   local candidate
   for candidate in \
     data/market \
@@ -74,19 +126,84 @@ publish_state() {
     data/training/review_summary_latest.json; do
     [[ -e "$candidate" ]] && paths+=("$candidate")
   done
+}
 
+restore_state() {
+  if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+    echo "No runtime-state release exists yet; using checkout/bootstrap state."
+    return 0
+  fi
+
+  local restored=false
+  local attempt
+  for attempt in 1 2 3; do
+    rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256"
+    if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber \
+      && gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.sha256" --dir "$TMP" --clobber \
+      && (cd "$TMP" && sha256sum -c "$ASSET.sha256") \
+      && validate_archive "$TMP/$ASSET"; then
+      restored=true
+      break
+    fi
+    echo "::warning::Runtime-state restore attempt $attempt failed; release may be updating concurrently." >&2
+    sleep $((attempt * 2))
+  done
+
+  if [[ "$restored" != "true" ]]; then
+    echo "::error::Unable to restore a checksum-valid runtime state after 3 attempts." >&2
+    exit 1
+  fi
+
+  clear_runtime_state
+  tar -xzf "$TMP/$ASSET" -C .
+  validate_sqlite_state false
+  echo "Restored authoritative runtime state from release tag=$TAG asset=$ASSET"
+}
+
+publish_state() {
+  local paths=()
+  collect_paths
   if [[ ${#paths[@]} -eq 0 ]]; then
     echo "No runtime state exists to publish."
     return 0
   fi
 
+  # Compact semantically before packaging. Resolved old predictions age out,
+  # but unresolved predictions are retained regardless of age so a 65-session
+  # m3 forecast can still reconcile after data gaps or workflow outages.
+  PYTHONPATH=src python -m floor.runtime_retention --data-dir data
+  collect_paths
+
+  local candidate
+  for candidate in "${paths[@]}"; do
+    if find "$candidate" -type l -print -quit 2>/dev/null | grep -q .; then
+      echo "::error::Refusing to publish symlinked runtime state under $candidate" >&2
+      exit 1
+    fi
+  done
+
+  # Fold committed WAL pages into the main DB files before archiving. This
+  # keeps the rolling release smaller and ensures the archived DBs are
+  # independently integrity-checked before replacing the previous state.
+  validate_sqlite_state true
+
   tar -czf "$TMP/$ASSET" "${paths[@]}"
+  validate_archive "$TMP/$ASSET"
+
+  local asset_bytes max_bytes
+  asset_bytes=$(stat -c%s "$TMP/$ASSET")
+  max_bytes=$((MAX_MB * 1024 * 1024))
+  if (( asset_bytes > max_bytes )); then
+    echo "::error::Refusing to replace runtime-state release: asset=${asset_bytes} bytes exceeds cap=${max_bytes} bytes (${MAX_MB} MB)." >&2
+    exit 1
+  fi
+
   (
     cd "$TMP"
     sha256sum "$ASSET" > "$ASSET.sha256"
   )
 
-  python - "$TMP/$ASSET.metadata.json" <<'PY'
+  python - "$TMP/$ASSET.metadata.json" "$TMP/$ASSET.sha256" "$asset_bytes" <<'PY'
 import json
 import os
 import sys
@@ -94,15 +211,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 out = Path(sys.argv[1])
+checksum = Path(sys.argv[2]).read_text(encoding="utf-8").split()[0]
+asset_bytes = int(sys.argv[3])
 out.write_text(
     json.dumps(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "repository": os.getenv("GITHUB_REPOSITORY"),
             "source_sha": os.getenv("GITHUB_SHA"),
             "run_id": os.getenv("GITHUB_RUN_ID"),
             "workflow": os.getenv("GITHUB_WORKFLOW"),
+            "asset": os.getenv("RUNTIME_STATE_ASSET", "floor-runtime-state.tar.gz"),
+            "asset_bytes": asset_bytes,
+            "max_asset_mb": int(os.getenv("RUNTIME_STATE_MAX_MB", "500")),
+            "retention_report": "data/metrics/runtime_retention_latest.json",
+            "sha256": checksum,
         },
         indent=2,
         sort_keys=True,
@@ -126,7 +250,7 @@ PY
     "$TMP/$ASSET.metadata.json" \
     --repo "$REPO" \
     --clobber
-  echo "Published rolling runtime state to release tag=$TAG"
+  echo "Published checksum-verified rolling runtime state to release tag=$TAG bytes=$asset_bytes cap_mb=$MAX_MB"
 }
 
 case "$MODE" in

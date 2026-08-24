@@ -111,6 +111,24 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _classic_params(task: str, status: str) -> dict:
+    return {
+        "schema_version": 2,
+        "floor": {"global": 0.01},
+        "ceiling": {"global": 0.02},
+        "timing": {
+            "schema_version": 2,
+            "horizon": task,
+            "status": status,
+        },
+        "confidence_calibration": {
+            "method": "validation_empirical_interval_breach",
+            "breach_probability": 0.2,
+            "evaluation_rows": 100,
+        },
+    }
+
+
 def test_model_suite_compatibility_requires_new_statistical_contracts(tmp_path: Path) -> None:
     models = tmp_path / "training" / "models"
     for task in ("d1", "w1", "q1"):
@@ -120,16 +138,7 @@ def test_model_suite_compatibility_requires_new_statistical_contracts(tmp_path: 
             {
                 "model_name": f"baseline_{task}",
                 "version": "v2",
-                "params": {
-                    "schema_version": 2,
-                    "floor": {"global": 0.01},
-                    "ceiling": {"global": 0.02},
-                    "timing": {
-                        "schema_version": 2,
-                        "horizon": task,
-                        "status": status,
-                    },
-                },
+                "params": _classic_params(task, status),
             },
         )
     _write_json(

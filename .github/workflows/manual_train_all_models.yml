@@ -42,10 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
 
@@ -136,20 +136,23 @@ jobs:
               raise SystemExit(f"ABT columns below threshold: {len(columns)} < {min_columns}")
           if missing:
               raise SystemExit(f"ABT missing P0 integrity variables: {missing}")
-          if not any(row.get("split") == "validation" and row.get("split_eligible_m3") for row in rows):
+          if not any(
+              row.get("split") == "validation" and row.get("split_eligible_m3")
+              for row in rows
+          ):
               raise SystemExit("ABT has no leakage-safe m3 validation rows")
           print(f"ABT OK rows={len(rows)} columns={len(columns)}")
           PY
 
-      - name: Train d1/w1/q1 horizon champions
+      - name: Train and gate d1/w1/q1 horizon champions
         run: |
           set -euo pipefail
-          PYTHONPATH=src python -m models.train_classic_horizons \
-            --dataset data/training/modelable_dataset.json \
-            --output-dir data/training/models \
-            --version "${{ steps.runmeta.outputs.version }}" \
-            --tasks d1,w1,q1 \
-            --training-mode manual 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+          bash scripts/retrain_models.sh \
+            data/training/modelable_dataset.json \
+            data/training \
+            "${{ steps.runmeta.outputs.version }}" \
+            "d1,w1,q1" \
+            "manual" 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Train m3 value/timing champions
         run: |
@@ -199,7 +202,11 @@ jobs:
           out_path = Path("${{ steps.runmeta.outputs.csv_file }}")
           rows = []
           for horizon in ("d1", "w1", "q1"):
-              payload = json.loads((models_dir / f"{horizon}_champion.json").read_text(encoding="utf-8"))
+              payload = json.loads(
+                  (models_dir / f"{horizon}_champion.json").read_text(
+                      encoding="utf-8"
+                  )
+              )
               metrics = payload.get("metrics", {})
               rows.append({
                   "horizon": horizon,
@@ -220,7 +227,13 @@ jobs:
           })
           out_path.parent.mkdir(parents=True, exist_ok=True)
           with out_path.open("w", encoding="utf-8", newline="") as fh:
-              writer = csv.DictWriter(fh, fieldnames=["horizon", "model_name", "version", "metric_1", "metric_2", "metric_3"])
+              writer = csv.DictWriter(
+                  fh,
+                  fieldnames=[
+                      "horizon", "model_name", "version", "metric_1",
+                      "metric_2", "metric_3",
+                  ],
+              )
               writer.writeheader()
               writer.writerows(rows)
           PY
@@ -249,7 +262,7 @@ jobs:
           git push
 
       - name: Upload full training run artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: manual-train-all-models-${{ steps.runmeta.outputs.version }}
           path: |
@@ -265,5 +278,6 @@ jobs:
             echo "## manual_train_all_models"
             echo "- Version: \`${{ steps.runmeta.outputs.version }}\`"
             echo "- Full DB/dataset/PKL/log outputs: Actions artifact only (14 days)"
+            echo "- Classic promotion: same-current-validation champion gate"
             echo "- Git commit enabled: \`${{ inputs.commit_champions }}\` (lightweight JSON/CSV only)"
           } >> "$GITHUB_STEP_SUMMARY"
