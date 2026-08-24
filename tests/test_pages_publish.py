@@ -179,6 +179,7 @@ def test_blocked_publication_must_not_expose_forecast_rows(tmp_path: Path) -> No
             "publishable_forecasts": False,
             "status": "BLOCKED",
             "expected_prediction_rows": 4,
+            "site_schema": {"valid": True},
         },
     )
     _write_json(site_data / "forecasts.json", {"rows": []})
