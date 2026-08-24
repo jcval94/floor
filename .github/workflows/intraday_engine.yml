@@ -2,11 +2,6 @@ name: intraday_engine
 
 on:
   schedule:
-    # GitHub Actions schedule uses UTC and does not follow America/New_York DST directly.
-    # We keep two narrow UTC windows to cover 09:15-16:15 ET year-round:
-    # - EDT (UTC-4): 13:15-20:15 UTC
-    # - EST (UTC-5): 14:15-21:15 UTC
-    # The gate job remains the second defense for exact market checkpoints.
     - cron: "15,30,45 13-19 * * 1-5"
     - cron: "0,15 20 * * 1-5"
     - cron: "15,30,45 14-20 * * 1-5"
@@ -18,20 +13,13 @@ on:
         required: false
         default: "false"
         type: choice
-        options:
-          - "false"
-          - "true"
+        options: ["false", "true"]
       force_event:
         description: "Event used when force_run=true"
         required: false
         default: "OPEN"
         type: choice
-        options:
-          - OPEN
-          - OPEN_PLUS_2H
-          - OPEN_PLUS_4H
-          - OPEN_PLUS_6H
-          - CLOSE
+        options: [OPEN, OPEN_PLUS_2H, OPEN_PLUS_4H, OPEN_PLUS_6H, CLOSE]
 
 permissions:
   contents: write
@@ -51,7 +39,12 @@ jobs:
       event: ${{ steps.guard.outputs.event }}
       session_day: ${{ steps.guard.outputs.session_day }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
       - name: Detect market checkpoint
         id: guard
         run: |
@@ -64,7 +57,6 @@ jobs:
               echo "event=${{ github.event.inputs.force_event || 'OPEN' }}"
               echo "session_day=$session_day"
             } >> "$GITHUB_OUTPUT"
-            echo "Manual force enabled: event=${{ github.event.inputs.force_event || 'OPEN' }}"
           else
             PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
           fi
@@ -73,214 +65,126 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
 
       - name: Initialize DBs
         run: make init-dbs
+
       - name: Normalize DB permissions
         run: |
           find data/market data/persistence -type d -exec chmod u+rwx {} +
           find data/market data/persistence -type f -exec chmod u+rw {} +
-      - name: Validate SQLite bootstrap
-        run: |
-          sqlite3 data/market/market_data.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_bars';" | grep -qx 'daily_bars'
-          for table in predictions signals orders training_reviews model_training_cycles; do
-            sqlite3 data/persistence/app.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name='${table}';" | grep -qx "${table}"
-          done
-      - name: Ensure market data is populated before engine run
-        run: |
-          market_rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
-          if [ "${market_rows:-0}" = "0" ]; then
-            echo "::warning::Market DB daily_bars is empty (COUNT(*)=0). Triggering Yahoo ingest preflight."
-            PYTHONPATH=src python -m storage.yahoo_ingest --db data/market/market_data.sqlite --range 2y --interval 1d --sleep-seconds 0.4
-          fi
-      - name: Validate champion artifacts (repo-managed, non-LFS)
+
+      - name: Ensure market data is populated
         run: |
           set -euo pipefail
-          d1_champion="data/training/models/d1_champion.json"
-          w1_champion="data/training/models/w1_champion.json"
-          q1_champion="data/training/models/q1_champion.json"
-          value_champion="data/training/models/value_champion.json"
-          timing_champion="data/training/models/timing_champion.json"
-          lfs_header='version https://git-lfs.github.com/spec/v1'
+          market_rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
+          if [ "${market_rows:-0}" = "0" ]; then
+            PYTHONPATH=src python -m storage.yahoo_ingest \
+              --db data/market/market_data.sqlite \
+              --range 2y \
+              --interval 1d \
+              --sleep-seconds 0.4
+          fi
 
-          for champion in "$d1_champion" "$w1_champion" "$q1_champion" "$value_champion" "$timing_champion"; do
-            attr=$(git check-attr filter -- "$champion" | awk -F": " '{print $3}')
-            if [ "$attr" = "lfs" ]; then
-              echo "::error::Champion artifact is tracked by Git LFS: $champion"
-              echo "Update .gitattributes to disable LFS for training JSON artifacts."
-              exit 1
-            fi
-            if [ ! -f "$champion" ]; then
-              echo "::error::Missing champion artifact: $champion"
-              echo "Publish champions via retraining workflow before running intraday engine."
-              exit 1
-            fi
-            head=$(head -c 120 "$champion" 2>/dev/null || true)
-            if [ "${head#${lfs_header}}" != "$head" ]; then
-              echo "::error::Champion artifact is unresolved Git LFS pointer: $champion"
-              echo "Store champion payloads directly in-repo (non-LFS) for deterministic intraday runs."
+      - name: Validate champion artifacts
+        run: |
+          set -euo pipefail
+          for champion in \
+            data/training/models/d1_champion.json \
+            data/training/models/w1_champion.json \
+            data/training/models/q1_champion.json \
+            data/training/models/value_champion.json \
+            data/training/models/timing_champion.json; do
+            test -s "$champion" || { echo "::error::Missing champion artifact: $champion"; exit 1; }
+            if head -c 120 "$champion" | grep -q 'version https://git-lfs.github.com/spec/v1'; then
+              echo "::error::Champion is an unresolved LFS pointer: $champion"
               exit 1
             fi
           done
-          echo "Champion artifacts validated (present + non-LFS)."
 
-      - name: Capture baseline counters (SQLite + artifacts)
-        id: db_before
+      - name: Capture baseline counters
         run: |
           set -euo pipefail
           mkdir -p data/logs
-          PYTHONPATH=src python -m utils.workflow_validations capture-baseline             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals             --output-file "$GITHUB_OUTPUT" | tee data/logs/intraday_baseline.json
+          PYTHONPATH=src python -m utils.workflow_validations capture-baseline \
+            --db data/persistence/app.sqlite \
+            --data-dir data \
+            --streams predictions,signals \
+            --output-file data/logs/baseline.env \
+            | tee data/logs/intraday_baseline.json
 
-      - name: Run intraday engine (idempotent retry)
+      - name: Run canonical intraday engine with retries
         env:
           LIVE_TRADING_ENABLED: "false"
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
         run: |
           set -euo pipefail
           mkdir -p data/logs
+          success=false
           for i in 1 2 3; do
             logfile="data/logs/intraday_engine_${{ needs.gate.outputs.event }}_attempt${i}.log"
-            echo "Running attempt $i; logfile=$logfile"
             if PYTHONPATH=src python -m floor.main run-cycle --event "${{ needs.gate.outputs.event }}" 2>&1 | tee "$logfile"; then
+              success=true
               break
             fi
-            echo "::warning::Intraday engine attempt $i failed. Showing log tail."
             tail -n 120 "$logfile" || true
-            if [ "$i" -eq 3 ]; then
-              echo "::error::Intraday engine failed after 3 attempts."
-              exit 1
-            fi
             sleep $((i*30))
           done
+          [ "$success" = true ] || { echo "::error::Intraday engine failed after 3 attempts"; exit 1; }
 
-      - name: Validate dashboard snapshot JSON after run-cycle
+      - name: Validate generated state
         run: |
           set -euo pipefail
-          dashboard_json="data/reports/dashboard.json"
-          if [ ! -f "$dashboard_json" ]; then
-            echo "::error::Missing required dashboard snapshot: $dashboard_json"
-            exit 1
-          fi
+          test -s data/reports/dashboard.json
+          sqlite3 data/persistence/app.sqlite "PRAGMA quick_check;" | grep -qx ok
+          PYTHONPATH=src python -m utils.workflow_validations validate-latest-payload \
+            --data-dir data \
+            --stream predictions \
+            --required-fields model_version
+          PYTHONPATH=src python -m utils.workflow_validations validate-prediction-quality \
+            --data-dir data \
+            --stream predictions \
+            --max-m3-blocked-ratio 0.4 \
+            --min-action-consistency-ratio 0.7 \
+            --action-return-tolerance 0.0 \
+            --sample-limit 10
 
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("data/reports/dashboard.json")
-          with path.open("r", encoding="utf-8") as fh:
-              payload = json.load(fh)
-          if not isinstance(payload, dict):
-              raise SystemExit("dashboard.json must contain a JSON object at the top level")
-          print(f"dashboard snapshot OK: {path} keys={len(payload)}")
-          PY
-
-      - name: Forecast diagnostics on failure
-        if: failure()
-        run: |
-          set -euo pipefail
-          echo "Collecting forecast diagnostics"
-          python - <<'PY'
-          from pathlib import Path
-          import json
-
-          models = [
-              Path("data/training/models/d1_champion.json"),
-              Path("data/training/models/w1_champion.json"),
-              Path("data/training/models/q1_champion.json"),
-              Path("data/training/models/value_champion.json"),
-              Path("data/training/models/timing_champion.json"),
-              Path("data/training/models_file/d1_champion.pkl"),
-              Path("data/training/models_file/w1_champion.pkl"),
-              Path("data/training/models_file/q1_champion.pkl"),
-              Path("data/training/models_file/value_champion.pkl"),
-              Path("data/training/models_file/timing_champion.pkl"),
-          ]
-          for p in models:
-              print(f"model_artifact path={p} exists={p.exists()}")
-
-          log_dir = Path("data/logs")
-          if log_dir.exists():
-              print("recent_logs")
-              for path in sorted(log_dir.glob("intraday_engine_*.log"))[-3:]:
-                  print(f"- {path}")
-
-          preds_dir = Path("data/predictions")
-          if preds_dir.exists():
-              files = sorted(preds_dir.glob("*.jsonl"))
-              print(f"prediction_files={len(files)}")
-              if files:
-                  sample = files[-1]
-                  lines = [line.strip() for line in sample.read_text(encoding="utf-8").splitlines() if line.strip()]
-                  print(f"sample_prediction_file={sample} rows={len(lines)}")
-                  if lines:
-                      row = json.loads(lines[-1])
-                      print(f"sample_prediction_symbol={row.get('symbol')} horizon={row.get('horizon')} model_version={row.get('model_version')}")
-          PY
-
-      - name: Validate persistence + artifact deltas after intraday run
-        run: |
-          set -euo pipefail
-          db="data/persistence/app.sqlite"
-          integrity=$(sqlite3 "$db" "PRAGMA quick_check;")
-          [ "$integrity" = "ok" ] || { echo "::error::SQLite quick_check failed: $integrity"; exit 1; }
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          baseline_line = Path('data/logs/intraday_baseline.json').read_text(encoding='utf-8').splitlines()[-1]
-          baseline = json.loads(baseline_line)
-          Path('data/logs/intraday_baseline_payload.json').write_text(json.dumps(baseline), encoding='utf-8')
-          PY
-
-          PYTHONPATH=src python -m utils.workflow_validations validate-deltas             --db data/persistence/app.sqlite             --data-dir data             --streams predictions,signals             --require-positive predictions,signals             --baseline-json data/logs/intraday_baseline_payload.json
-
-          PYTHONPATH=src python -m utils.workflow_validations validate-latest-payload             --data-dir data             --stream predictions             --required-fields model_version
-
-      - name: Validate prediction quality guardrails
-        run: |
-          set -euo pipefail
-          PYTHONPATH=src python -m utils.workflow_validations validate-prediction-quality             --data-dir data             --stream predictions             --max-m3-blocked-ratio 0.4             --min-action-consistency-ratio 0.7             --action-return-tolerance 0.0             --sample-limit 10
-
-      - name: Mark run
+      - name: Mark checkpoint complete
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
-      - name: Commit auditable outputs
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/predictions data/signals data/orders data/snapshots data/persistence data/training/models data/training/metrics
-          if git diff --cached --quiet; then
-            echo "No auditable changes to commit."
-            exit 0
-          fi
 
-          git commit -m "chore: intraday ${{ needs.gate.outputs.event }} artifacts"
-          for attempt in 1 2 3; do
-            if git push; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "::error::Failed to push after 3 attempts (non-fast-forward persisted)."
-              exit 1
-            fi
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
-          done
-      - name: Upload runtime artifacts
-        uses: actions/upload-artifact@v4
+      - name: Publish rolling runtime state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
+      - name: Upload immutable per-run audit artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: intraday-engine-runtime
+          name: intraday-audit-${{ github.run_id }}-${{ needs.gate.outputs.event }}
           path: |
-            data/market/market_data.sqlite
-            data/persistence/app.sqlite
-            data/training/models
-            data/training/metrics
+            data/predictions
+            data/signals
+            data/orders
+            data/snapshots
+            data/reports
+            data/metrics
             data/logs
-          if-no-files-found: ignore
+            data/persistence/app.sqlite
+            data/market/market_data.sqlite
+          if-no-files-found: warn
+          retention-days: 30
 
   engine_info:
     needs: [gate, engine_critical]
@@ -294,3 +198,5 @@ jobs:
           echo "run=${{ needs.gate.outputs.run }}"
           echo "event=${{ needs.gate.outputs.event }}"
           echo "reason=${{ needs.gate.outputs.reason }}"
+          echo "runtime_state=github_release:runtime-state-v1"
+          echo "git_operational_writes=disabled"
