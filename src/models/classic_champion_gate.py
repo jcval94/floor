@@ -64,6 +64,8 @@ def _slug(value: object) -> str:
 def _number(value: object) -> float | None:
     if isinstance(value, bool) or value is None:
         return None
+    if not isinstance(value, (int, float, str)):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -221,6 +223,7 @@ def gate_one_horizon(
     if candidate is None:
         raise RuntimeError(f"Classic trainer did not produce {candidate_path}")
 
+    challenger_path: Path | None = None
     candidate_ok, candidate_reason = _artifact_compatible(candidate, horizon)
     previous = _load_json(previous_path)
     previous_ok = False
