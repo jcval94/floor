@@ -40,6 +40,24 @@ jobs:
             exit 1
           }
 
+          # A multi-GB mirror rewrite can hold the shared runtime-state writer
+          # lock for a long time. Never start it before/during a trading session.
+          PYTHONPATH=src python - <<'PY'
+          from datetime import datetime, timedelta
+          from utils.market_session import ET, get_session_info
+
+          now = datetime.now(tz=ET)
+          info = get_session_info(now)
+          if info.is_open_day:
+              assert info.market_close is not None
+              safe_after = info.market_close + timedelta(hours=1)
+              if now < safe_after:
+                  raise SystemExit(
+                      f"History compaction is allowed only >=1h after market close on an open day; now={now.isoformat()} safe_after={safe_after.isoformat()}"
+                  )
+          print(f"compaction_window_ok now_et={now.isoformat()} open_day={info.is_open_day}")
+          PY
+
           protected_branches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
             --jq '.[] | select(.protected == true) | .name')
           [ -z "$protected_branches" ] || {
