@@ -34,10 +34,23 @@ def validate_configs() -> list[str]:
 
 
 def validate_dataset_schemas() -> list[str]:
+    """Validate generated Pages payloads without requiring snapshots in Git.
+
+    `site/data/*.json` is intentionally generated during the audited Pages build
+    and ignored by Git. If a local/generated payload is present, validate its
+    minimum schema. If it is absent, validate that the repository declares the
+    generated-data contract instead of treating absence as an error.
+    """
+
     errors: list[str] = []
     latest_dir = ROOT / "site" / "data"
-    if not latest_dir.exists():
-        return errors
+    ignore_path = ROOT / ".gitignore"
+    ignore = ignore_path.read_text(encoding="utf-8") if ignore_path.exists() else ""
+    if "site/data/*.json" not in ignore:
+        errors.append("generated Pages JSON must be ignored via site/data/*.json")
+
+    if not (ROOT / "src" / "utils" / "pages_publish.py").exists():
+        errors.append("Pages publication generator missing: src/utils/pages_publish.py")
 
     required = {
         "dashboard.json": {"system_health"},
@@ -45,10 +58,14 @@ def validate_dataset_schemas() -> list[str]:
         "strategy.json": {"status"},
     }
 
+    if not latest_dir.exists():
+        return errors
+
     for file_name, keys in required.items():
         p = latest_dir / file_name
         if not p.exists():
-            errors.append(f"missing dataset: {p}")
+            # Generated snapshots are not a versioned source of truth. CI's
+            # audited Pages dry-run exercises generation and validation.
             continue
         try:
             payload = json.loads(p.read_text(encoding="utf-8"))

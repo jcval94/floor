@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/pages.yml'
+      - 'scripts/runtime_state.sh'
       - 'site/**'
       - 'src/utils/pages_build.py'
       - 'src/utils/pages_publish.py'
@@ -36,11 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout latest audited branch state
-        uses: actions/checkout@v5
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          # workflow_run.head_sha is the commit that STARTED intraday_engine.
-          # intraday_engine writes/pushes outputs during the run, so publishing
-          # that SHA can deploy stale pre-run data. Resolve the branch head.
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || 'main' }}
           fetch-depth: 2
 
@@ -58,6 +56,11 @@ jobs:
           }
           echo "upstream_start=$UPSTREAM_HEAD_SHA"
           echo "publication_head=$(git rev-parse HEAD)"
+
+      - name: Restore authoritative rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -105,11 +108,9 @@ jobs:
               raise SystemExit('blocked publication leaked actionable forecast rows')
 
           batch_as_of = (audit.get('batch') or {}).get('as_of')
-          dashboard_audit = dashboard.get('publication_audit') or {}
-          model_audit = models.get('publication_audit') or {}
-          if dashboard_audit.get('batch_as_of') != batch_as_of:
+          if (dashboard.get('publication_audit') or {}).get('batch_as_of') != batch_as_of:
               raise SystemExit('dashboard publication audit is not batch-coherent')
-          if model_audit.get('batch_as_of') != batch_as_of:
+          if (models.get('publication_audit') or {}).get('batch_as_of') != batch_as_of:
               raise SystemExit('models publication audit is not batch-coherent')
 
           print('publication_status=', audit.get('status'))
@@ -169,6 +170,7 @@ jobs:
           python - <<'PY'
           import hashlib
           import json
+          import subprocess
           from datetime import datetime, timezone
           from pathlib import Path
 
@@ -177,13 +179,11 @@ jobs:
           for path in sorted(p for p in root.rglob('*') if p.is_file() and p.name != 'publication_manifest.json'):
               rel = path.relative_to(root).as_posix()
               raw = path.read_bytes()
-              entries[rel] = {
-                  'sha256': hashlib.sha256(raw).hexdigest(),
-                  'bytes': len(raw),
-              }
+              entries[rel] = {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)}
           payload = {
               'generated_at': datetime.now(timezone.utc).isoformat(),
-              'source_commit': __import__('subprocess').check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'runtime_state_source': 'github_release:runtime-state-v1',
               'files': entries,
           }
           (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
@@ -207,6 +207,7 @@ jobs:
               out.write(f"- Rows: `{batch.get('observed_rows')}/{batch.get('expected_rows')}`\n")
               out.write(f"- Model suite: `{(audit.get('models') or {}).get('status')}`\n")
               out.write(f"- Freshness: `{(audit.get('freshness') or {}).get('status')}`\n")
+              out.write('- Runtime state: `github_release:runtime-state-v1`\n')
               out.write(f"- Blockers: `{audit.get('blockers', [])}`\n")
               out.write(f"- Warnings: `{audit.get('warnings', [])}`\n")
           PY

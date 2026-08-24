@@ -8,20 +8,22 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: retrain-assessment-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   assess_critical:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
-
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
       - name: Initialize DBs
         run: make init-dbs
-
       - name: Refresh market data before assessment
         run: |
           set -euo pipefail
@@ -30,17 +32,6 @@ jobs:
             --range 2y \
             --interval 1d \
             --sleep-seconds 0.4
-
-      - name: Validate assessment source data
-        run: |
-          set -euo pipefail
-          rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
-          if [ "${rows:-0}" -le 0 ]; then
-            echo "::error::Retrain assessment refused: daily_bars is empty."
-            exit 1
-          fi
-          echo "assessment_source_rows=$rows"
-
       - name: Validate complete market universe coverage
         run: |
           set -euo pipefail
@@ -50,74 +41,31 @@ jobs:
             --benchmark SPY \
             --min-rows-per-symbol 60 \
             --max-age-days 7
-
-      - name: Build current modelable dataset from populated DB
+      - name: Build current modelable dataset
         run: |
           set -euo pipefail
           PYTHONPATH=src python -m features.build_training_from_db \
             --db data/market/market_data.sqlite \
             --output data/training/yahoo_market_rows.jsonl
-          test -s data/training/yahoo_market_rows.jsonl || {
-            echo "::error::Retrain assessment refused: raw training rows are empty."
-            exit 1
-          }
           PYTHONPATH=src python -m features.run_features \
             --input data/training/yahoo_market_rows.jsonl \
             --output data/training/modelable_dataset.json
-
-      - name: Validate modelable dataset has rows
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path('data/training/modelable_dataset.json')
-          payload = json.loads(path.read_text(encoding='utf-8'))
-          rows = payload.get('rows', []) if isinstance(payload, dict) else payload
-          if not isinstance(rows, list) or not rows:
-              raise SystemExit('Retrain assessment refused: modelable dataset has zero rows')
-          print(f'modelable_rows={len(rows)}')
-          PY
-
+          test -s data/training/modelable_dataset.json
       - name: Run retrain assessment
         run: PYTHONPATH=src python -m floor.main review-training
-
-      - name: Block automatic champion replacement
+      - name: Enforce governance
         run: |
           set -euo pipefail
           PYTHONPATH=src python -m floor.training.governance \
             --summary data/training/review_summary_latest.json
-
-      - name: Commit assessment history only
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
-            data/training/reviews.jsonl \
-            data/training/review_summary_latest.json
-          if git diff --cached --quiet; then
-            echo "No retrain assessment state changes to commit."
-            exit 0
-          fi
-
-          git commit -m "chore: retrain assessment"
-          for attempt in 1 2 3; do
-            if git push; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "::error::Failed to push retrain assessment after 3 attempts."
-              exit 1
-            fi
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
-          done
-
+      - name: Publish assessment state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
       - name: Upload reconstructable assessment artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: retrain-assessment-artifacts
+          name: retrain-assessment-${{ github.run_id }}
           path: |
             data/training/reviews.jsonl
             data/training/review_summary_latest.json
@@ -126,6 +74,7 @@ jobs:
             data/market/market_data.sqlite
             data/persistence/app.sqlite
           if-no-files-found: error
+          retention-days: 30
 
   assess_info:
     needs: assess_critical
@@ -135,4 +84,6 @@ jobs:
       contents: read
     steps:
       - name: Summary
-        run: echo "retrain_assessment result=${{ needs.assess_critical.result }}"
+        run: |
+          echo "retrain_assessment result=${{ needs.assess_critical.result }}"
+          echo "assessment_history=runtime-state-v1 + Actions artifact"

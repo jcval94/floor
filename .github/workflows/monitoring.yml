@@ -8,16 +8,21 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: monitoring-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   monitor_critical:
     runs-on: ubuntu-latest
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
-
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+      - name: Initialize DBs
+        run: make init-dbs
       - name: Generate operational health snapshot
         id: health
         run: |
@@ -29,38 +34,17 @@ jobs:
           rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           exit 0
-
-      - name: Commit monitoring state only when semantics change
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/metrics/public_metrics.json
-          if git diff --cached --quiet; then
-            echo "Monitoring semantic state unchanged; no commit required."
-            exit 0
-          fi
-
-          git commit -m "chore: monitoring health state"
-          for attempt in 1 2 3; do
-            if git push; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "::error::Failed to push monitoring state after 3 attempts."
-              exit 1
-            fi
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
-          done
-
-      - name: Upload monitoring snapshot
-        uses: actions/upload-artifact@v4
+      - name: Publish rolling monitoring state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+      - name: Upload immutable monitoring snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: monitoring-health
+          name: monitoring-health-${{ github.run_id }}
           path: data/metrics/public_metrics.json
           if-no-files-found: error
-
+          retention-days: 30
       - name: Fail workflow on critical health
         if: steps.health.outputs.rc != '0'
         run: |
@@ -76,4 +60,6 @@ jobs:
       contents: read
     steps:
       - name: Summary
-        run: echo "monitoring result=${{ needs.monitor_critical.result }}"
+        run: |
+          echo "monitoring result=${{ needs.monitor_critical.result }}"
+          echo "git_operational_writes=disabled"
