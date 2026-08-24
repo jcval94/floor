@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "league_id": "strategy_league_v1",
+  "enabled": true,
+  "mode": "shadow_paper",
+  "initial_nav_usd": 100000.0,
+  "benchmark_spy": "SPY",
+  "weekly_review_frequency_sessions": 5,
+  "execution": {
+    "commission_bps": 2.0,
+    "slippage_bps": 3.0,
+    "sell_fee_bps": 3.0
+  },
+  "members": [
+    {"id": "weekly_opportunity_ridge", "type": "strategy", "required": true},
+    {"id": "breakout_protected_by_floor", "type": "strategy", "required": true},
+    {"id": "benchmark_spy", "type": "benchmark", "required": true},
+    {"id": "benchmark_equal_weight", "type": "benchmark", "required": true}
+  ],
+  "weekly_model_path": "data/metrics/strategy_league/models/weekly_opportunity_challenger.json",
+  "promotion_review": {
+    "min_sessions": 63,
+    "min_trades": 10,
+    "max_drawdown_abs": 0.15,
+    "min_sharpe": 0.5,
+    "require_positive_excess_vs_spy": true,
+    "require_positive_excess_vs_equal_weight": true
+  }
+}

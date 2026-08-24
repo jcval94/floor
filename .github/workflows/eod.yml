@@ -52,6 +52,14 @@ jobs:
       - name: Build site snapshot
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main build-site
+      - name: Update prospective Strategy League
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m league.run_eod \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --strategies-config config/strategies.yaml \
+            --universe config/universe.yaml
       - name: Mark run
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
@@ -71,6 +79,17 @@ jobs:
             data/metrics
           if-no-files-found: warn
           retention-days: 30
+      - name: Upload compact Strategy League audit
+        if: steps.lock_guard.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: strategy-league-${{ github.run_id }}
+          path: |
+            data/metrics/strategy_league/leaderboard.json
+            data/metrics/strategy_league/status.json
+            data/metrics/strategy_league/runs/*/history.jsonl
+          if-no-files-found: warn
+          retention-days: 90
       - name: Report duplicate/stale EOD suppression
         if: steps.lock_guard.outputs.run != 'true'
         run: echo "EOD suppressed after lock revalidation; another run already completed or the close window elapsed."

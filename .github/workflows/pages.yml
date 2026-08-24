@@ -14,6 +14,7 @@ on:
       - 'src/utils/pages_build.py'
       - 'src/utils/pages_publish.py'
       - 'src/utils/pages_security.py'
+      - 'src/league/publish_site.py'
       - 'config/universe.yaml'
   workflow_dispatch:
 
@@ -74,6 +75,9 @@ jobs:
             --site-data-dir site/data \
             --universe-path config/universe.yaml \
             --source-commit "$SOURCE_COMMIT"
+          PYTHONPATH=src python -m league.publish_site \
+            --data-dir data \
+            --output site/data/strategy_league.json
           PYTHONPATH=src python -m utils.pages_security --site-dir site
           touch site/.nojekyll
 
@@ -95,6 +99,7 @@ jobs:
           forecasts = json.loads(Path('site/data/forecasts.json').read_text(encoding='utf-8'))
           dashboard = json.loads(Path('site/data/dashboard.json').read_text(encoding='utf-8'))
           models = json.loads(Path('site/data/models.json').read_text(encoding='utf-8'))
+          league = json.loads(Path('site/data/strategy_league.json').read_text(encoding='utf-8'))
 
           if not audit.get('safe_to_deploy'):
               raise SystemExit('audit.safe_to_deploy is false')
@@ -112,6 +117,10 @@ jobs:
               raise SystemExit('dashboard publication audit is not batch-coherent')
           if (models.get('publication_audit') or {}).get('batch_as_of') != batch_as_of:
               raise SystemExit('models publication audit is not batch-coherent')
+          if league.get('live_execution_enabled') is not False:
+              raise SystemExit('Strategy League must never publish live execution as enabled')
+          if league.get('automatic_promotion') is not False:
+              raise SystemExit('Strategy League must never auto-promote')
 
           print('publication_status=', audit.get('status'))
           print('publishable_forecasts=', publishable)
@@ -120,6 +129,8 @@ jobs:
           print('published_rows=', len(rows))
           print('model_compatibility=', (audit.get('models') or {}).get('status'))
           print('freshness=', (audit.get('freshness') or {}).get('status'))
+          print('league_status=', league.get('status'))
+          print('league_sessions=', league.get('sessions'))
           print('blockers=', audit.get('blockers', []))
           print('warnings=', audit.get('warnings', []))
           PY
@@ -129,6 +140,7 @@ jobs:
           set -euo pipefail
           node --check site/assets/app.js
           node --check site/assets/audit.js
+          node --check site/assets/league.js
           python - <<'PY'
           import json
           import re
