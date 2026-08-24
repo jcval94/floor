@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   gate:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,17 +43,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
+      - name: Revalidate close checkpoint under writer lock
+        id: lock_guard
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
       - name: Initialize DBs
+        if: steps.lock_guard.outputs.run == 'true'
         run: make init-dbs
       - name: Build site snapshot
+        if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main build-site
       - name: Mark run
+        if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
       - name: Publish rolling runtime state outside Git
+        if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
       - name: Upload immutable EOD audit artifact
+        if: steps.lock_guard.outputs.run == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: eod-audit-${{ github.run_id }}
@@ -62,6 +71,9 @@ jobs:
             data/metrics
           if-no-files-found: warn
           retention-days: 30
+      - name: Report duplicate/stale EOD suppression
+        if: steps.lock_guard.outputs.run != 'true'
+        run: echo "EOD suppressed after lock revalidation; another run already completed or the close window elapsed."
 
   eod_info:
     needs: [gate, eod_critical]
