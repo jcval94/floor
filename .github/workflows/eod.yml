@@ -2,7 +2,8 @@ name: eod
 
 on:
   schedule:
-    - cron: "*/15 * * * 1-5"
+    # Two close-window candidates cover US daylight-saving changes without 15-minute polling.
+    - cron: "45 20,21 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -27,12 +28,13 @@ jobs:
         run: bash scripts/runtime_state.sh restore
       - name: Detect close window
         id: guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 50 --data-dir data
 
   eod_critical:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     concurrency:
       group: floor-runtime-state-writer
       cancel-in-progress: false
@@ -45,13 +47,74 @@ jobs:
         run: bash scripts/runtime_state.sh restore
       - name: Revalidate close checkpoint under writer lock
         id: lock_guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 25 --data-dir data
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 50 --data-dir data
       - name: Initialize DBs
         if: steps.lock_guard.outputs.run == 'true'
         run: make init-dbs
+
+      - name: Refresh only recent daily market bars
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m storage.yahoo_ingest \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --range 5d \
+            --interval 1d \
+            --sleep-seconds 0.15
+
+      - name: Ensure frozen Weekly challenger exists
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          MODEL=data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+          if [ -s "$MODEL" ]; then
+            echo "Frozen Weekly challenger already exists; bootstrap skipped."
+            exit 0
+          fi
+
+          echo "Weekly challenger missing; bootstrapping once from retained local history."
+          if ! PYTHONPATH=src python -m utils.training_data_guard \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --min-rows-per-symbol 80 \
+            --max-age-days 7; then
+            echo "Local retained history is insufficient; performing one-time 2y bootstrap refresh."
+            PYTHONPATH=src python -m storage.yahoo_ingest \
+              --db data/market/market_data.sqlite \
+              --universe config/universe.yaml \
+              --benchmark SPY \
+              --range 2y \
+              --interval 1d \
+              --sleep-seconds 0.2
+          fi
+
+          mkdir -p data/metrics/strategy_league/bootstrap
+          PYTHONPATH=src python -m features.build_training_from_db \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --output data/metrics/strategy_league/bootstrap/market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features \
+            --input data/metrics/strategy_league/bootstrap/market_rows.jsonl \
+            --output data/metrics/strategy_league/bootstrap/modelable_dataset.json
+          VERSION="league-$(date -u +%Y%m%dT%H%M%SZ)"
+          PYTHONPATH=src python -m league.bootstrap_weekly_model \
+            --dataset data/metrics/strategy_league/bootstrap/modelable_dataset.json \
+            --output "$MODEL" \
+            --version "$VERSION"
+          rm -rf data/metrics/strategy_league/bootstrap
+
+      - name: Reconcile matured predictions against realized bars
+        if: steps.lock_guard.outputs.run == 'true'
+        run: PYTHONPATH=src python -m floor.main reconcile-predictions
+
       - name: Build site snapshot
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main build-site
+
       - name: Update prospective Strategy League
         if: steps.lock_guard.outputs.run == 'true'
         run: |
@@ -60,6 +123,11 @@ jobs:
             --league-config config/strategy_league.json \
             --strategies-config config/strategies.yaml \
             --universe config/universe.yaml
+
+      - name: Build experiment observation snapshot
+        if: steps.lock_guard.outputs.run == 'true'
+        run: PYTHONPATH=src python -m league.experiment_observation --data-dir data
+
       - name: Mark run
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
@@ -87,6 +155,9 @@ jobs:
           path: |
             data/metrics/strategy_league/leaderboard.json
             data/metrics/strategy_league/status.json
+            data/metrics/strategy_league/experiment_observation.json
+            data/metrics/strategy_league/experiment_observation_history.jsonl
+            data/metrics/strategy_league/models/weekly_opportunity_challenger.json
             data/metrics/strategy_league/runs/*/history.jsonl
           if-no-files-found: warn
           retention-days: 90
@@ -104,4 +175,5 @@ jobs:
       - name: Summary
         run: |
           echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"
+          echo "polling=close-window-only"
           echo "git_operational_writes=disabled"
