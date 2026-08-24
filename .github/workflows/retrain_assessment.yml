@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   assess_critical:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     concurrency:
