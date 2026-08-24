@@ -12,15 +12,39 @@ from models.classic_horizon_predictor import (
 from models.horizon_timing import predict_horizon_timing
 from models.inference import predict_timing_week_probabilities, predict_value_floor_m3
 
+DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD = 0.12
+
 
 class ParityChampionModelSet(ChampionModelSet):
     """Champion set that executes serialized training params at serving time.
 
-    Classic floor/ceiling values and w1/q1 timing must come from trained params.
-    d1 timing is explicitly allowed to be unavailable because the canonical
-    training source currently contains daily OHLC bars and cannot identify an
-    intraday OPEN/+2h/+4h/+6h/CLOSE event honestly.
+    Classic floor/ceiling values and timing come from trained params. Confidence
+    is the empirical interval non-breach rate measured on the dedicated
+    validation holdout; it is not fabricated from MAE. This model set does not
+    claim to predict directional return.
     """
+
+    @property
+    def m3_timing_abstention_threshold(self) -> float:
+        """Return the trained timing abstention threshold with a safe default."""
+
+        metrics = (
+            self._timing_champion.get("metrics", {})
+            if isinstance(self._timing_champion, dict)
+            else {}
+        )
+        raw = (
+            metrics.get("abstention_threshold")
+            if isinstance(metrics, dict)
+            else None
+        )
+        try:
+            threshold = float(raw)
+        except (TypeError, ValueError):
+            threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
+        if not 0.0 <= threshold <= 1.0:
+            threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
+        return threshold
 
     def _predict_classic_horizon(
         self,
@@ -38,10 +62,16 @@ class ParityChampionModelSet(ChampionModelSet):
         params = artifact.get("params")
         if not isinstance(params, dict):
             raise ValueError(f"Classic champion {horizon} missing params mapping")
+        if int(params.get("schema_version") or 0) != 2:
+            raise ValueError(
+                f"Classic champion {horizon} uses unsupported schema; retrain required"
+            )
         floor_params = params.get("floor")
         ceiling_params = params.get("ceiling")
         if not isinstance(floor_params, dict) or not isinstance(ceiling_params, dict):
-            raise ValueError(f"Classic champion {horizon} missing floor/ceiling trained params")
+            raise ValueError(
+                f"Classic champion {horizon} missing floor/ceiling trained params"
+            )
 
         features = build_runtime_features(row)
         floor_delta = predict_family_delta(family, floor_params, features)
@@ -51,7 +81,6 @@ class ParityChampionModelSet(ChampionModelSet):
         floor = close * (1.0 - floor_delta)
         ceiling = close * (1.0 + ceiling_delta)
         spread = max(0.01, ceiling - floor)
-        expected_return = ((floor + ceiling) / 2.0 - close) / max(close, 1e-6)
 
         timing = params.get("timing")
         floor_time = ""
@@ -70,12 +99,17 @@ class ParityChampionModelSet(ChampionModelSet):
                 "ceiling",
             )
             if horizon == "d1":
-                floor_time = "" if predicted_floor_time is None else str(predicted_floor_time)
-                ceiling_time = "" if predicted_ceiling_time is None else str(predicted_ceiling_time)
+                floor_time = (
+                    "" if predicted_floor_time is None else str(predicted_floor_time)
+                )
+                ceiling_time = (
+                    "" if predicted_ceiling_time is None else str(predicted_ceiling_time)
+                )
             else:
                 if predicted_floor_time is None or predicted_ceiling_time is None:
                     raise ValueError(
-                        f"Classic champion {horizon} has no trained timing labels; retrain required"
+                        f"Classic champion {horizon} has no trained timing labels; "
+                        "retrain required"
                     )
                 floor_time = str(predicted_floor_time)
                 ceiling_time = str(predicted_ceiling_time)
@@ -84,9 +118,31 @@ class ParityChampionModelSet(ChampionModelSet):
                 f"Classic champion {horizon} missing trained timing params; retrain required"
             )
 
-        metrics = artifact.get("metrics", {}) if isinstance(artifact.get("metrics"), dict) else {}
-        spread_mae = float(metrics.get("mae_spread") or spread / max(close, 1.0))
-        breach_prob = min(0.98, max(0.05, 0.2 + spread_mae / max(close, 1.0)))
+        calibration = params.get("confidence_calibration")
+        if not isinstance(calibration, dict):
+            raise ValueError(
+                f"Classic champion {horizon} missing empirical confidence calibration; "
+                "retrain required"
+            )
+        if calibration.get("method") != "validation_empirical_interval_breach":
+            raise ValueError(
+                f"Classic champion {horizon} confidence calibration method unsupported"
+            )
+        raw_breach = calibration.get("breach_probability")
+        if not isinstance(raw_breach, (int, float, str, bytes, bytearray)):
+            raise ValueError(
+                f"Classic champion {horizon} missing numeric empirical breach probability"
+            )
+        try:
+            breach_prob = float(raw_breach)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Classic champion {horizon} missing numeric empirical breach probability"
+            ) from exc
+        if not 0.0 <= breach_prob <= 1.0:
+            raise ValueError(
+                f"Classic champion {horizon} empirical breach probability out of range"
+            )
 
         return HorizonForecast(
             floor=round(floor, 4),
@@ -94,7 +150,7 @@ class ParityChampionModelSet(ChampionModelSet):
             floor_time=floor_time,
             ceiling_time=ceiling_time,
             breach_prob=round(breach_prob, 4),
-            expected_return=round(expected_return, 6),
+            expected_return=0.0,
             expected_range=round(spread, 4),
         )
 
@@ -124,9 +180,7 @@ class ParityChampionModelSet(ChampionModelSet):
 
         close = float(row["close"])
         atr = float(row.get("atr_14") or max(0.5, close * 0.01))
-        trend = float(row.get("trend_context_m3") or 0.0)
         dd = float(row.get("drawdown_13w") or 0.0)
-        align = float(row.get("ai_horizon_alignment") or 0.0)
 
         floor = predict_value_floor_m3(row, self._value_champion)
         probs = predict_timing_week_probabilities(row, self._timing_champion)
@@ -139,17 +193,18 @@ class ParityChampionModelSet(ChampionModelSet):
             {"week": idx + 1, "probability": round(probs[idx], 6)}
             for idx in top3_idx
         ]
-        expected_return = round(0.5 * trend + 0.2 * align - 0.15 * abs(dd), 6)
         expected_range = round(max(0.01, atr * (10 + 2 * (1 + abs(dd)))), 4)
         return M3Forecast(
             floor_m3=round(floor, 4),
             floor_week_m3=best_idx + 1,
             floor_week_m3_confidence=round(probs[best_idx], 6),
             floor_week_m3_top3=top3,
-            expected_return_m3=expected_return,
+            expected_return_m3=0.0,
             expected_range_m3=expected_range,
         )
 
 
-def load_champion_models(model_registry_dir: Path | None = None) -> ParityChampionModelSet:
+def load_champion_models(
+    model_registry_dir: Path | None = None,
+) -> ParityChampionModelSet:
     return ParityChampionModelSet(model_registry_dir=model_registry_dir)

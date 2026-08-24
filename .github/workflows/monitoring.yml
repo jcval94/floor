@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   monitor_critical:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     concurrency:
       group: floor-runtime-state-writer
@@ -27,29 +28,41 @@ jobs:
         id: health
         run: |
           set +e
+          rm -f data/metrics/public_metrics.json
           PYTHONPATH=src python -m monitoring.health_snapshot \
             --data-dir data \
             --universe config/universe.yaml \
             --output data/metrics/public_metrics.json
           rc=$?
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          valid=false
+          if [ -s data/metrics/public_metrics.json ] && python -m json.tool data/metrics/public_metrics.json >/dev/null 2>&1; then
+            valid=true
+          fi
+          {
+            echo "rc=$rc"
+            echo "snapshot_valid=$valid"
+          } >> "$GITHUB_OUTPUT"
           exit 0
       - name: Publish rolling monitoring state outside Git
+        if: steps.health.outputs.snapshot_valid == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
       - name: Upload immutable monitoring snapshot
+        if: steps.health.outputs.snapshot_valid == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: monitoring-health-${{ github.run_id }}
           path: data/metrics/public_metrics.json
           if-no-files-found: error
           retention-days: 30
-      - name: Fail workflow on critical health
-        if: steps.health.outputs.rc != '0'
+      - name: Fail workflow on invalid or critical health
+        if: steps.health.outputs.rc != '0' || steps.health.outputs.snapshot_valid != 'true'
         run: |
-          echo "::error::Operational health snapshot is CRITICAL."
-          cat data/metrics/public_metrics.json
+          echo "::error::Operational health snapshot is invalid or CRITICAL."
+          if [ -f data/metrics/public_metrics.json ]; then
+            cat data/metrics/public_metrics.json
+          fi
           exit 1
 
   monitor_info:

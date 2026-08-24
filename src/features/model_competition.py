@@ -1,10 +1,8 @@
 """Model competition design for floor/ceiling forecasting.
 
-This module defines model families that compete for each horizon (d1, w1, q1):
-1) EVT + Change-Point Hybrid (recommended by repo PDFs for intraday extremes/regimes)
-2) XGBoost (strong tabular non-linear baseline)
-3) LSTM Sequence Model (temporal sequence representation)
-4) Quantile Elastic Net (interpretable linear baseline)
+The names in this module describe the algorithms that are actually implemented.
+They intentionally avoid claiming XGBoost/LSTM/EVT when the current code uses
+simpler in-repo baselines.
 """
 
 from __future__ import annotations
@@ -31,40 +29,48 @@ def build_model_specs() -> list[ModelSpec]:
         specs.extend(
             [
                 ModelSpec(
-                    model_id=f"evt_cp_{horizon}",
-                    model_family="evt_changepoint_hybrid",
+                    model_id=f"regime_median_{horizon}",
+                    model_family="regime_median",
                     horizon=horizon,
                     predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
-                    objective="tail_extreme_probabilistic_regression",
+                    objective="regime_conditioned_median_regression",
                     notes=(
-                        "Modelo basado en recomendaciones de los estudios del repo: "
-                        "EVT/POT para colas + detector de régimen (CUSUM/changepoints) "
-                        "para robustecer timing de extremos piso/techo."
+                        "Baseline por terciles de volatilidad y signo de tendencia; "
+                        "usa medianas observadas por régimen. No implementa EVT/POT ni changepoints."
                     ),
                 ),
                 ModelSpec(
-                    model_id=f"xgboost_{horizon}",
-                    model_family="xgboost",
+                    model_id=f"boosted_stumps_{horizon}",
+                    model_family="boosted_stumps",
                     horizon=horizon,
                     predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
-                    objective="quantile_regression",
-                    notes="Ensamble boosting eficiente para datos tabulares con no linealidades e interacciones.",
+                    objective="squared_error_boosted_stumps",
+                    notes=(
+                        "Boosting ligero implementado en el repo mediante decision stumps; "
+                        "no depende de XGBoost."
+                    ),
                 ),
                 ModelSpec(
-                    model_id=f"lstm_{horizon}",
-                    model_family="lstm_sequence",
+                    model_id=f"sequence_linear_{horizon}",
+                    model_family="sequence_linear",
                     horizon=horizon,
                     predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
-                    objective="multi_output_regression",
-                    notes="Modelo secuencial para dependencia temporal; usa ventanas lookback y masking por missing.",
+                    objective="regularized_linear_regression",
+                    notes=(
+                        "Baseline lineal regularizado sobre variables de contexto temporal; "
+                        "no implementa una red LSTM."
+                    ),
                 ),
                 ModelSpec(
-                    model_id=f"qenet_{horizon}",
-                    model_family="quantile_elastic_net",
+                    model_id=f"regularized_linear_{horizon}",
+                    model_family="regularized_linear",
                     horizon=horizon,
                     predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
-                    objective="quantile_regression",
-                    notes="Baseline interpretable con regularización; útil para estabilidad y explainability.",
+                    objective="regularized_linear_regression",
+                    notes=(
+                        "Baseline lineal regularizado interpretable. El objetivo actual es error cuadrático, "
+                        "no una regresión cuantílica/Elastic Net completa."
+                    ),
                 ),
             ]
         )
@@ -72,27 +78,35 @@ def build_model_specs() -> list[ModelSpec]:
 
 
 def competition_protocol() -> dict:
-    """Walk-forward competition protocol shared by all horizons."""
+    """Protocol contract for classic horizon competition.
+
+    The implemented trainer requires a dedicated chronological validation split.
+    It must never use the test split or a slice of training for champion selection.
+    """
 
     return {
         "selection_metric": {
-            "primary": "pinball_loss_p10_p90",
-            "secondary": ["coverage_10_90", "mae_midpoint", "hit_rate_floor_breach", "hit_rate_ceiling_reach"],
-        },
-        "validation": {
-            "scheme": "walk_forward",
-            "retrain_each_fold": True,
-            "purge_gap_days": 1,
-            "embargo_days": 1,
-        },
-        "pdf_recommendation_traceability": {
-            "recommended_core": ["EVT/POT", "CUSUM/ChangePoints", "Temporal CV with purge/embargo"],
-            "source_docs": [
-                "docs/10_resumenes/02_estudio-piso-techo-acciones-liquidas.md",
-                "docs/20_fuentes/estudio-del-piso-y-el-techo-intradia-en-acciones-liquidas-definiciones-literatura-metodos-de.txt",
+            "primary": "mae_spread",
+            "secondary": [
+                "mae_floor",
+                "mae_ceiling",
+                "test_interval_coverage",
+                "empirical_breach_rate",
             ],
         },
-        "tie_break": "best_calibration_then_lowest_turnover_error",
+        "validation": {
+            "scheme": "chronological_validation_holdout",
+            "test_used_for_selection": False,
+            "training_fallback_allowed": False,
+            "purge_contract": "split_eligible_<horizon> / target_end_date_<horizon>",
+        },
+        "implementation_traceability": {
+            "regime_median": "volatility terciles + trend sign + observed median",
+            "boosted_stumps": "in-repo additive decision stumps",
+            "sequence_linear": "L2-regularized linear baseline on temporal-context features",
+            "regularized_linear": "L2-regularized linear baseline",
+        },
+        "tie_break": "lowest_total_boundary_mae",
     }
 
 

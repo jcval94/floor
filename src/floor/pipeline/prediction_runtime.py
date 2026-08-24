@@ -240,6 +240,7 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Horizon, dict
         "floor_week_m3_start_date": row.get("floor_week_m3_start_date"),
         "floor_week_m3_end_date": row.get("floor_week_m3_end_date"),
         "floor_week_m3_label_human": row.get("floor_week_m3_label_human"),
+        "m3_timing_abstention_threshold": row.get("m3_timing_abstention_threshold"),
         "expected_return_m3": row.get("expected_return_m3"),
         "expected_range_m3": row.get("expected_range_m3"),
         "m3_status": row.get("m3_status"), "m3_block_reason": row.get("m3_block_reason"),

@@ -4,14 +4,14 @@ from typing import Any
 
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
-    "quantile_elastic_net": (
+    "regularized_linear": (
         "atr_14",
         "trend_context_m3",
         "drawdown_13w",
         "dist_to_low_3m",
         "ai_horizon_alignment",
     ),
-    "xgboost": (
+    "boosted_stumps": (
         "atr_14",
         "trend_context_m3",
         "drawdown_13w",
@@ -19,7 +19,7 @@ FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
         "ai_horizon_alignment",
         "rel_strength_20",
     ),
-    "lstm_sequence": (
+    "sequence_linear": (
         "momentum_20",
         "trend_context_m3",
         "ai_horizon_alignment",
@@ -34,15 +34,21 @@ def clamp_delta(value: float) -> float:
 
 
 def model_family(model_name: str) -> str:
+    """Resolve model IDs to the algorithm that is actually executed.
+
+    Legacy IDs remain readable only so old artifacts fail/serve deterministically
+    during migration; all newly trained artifacts use truthful names.
+    """
+
     name = str(model_name or "").lower()
-    if name.startswith("evt_cp_"):
-        return "evt_changepoint_hybrid"
-    if name.startswith("xgboost_"):
-        return "xgboost"
-    if name.startswith("lstm_"):
-        return "lstm_sequence"
-    if name.startswith("qenet_"):
-        return "quantile_elastic_net"
+    if name.startswith("regime_median_") or name.startswith("evt_cp_"):
+        return "regime_median"
+    if name.startswith("boosted_stumps_") or name.startswith("xgboost_"):
+        return "boosted_stumps"
+    if name.startswith("sequence_linear_") or name.startswith("lstm_"):
+        return "sequence_linear"
+    if name.startswith("regularized_linear_") or name.startswith("qenet_"):
+        return "regularized_linear"
     return ""
 
 
@@ -61,46 +67,41 @@ def build_runtime_features(row: dict[str, Any]) -> dict[str, float]:
 
 
 def validate_family_params(family: str, params: dict[str, Any]) -> None:
-    """Validate a serialized trained model contract before serving it.
+    """Validate a serialized trained model contract before serving it."""
 
-    A malformed trained artifact must never degrade into default deltas. Old
-    heuristic artifacts are handled outside this function by the compatibility
-    path; once nested trained params exist, they are required to be complete.
-    """
-
-    if family == "evt_changepoint_hybrid":
+    if family == "regime_median":
         if not _is_number(params.get("global")):
-            raise ValueError("EVT params missing numeric global")
+            raise ValueError("Regime-median params missing numeric global")
         if not isinstance(params.get("table"), dict):
-            raise ValueError("EVT params missing table mapping")
+            raise ValueError("Regime-median params missing table mapping")
         cuts = params.get("vol_cuts")
         if not isinstance(cuts, list) or not all(_is_number(value) for value in cuts):
-            raise ValueError("EVT params vol_cuts must be a numeric list")
+            raise ValueError("Regime-median params vol_cuts must be a numeric list")
         bins_raw = params.get("bins")
         if not _is_number(bins_raw):
-            raise ValueError("EVT params bins must be a positive integer")
+            raise ValueError("Regime-median params bins must be a positive integer")
         bins_value = _to_float(bins_raw, 0.0)
         if bins_value <= 0 or bins_value != float(int(bins_value)):
-            raise ValueError("EVT params bins must be a positive integer")
+            raise ValueError("Regime-median params bins must be a positive integer")
         return
 
-    if family == "xgboost":
+    if family == "boosted_stumps":
         if not _is_number(params.get("base")) or not _is_number(params.get("lr")):
-            raise ValueError("XGBoost params require numeric base and lr")
+            raise ValueError("Boosted-stumps params require numeric base and lr")
         stumps = params.get("stumps")
         if not isinstance(stumps, list):
-            raise ValueError("XGBoost params stumps must be a list")
+            raise ValueError("Boosted-stumps params stumps must be a list")
         for stump in stumps:
             if not isinstance(stump, dict):
-                raise ValueError("XGBoost stump must be a mapping")
+                raise ValueError("Boosted-stumps member must be a mapping")
             if not str(stump.get("feature") or ""):
-                raise ValueError("XGBoost stump missing feature")
+                raise ValueError("Boosted-stumps member missing feature")
             for key in ("threshold", "left", "right"):
                 if not _is_number(stump.get(key)):
-                    raise ValueError(f"XGBoost stump missing numeric {key}")
+                    raise ValueError(f"Boosted-stumps member missing numeric {key}")
         return
 
-    if family in {"quantile_elastic_net", "lstm_sequence"}:
+    if family in {"regularized_linear", "sequence_linear"}:
         weights = params.get("weights")
         features = params.get("features")
         if not isinstance(weights, dict) or not weights:
@@ -124,19 +125,19 @@ def predict_family_delta(
     params: dict[str, Any],
     features: dict[str, float],
 ) -> float:
-    """Execute one trained classic horizon model exactly from its serialized params."""
+    """Execute one trained classic horizon model exactly from serialized params."""
 
     validate_family_params(family, params)
-    if family == "evt_changepoint_hybrid":
-        return _predict_evt(params, features)
-    if family == "xgboost":
+    if family == "regime_median":
+        return _predict_regime_median(params, features)
+    if family == "boosted_stumps":
         return _predict_boosted_stumps(params, features)
-    if family in {"quantile_elastic_net", "lstm_sequence"}:
+    if family in {"regularized_linear", "sequence_linear"}:
         return _predict_linear(params, features)
     raise ValueError(f"Unsupported classic horizon family: {family}")
 
 
-def _predict_evt(params: dict[str, Any], features: dict[str, float]) -> float:
+def _predict_regime_median(params: dict[str, Any], features: dict[str, float]) -> float:
     bins = int(_to_float(params.get("bins"), 3.0)) or 3
     cuts = [_to_float(value, 0.0) for value in _as_list(params.get("vol_cuts"))]
     trend_bucket = "up" if float(features.get("trend_context_m3", 0.0)) >= 0 else "down"
