@@ -108,6 +108,7 @@ def test_history_compaction_is_manual_guarded_atomic_and_drift_safe() -> None:
     workflow = _text(WORKFLOWS / "manual_compact_git_history.yml")
     assert "workflow_dispatch:" in workflow
     assert "PURGE_GENERATED_DATA_HISTORY" in workflow
+    assert "safe_after = info.market_close + timedelta(hours=1)" in workflow
     assert "--path data" in workflow
     assert "--invert-paths" in workflow
     assert "git clone --mirror" in workflow
@@ -134,6 +135,10 @@ def test_runtime_state_is_release_backed_checksum_verified_and_authoritative() -
     assert "clear_runtime_state" in script
     assert script.index("clear_runtime_state\n  tar -xzf") > script.index("sha256sum -c")
     assert "member.issym() or member.islnk()" in script
+    assert "validate_sqlite_state true" in script
+    assert "validate_sqlite_state false" in script
+    assert "PRAGMA wal_checkpoint(TRUNCATE)" in script
+    assert "PRAGMA quick_check" in script
     assert "data/market" in script
     assert "data/persistence" in script
     assert "data/predictions" in script
