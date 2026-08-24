@@ -104,16 +104,24 @@ def test_split_and_walk_forward_exist() -> None:
     assert "m3" in artifact["horizon_coverage"]
 
 
-def test_model_competition_has_four_models_including_lstm_xgboost_and_evt_per_horizon() -> None:
+def test_model_competition_has_four_truthfully_named_models_per_horizon() -> None:
     artifact = build_modelable_dataset(_synthetic_rows())
     competition = artifact["model_competition"]["models_by_horizon"]
+    expected = {
+        "regime_median",
+        "boosted_stumps",
+        "sequence_linear",
+        "regularized_linear",
+    }
     for horizon in ("d1", "w1", "q1"):
         models = competition[horizon]
         assert len(models) == 4
-        families = {m["model_family"] for m in models}
-        assert "lstm_sequence" in families
-        assert "xgboost" in families
-        assert "evt_changepoint_hybrid" in families
+        assert {m["model_family"] for m in models} == expected
+        assert not any(
+            token in m["model_id"]
+            for m in models
+            for token in ("xgboost", "lstm", "evt_cp", "qenet")
+        )
 
 
 def test_model_competition_exposes_flat_models_list_for_workflow_guards() -> None:
@@ -162,9 +170,9 @@ def test_m3_tie_break_selects_earliest_week() -> None:
     while produced < 80:
         if day.weekday() < 5:
             low = 100.0 + produced
-            if produced in {5, 6}:  # week 1 in forward window (current day excluded)
+            if produced in {5, 6}:
                 low = 50.0
-            if produced in {15, 16}:  # week 3 same minimum -> tie
+            if produced in {15, 16}:
                 low = 50.0
             rows.append(
                 {

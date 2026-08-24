@@ -59,9 +59,17 @@ def test_end_to_end_etl_training_and_prediction_for_all_model_pipelines(tmp_path
 
     # d1/w1/q1 pipeline: classic-horizon competition
     run_classic_horizons(dataset_path=modelable_path, output_dir=models_dir, version=version)
+    truthful_prefixes = (
+        "regime_median_",
+        "boosted_stumps_",
+        "sequence_linear_",
+        "regularized_linear_",
+    )
     for task in ("d1", "w1", "q1"):
         champion = json.loads((models_dir / f"{task}_champion.json").read_text(encoding="utf-8"))
-        assert champion["model_name"].startswith(("evt_cp_", "xgboost_", "lstm_", "qenet_"))
+        assert champion["model_name"].startswith(truthful_prefixes)
+        assert champion["params"]["schema_version"] == 2
+        assert champion["params"]["split_integrity"]["test_used_for_selection"] is False
 
     # m3 pipeline: value + timing
     run_training(
@@ -101,6 +109,6 @@ def test_end_to_end_etl_training_and_prediction_for_all_model_pipelines(tmp_path
         "floor_q1",
         "ceiling_q1",
         "floor_m3",
-        "floor_week_m3",
     ):
         assert forecast.get(col) is not None
+    assert forecast.get("floor_week_m3") is None or 1 <= int(forecast["floor_week_m3"]) <= 13

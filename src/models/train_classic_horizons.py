@@ -20,14 +20,14 @@ HORIZON_TARGETS = {
 }
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
-    "qenet": (
+    "regularized_linear": (
         "atr_14",
         "trend_context_m3",
         "drawdown_13w",
         "dist_to_low_3m",
         "ai_horizon_alignment",
     ),
-    "xgboost": (
+    "boosted_stumps": (
         "atr_14",
         "trend_context_m3",
         "drawdown_13w",
@@ -35,7 +35,7 @@ FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
         "ai_horizon_alignment",
         "rel_strength_20",
     ),
-    "lstm_sequence": (
+    "sequence_linear": (
         "momentum_20",
         "trend_context_m3",
         "ai_horizon_alignment",
@@ -95,27 +95,42 @@ def _eligible(row: dict, horizon: str) -> bool:
 
 
 def _split(rows: list[dict], horizon: str) -> tuple[list[dict], list[dict]]:
-    train = [
-        row
-        for row in rows
-        if row.get("split") == "train" and _eligible(row, horizon)
-    ]
-    validation = [
-        row
-        for row in rows
-        if row.get("split") == "validation" and _eligible(row, horizon)
-    ]
-    test = [
-        row
-        for row in rows
-        if row.get("split") == "test" and _eligible(row, horizon)
-    ]
-    if train:
-        return train, validation or test
+    """Return training and champion-selection validation rows.
+
+    If the ABT contains explicit chronological splits, only ``validation`` is
+    allowed for model selection. ``test`` is intentionally untouched for final
+    assessment/backtesting. For small synthetic/unit-test inputs without split
+    metadata, a deterministic 70/30 chronological holdout is created.
+    """
+
+    explicit_split = any(
+        row.get("split") in {"train", "validation", "test"} for row in rows
+    )
+    if explicit_split:
+        train = [
+            row
+            for row in rows
+            if row.get("split") == "train" and _eligible(row, horizon)
+        ]
+        validation = [
+            row
+            for row in rows
+            if row.get("split") == "validation" and _eligible(row, horizon)
+        ]
+        return train, validation
 
     eligible = [row for row in rows if _eligible(row, horizon)]
-    pivot = max(1, int(len(eligible) * 0.7))
-    return eligible[:pivot], eligible[pivot:]
+    if len(eligible) < 2:
+        return eligible, []
+    ordered = sorted(
+        eligible,
+        key=lambda row: (
+            str(row.get("timestamp") or ""),
+            str(row.get("symbol") or ""),
+        ),
+    )
+    pivot = max(1, min(len(ordered) - 1, int(len(ordered) * 0.7)))
+    return ordered[:pivot], ordered[pivot:]
 
 
 def _number(value: object) -> float | None:
@@ -155,16 +170,11 @@ def _prepare_rows(
         ceiling = _number(row.get(ceiling_col))
         if close is None or close <= 0 or floor is None or ceiling is None:
             continue
-        features = {
-            name: _feature(row, name, close)
-            for name in feature_names
-        }
+        features = {name: _feature(row, name, close) for name in feature_names}
         symbol = str(row.get("symbol") or "")
         previous = previous_by_symbol.get(symbol)
         features["ret_1"] = (
-            0.0
-            if previous is None
-            else (close - previous) / max(previous, 1e-6)
+            0.0 if previous is None else (close - previous) / max(previous, 1e-6)
         )
         previous_by_symbol[symbol] = close
         result.append(
@@ -206,6 +216,8 @@ def _float_dict(value: object) -> dict[str, float]:
 
 
 def _fit_evt(rows: list[_PreparedRow], target_key: str) -> dict[str, Any]:
+    """Legacy function name retained for parity tests; implementation is regime median."""
+
     vol = [abs(item.features.get("atr_14", 0.0)) for item in rows]
     cuts = [_quantile(vol, 1 / 3), _quantile(vol, 2 / 3)] if rows else []
     grouped: dict[str, list[float]] = {}
@@ -225,7 +237,10 @@ def _fit_evt(rows: list[_PreparedRow], target_key: str) -> dict[str, Any]:
         "table": {key: _quantile(values, 0.5) for key, values in grouped.items()},
         "vol_cuts": cuts,
         "bins": 3,
-        "cv": {"enabled": False, "reason": "fold_purge_not_implemented"},
+        "cv": {
+            "enabled": False,
+            "reason": "inner_cv_not_used_for_champion_selection",
+        },
     }
 
 
@@ -259,7 +274,9 @@ def _fit_boosted_stumps(
     stumps: list[dict[str, float | str]] = []
 
     for _ in range(rounds):
-        residuals = [target - prediction for target, prediction in zip(targets, predictions)]
+        residuals = [
+            target - prediction for target, prediction in zip(targets, predictions)
+        ]
         best: dict[str, float | str] | None = None
         best_error = float("inf")
         for name in feature_names:
@@ -302,7 +319,10 @@ def _fit_boosted_stumps(
         "stumps": stumps,
         "lr": lr,
         "rounds": rounds,
-        "cv": {"enabled": False, "reason": "fold_purge_not_implemented"},
+        "cv": {
+            "enabled": False,
+            "reason": "inner_cv_not_used_for_champion_selection",
+        },
     }
 
 
@@ -377,18 +397,25 @@ def _family_model(
     training_mode: str,
 ) -> tuple[dict[str, Any], Callable[[_PreparedRow], float]]:
     del training_mode
-    if family == "evt_changepoint_hybrid":
-        evt_params = _fit_evt(rows, target_key)
-        return evt_params, lambda item: _predict_evt(item, evt_params)
+    if family in {"regime_median", "evt_changepoint_hybrid"}:
+        params = _fit_evt(rows, target_key)
+        return params, lambda item: _predict_evt(item, params)
 
-    if family == "xgboost":
-        names = FEATURES_BY_FAMILY["xgboost"]
-        boost_params = _fit_boosted_stumps(rows, names, target_key)
-        return boost_params, lambda item: _predict_boosted_stumps(item, boost_params)
+    if family in {"boosted_stumps", "xgboost"}:
+        names = FEATURES_BY_FAMILY["boosted_stumps"]
+        params = _fit_boosted_stumps(rows, names, target_key)
+        return params, lambda item: _predict_boosted_stumps(item, params)
 
-    key = "lstm_sequence" if family == "lstm_sequence" else "qenet"
+    if family in {"sequence_linear", "lstm_sequence"}:
+        key = "sequence_linear"
+        l2 = 0.02
+    elif family in {"regularized_linear", "quantile_elastic_net", "qenet"}:
+        key = "regularized_linear"
+        l2 = 0.01
+    else:
+        raise ValueError(f"Unsupported classic horizon family: {family}")
+
     names = FEATURES_BY_FAMILY[key]
-    l2 = 0.02 if family == "lstm_sequence" else 0.01
     weights, bias = _fit_linear(rows, names, target_key, l2=l2, lr=0.02)
     linear_params: dict[str, Any] = {
         "weights": weights,
@@ -396,12 +423,12 @@ def _family_model(
         "features": list(names),
         "l2": l2,
         "lr": 0.02,
-        "cv": {"enabled": False, "reason": "fold_purge_not_implemented"},
+        "cv": {
+            "enabled": False,
+            "reason": "inner_cv_not_used_for_champion_selection",
+        },
     }
-    return (
-        linear_params,
-        lambda item: _predict_linear(item, weights, bias, names),
-    )
+    return linear_params, lambda item: _predict_linear(item, weights, bias, names)
 
 
 def _metrics(
@@ -409,32 +436,60 @@ def _metrics(
     floor_predictions: list[float],
     ceiling_predictions: list[float],
 ) -> dict[str, float]:
+    """Evaluate boundary forecasts on a real holdout.
+
+    Coverage is now semantic: a floor is covered when the realized minimum is
+    not below the predicted floor; a ceiling is covered when the realized
+    maximum is not above the predicted ceiling. Interval coverage requires both.
+    """
+
     floor_errors: list[float] = []
     ceiling_errors: list[float] = []
     spread_errors: list[float] = []
+    floor_pct_errors: list[float] = []
+    ceiling_pct_errors: list[float] = []
+    spread_pct_errors: list[float] = []
+    floor_covered: list[float] = []
+    ceiling_covered: list[float] = []
+    interval_covered: list[float] = []
+
     for item, floor_delta, ceiling_delta in zip(
-        rows,
-        floor_predictions,
-        ceiling_predictions,
+        rows, floor_predictions, ceiling_predictions
     ):
         predicted_floor = item.close * (1.0 - floor_delta)
         predicted_ceiling = item.close * (1.0 + ceiling_delta)
         actual_floor = item.close * (1.0 - item.floor_delta)
         actual_ceiling = item.close * (1.0 + item.ceiling_delta)
-        floor_errors.append(abs(predicted_floor - actual_floor))
-        ceiling_errors.append(abs(predicted_ceiling - actual_ceiling))
-        spread_errors.append(
-            abs(
-                (predicted_ceiling - predicted_floor)
-                - (actual_ceiling - actual_floor)
-            )
+        floor_error = abs(predicted_floor - actual_floor)
+        ceiling_error = abs(predicted_ceiling - actual_ceiling)
+        spread_error = abs(
+            (predicted_ceiling - predicted_floor) - (actual_ceiling - actual_floor)
         )
+        floor_errors.append(floor_error)
+        ceiling_errors.append(ceiling_error)
+        spread_errors.append(spread_error)
+        denom = max(item.close, 1e-6)
+        floor_pct_errors.append(floor_error / denom)
+        ceiling_pct_errors.append(ceiling_error / denom)
+        spread_pct_errors.append(spread_error / denom)
+        floor_ok = actual_floor >= predicted_floor
+        ceiling_ok = actual_ceiling <= predicted_ceiling
+        floor_covered.append(1.0 if floor_ok else 0.0)
+        ceiling_covered.append(1.0 if ceiling_ok else 0.0)
+        interval_covered.append(1.0 if floor_ok and ceiling_ok else 0.0)
+
+    interval_coverage = _mean(interval_covered)
     return {
         "mae_floor": _mean(floor_errors),
         "mae_ceiling": _mean(ceiling_errors),
         "mae_spread": _mean(spread_errors),
-        "test_floor_coverage": len(floor_errors) / max(1, len(rows)),
-        "test_ceiling_coverage": len(ceiling_errors) / max(1, len(rows)),
+        "mae_floor_pct": _mean(floor_pct_errors),
+        "mae_ceiling_pct": _mean(ceiling_pct_errors),
+        "mae_spread_pct": _mean(spread_pct_errors),
+        "test_floor_coverage": _mean(floor_covered),
+        "test_ceiling_coverage": _mean(ceiling_covered),
+        "test_interval_coverage": interval_coverage,
+        "empirical_breach_rate": 1.0 - interval_coverage,
     }
 
 
@@ -450,13 +505,7 @@ def train_horizon_competition(
     floor_col, ceiling_col = HORIZON_TARGETS[horizon]
     train_raw, evaluation_raw = _split(rows, horizon)
     feature_names = tuple(
-        sorted(
-            {
-                name
-                for values in FEATURES_BY_FAMILY.values()
-                for name in values
-            }
-        )
+        sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
     )
     train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
     evaluation = _prepare_rows(evaluation_raw, floor_col, ceiling_col, feature_names)
@@ -465,30 +514,23 @@ def train_horizon_competition(
             f"No leakage-safe training rows with valid labels for horizon={horizon}"
         )
     if not evaluation:
-        evaluation = train[-max(1, len(train) // 3) :]
+        raise ValueError(
+            f"No leakage-safe validation rows for horizon={horizon}; "
+            "champion selection refuses train/test fallback"
+        )
 
     timing = fit_horizon_timing(train_raw, horizon)
     candidates: list[HorizonCompetitionCandidate] = []
     for spec in [spec for spec in build_model_specs() if spec.horizon == horizon]:
         floor_params, floor_fn = _family_model(
-            spec.model_family,
-            train,
-            "floor_delta",
-            training_mode,
+            spec.model_family, train, "floor_delta", training_mode
         )
         ceiling_params, ceiling_fn = _family_model(
-            spec.model_family,
-            train,
-            "ceiling_delta",
-            training_mode,
+            spec.model_family, train, "ceiling_delta", training_mode
         )
         floor_predictions = [floor_fn(item) for item in evaluation]
         ceiling_predictions = [ceiling_fn(item) for item in evaluation]
-        candidate_metrics = _metrics(
-            evaluation,
-            floor_predictions,
-            ceiling_predictions,
-        )
+        candidate_metrics = _metrics(evaluation, floor_predictions, ceiling_predictions)
         candidates.append(
             HorizonCompetitionCandidate(
                 model_id=spec.model_id,
@@ -506,8 +548,15 @@ def train_horizon_competition(
                     "ceiling": ceiling_params,
                     "timing": timing,
                     "training_mode": training_mode,
+                    "confidence_calibration": {
+                        "method": "validation_empirical_interval_breach",
+                        "breach_probability": candidate_metrics["empirical_breach_rate"],
+                        "evaluation_rows": len(evaluation),
+                    },
                     "split_integrity": {
                         "eligibility_field": f"split_eligible_{horizon}",
+                        "selection_split": "validation",
+                        "test_used_for_selection": False,
                         "train_rows_raw": len(train_raw),
                         "evaluation_rows_raw": len(evaluation_raw),
                     },
@@ -518,8 +567,8 @@ def train_horizon_competition(
     champion = min(
         candidates,
         key=lambda item: (
-            item.metrics["mae_spread"],
-            item.metrics["mae_floor"] + item.metrics["mae_ceiling"],
+            item.metrics["mae_spread_pct"],
+            item.metrics["mae_floor_pct"] + item.metrics["mae_ceiling_pct"],
         ),
     )
     return candidates, champion
@@ -545,10 +594,7 @@ def run(
     artifacts: list[HorizonBaselineArtifact] = []
     for horizon in selected:
         candidates, champion = train_horizon_competition(
-            rows,
-            horizon,
-            version,
-            training_mode,
+            rows, horizon, version, training_mode
         )
         artifact = HorizonBaselineArtifact(
             horizon=horizon,
@@ -575,7 +621,9 @@ def run(
                 {
                     "horizon": horizon,
                     "version": version,
-                    "selection_metric": "mae_spread_then_total_mae",
+                    "selection_metric": "mae_spread_pct_then_total_boundary_mae_pct",
+                    "selection_split": "validation",
+                    "test_used_for_selection": False,
                     "training_mode": training_mode,
                     "selected_model_id": champion.model_id,
                     "timing_status": timing_status,
@@ -594,14 +642,19 @@ def run(
             "model_name",
             "version",
             "train_rows",
-            "test_rows",
+            "validation_rows",
             "floor_delta",
             "ceiling_delta",
             "mae_floor",
             "mae_ceiling",
             "mae_spread",
+            "mae_floor_pct",
+            "mae_ceiling_pct",
+            "mae_spread_pct",
             "test_floor_coverage",
             "test_ceiling_coverage",
+            "test_interval_coverage",
+            "empirical_breach_rate",
             "timing_status",
         ]
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -618,14 +671,27 @@ def run(
                     "model_name": artifact.model_name,
                     "version": artifact.version,
                     "train_rows": artifact.train_rows,
-                    "test_rows": artifact.test_rows,
+                    "validation_rows": artifact.test_rows,
                     "floor_delta": round(artifact.floor_delta, 8),
                     "ceiling_delta": round(artifact.ceiling_delta, 8),
                     "mae_floor": round(artifact.metrics["mae_floor"], 8),
                     "mae_ceiling": round(artifact.metrics["mae_ceiling"], 8),
                     "mae_spread": round(artifact.metrics["mae_spread"], 8),
-                    "test_floor_coverage": round(artifact.metrics["test_floor_coverage"], 8),
-                    "test_ceiling_coverage": round(artifact.metrics["test_ceiling_coverage"], 8),
+                    "mae_floor_pct": round(artifact.metrics["mae_floor_pct"], 8),
+                    "mae_ceiling_pct": round(artifact.metrics["mae_ceiling_pct"], 8),
+                    "mae_spread_pct": round(artifact.metrics["mae_spread_pct"], 8),
+                    "test_floor_coverage": round(
+                        artifact.metrics["test_floor_coverage"], 8
+                    ),
+                    "test_ceiling_coverage": round(
+                        artifact.metrics["test_ceiling_coverage"], 8
+                    ),
+                    "test_interval_coverage": round(
+                        artifact.metrics["test_interval_coverage"], 8
+                    ),
+                    "empirical_breach_rate": round(
+                        artifact.metrics["empirical_breach_rate"], 8
+                    ),
                     "timing_status": timing_status,
                 }
             )
@@ -646,9 +712,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     tasks = tuple(
-        part.strip()
-        for part in str(args.tasks).split(",")
-        if part.strip()
+        part.strip() for part in str(args.tasks).split(",") if part.strip()
     )
     run(
         Path(args.dataset),

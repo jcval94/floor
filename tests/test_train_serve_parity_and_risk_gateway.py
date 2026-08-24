@@ -25,7 +25,7 @@ def _prepared(features: dict[str, float]) -> _PreparedRow:
     )
 
 
-def test_evt_train_and_shared_serving_predictor_match() -> None:
+def test_regime_median_train_and_shared_serving_predictor_match() -> None:
     features = {"atr_14": 0.02, "trend_context_m3": 1.0}
     params = {
         "global": 0.03,
@@ -34,7 +34,7 @@ def test_evt_train_and_shared_serving_predictor_match() -> None:
         "bins": 3,
     }
     train_value = _predict_evt(_prepared(features), params)
-    serve_value = predict_family_delta("evt_changepoint_hybrid", params, features)
+    serve_value = predict_family_delta("regime_median", params, features)
     assert serve_value == train_value == 0.022
 
 
@@ -49,7 +49,7 @@ def test_boosted_stumps_train_and_shared_serving_predictor_match() -> None:
         ],
     }
     train_value = _predict_boosted_stumps(_prepared(features), params)
-    serve_value = predict_family_delta("xgboost", params, features)
+    serve_value = predict_family_delta("boosted_stumps", params, features)
     assert serve_value == train_value
 
 
@@ -60,18 +60,32 @@ def test_linear_train_and_shared_serving_predictor_match() -> None:
     bias = 0.012
     params = {"weights": weights, "bias": bias, "features": list(names)}
     train_value = _predict_linear(_prepared(features), weights, bias, names)
-    assert predict_family_delta("quantile_elastic_net", params, features) == train_value
-    assert predict_family_delta("lstm_sequence", params, features) == train_value
+    assert predict_family_delta("regularized_linear", params, features) == train_value
+    assert predict_family_delta("sequence_linear", params, features) == train_value
+
+
+def _d1_timing_unavailable() -> dict:
+    return {
+        "schema_version": 2,
+        "horizon": "d1",
+        "status": "unavailable_daily_resolution",
+        "classes": ["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"],
+        "train_rows": 0,
+        "vol_cuts": [],
+        "floor": {"rows": 0, "global": {}, "table": {}},
+        "ceiling": {"rows": 0, "global": {}, "table": {}},
+    }
 
 
 def test_parity_model_uses_nested_trained_params_not_aggregate_median() -> None:
     model = object.__new__(ParityChampionModelSet)
     artifact = {
-        "model_name": "evt_cp_d1",
+        "model_name": "regime_median_d1",
         "floor_delta": 0.40,
         "ceiling_delta": 0.40,
-        "metrics": {"mae_spread": 1.0},
+        "metrics": {"mae_spread_pct": 0.01},
         "params": {
+            "schema_version": 2,
             "floor": {
                 "global": 0.01,
                 "table": {"v2:up": 0.02},
@@ -84,6 +98,12 @@ def test_parity_model_uses_nested_trained_params_not_aggregate_median() -> None:
                 "vol_cuts": [0.01, 0.03],
                 "bins": 3,
             },
+            "timing": _d1_timing_unavailable(),
+            "confidence_calibration": {
+                "method": "validation_empirical_interval_breach",
+                "breach_probability": 0.20,
+                "evaluation_rows": 100,
+            },
         },
     }
     row = {
@@ -95,6 +115,9 @@ def test_parity_model_uses_nested_trained_params_not_aggregate_median() -> None:
     assert forecast is not None
     assert forecast.floor == 98.0
     assert forecast.ceiling == 103.0
+    assert forecast.breach_prob == 0.2
+    assert forecast.floor_time == ""
+    assert forecast.ceiling_time == ""
     assert forecast.floor != 60.0
     assert forecast.ceiling != 140.0
 
@@ -102,15 +125,22 @@ def test_parity_model_uses_nested_trained_params_not_aggregate_median() -> None:
 def test_trained_nested_params_fail_closed_when_malformed() -> None:
     model = object.__new__(ParityChampionModelSet)
     artifact = {
-        "model_name": "evt_cp_d1",
+        "model_name": "regime_median_d1",
         "floor_delta": 0.02,
         "ceiling_delta": 0.03,
         "params": {
+            "schema_version": 2,
             "floor": {"table": {}, "vol_cuts": [0.01], "bins": 2},
             "ceiling": {"global": 0.03, "table": {}, "vol_cuts": [0.01], "bins": 2},
+            "timing": _d1_timing_unavailable(),
+            "confidence_calibration": {
+                "method": "validation_empirical_interval_breach",
+                "breach_probability": 0.20,
+                "evaluation_rows": 100,
+            },
         },
     }
-    with pytest.raises(ValueError, match="EVT params missing numeric global"):
+    with pytest.raises(ValueError, match="Regime-median params missing numeric global"):
         model._predict_classic_horizon(
             {"close": 100.0, "atr_14": 2.0, "trend_context_m3": 1.0},
             artifact,

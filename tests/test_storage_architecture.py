@@ -43,6 +43,43 @@ def test_operational_workflows_do_not_commit_generated_state_to_git() -> None:
         assert "git add \\\n            data/" not in workflow
 
 
+def test_authoritative_runtime_writers_are_main_only() -> None:
+    for filename in (
+        "intraday_engine.yml",
+        "eod.yml",
+        "monitoring.yml",
+        "ingest.yml",
+        "retrain_assessment.yml",
+        "retrain_execute.yml",
+    ):
+        workflow = _text(WORKFLOWS / filename)
+        assert "github.ref_name == 'main'" in workflow
+
+
+def test_intraday_and_eod_revalidate_after_writer_lock() -> None:
+    intraday = _text(WORKFLOWS / "intraday_engine.yml")
+    eod = _text(WORKFLOWS / "eod.yml")
+    assert "Revalidate checkpoint under writer lock" in intraday
+    assert "steps.lock_guard.outputs.run == 'true'" in intraday
+    assert "cancel-in-progress: false" in intraday
+    assert "Revalidate close checkpoint under writer lock" in eod
+    assert "steps.lock_guard.outputs.run == 'true'" in eod
+
+
+def test_ingest_uses_before_after_decision_fingerprint_not_git_head() -> None:
+    workflow = _text(WORKFLOWS / "ingest.yml")
+    assert "Capture decision-state fingerprint before ingest" in workflow
+    assert "ingest_decision_before.json" in workflow
+    assert "git diff --quiet -- data/predictions" not in workflow
+
+
+def test_monitoring_does_not_republish_stale_snapshot_after_failure() -> None:
+    workflow = _text(WORKFLOWS / "monitoring.yml")
+    assert "rm -f data/metrics/public_metrics.json" in workflow
+    assert "snapshot_valid" in workflow
+    assert "if: steps.health.outputs.snapshot_valid == 'true'" in workflow
+
+
 def test_retrain_execute_commits_only_lightweight_model_registry() -> None:
     workflow = _text(WORKFLOWS / "retrain_execute.yml")
     assert "git add -f data/training/models/*.json" in workflow
@@ -56,6 +93,7 @@ def test_retrain_execute_commits_only_lightweight_model_registry() -> None:
         assert forbidden not in workflow
     assert "runtime_state.sh restore" in workflow
     assert "runtime_state.sh publish" in workflow
+    assert "git rebase --autostash" in workflow
 
 
 def test_pages_restores_runtime_state_before_publication() -> None:
@@ -66,25 +104,44 @@ def test_pages_restores_runtime_state_before_publication() -> None:
     assert "runtime_state_source': 'github_release:runtime-state-v1'" in workflow
 
 
-def test_history_compaction_is_manual_guarded_and_removes_data_from_all_refs() -> None:
+def test_history_compaction_is_manual_guarded_atomic_and_drift_safe() -> None:
     workflow = _text(WORKFLOWS / "manual_compact_git_history.yml")
     assert "workflow_dispatch:" in workflow
     assert "PURGE_GENERATED_DATA_HISTORY" in workflow
+    assert "safe_after = info.market_close + timedelta(hours=1)" in workflow
     assert "--path data" in workflow
     assert "--invert-paths" in workflow
     assert "git clone --mirror" in workflow
     assert "refs/heads/*:refs/heads/*" in workflow
     assert "refs/tags/*:refs/tags/*" in workflow
     assert "open_prs" in workflow
-    assert "runtime_state.sh publish" in workflow
+    assert "protected_branches" in workflow
+    assert "refs_pre_push.txt" in workflow
+    assert "cmp -s" in workflow
+    assert "push --dry-run --atomic --force --prune" in workflow
+    assert "push --atomic --force --prune" in workflow
+    restore_pos = workflow.index("runtime_state.sh restore")
+    publish_pos = workflow.index("runtime_state.sh publish")
+    assert restore_pos < publish_pos
 
 
-def test_runtime_state_is_release_backed_and_checksum_verified() -> None:
+def test_runtime_state_is_release_backed_checksum_verified_and_authoritative() -> None:
     script = _text(ROOT / "scripts" / "runtime_state.sh")
     assert 'TAG="${RUNTIME_STATE_TAG:-runtime-state-v1}"' in script
+    assert 'MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"' in script
     assert "gh release download" in script
     assert "gh release upload" in script
     assert "sha256sum -c" in script
+    assert "for attempt in 1 2 3" in script
+    assert "clear_runtime_state" in script
+    assert script.index("clear_runtime_state\n  tar -xzf") > script.index("sha256sum -c")
+    assert "member.issym() or member.islnk()" in script
+    assert "validate_sqlite_state true" in script
+    assert "validate_sqlite_state false" in script
+    assert "PRAGMA wal_checkpoint(TRUNCATE)" in script
+    assert "PRAGMA quick_check" in script
+    assert "python -m floor.runtime_retention --data-dir data" in script
+    assert "asset_bytes > max_bytes" in script
     assert "data/market" in script
     assert "data/persistence" in script
     assert "data/predictions" in script

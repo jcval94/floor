@@ -20,6 +20,7 @@ from utils.pages_build import build_pages_data
 ET = ZoneInfo("America/New_York")
 AUDIT_SCHEMA_VERSION = 2
 AUDIT_SCRIPT_TAG = '<script type="module" src="assets/audit.js"></script>'
+DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD = 0.12
 EXPECTED_SITE_JSON = (
     "dashboard.json",
     "drift.json",
@@ -314,6 +315,28 @@ def _valid_timing(value: object, horizon: str) -> bool:
     return 1 <= numeric <= upper
 
 
+def _validate_m3_top3(label: str, top3: object, errors: list[str]) -> None:
+    if not isinstance(top3, list) or len(top3) != 3:
+        errors.append(f"{label}:m3_top3_must_have_3_rows")
+        return
+    top_weeks: list[int] = []
+    for item_raw in top3:
+        item = _mapping(item_raw)
+        if not item:
+            errors.append(f"{label}:invalid_m3_top3_item")
+            continue
+        item_week = _strict_int(item.get("week"))
+        probability = _finite(item.get("probability"))
+        if item_week is None or not 1 <= item_week <= 13:
+            errors.append(f"{label}:invalid_m3_top3_week")
+        else:
+            top_weeks.append(item_week)
+        if probability is None or not 0.0 <= probability <= 1.0:
+            errors.append(f"{label}:invalid_m3_top3_probability")
+    if len(top_weeks) != len(set(top_weeks)):
+        errors.append(f"{label}:duplicate_m3_top3_week")
+
+
 def validate_prediction_contract(
     rows: list[dict],
     symbols: list[str],
@@ -353,40 +376,41 @@ def validate_prediction_contract(
                     f"{label}:invalid_ceiling_timing={row.get('ceiling_time_bucket')}"
                 )
         elif horizon == "m3":
-            if str(row.get("m3_status") or "") != "ok":
-                errors.append(f"{label}:m3_status={row.get('m3_status')}")
-                continue
+            status = str(row.get("m3_status") or "")
             floor = _finite(row.get("floor_m3"))
-            week = _strict_int(row.get("floor_week_m3"))
             confidence = _finite(row.get("floor_week_m3_confidence"))
             if floor is None or floor <= 0:
                 errors.append(f"{label}:invalid_floor_m3")
-            if week is None or not 1 <= week <= 13:
-                errors.append(
-                    f"{label}:invalid_floor_week_m3={row.get('floor_week_m3')}"
-                )
             if confidence is None or not 0.0 <= confidence <= 1.0:
                 errors.append(f"{label}:invalid_m3_confidence")
-            top3 = row.get("floor_week_m3_top3")
-            if not isinstance(top3, list) or len(top3) != 3:
-                errors.append(f"{label}:m3_top3_must_have_3_rows")
+
+            if status == "ok":
+                week = _strict_int(row.get("floor_week_m3"))
+                if week is None or not 1 <= week <= 13:
+                    errors.append(
+                        f"{label}:invalid_floor_week_m3={row.get('floor_week_m3')}"
+                    )
+                _validate_m3_top3(label, row.get("floor_week_m3_top3"), errors)
+            elif status == "timing_abstained":
+                nested = _mapping(row.get("m3_payload"))
+                threshold = _finite(row.get("m3_timing_abstention_threshold"))
+                if threshold is None:
+                    threshold = _finite(
+                        nested.get("m3_timing_abstention_threshold")
+                    )
+                if threshold is None or not 0.0 <= threshold <= 1.0:
+                    threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
+                if confidence is not None and confidence >= threshold:
+                    errors.append(
+                        f"{label}:abstention_confidence_not_below_threshold"
+                    )
+                if row.get("floor_week_m3") not in (None, ""):
+                    errors.append(f"{label}:abstention_must_not_publish_week")
+                top3 = row.get("floor_week_m3_top3")
+                if not isinstance(top3, list) or top3:
+                    errors.append(f"{label}:abstention_must_not_publish_top3")
             else:
-                top_weeks: list[int] = []
-                for item_raw in top3:
-                    item = _mapping(item_raw)
-                    if not item:
-                        errors.append(f"{label}:invalid_m3_top3_item")
-                        continue
-                    item_week = _strict_int(item.get("week"))
-                    probability = _finite(item.get("probability"))
-                    if item_week is None or not 1 <= item_week <= 13:
-                        errors.append(f"{label}:invalid_m3_top3_week")
-                    else:
-                        top_weeks.append(item_week)
-                    if probability is None or not 0.0 <= probability <= 1.0:
-                        errors.append(f"{label}:invalid_m3_top3_probability")
-                if len(top_weeks) != len(set(top_weeks)):
-                    errors.append(f"{label}:duplicate_m3_top3_week")
+                errors.append(f"{label}:m3_status={status or 'missing'}")
         else:
             errors.append(f"{label}:unknown_horizon")
 
