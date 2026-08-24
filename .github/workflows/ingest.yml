@@ -4,22 +4,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-
-concurrency:
-  group: ingest-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   ingest_critical:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
-
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
       - name: Initialize market DB
         run: make init-dbs
-
       - name: Refresh market DB from Yahoo
         run: |
           set -euo pipefail
@@ -28,29 +30,27 @@ jobs:
             --range 2y \
             --interval 1d \
             --sleep-seconds 0.4
-
       - name: Validate market data populated
         run: |
           set -euo pipefail
           rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
-          if [ "${rows:-0}" -le 0 ]; then
-            echo "::error::Yahoo ingest completed without market rows."
-            exit 1
-          fi
+          [ "${rows:-0}" -gt 0 ] || { echo "::error::Yahoo ingest completed without market rows."; exit 1; }
           echo "market_rows=$rows"
-
       - name: Assert ingest does not mutate decisions
         run: |
           set -euo pipefail
           if ! git diff --quiet -- data/predictions data/signals data/orders; then
-            echo "::error::Ingest preflight mutated prediction, signal, or order artifacts."
-            git diff -- data/predictions data/signals data/orders
+            echo "::error::Ingest mutated prediction, signal, or order artifacts."
             exit 1
           fi
-
+      - name: Publish refreshed market state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
       - name: Upload refreshed market DB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ingest-market-db
+          name: ingest-market-db-${{ github.run_id }}
           path: data/market/market_data.sqlite
           if-no-files-found: error
+          retention-days: 14
