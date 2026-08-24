@@ -113,9 +113,6 @@ def _prune_predictions(
                 removed += 1
                 continue
 
-            # Never discard an old prediction that has not yet produced durable
-            # reconciliation evidence. This preserves the 65-session m3 contract
-            # even through data gaps or prolonged workflow outages.
             output.append(row)
             old_unresolved_kept += 1
 
@@ -299,29 +296,44 @@ def _compact_market_db(
     return before - after
 
 
+def _is_within(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
 def _prune_snapshot_files(
     root: Path,
     *,
     now: datetime,
     policy: RuntimeRetentionPolicy,
+    protected_roots: tuple[Path, ...] = (),
 ) -> dict[str, int]:
     if not root.exists():
-        return {"kept": 0, "removed": 0}
+        return {"kept": 0, "removed": 0, "protected": 0}
     files = sorted(
         (path for path in root.rglob("*") if path.is_file()),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
+    protected = [
+        path
+        for path in files
+        if any(_is_within(path, protected_root) for protected_root in protected_roots)
+    ]
+    candidates = [path for path in files if path not in protected]
     cutoff = now - timedelta(days=policy.snapshot_days)
-    keep_latest = set(files[: policy.keep_latest_files])
+    keep_latest = set(candidates[: policy.keep_latest_files])
     removed = 0
-    for path in files:
+    for path in candidates:
         modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         if path in keep_latest or modified >= cutoff:
             continue
         path.unlink()
         removed += 1
-    return {"kept": len(files) - removed, "removed": removed}
+    return {
+        "kept": len(files) - removed,
+        "removed": removed,
+        "protected": len(protected),
+    }
 
 
 def compact_runtime_state(
@@ -333,8 +345,6 @@ def compact_runtime_state(
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     policy = policy or RuntimeRetentionPolicy()
 
-    # Resolve prediction retention while reconciliation keys still exist. Only
-    # after old resolved predictions are removed do we age out old evidence.
     predictions = _prune_predictions(data_dir, now=now, policy=policy)
     reconciliation = _prune_jsonl_tree(
         data_dir / "predictions" / "reconciliations",
@@ -366,9 +376,25 @@ def compact_runtime_state(
         now=now,
         policy=policy,
     )
+
+    strategy_league_root = data_dir / "metrics" / "strategy_league"
     snapshots = {
-        name: _prune_snapshot_files(data_dir / name, now=now, policy=policy)
-        for name in ("reports", "snapshots", "metrics")
+        "reports": _prune_snapshot_files(
+            data_dir / "reports",
+            now=now,
+            policy=policy,
+        ),
+        "snapshots": _prune_snapshot_files(
+            data_dir / "snapshots",
+            now=now,
+            policy=policy,
+        ),
+        "metrics": _prune_snapshot_files(
+            data_dir / "metrics",
+            now=now,
+            policy=policy,
+            protected_roots=(strategy_league_root,),
+        ),
     }
 
     result: dict[str, Any] = {
@@ -385,6 +411,7 @@ def compact_runtime_state(
         "safety": {
             "old_unresolved_predictions_are_retained": True,
             "malformed_jsonl_fails_closed": True,
+            "strategy_league_evidence_is_retained": True,
         },
     }
     metrics_path = data_dir / "metrics" / "runtime_retention_latest.json"
