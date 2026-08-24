@@ -2,12 +2,23 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-data/market/*.sqlite
-data/market/*.sqlite-wal
-data/market/*.sqlite-shm
-data/persistence/*.sqlite
-data/persistence/*.sqlite-wal
-data/persistence/*.sqlite-shm
+# Runtime / generated state is stored outside Git history.
+# GitHub Release `runtime-state-v1` keeps the rolling operational state;
+# GitHub Actions artifacts keep immutable per-run audit outputs.
+data/*
+!data/.gitkeep
+!data/training/
+data/training/*
+!data/training/models/
+data/training/models/*
+!data/training/models/*.json
+
+# Local/reconstructable databases and archives.
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.runtime/
+*.tar.gz
 
 # GitHub Pages JSON is generated and audited at deployment time.
 # Keeping snapshots in git creates a second stale source of truth.
