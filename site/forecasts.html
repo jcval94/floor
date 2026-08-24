@@ -1,5 +1,47 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Forecasts</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="forecasts"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>Forecasts</h1><p class="small">Week 1..13 = semanas bursátiles relativas en horizonte 3 meses (m3).</p><div id="forecastCards" class="grid"></div><h2>Top oportunidades</h2><div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Horizonte</th><th>Floor</th><th>Ceiling</th><th>Spread abs</th><th>Spread rel</th><th>Score</th></tr></thead><tbody id="opps"></tbody></table></div>
-<h2>3M Downside Window</h2><div class="table-wrap"><table><thead><tr><th>Ticker</th><th>floor_m3</th><th>Semana m3 (explicación humana)</th><th>Rango fechas</th><th>Top-3 semanas probables</th><th>Cambio material vs previo</th></tr></thead><tbody id="m3TopWeeks"></tbody></table></div>
-</main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Pronósticos de piso, techo y downside por horizonte." />
+  <title>Floor · Pronósticos</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="forecasts">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal">
+    <a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a>
+  </nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Forecast explorer</span><h1>Rangos esperados, sin convertirlos en “alpha”.</h1><p class="lead">Explora pisos y techos por 1, 5 y 10 sesiones, además del floor de 3 meses. La confianza representa calidad del intervalo cuando existe una calibración válida.</p></div></section>
+
+  <section class="filters" aria-label="Filtros de pronósticos">
+    <div class="filter-field search"><label for="forecastSearch">Buscar ticker</label><input id="forecastSearch" type="search" placeholder="AAPL, MSFT, NVDA…" autocomplete="off" /></div>
+    <div class="filter-field"><label for="forecastHorizon">Horizonte</label><select id="forecastHorizon"><option value="d1">1 sesión</option><option value="w1" selected>5 sesiones</option><option value="q1">10 sesiones</option></select></div>
+    <div class="filter-field"><label for="forecastConfidence">Confianza mínima</label><select id="forecastConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
+    <div id="forecastSummary" class="result-summary" aria-live="polite"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-heading"><div><span class="eyebrow">Highlighted ranges</span><h2>Vista rápida</h2><p>Ordenada por confianza del intervalo, no por supuesto potencial de compra.</p></div></div>
+    <div id="forecastCards" class="forecast-grid"><div class="empty-state">Cargando pronósticos…</div></div>
+  </section>
+
+  <section class="section">
+    <div class="section-heading"><div><span class="eyebrow">Comparison table</span><h2>Comparar activos</h2><p>Downside y upside se calculan contra la mejor referencia de precio disponible.</p></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Referencia</th><th>Piso</th><th>Downside</th><th>Techo</th><th>Upside</th><th>Confianza</th></tr></thead><tbody id="forecastTable"></tbody></table></div>
+  </section>
+
+  <section class="section">
+    <div class="section-heading"><div><span class="eyebrow">3M downside watch</span><h2>Horizonte de 3 meses</h2><p>El valor de floor puede mantenerse disponible aunque el modelo de timing decida abstenerse.</p></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Floor 3M</th><th>Timing estimado</th><th>Confianza timing</th><th>Rango de fechas</th><th>Cambio vs previo</th></tr></thead><tbody id="m3WatchTable"></tbody></table></div>
+  </section>
+</main>
+<footer class="site-footer"><span>Floor · Los rangos no son recomendaciones de inversión.</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

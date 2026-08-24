@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Estado de publicación, modelos, drift e incidentes de Floor." />
+  <title>Floor · Salud del sistema</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="system">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Trust & observability</span><h1>¿Se puede confiar en lo que está publicado?</h1><p class="lead">Una sola vista consolida publicación, modelos, drift, incidentes y salud del pipeline. Si una fuente no está disponible, el estado se muestra como desconocido; nunca como saludable por defecto.</p></div></section>
+
+  <section id="systemOverview" class="metrics-grid" aria-label="Resumen de salud"></section>
+
+  <section class="section system-layout">
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Components</span><h2>Estado por componente</h2></div></div><div class="table-wrap"><table><thead><tr><th>Componente</th><th>Estado</th></tr></thead><tbody id="systemComponents"></tbody></table></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Publication audit</span><h2>Integridad de publicación</h2></div></div><div id="systemAudit"></div></article>
+  </section>
+
+  <section class="section"><div class="section-heading"><div><span class="eyebrow">Model governance</span><h2>Modelos</h2><p>Resumen legible primero; parámetros técnicos bajo demanda.</p></div><a class="text-link" href="models.html">Vista técnica completa</a></div><div id="systemModels" class="model-grid"></div></section>
+
+  <section class="section system-layout">
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Drift</span><h2>Deriva y retraining</h2></div><a class="text-link" href="drift.html">Detalle</a></div><div id="systemDrift"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Incidents</span><h2>Incidentes</h2></div><a class="text-link" href="incidents.html">Detalle</a></div><div id="systemIncidents"></div></article>
+  </section>
+</main>
+<footer class="site-footer"><span>Floor · Capa de confianza y observabilidad</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="index.html">Resumen</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
