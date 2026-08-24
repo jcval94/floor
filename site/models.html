@@ -1,5 +1,25 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Models</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="models"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>Models</h1><div class="card"><h3>Champion vigente</h3><div id="champion"></div><div id="suiteStatus"></div></div><div class="card"><h3>Métricas de calibración</h3><pre id="calibration" class="small"></pre></div><div class="card"><h3>Retraining schedule</h3><div id="retrainingSchedule"></div></div><p id="modelsHint" class="small"></p><h2>Detalle por modelo</h2><div class="table-wrap model-detail-wrap"><table class="models-table"><thead><tr><th>task</th><th>modelo</th><th>version</th><th>status</th><th>recomendación</th><th>métricas actuales</th><th>params</th><th>drift + razón</th></tr></thead><tbody id="modelDetails"></tbody></table></div><h2>Timeline de campeones</h2><div class="table-wrap"><table><thead><tr><th>as_of</th><th>model</th><th>action</th><th>drift</th></tr></thead><tbody id="timeline"></tbody></table></div>
-<h2>Estabilidad forecast m3 vs snapshot previo</h2><p class="small">Week 1..13 representa semanas bursátiles relativas del horizonte 3M.</p><div class="table-wrap"><table><thead><tr><th>Ticker</th><th>floor_m3</th><th>Semana m3 (humana)</th><th>Δ m3 vs previo</th><th>Cambio material</th></tr></thead><tbody id="m3Stability"></tbody></table></div>
-</main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Gobernanza, métricas y versiones de modelos Floor." />
+  <title>Floor · Modelos</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="models">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Model governance</span><h1>Modelos vigentes y evidencia de calidad.</h1><p class="lead">Primero se muestran estado, versión y métricas relevantes. Parámetros y razones técnicas permanecen accesibles bajo demanda.</p></div><div><div class="small">Champion agregado</div><strong id="champion">No disponible</strong><div id="suiteStatus" style="margin-top:8px"></div></div></section>
+  <section class="section"><div class="section-heading"><div><span class="eyebrow">Model suite</span><h2>Detalle por modelo</h2></div><a class="text-link" href="system.html">Volver a salud del sistema</a></div><div id="modelCards" class="model-grid"></div></section>
+  <section class="section"><div class="section-heading"><div><span class="eyebrow">History</span><h2>Timeline de campeones</h2></div></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Modelo</th><th>Acción</th><th>Drift</th></tr></thead><tbody id="timeline"></tbody></table></div></section>
+</main>
+<footer class="site-footer"><span>Floor · Gobernanza de modelos</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

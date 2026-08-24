@@ -1,3 +1,45 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Tickers</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="tickers"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>Universe (50 tickers)</h1><p class="small">Incluye contexto m3: floor_m3 y semana 1..13 con etiqueta humana.</p><div class="card" style="margin-bottom:12px"><label for="horizonFilter"><strong>Modelo a mostrar:</strong></label> <select id="horizonFilter"><option value="d1">d1</option><option value="w1">w1</option><option value="q1">q1</option><option value="m3">m3</option></select> <span class="small" style="margin-left:8px">Valor reciente: artefacto intraday más reciente (yahoo_market_rows). También se muestra el último close diario de market_data.sqlite.</span></div><div class="table-wrap"><table><thead><tr><th class="sortable" data-col="0">Ticker</th><th class="sortable" data-col="1">Valor reciente (intraday)</th><th class="sortable" data-col="2">Último close diario</th><th class="sortable" data-col="3">Δ% intraday vs close</th><th class="sortable" data-col="4">Floor modelo</th><th class="sortable" data-col="5">Δ% vs reciente (floor)</th><th class="sortable" data-col="6">Ceiling modelo</th><th class="sortable" data-col="7">Δ% vs reciente (ceiling)</th><th class="sortable" data-col="8">floor_m3</th><th class="sortable" data-col="9">Δ% vs reciente (m3)</th><th>Semana m3</th><th>Rango semana m3</th><th class="sortable" data-col="12">Score</th></tr></thead><tbody id="tickersTable"></tbody></table></div><div id="tickerDetail" style="margin-top:12px"></div></main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Explorador de tickers con rangos, downside, upside y confianza." />
+  <title>Floor · Tickers</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="tickers">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Universe explorer</span><h1>Compara activos sin perderte entre 13 columnas.</h1><p class="lead">La vista principal se concentra en precio, rango, downside, upside y confianza. Los detalles técnicos quedan disponibles bajo demanda.</p></div></section>
+
+  <section class="filters" aria-label="Filtros del universo">
+    <div class="filter-field search"><label for="tickerSearch">Buscar ticker</label><input id="tickerSearch" type="search" placeholder="Escribe un símbolo…" autocomplete="off" /></div>
+    <div class="filter-field"><label for="horizonFilter">Horizonte</label><select id="horizonFilter"><option value="d1">1 sesión</option><option value="w1" selected>5 sesiones</option><option value="q1">10 sesiones</option></select></div>
+    <div class="filter-field"><label for="tickerConfidence">Confianza mínima</label><select id="tickerConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
+    <div id="tickerCount" class="result-summary" aria-live="polite"></div>
+  </section>
+
+  <section class="section">
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="symbol">Ticker</button></th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="price">Precio</button></th>
+        <th>Rango esperado</th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="downside">Downside</button></th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="upside">Upside</button></th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="confidence">Confianza</button></th>
+      </tr></thead>
+      <tbody id="tickersTable"><tr><td colspan="6"><div class="empty-state">Cargando universo…</div></td></tr></tbody>
+    </table></div>
+  </section>
+  <div id="tickerDetail" aria-live="polite"></div>
+</main>
+<footer class="site-footer"><span>Floor · Vista simplificada del universo monitoreado</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="system.html">Estado</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
