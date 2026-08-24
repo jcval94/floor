@@ -90,13 +90,13 @@ function suppressActionablePanels(audit) {
 
   ['forecastCards', 'tickerDetail'].forEach((id) => {
     const node = document.getElementById(id);
-    if (!node) return;
+    if (!node || node.querySelector('.publication-suppressed')) return;
     node.replaceChildren(suppressedCard(message));
   });
 
   ['opps', 'm3TopWeeks', 'tickersTable', 'forecastTable', 'm3WatchTable', 'forecastSnapshot'].forEach((id) => {
     const node = document.getElementById(id);
-    if (!node) return;
+    if (!node || node.querySelector('.publication-suppressed')) return;
     node.innerHTML = '';
     const tr = document.createElement('tr');
     const td = document.createElement('td');
