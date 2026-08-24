@@ -1,0 +1,83 @@
+name: strategy_league_bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: floor-runtime-state-writer
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Install project
+        run: python -m pip install -e .
+
+      - name: Restore rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+
+      - name: Initialize DBs
+        run: make init-dbs
+
+      - name: Build local-only bootstrap dataset
+        run: |
+          set -euo pipefail
+          mkdir -p data/metrics/strategy_league/bootstrap
+          PYTHONPATH=src python -m features.build_training_from_db \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --output data/metrics/strategy_league/bootstrap/market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features \
+            --input data/metrics/strategy_league/bootstrap/market_rows.jsonl \
+            --output data/metrics/strategy_league/bootstrap/modelable_dataset.json
+
+      - name: Train only Weekly Opportunity challenger
+        run: |
+          set -euo pipefail
+          VERSION="league-$(date -u +%Y%m%dT%H%M%SZ)"
+          PYTHONPATH=src python -m league.bootstrap_weekly_model \
+            --dataset data/metrics/strategy_league/bootstrap/modelable_dataset.json \
+            --output data/metrics/strategy_league/models/weekly_opportunity_challenger.json \
+            --version "$VERSION"
+
+      - name: Remove temporary bootstrap rows
+        run: rm -rf data/metrics/strategy_league/bootstrap
+
+      - name: Publish compact runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
+      - name: Upload frozen challenger for audit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: strategy-league-weekly-model-${{ github.run_id }}
+          path: data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summary
+        run: |
+          {
+            echo "## Strategy League bootstrap"
+            echo "- Network market-data download: \`false\`"
+            echo "- Models trained: \`weekly_opportunity_ridge only\`"
+            echo "- Operational PAPER gateway: \`disabled\`"
+            echo "- LIVE execution: \`disabled\`"
+          } >> "$GITHUB_STEP_SUMMARY"
