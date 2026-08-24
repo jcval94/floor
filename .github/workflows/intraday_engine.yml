@@ -26,10 +26,11 @@ permissions:
 
 concurrency:
   group: intraday-engine-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   gate:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,15 +79,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
+      - name: Revalidate checkpoint under writer lock
+        id: lock_guard
+        env:
+          ORIGINAL_EVENT: ${{ needs.gate.outputs.event }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_run || 'false' }}" = "true" ]; then
+            {
+              echo "run=true"
+              echo "reason=manual_force"
+              echo "event=$ORIGINAL_EVENT"
+            } >> "$GITHUB_OUTPUT"
+          else
+            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
+          fi
+
       - name: Initialize DBs
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: make init-dbs
 
       - name: Normalize DB permissions
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: |
           find data/market data/persistence -type d -exec chmod u+rwx {} +
           find data/market data/persistence -type f -exec chmod u+rw {} +
 
       - name: Ensure market data is populated
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: |
           set -euo pipefail
           market_rows=$(sqlite3 data/market/market_data.sqlite "SELECT COUNT(*) FROM daily_bars;")
@@ -99,6 +119,7 @@ jobs:
           fi
 
       - name: Validate champion artifacts
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: |
           set -euo pipefail
           for champion in \
@@ -115,6 +136,7 @@ jobs:
           done
 
       - name: Capture baseline counters
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: |
           set -euo pipefail
           mkdir -p data/logs
@@ -126,6 +148,7 @@ jobs:
             | tee data/logs/intraday_baseline.json
 
       - name: Run canonical intraday engine with retries
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         env:
           LIVE_TRADING_ENABLED: "false"
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
@@ -145,6 +168,7 @@ jobs:
           [ "$success" = true ] || { echo "::error::Intraday engine failed after 3 attempts"; exit 1; }
 
       - name: Validate generated state
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: |
           set -euo pipefail
           test -s data/reports/dashboard.json
@@ -162,14 +186,17 @@ jobs:
             --sample-limit 10
 
       - name: Mark checkpoint complete
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         run: PYTHONPATH=src python -m utils.workflow_guards mark --kind intraday --event "${{ needs.gate.outputs.event }}" --data-dir data
 
       - name: Publish rolling runtime state outside Git
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
 
       - name: Upload immutable per-run audit artifact
+        if: steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event == needs.gate.outputs.event
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: intraday-audit-${{ github.run_id }}-${{ needs.gate.outputs.event }}
@@ -185,6 +212,14 @@ jobs:
             data/market/market_data.sqlite
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Report duplicate or stale checkpoint suppression
+        if: steps.lock_guard.outputs.run != 'true' || steps.lock_guard.outputs.event != needs.gate.outputs.event
+        run: |
+          echo "Intraday run suppressed after lock revalidation."
+          echo "original_event=${{ needs.gate.outputs.event }}"
+          echo "revalidated_event=${{ steps.lock_guard.outputs.event }}"
+          echo "revalidated_reason=${{ steps.lock_guard.outputs.reason }}"
 
   engine_info:
     needs: [gate, engine_critical]
