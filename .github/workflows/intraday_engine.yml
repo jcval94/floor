@@ -2,10 +2,9 @@ name: intraday_engine
 
 on:
   schedule:
-    - cron: "15,30,45 13-19 * * 1-5"
-    - cron: "0,15 20 * * 1-5"
-    - cron: "15,30,45 14-20 * * 1-5"
-    - cron: "0,15 21 * * 1-5"
+    # Hourly checkpoint polling. :30 aligns OPEN/+2h/+4h/+6h across US DST;
+    # CLOSE is picked up 30 minutes after the bell by the wider guard tolerance.
+    - cron: "30 13-21 * * 1-5"
   workflow_dispatch:
     inputs:
       force_run:
@@ -59,7 +58,7 @@ jobs:
               echo "session_day=$session_day"
             } >> "$GITHUB_OUTPUT"
           else
-            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
+            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 35 --data-dir data
           fi
 
   engine_critical:
@@ -92,7 +91,7 @@ jobs:
               echo "event=$ORIGINAL_EVENT"
             } >> "$GITHUB_OUTPUT"
           else
-            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 20 --data-dir data
+            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 35 --data-dir data
           fi
 
       - name: Initialize DBs
