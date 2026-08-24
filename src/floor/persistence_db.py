@@ -14,16 +14,42 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
     return row is not None
 
 
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    if not _table_exists(conn, table):
+        return set()
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    if column not in _columns(conn, table):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def init_persistence_db(db_path: Path) -> None:
+    """Create/migrate the reconstructable SQLite query cache.
+
+    JSONL is the durable ledger. ``batch_id`` makes prediction/signal replay and
+    intraday retries idempotent; legacy rows with an empty batch id remain
+    readable and are deliberately outside the unique partial indexes.
+    """
+
     with _connect(db_path) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS predictions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id TEXT NOT NULL DEFAULT '',
                 symbol TEXT,
                 as_of TEXT,
                 event_type TEXT,
@@ -39,6 +65,7 @@ def init_persistence_db(db_path: Path) -> None:
             """
             CREATE TABLE IF NOT EXISTS signals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id TEXT NOT NULL DEFAULT '',
                 symbol TEXT,
                 as_of TEXT,
                 horizon TEXT,
@@ -128,7 +155,8 @@ def init_persistence_db(db_path: Path) -> None:
             """
             CREATE TABLE IF NOT EXISTS prediction_reconciliations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                prediction_id INTEGER NOT NULL UNIQUE,
+                prediction_id INTEGER NOT NULL,
+                prediction_key TEXT,
                 symbol TEXT NOT NULL,
                 horizon TEXT NOT NULL,
                 predicted_as_of TEXT NOT NULL,
@@ -151,19 +179,59 @@ def init_persistence_db(db_path: Path) -> None:
             """
         )
 
+        # Safe forward-only migrations for locally retained SQLite files.
+        _ensure_column(conn, "predictions", "batch_id", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "signals", "batch_id", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "prediction_reconciliations", "prediction_key", "TEXT")
 
-def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_predictions_batch_symbol_horizon
+            ON predictions(batch_id, symbol, horizon)
+            WHERE batch_id <> ''
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_signals_batch_symbol_horizon
+            ON signals(batch_id, symbol, horizon)
+            WHERE batch_id <> ''
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_prediction_reconciliation_key
+            ON prediction_reconciliations(prediction_key)
+            WHERE prediction_key IS NOT NULL AND prediction_key <> ''
+            """
+        )
+        # Preserve the legacy identity contract when present/fresh.
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_prediction_reconciliation_id
+            ON prediction_reconciliations(prediction_id)
+            """
+        )
+
+
+def persist_payload(db_path: Path, stream: str, payload: dict) -> bool:
+    """Persist one payload, returning whether a new row was inserted."""
+
     init_persistence_db(db_path)
     raw = json.dumps(payload, ensure_ascii=False)
 
     with _connect(db_path) as conn:
+        cursor: sqlite3.Cursor | None = None
         if stream == "predictions":
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO predictions(symbol, as_of, event_type, horizon, floor_value, ceiling_value, model_version, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO predictions(
+                    batch_id, symbol, as_of, event_type, horizon,
+                    floor_value, ceiling_value, model_version, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    str(payload.get("batch_id") or ""),
                     payload.get("symbol"),
                     payload.get("as_of"),
                     payload.get("event_type"),
@@ -175,12 +243,14 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "signals":
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO signals(symbol, as_of, horizon, action, confidence, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO signals(
+                    batch_id, symbol, as_of, horizon, action, confidence, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    str(payload.get("batch_id") or ""),
                     payload.get("symbol"),
                     payload.get("as_of"),
                     payload.get("horizon"),
@@ -190,7 +260,7 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "orders":
-            conn.execute(
+            cursor = conn.execute(
                 """
                 INSERT INTO orders(symbol, as_of, action, qty, order_type, mode, payload_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -206,10 +276,12 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "training" and str(payload.get("model_name", "")):
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO training_reviews(as_of, model_name, action, reason, data_drift, concept_drift, calibration_drift, performance_decay, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO training_reviews(
+                    as_of, model_name, action, reason, data_drift, concept_drift,
+                    calibration_drift, performance_decay, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.get("as_of"),
@@ -224,15 +296,18 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "model_competition" and str(payload.get("model_id", "")):
-            metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
-            conn.execute(
+            metrics = (
+                payload.get("metrics", {})
+                if isinstance(payload.get("metrics"), dict)
+                else {}
+            )
+            cursor = conn.execute(
                 """
                 INSERT INTO model_competition_results(
                     as_of, version, horizon, model_id, model_family, is_champion,
-                    mae_floor, mae_ceiling, mae_spread, test_floor_coverage, test_ceiling_coverage,
-                    payload_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    mae_floor, mae_ceiling, mae_spread,
+                    test_floor_coverage, test_ceiling_coverage, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.get("as_of"),
@@ -250,7 +325,7 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "model_training_cycle" and str(payload.get("task", "")):
-            conn.execute(
+            cursor = conn.execute(
                 """
                 INSERT INTO model_training_cycles(
                     as_of, task, training_mode, action, champion_decision,
@@ -258,10 +333,9 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                     previous_champion_path, previous_champion_version,
                     new_champion_path, challenger_path,
                     metrics_path, dataset_path, output_dir,
-                    cv_enabled, cv_folds, hyperparameter_grid_json, tuning_summary_json,
-                    payload_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cv_enabled, cv_folds, hyperparameter_grid_json,
+                    tuning_summary_json, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.get("as_of"),
@@ -287,22 +361,22 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                 ),
             )
         elif stream == "prediction_reconciliation" and payload.get("prediction_id") is not None:
-            conn.execute(
+            cursor = conn.execute(
                 """
-                INSERT INTO prediction_reconciliations(
-                    prediction_id, symbol, horizon, predicted_as_of, resolved_at, model_version,
+                INSERT OR IGNORE INTO prediction_reconciliations(
+                    prediction_id, prediction_key, symbol, horizon,
+                    predicted_as_of, resolved_at, model_version,
                     window_start, window_end, window_sessions,
                     predicted_floor, predicted_ceiling,
                     realized_floor, realized_ceiling,
                     abs_error_floor, abs_error_ceiling,
                     m3_predicted_week, m3_realized_week, m3_week_hit,
                     payload_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(prediction_id) DO NOTHING
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.get("prediction_id"),
+                    payload.get("prediction_key"),
                     payload.get("symbol"),
                     payload.get("horizon"),
                     payload.get("predicted_as_of"),
@@ -319,10 +393,18 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> None:
                     payload.get("abs_error_ceiling"),
                     payload.get("m3_predicted_week"),
                     payload.get("m3_realized_week"),
-                    1 if bool(payload.get("m3_week_hit")) else 0 if payload.get("m3_week_hit") is not None else None,
+                    (
+                        1
+                        if bool(payload.get("m3_week_hit"))
+                        else 0
+                        if payload.get("m3_week_hit") is not None
+                        else None
+                    ),
                     raw,
                 ),
             )
+
+        return bool(cursor is not None and cursor.rowcount > 0)
 
 
 def stream_count(db_path: Path, stream: str) -> int:
@@ -352,4 +434,4 @@ def latest_predictions(db_path: Path) -> list[dict]:
         if not _table_exists(conn, "predictions"):
             return []
         rows = conn.execute(query).fetchall()
-    return [json.loads(r[0]) for r in rows]
+    return [json.loads(row[0]) for row in rows]

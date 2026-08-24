@@ -9,7 +9,7 @@ import pytest
 
 from floor.calendar import is_us_market_holiday
 from floor.storage import append_jsonl
-from forecasting.generate_forecasts import _blended_confidence
+from forecasting.generate_forecasts import _model_confidence
 from forecasting.merge_ai_signal import merge_market_with_ai_signal
 from monitoring.health_snapshot import build_health_snapshot
 from utils.market_data_guard import validate_market_data_freshness
@@ -38,12 +38,16 @@ def _seed_market_db(path: Path, rows: list[tuple[str, str]]) -> None:
         )
 
 
-def test_missing_ai_is_neutral_and_cannot_boost_confidence() -> None:
+def test_missing_ai_is_neutral_and_model_confidence_has_no_ai_boost() -> None:
     merged = merge_market_with_ai_signal({"symbol": "AAPL", "close": 100.0}, None)
     assert merged["ai_present"] is False
     assert merged["ai_weight"] == 0.0
     assert merged["ai_effective_score"] == 0.0
-    assert _blended_confidence(0.72, False, 1.0, 1.0) == pytest.approx(0.72)
+
+    # Confidence is now solely the empirically calibrated mean non-breach rate.
+    # There is intentionally no AI argument/helper capable of boosting it.
+    assert _model_confidence(0.28) == pytest.approx(0.72)
+    assert _model_confidence(0.20, 0.30, 0.40) == pytest.approx(0.70)
 
 
 def test_market_freshness_uses_market_sessions_over_weekend(tmp_path: Path) -> None:

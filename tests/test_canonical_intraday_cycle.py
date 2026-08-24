@@ -39,8 +39,13 @@ def test_forecast_batch_guard_rejects_blocked_partial_or_duplicate_output() -> N
         )
 
 
-def _patch_minimal_cycle(monkeypatch: pytest.MonkeyPatch, *, blocked: bool = False) -> list[str]:
+def _patch_minimal_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    blocked: bool = False,
+) -> tuple[list[str], list[object]]:
     written_paths: list[str] = []
+    written_records: list[object] = []
 
     monkeypatch.setattr(canonical, "_latest_feature_rows", lambda _cfg, _symbols: [{"symbol": "AAPL"}])
     monkeypatch.setattr(canonical, "_validate_feature_rows", lambda _rows: None)
@@ -80,21 +85,22 @@ def _patch_minimal_cycle(monkeypatch: pytest.MonkeyPatch, *, blocked: bool = Fal
         ],
     )
     monkeypatch.setattr(canonical, "_validate_prediction_payload", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(canonical, "_signal_from_prediction", lambda *_args, **_kwargs: {"action": "BUY"})
     monkeypatch.setattr(canonical, "reconcile_predictions", lambda _data_dir: {"pending": 0})
-    monkeypatch.setattr(
-        canonical,
-        "append_jsonl",
-        lambda path, _record: written_paths.append(str(path)),
-    )
-    return written_paths
+
+    def capture(path: Path, record: object, **_kwargs: object) -> bool:
+        written_paths.append(str(path))
+        written_records.append(record)
+        return True
+
+    monkeypatch.setattr(canonical, "append_jsonl", capture)
+    return written_paths, written_records
 
 
-def test_canonical_cycle_is_signal_only_and_does_not_write_orders(
+def test_canonical_cycle_is_hold_only_and_does_not_write_orders(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    written_paths = _patch_minimal_cycle(monkeypatch)
+    written_paths, written_records = _patch_minimal_cycle(monkeypatch)
     cfg = RuntimeConfig(root_dir=tmp_path, data_dir=tmp_path / "data")
 
     canonical.run_intraday_cycle("OPEN", ["AAPL"], cfg)
@@ -102,13 +108,16 @@ def test_canonical_cycle_is_signal_only_and_does_not_write_orders(
     assert any("/predictions/" in path for path in written_paths)
     assert any("/signals/" in path for path in written_paths)
     assert all("/orders/" not in path for path in written_paths)
+    signal_records = [record for path, record in zip(written_paths, written_records) if "/signals/" in path]
+    assert signal_records
+    assert all(getattr(record, "action", None) == "HOLD" for record in signal_records)
 
 
 def test_canonical_cycle_fails_before_any_persistence_when_models_are_blocked(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    written_paths = _patch_minimal_cycle(monkeypatch, blocked=True)
+    written_paths, _written_records = _patch_minimal_cycle(monkeypatch, blocked=True)
     cfg = RuntimeConfig(root_dir=tmp_path, data_dir=tmp_path / "data")
 
     with pytest.raises(RuntimeError, match="blocked=AAPL"):

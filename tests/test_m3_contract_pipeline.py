@@ -106,9 +106,12 @@ def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     assert "floor_m3" in d1_row
     assert "floor_week_m3" in d1_row
     assert "m3_status" in d1_row
-    assert d1_row["m3_status"] == "ok"
-    assert d1_row.get("m3_block_reason") is None
+    assert d1_row["floor_m3"] is not None
+    assert d1_row["floor_week_m3"] is None
+    assert d1_row["m3_status"] == "timing_abstained"
+    assert "floor value remains available" in d1_row.get("m3_block_reason", "")
 
     m3_payload = m3_rows[0].get("m3_payload", {})
-    assert "m3_status" in m3_payload
-    assert "floor_week_m3" in m3_payload
+    assert m3_payload["m3_status"] == "timing_abstained"
+    assert m3_payload["floor_week_m3"] is None
+    assert m3_payload["floor_week_m3_top3"] == []
