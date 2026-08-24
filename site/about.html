@@ -1,3 +1,33 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>About</title><link rel="stylesheet" href="assets/styles.css"/></head>
-<body data-page="about"><header><nav class="nav"><a data-nav="home" href="index.html">Home</a><a data-nav="forecasts" href="forecasts.html">Forecasts</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Strategies</a><a data-nav="models" href="models.html">Models</a><a data-nav="drift" href="drift.html">Drift & Retraining</a><a data-nav="incidents" href="incidents.html">Incidents</a><a data-nav="about" href="about.html">About</a></nav></header>
-<main class="container"><h1>About / Methodology</h1><div class="card"><p>floor publica forecasts de piso/techo y timing esperado por horizonte usando artefactos estáticos generados por workflows.</p><ul><li>Sin backend server-side.</li><li>Datos desde <code>site/data/*.json</code>.</li><li>Gobernanza de drift/retraining e incidentes en páginas dedicadas.</li></ul></div></main><script type="module" src="assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Metodología, horizontes, confianza y limitaciones de Floor." />
+  <title>Floor · Metodología</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-page="about">
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<header class="site-header"><div class="header-inner">
+  <a class="brand" href="index.html" aria-label="Floor, ir al resumen"><span class="brand-mark">F</span><span class="brand-copy"><strong>Floor</strong><span>Forecast intelligence</span></span></a>
+  <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="primaryNav">Menú</button>
+  <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
+</div></header>
+<main id="main-content" class="container">
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Methodology</span><h1>Qué estima Floor y qué no pretende estimar.</h1><p class="lead">La metodología está diseñada para que el significado de cada número sea explícito y para separar forecasting de rangos, timing y señales direccionales.</p></div></section>
+  <section class="methodology-grid">
+    <article class="methodology-card"><h2>Qué es un floor / ceiling</h2><p>Son estimaciones de límites inferior y superior del rango esperado para un horizonte. No implican por sí mismos una recomendación de compra o venta.</p></article>
+    <article class="methodology-card"><h2>Horizontes</h2><ul><li><strong>1 sesión</strong> <code>d1</code></li><li><strong>5 sesiones</strong> <code>w1</code></li><li><strong>10 sesiones</strong> <code>q1</code></li><li><strong>3 meses</strong> <code>m3</code></li></ul><p><code>q1</code> es un código interno; en la interfaz siempre se presenta como 10 sesiones para evitar confundirlo con “quarter”.</p></article>
+    <article class="methodology-card"><h2>Confianza</h2><p>Cuando está disponible, la confianza del rango se deriva de calibración empírica sobre validation. Si no existe evidencia válida, la interfaz muestra “No disponible”; nunca inventa 50% como valor neutral.</p></article>
+    <article class="methodology-card"><h2>Timing 3M</h2><p>El modelo puede abstenerse de elegir una semana si su probabilidad máxima no supera el umbral entrenado. En ese caso el floor 3M puede seguir visible, pero el timing aparece como no disponible.</p></article>
+    <article class="methodology-card"><h2>Publicación fail-closed</h2><p>Antes de publicar forecasts se verifica coherencia del batch, compatibilidad de modelos, frescura y contrato de datos. Si los checks críticos fallan, los forecasts accionables se suprimen.</p></article>
+    <article class="methodology-card"><h2>Limitaciones</h2><p>Los modelos pueden degradarse ante cambios de régimen, datos incompletos o eventos extremos. Los resultados históricos y backtests no garantizan resultados futuros.</p></article>
+    <article class="methodology-card"><h2>Fuente y arquitectura</h2><p>GitHub Pages sirve una aplicación estática. Los datos operativos se restauran desde el estado rolling y los JSON públicos se generan y auditan en cada despliegue.</p></article>
+    <article class="methodology-card"><h2>Uso responsable</h2><p>Floor es una herramienta analítica y experimental. No constituye asesoría financiera ni sustituye gestión de riesgo, investigación fundamental o juicio profesional.</p></article>
+  </section>
+</main>
+<footer class="site-footer"><span>Floor · Metodología y limitaciones</span><nav aria-label="Enlaces secundarios"><a href="index.html">Resumen</a><a href="system.html">Estado</a></nav></footer>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

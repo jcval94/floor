@@ -7,7 +7,7 @@ async function loadAudit() {
     return {
       status: 'BLOCKED',
       publishable_forecasts: false,
-      blockers: [`audit.json no disponible: ${String(error)}`],
+      blockers: [`No se pudo validar audit.json: ${String(error)}`],
       warnings: [],
       generated_at: null,
       batch: {},
@@ -16,96 +16,104 @@ async function loadAudit() {
   }
 }
 
-function addStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .publication-audit { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #777; border-radius: 8px; font-size: 14px; line-height: 1.45; }
-    .publication-audit.ok { border-color: #1f7a3f; background: rgba(31,122,63,.08); }
-    .publication-audit.degraded { border-color: #a16b00; background: rgba(161,107,0,.10); }
-    .publication-audit.blocked { border-color: #a12626; background: rgba(161,38,38,.10); }
-    .publication-audit strong { display: inline-block; margin-right: 8px; }
-    .publication-audit code { overflow-wrap: anywhere; }
-    .publication-suppressed { padding: 14px; border: 1px solid #a12626; border-radius: 8px; background: rgba(161,38,38,.08); }
-  `;
-  document.head.appendChild(style);
+function textList(items) {
+  return Array.isArray(items) && items.length ? items.join(' · ') : 'Sin detalle adicional';
 }
 
-function textList(items) {
-  return Array.isArray(items) && items.length ? items.join(' · ') : '-';
+function tone(status) {
+  const normalized = String(status || 'BLOCKED').toUpperCase();
+  if (normalized === 'OK') return 'ok';
+  if (normalized === 'DEGRADED') return 'warn';
+  return 'bad';
+}
+
+function makeStatusBadge(label, status) {
+  const span = document.createElement('span');
+  span.className = `status-badge ${tone(status)}`;
+  const dot = document.createElement('span');
+  dot.className = 'status-dot';
+  dot.setAttribute('aria-hidden', 'true');
+  span.appendChild(dot);
+  span.appendChild(document.createTextNode(label));
+  return span;
 }
 
 function renderBanner(audit) {
   const status = String(audit.status || 'BLOCKED').toUpperCase();
-  const tone = status === 'OK' ? 'ok' : status === 'DEGRADED' ? 'degraded' : 'blocked';
+  const page = document.body.dataset.page;
+  if (page === 'home' && status === 'OK' && audit.publishable_forecasts) return;
+
   const banner = document.createElement('section');
-  banner.className = `publication-audit ${tone}`;
+  banner.className = `publication-audit trust-strip ${tone(status)}`;
+  banner.setAttribute('role', status === 'BLOCKED' ? 'alert' : 'status');
 
-  const title = document.createElement('div');
-  const strong = document.createElement('strong');
-  strong.textContent = `Publication audit: ${status}`;
-  title.appendChild(strong);
-  const publish = document.createElement('span');
-  publish.textContent = audit.publishable_forecasts ? 'Forecasts publicables' : 'Forecasts suprimidos';
-  title.appendChild(publish);
-  banner.appendChild(title);
+  const left = document.createElement('div');
+  const label = !audit.publishable_forecasts
+    ? 'Pronósticos no disponibles'
+    : status === 'DEGRADED'
+      ? 'Publicación con advertencias'
+      : 'Datos verificados';
+  left.appendChild(makeStatusBadge(label, status));
 
-  const meta = document.createElement('div');
-  meta.className = 'small';
+  const meta = document.createElement('span');
+  meta.className = 'trust-time';
   const batch = audit.batch || {};
-  meta.textContent = `Batch: ${batch.as_of || '-'} · filas ${batch.observed_rows ?? '-'} / ${batch.expected_rows ?? '-'} · commit ${audit.source_commit || '-'}`;
-  banner.appendChild(meta);
+  meta.textContent = `Batch ${batch.as_of || 'sin fecha'} · ${batch.observed_rows ?? '—'}/${batch.expected_rows ?? '—'} filas`;
+  left.appendChild(meta);
+  banner.appendChild(left);
 
-  if (Array.isArray(audit.blockers) && audit.blockers.length) {
-    const block = document.createElement('div');
-    block.className = 'small';
-    block.textContent = `Bloqueos: ${textList(audit.blockers)}`;
-    banner.appendChild(block);
-  }
-  if (Array.isArray(audit.warnings) && audit.warnings.length) {
-    const warning = document.createElement('div');
-    warning.className = 'small';
-    warning.textContent = `Advertencias: ${textList(audit.warnings)}`;
-    banner.appendChild(warning);
-  }
+  const detail = document.createElement('span');
+  detail.className = 'trust-detail';
+  if (!audit.publishable_forecasts) detail.textContent = 'Los valores accionables fueron ocultados por controles de integridad.';
+  else if (Array.isArray(audit.warnings) && audit.warnings.length) detail.textContent = textList(audit.warnings.slice(0, 2));
+  else detail.textContent = 'Contrato de publicación validado.';
+  banner.appendChild(detail);
 
   const main = document.querySelector('main');
   if (main) main.prepend(banner);
-  else document.body.prepend(banner);
+}
+
+function suppressedCard(message) {
+  const div = document.createElement('div');
+  div.className = 'empty-state publication-suppressed';
+  const strong = document.createElement('strong');
+  strong.textContent = 'Datos temporalmente no disponibles';
+  const p = document.createElement('p');
+  p.textContent = message;
+  div.append(strong, p);
+  return div;
 }
 
 function suppressActionablePanels(audit) {
   if (audit.publishable_forecasts) return;
-  const message = `Forecasts ocultos por auditoría de publicación: ${textList(audit.blockers)}`;
+  const message = 'El batch más reciente no superó los controles de integridad. No se muestran forecasts hasta contar con una publicación verificable.';
 
-  const blockContainers = ['forecastCards', 'tickerDetail'];
-  blockContainers.forEach((id) => {
+  ['forecastCards', 'tickerDetail'].forEach((id) => {
     const node = document.getElementById(id);
-    if (!node) return;
-    node.innerHTML = '';
-    const div = document.createElement('div');
-    div.className = 'publication-suppressed';
-    div.textContent = message;
-    node.appendChild(div);
+    if (!node || node.querySelector('.publication-suppressed')) return;
+    node.replaceChildren(suppressedCard(message));
   });
 
-  const tableBodies = ['opps', 'm3TopWeeks', 'tickersTable'];
-  tableBodies.forEach((id) => {
+  ['opps', 'm3TopWeeks', 'tickersTable', 'forecastTable', 'm3WatchTable', 'forecastSnapshot'].forEach((id) => {
     const node = document.getElementById(id);
-    if (!node) return;
-    node.innerHTML = `<tr><td colspan="20" class="publication-suppressed"></td></tr>`;
-    const cell = node.querySelector('td');
-    if (cell) cell.textContent = message;
+    if (!node || node.querySelector('.publication-suppressed')) return;
+    node.innerHTML = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 20;
+    td.appendChild(suppressedCard(message));
+    tr.appendChild(td);
+    node.appendChild(tr);
   });
 }
 
 async function runAuditOverlay() {
-  addStyles();
   const audit = await loadAudit();
   renderBanner(audit);
   suppressActionablePanels(audit);
   if (!audit.publishable_forecasts) {
     const observer = new MutationObserver(() => suppressActionablePanels(audit));
-    ['forecastCards', 'tickerDetail', 'opps', 'm3TopWeeks', 'tickersTable'].forEach((id) => {
+    ['forecastCards', 'tickerDetail', 'tickersTable', 'forecastTable', 'm3WatchTable', 'forecastSnapshot'].forEach((id) => {
       const node = document.getElementById(id);
       if (node) observer.observe(node, { childList: true, subtree: true });
     });
@@ -113,6 +121,4 @@ async function runAuditOverlay() {
   }
 }
 
-window.addEventListener('load', () => {
-  runAuditOverlay();
-});
+window.addEventListener('load', runAuditOverlay);
