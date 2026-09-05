@@ -56,10 +56,14 @@ def test_bootstrap_is_automatic_but_idempotent() -> None:
     assert "steps.challenger.outputs.exists != 'true'" in workflow
 
 
-def test_pages_publish_after_eod_and_include_experiment_evidence() -> None:
+def test_pages_publish_only_after_real_eod_evidence() -> None:
     workflow = _text(".github/workflows/pages.yml")
 
     assert 'workflows: ["eod"]' in workflow
+    assert "eod-audit-${upstream_run_id}" in workflow
+    assert "eod_completed_without_audit" in workflow
+    assert "needs.gate.outputs.publish == 'true'" in workflow
+    assert "actions: read" in workflow
     assert "experiment_observation.json" in workflow
     assert "node --check site/assets/experiment.js" in workflow
     assert "operational_paper_gateway_used" in workflow
