@@ -19,12 +19,18 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
     )
 
 
-def _leaderboard(last_session: str = "2026-08-25", sessions: int = 2) -> dict:
+def _leaderboard(
+    last_session: str = "2026-08-25",
+    sessions: int = 2,
+    *,
+    league_id: str = "strategy_league_v1",
+    start_session: str = "2026-08-24",
+) -> dict:
     return {
         "schema_version": 1,
-        "league_id": "strategy_league_v1",
+        "league_id": league_id,
         "status": "RUNNING",
-        "start_session": "2026-08-24",
+        "start_session": start_session,
         "last_session": last_session,
         "sessions": sessions,
         "initial_nav_usd": 100000.0,
@@ -129,6 +135,7 @@ def test_observation_aggregates_only_post_genesis_model_evidence(tmp_path: Path)
     payload = build_experiment_observation(data)
 
     assert payload["status"] == "RUNNING"
+    assert payload["league_id"] == "strategy_league_v1"
     assert payload["start_session"] == "2026-08-24"
     assert payload["safety"]["live_execution_enabled"] is False
     assert payload["safety"]["operational_paper_gateway_used"] is False
@@ -166,3 +173,37 @@ def test_observation_history_is_once_per_league_session(tmp_path: Path) -> None:
     _write_json(league_path, _leaderboard("2026-08-26", 3))
     build_experiment_observation(data)
     assert len(history.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_observation_history_keeps_epochs_distinct(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    league_path = data / "metrics" / "strategy_league" / "leaderboard.json"
+    history = (
+        data
+        / "metrics"
+        / "strategy_league"
+        / "experiment_observation_history.jsonl"
+    )
+
+    _write_json(league_path, _leaderboard())
+    first = build_experiment_observation(data)
+
+    _write_json(
+        league_path,
+        _leaderboard(
+            "2026-09-08",
+            1,
+            league_id="strategy_league_v2",
+            start_session="2026-09-08",
+        ),
+    )
+    second = build_experiment_observation(data)
+
+    rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
+    assert first["league_id"] == "strategy_league_v1"
+    assert second["league_id"] == "strategy_league_v2"
+    assert second["start_session"] == "2026-09-08"
+    assert [row["league_id"] for row in rows] == [
+        "strategy_league_v1",
+        "strategy_league_v2",
+    ]
