@@ -2,8 +2,9 @@ name: eod
 
 on:
   schedule:
-    # Two close-window candidates cover US daylight-saving changes without 15-minute polling.
-    - cron: "45 20,21 * * 1-5"
+    # Poll hourly after the earliest possible US close. The guard is idempotent,
+    # so these are cheap backstops that tolerate delayed/dropped scheduled runs.
+    - cron: "15 20-23 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,8 @@ jobs:
       run: ${{ steps.guard.outputs.run }}
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
+      checkpoint_at: ${{ steps.guard.outputs.checkpoint_at }}
+      lateness_minutes: ${{ steps.guard.outputs.lateness_minutes }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -26,9 +29,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
-      - name: Detect close window
+      - name: Detect due close
         id: guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 50 --data-dir data
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
 
   eod_critical:
     needs: gate
@@ -45,9 +48,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
-      - name: Revalidate close checkpoint under writer lock
+      - name: Revalidate close under writer lock
         id: lock_guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 50 --data-dir data
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
       - name: Initialize DBs
         if: steps.lock_guard.outputs.run == 'true'
         run: make init-dbs
@@ -163,7 +166,17 @@ jobs:
           retention-days: 90
       - name: Report duplicate/stale EOD suppression
         if: steps.lock_guard.outputs.run != 'true'
-        run: echo "EOD suppressed after lock revalidation; another run already completed or the close window elapsed."
+        run: |
+          echo "EOD suppressed after lock revalidation."
+          echo "reason=${{ steps.lock_guard.outputs.reason }}"
+          echo "checkpoint_at=${{ steps.lock_guard.outputs.checkpoint_at }}"
+          echo "lateness_minutes=${{ steps.lock_guard.outputs.lateness_minutes }}"
+
+      - name: Fail if close expired while waiting for the writer lock
+        if: steps.lock_guard.outputs.reason == 'close_window_missed'
+        run: |
+          echo "::error::The EOD close window expired before the evidence loop could run."
+          exit 1
 
   eod_info:
     needs: [gate, eod_critical]
@@ -175,5 +188,11 @@ jobs:
       - name: Summary
         run: |
           echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"
-          echo "polling=close-window-only"
+          echo "checkpoint_at=${{ needs.gate.outputs.checkpoint_at }}"
+          echo "lateness_minutes=${{ needs.gate.outputs.lateness_minutes }}"
+          echo "polling=hourly-close-backstops"
           echo "git_operational_writes=disabled"
+          if [ "${{ needs.gate.outputs.reason }}" = "close_window_missed" ]; then
+            echo "::error::EOD did not complete inside the allowed catch-up window."
+            exit 1
+          fi
