@@ -204,6 +204,7 @@ def _weekly_challenger(data_dir: Path) -> dict[str, Any]:
 
 def _append_history_once(path: Path, payload: dict[str, Any]) -> None:
     session = str(payload.get("last_session") or "")
+    league_id = str(payload.get("league_id") or "")
     if not session:
         return
     if path.exists():
@@ -213,7 +214,9 @@ def _append_history_once(path: Path, payload: dict[str, Any]) -> None:
                 last = json.loads(lines[-1])
             except json.JSONDecodeError:
                 last = {}
-            if str(last.get("last_session") or "") == session:
+            same_session = str(last.get("last_session") or "") == session
+            same_epoch = str(last.get("league_id") or "") == league_id
+            if same_session and same_epoch:
                 return
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -245,6 +248,7 @@ def build_experiment_observation(data_dir: Path) -> dict[str, Any]:
 
     payload: dict[str, Any] = {
         "schema_version": 1,
+        "league_id": leaderboard.get("league_id"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "RUNNING" if start_session else "WAITING_FOR_GENESIS",
         "start_session": start_session,
@@ -306,6 +310,7 @@ def main() -> None:
         json.dumps(
             {
                 "status": payload.get("status"),
+                "league_id": payload.get("league_id"),
                 "start_session": payload.get("start_session"),
                 "last_session": payload.get("last_session"),
                 "sessions": payload.get("sessions"),
