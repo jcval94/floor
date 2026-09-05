@@ -13,6 +13,8 @@ from utils.prediction_batch_guard import inspect_latest_prediction_batch
 
 ET = ZoneInfo("America/New_York")
 _STATUS_RANK = {"OK": 0, "DEGRADED": 1, "CRITICAL": 2}
+_CHECKPOINT_GRACE = timedelta(minutes=90)
+_CHECKPOINT_CRITICAL_AFTER = timedelta(minutes=180)
 
 
 def _parse_dt(value: object) -> datetime | None:
@@ -157,19 +159,41 @@ def _checkpoint_check(data_dir: Path, now_et: datetime) -> dict[str, str]:
     info = get_session_info(now_et)
     if not info.is_open_day:
         return _check("checkpoint_completeness", "OK", "market closed today; no checkpoints required")
+
     checkpoints = checkpoint_times(info)
-    grace = timedelta(minutes=45)
-    expected = [event for event, timestamp in checkpoints.items() if now_et >= timestamp + grace]
-    if not expected:
-        return _check("checkpoint_completeness", "OK", "no checkpoint is past its grace window")
     day = info.session_day.isoformat()
     marker_dir = data_dir / "snapshots" / "workflow_runs"
-    missing = [event for event in expected if not (marker_dir / f"intraday_{day}_{event}.json").exists()]
+
+    missing: list[tuple[str, datetime]] = []
+    for event, timestamp in checkpoints.items():
+        if now_et < timestamp + _CHECKPOINT_GRACE:
+            continue
+        if not (marker_dir / f"intraday_{day}_{event}.json").exists():
+            missing.append((event, timestamp))
+
     if not missing:
-        return _check("checkpoint_completeness", "OK", "all elapsed checkpoints are marked complete")
-    after_close = bool(info.market_close and now_et >= info.market_close + timedelta(minutes=60))
-    status = "CRITICAL" if after_close else "DEGRADED"
-    return _check("checkpoint_completeness", status, f"missing elapsed checkpoints: {','.join(missing)}")
+        if any(now_et >= timestamp for timestamp in checkpoints.values()):
+            return _check("checkpoint_completeness", "OK", "all checkpoints past their grace window are marked complete")
+        return _check("checkpoint_completeness", "OK", "no checkpoint is due yet")
+
+    critical = [
+        event
+        for event, timestamp in missing
+        if now_et >= timestamp + _CHECKPOINT_CRITICAL_AFTER
+    ]
+    status = "CRITICAL" if critical else "DEGRADED"
+    missing_names = ",".join(event for event, _ in missing)
+    if critical:
+        return _check(
+            "checkpoint_completeness",
+            status,
+            f"missing checkpoints beyond hard deadline: {missing_names}",
+        )
+    return _check(
+        "checkpoint_completeness",
+        status,
+        f"missing checkpoints beyond scheduler grace: {missing_names}",
+    )
 
 
 def build_health_snapshot(

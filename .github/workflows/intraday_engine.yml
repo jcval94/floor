@@ -2,9 +2,11 @@ name: intraday_engine
 
 on:
   schedule:
-    # Hourly checkpoint polling. :30 aligns OPEN/+2h/+4h/+6h across US DST;
-    # CLOSE is picked up 30 minutes after the bell by the wider guard tolerance.
-    - cron: "30 13-21 * * 1-5"
+    # Hourly checkpoint polling runs 10 minutes after the nominal :30 events.
+    # Two close backstops add resilience to GitHub Actions scheduler delays
+    # without returning to high-frequency polling.
+    - cron: "40 13-22 * * 1-5"
+    - cron: "10 20,21 * * 1-5"
   workflow_dispatch:
     inputs:
       force_run:
@@ -38,6 +40,8 @@ jobs:
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
       session_day: ${{ steps.guard.outputs.session_day }}
+      checkpoint_at: ${{ steps.guard.outputs.checkpoint_at }}
+      lateness_minutes: ${{ steps.guard.outputs.lateness_minutes }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,7 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
-      - name: Detect market checkpoint
+      - name: Detect due market checkpoint
         id: guard
         run: |
           set -euo pipefail
@@ -56,9 +60,11 @@ jobs:
               echo "reason=manual_force"
               echo "event=${{ github.event.inputs.force_event || 'OPEN' }}"
               echo "session_day=$session_day"
+              echo "checkpoint_at="
+              echo "lateness_minutes="
             } >> "$GITHUB_OUTPUT"
           else
-            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 35 --data-dir data
+            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 90 --data-dir data
           fi
 
   engine_critical:
@@ -89,9 +95,11 @@ jobs:
               echo "run=true"
               echo "reason=manual_force"
               echo "event=$ORIGINAL_EVENT"
+              echo "checkpoint_at="
+              echo "lateness_minutes="
             } >> "$GITHUB_OUTPUT"
           else
-            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 35 --data-dir data
+            PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 90 --data-dir data
           fi
 
       - name: Initialize DBs
@@ -219,6 +227,14 @@ jobs:
           echo "original_event=${{ needs.gate.outputs.event }}"
           echo "revalidated_event=${{ steps.lock_guard.outputs.event }}"
           echo "revalidated_reason=${{ steps.lock_guard.outputs.reason }}"
+          echo "revalidated_checkpoint_at=${{ steps.lock_guard.outputs.checkpoint_at }}"
+          echo "revalidated_lateness_minutes=${{ steps.lock_guard.outputs.lateness_minutes }}"
+
+      - name: Fail if a due checkpoint was lost while waiting for the writer lock
+        if: steps.lock_guard.outputs.reason == 'checkpoint_missed' || (steps.lock_guard.outputs.run == 'true' && steps.lock_guard.outputs.event != needs.gate.outputs.event)
+        run: |
+          echo "::error::A due checkpoint became stale or advanced while waiting for the runtime-state writer lock."
+          exit 1
 
   engine_info:
     needs: [gate, engine_critical]
@@ -232,5 +248,11 @@ jobs:
           echo "run=${{ needs.gate.outputs.run }}"
           echo "event=${{ needs.gate.outputs.event }}"
           echo "reason=${{ needs.gate.outputs.reason }}"
+          echo "checkpoint_at=${{ needs.gate.outputs.checkpoint_at }}"
+          echo "lateness_minutes=${{ needs.gate.outputs.lateness_minutes }}"
           echo "runtime_state=github_release:runtime-state-v1"
           echo "git_operational_writes=disabled"
+          if [ "${{ needs.gate.outputs.reason }}" = "checkpoint_missed" ]; then
+            echo "::error::A market checkpoint was missed outside the allowed lateness window."
+            exit 1
+          fi

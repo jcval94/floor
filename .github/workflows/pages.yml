@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -29,13 +30,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      publish: ${{ steps.decision.outputs.publish }}
+      reason: ${{ steps.decision.outputs.reason }}
+    steps:
+      - name: Require real EOD evidence before workflow-run publication
+        id: decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          publish=false
+          reason=unsupported_event
+
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_NAME" = "main" ]; then
+            publish=true
+            reason=main_push
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF_NAME" = "main" ]; then
+            publish=true
+            reason=manual_main
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_run" ] \
+            && [ "${{ github.event.workflow_run.conclusion }}" = "success" ] \
+            && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            upstream_run_id="${{ github.event.workflow_run.id }}"
+            expected_artifact="eod-audit-${upstream_run_id}"
+            count=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100" \
+              --jq "[.artifacts[] | select(.name == \"${expected_artifact}\" and .expired == false)] | length")
+            if [ "${count:-0}" -gt 0 ]; then
+              publish=true
+              reason=eod_audit_present
+            else
+              reason=eod_completed_without_audit
+            fi
+          fi
+
+          {
+            echo "publish=$publish"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+          echo "pages publish=$publish reason=$reason"
+
   build:
-    if: >-
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'push' && github.ref_name == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main')
+    needs: gate
+    if: needs.gate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout latest audited branch state

@@ -80,7 +80,32 @@ def test_retrain_alert_degrades_health_instead_of_reporting_ok(tmp_path: Path) -
     assert any(item["name"] == "retraining_review" and item["status"] == "DEGRADED" for item in payload["series"])
 
 
-def test_missing_elapsed_checkpoints_are_critical_after_close(tmp_path: Path) -> None:
+def test_scheduler_delay_inside_grace_does_not_raise_false_alarm(tmp_path: Path) -> None:
+    # OPEN was 60 minutes ago. GitHub Actions can be delayed; the engine still
+    # has time to catch the checkpoint inside its 90-minute execution window.
+    now_et = datetime(2026, 8, 21, 10, 30, tzinfo=ET)
+    _write_dashboard(tmp_path, now_et)
+    _write_review(tmp_path)
+
+    payload = build_health_snapshot(tmp_path, now=now_et)
+
+    checkpoint = next(item for item in payload["series"] if item["name"] == "checkpoint_completeness")
+    assert checkpoint["status"] == "OK"
+
+
+def test_missing_checkpoint_degrades_after_scheduler_grace(tmp_path: Path) -> None:
+    now_et = datetime(2026, 8, 21, 11, 0, tzinfo=ET)  # OPEN is 90 minutes old.
+    _write_dashboard(tmp_path, now_et)
+    _write_review(tmp_path)
+
+    payload = build_health_snapshot(tmp_path, now=now_et)
+
+    checkpoint = next(item for item in payload["series"] if item["name"] == "checkpoint_completeness")
+    assert checkpoint["status"] == "DEGRADED"
+    assert "OPEN" in checkpoint["detail"]
+
+
+def test_missing_elapsed_checkpoints_are_critical_after_hard_deadline(tmp_path: Path) -> None:
     now_et = datetime(2026, 8, 21, 17, 30, tzinfo=ET)
     _write_dashboard(tmp_path, now_et)
     _write_review(tmp_path)

@@ -2,7 +2,7 @@ name: monitoring
 
 on:
   schedule:
-    - cron: "55 13-21 * * 1-5"
+    - cron: "55 13-22 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -12,19 +12,33 @@ jobs:
   monitor_critical:
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency:
       group: floor-runtime-state-writer
       cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Detect market session
+        id: session
+        run: PYTHONPATH=src python -m utils.workflow_guards check --kind always_open_day --tolerance-minutes 0 --data-dir data
+
+      - name: Skip closed market day
+        if: steps.session.outputs.run != 'true'
+        run: echo "Monitoring skipped because today is not a US market session."
+
       - name: Restore rolling runtime state
+        if: steps.session.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
-      - name: Initialize DBs
-        run: make init-dbs
+
+      # health_snapshot reads the restored report/prediction/review/marker files.
+      # Do not hydrate SQLite here: it is unnecessary, expensive and holds the
+      # shared runtime-state writer lock long enough to delay market checkpoints.
       - name: Generate operational health snapshot
+        if: steps.session.outputs.run == 'true'
         id: health
         run: |
           set +e
@@ -43,21 +57,24 @@ jobs:
             echo "snapshot_valid=$valid"
           } >> "$GITHUB_OUTPUT"
           exit 0
+
       - name: Publish rolling monitoring state outside Git
-        if: steps.health.outputs.snapshot_valid == 'true'
+        if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
+
       - name: Upload immutable monitoring snapshot
-        if: steps.health.outputs.snapshot_valid == 'true'
+        if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: monitoring-health-${{ github.run_id }}
           path: data/metrics/public_metrics.json
           if-no-files-found: error
           retention-days: 30
+
       - name: Fail workflow on invalid or critical health
-        if: steps.health.outputs.rc != '0' || steps.health.outputs.snapshot_valid != 'true'
+        if: steps.session.outputs.run == 'true' && (steps.health.outputs.rc != '0' || steps.health.outputs.snapshot_valid != 'true')
         run: |
           echo "::error::Operational health snapshot is invalid or CRITICAL."
           if [ -f data/metrics/public_metrics.json ]; then
@@ -76,4 +93,5 @@ jobs:
         run: |
           echo "monitoring result=${{ needs.monitor_critical.result }}"
           echo "polling=hourly-market-window"
+          echo "sqlite_hydration=disabled"
           echo "git_operational_writes=disabled"

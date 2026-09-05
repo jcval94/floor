@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from utils.market_session import detect_event, get_session_info
+from utils.market_session import checkpoint_times, detect_event, get_session_info
 
 ET = ZoneInfo("America/New_York")
 
@@ -28,7 +28,7 @@ def _marker_path(base_dir: Path, key: str) -> Path:
 
 
 def _marker_key(kind: str, day: str, event: str | None = None) -> str:
-    """Builds marker keys by workflow type.
+    """Build marker keys by workflow type.
 
     Convention:
     - intraday/event_specific: `<kind>_<YYYY-MM-DD>_<EVENT>`
@@ -42,46 +42,160 @@ def _marker_key(kind: str, day: str, event: str | None = None) -> str:
     return f"{kind}_{day}"
 
 
-def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: Path) -> dict[str, str]:
-    now = datetime.now(tz=ET)
+def _as_et(now: datetime | None) -> datetime:
+    current = now or datetime.now(tz=ET)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=ET)
+    return current.astimezone(ET)
+
+
+def _marker_exists(data_dir: Path, kind: str, day: str, event: str) -> bool:
+    return _marker_path(data_dir, _marker_key(kind=kind, day=day, event=event)).exists()
+
+
+def _intraday_decision(
+    *,
+    now: datetime,
+    tolerance_minutes: int,
+    data_dir: Path,
+    out: dict[str, str],
+) -> dict[str, str]:
     info = get_session_info(now)
+    checkpoints = checkpoint_times(info)
+    if not checkpoints:
+        out["reason"] = "no_checkpoints"
+        return out
+
+    day = info.session_day.isoformat()
+    tolerance = timedelta(minutes=max(0, tolerance_minutes))
+    due = [(event, timestamp) for event, timestamp in checkpoints.items() if timestamp <= now]
+    if not due:
+        out["reason"] = "no_checkpoint_due"
+        return out
+
+    # Only run checkpoints that are already due, are still fresh enough to be
+    # meaningful, and have not been completed. If several are eligible because
+    # a runner was delayed, prefer the most recent due checkpoint rather than
+    # fabricating an older market state.
+    eligible = [
+        (event, timestamp)
+        for event, timestamp in due
+        if now - timestamp <= tolerance and not _marker_exists(data_dir, "intraday", day, event)
+    ]
+    if eligible:
+        event, timestamp = max(eligible, key=lambda item: item[1])
+        lateness = max(0, int((now - timestamp).total_seconds() // 60))
+        out.update(
+            {
+                "run": "true",
+                "reason": "checkpoint_due",
+                "event": event,
+                "checkpoint_at": timestamp.isoformat(),
+                "lateness_minutes": str(lateness),
+            }
+        )
+        return out
+
+    unmarked_due = [
+        (event, timestamp)
+        for event, timestamp in due
+        if not _marker_exists(data_dir, "intraday", day, event)
+    ]
+    if unmarked_due:
+        event, timestamp = max(unmarked_due, key=lambda item: item[1])
+        lateness = max(0, int((now - timestamp).total_seconds() // 60))
+        out.update(
+            {
+                "reason": "checkpoint_missed",
+                "event": event,
+                "checkpoint_at": timestamp.isoformat(),
+                "lateness_minutes": str(lateness),
+            }
+        )
+        return out
+
+    event, timestamp = max(due, key=lambda item: item[1])
+    out.update(
+        {
+            "reason": "already_ran",
+            "event": event,
+            "checkpoint_at": timestamp.isoformat(),
+            "lateness_minutes": str(max(0, int((now - timestamp).total_seconds() // 60))),
+        }
+    )
+    return out
+
+
+def _eod_decision(
+    *,
+    now: datetime,
+    tolerance_minutes: int,
+    data_dir: Path,
+    out: dict[str, str],
+) -> dict[str, str]:
+    info = get_session_info(now)
+    if info.market_close is None:
+        out["reason"] = "market_closed"
+        return out
+
+    day = info.session_day.isoformat()
+    key = _marker_key(kind="eod", day=day, event="CLOSE")
+    legacy_key = f"eod_{day}"
+    if _marker_path(data_dir, key).exists() or _marker_path(data_dir, legacy_key).exists():
+        out.update({"reason": "already_ran", "event": "CLOSE"})
+        return out
+
+    close_at = info.market_close
+    out["checkpoint_at"] = close_at.isoformat()
+    if now < close_at:
+        out["reason"] = "not_close_due"
+        return out
+
+    lateness = max(0, int((now - close_at).total_seconds() // 60))
+    out["lateness_minutes"] = str(lateness)
+    if now - close_at > timedelta(minutes=max(0, tolerance_minutes)):
+        out.update({"reason": "close_window_missed", "event": "CLOSE"})
+        return out
+
+    out.update({"run": "true", "reason": "close_due", "event": "CLOSE"})
+    return out
+
+
+def should_run(
+    kind: str,
+    tolerance_minutes: int,
+    event: str | None,
+    data_dir: Path,
+    now: datetime | None = None,
+) -> dict[str, str]:
+    current = _as_et(now)
+    info = get_session_info(current)
     out = {
         "run": "false",
         "reason": "market_closed",
         "event": "",
         "session_day": info.session_day.isoformat(),
+        "checkpoint_at": "",
+        "lateness_minutes": "",
     }
     if not info.is_open_day:
         return out
 
     if kind == "intraday":
-        detected = detect_event(now=now, tolerance_minutes=tolerance_minutes)
-        if not detected:
-            out["reason"] = "no_checkpoint_window"
-            return out
-        key = _marker_key(kind="intraday", day=info.session_day.isoformat(), event=detected)
-        marker = _marker_path(data_dir, key)
-        if marker.exists():
-            out["reason"] = "already_ran"
-            out["event"] = detected
-            return out
-        out.update({"run": "true", "reason": "checkpoint_window", "event": detected})
-        return out
+        return _intraday_decision(
+            now=current,
+            tolerance_minutes=tolerance_minutes,
+            data_dir=data_dir,
+            out=out,
+        )
 
     if kind == "eod":
-        close_event = detect_event(now=now, tolerance_minutes=tolerance_minutes)
-        if close_event != "CLOSE":
-            out["reason"] = "not_close_window"
-            return out
-        day = info.session_day.isoformat()
-        key = _marker_key(kind="eod", day=day, event="CLOSE")
-        legacy_key = f"eod_{day}"
-        if _marker_path(data_dir, key).exists() or _marker_path(data_dir, legacy_key).exists():
-            out["reason"] = "already_ran"
-            out["event"] = "CLOSE"
-            return out
-        out.update({"run": "true", "reason": "close_window", "event": "CLOSE"})
-        return out
+        return _eod_decision(
+            now=current,
+            tolerance_minutes=tolerance_minutes,
+            data_dir=data_dir,
+            out=out,
+        )
 
     if kind == "always_open_day":
         out.update({"run": "true", "reason": "open_day"})
@@ -91,11 +205,11 @@ def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: P
         if not event:
             out["reason"] = "missing_event"
             return out
-        detected = detect_event(now=now, tolerance_minutes=tolerance_minutes)
+        detected = detect_event(now=current, tolerance_minutes=tolerance_minutes)
         if detected != event:
             out["reason"] = "event_not_matched"
             return out
-        key = f"{kind}_{info.session_day.isoformat()}_{event}"
+        key = _marker_key(kind=kind, day=info.session_day.isoformat(), event=event)
         if _marker_path(data_dir, key).exists():
             out["reason"] = "already_ran"
             out["event"] = event
@@ -107,9 +221,14 @@ def should_run(kind: str, tolerance_minutes: int, event: str | None, data_dir: P
     return out
 
 
-def mark_run(kind: str, data_dir: Path, event: str | None) -> Path:
-    now = datetime.now(tz=ET)
-    day = now.date().isoformat()
+def mark_run(
+    kind: str,
+    data_dir: Path,
+    event: str | None,
+    now: datetime | None = None,
+) -> Path:
+    current = _as_et(now)
+    day = current.date().isoformat()
     marker_event = "CLOSE" if kind == "eod" else event
     key = _marker_key(kind=kind, day=day, event=marker_event)
     marker = _marker_path(data_dir, key)
@@ -118,7 +237,7 @@ def mark_run(kind: str, data_dir: Path, event: str | None) -> Path:
         "kind": kind,
         "day": day,
         "event": marker_event,
-        "ts": now.isoformat(),
+        "ts": current.isoformat(),
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
     }
