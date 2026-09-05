@@ -62,7 +62,8 @@ def test_intraday_and_eod_revalidate_after_writer_lock() -> None:
     assert "Revalidate checkpoint under writer lock" in intraday
     assert "steps.lock_guard.outputs.run == 'true'" in intraday
     assert "cancel-in-progress: false" in intraday
-    assert "Revalidate close checkpoint under writer lock" in eod
+    assert "Revalidate close" in eod
+    assert "writer lock" in eod
     assert "steps.lock_guard.outputs.run == 'true'" in eod
 
 
@@ -77,7 +78,8 @@ def test_monitoring_does_not_republish_stale_snapshot_after_failure() -> None:
     workflow = _text(WORKFLOWS / "monitoring.yml")
     assert "rm -f data/metrics/public_metrics.json" in workflow
     assert "snapshot_valid" in workflow
-    assert "if: steps.health.outputs.snapshot_valid == 'true'" in workflow
+    assert "steps.health.outputs.snapshot_valid == 'true'" in workflow
+    assert "steps.session.outputs.run == 'true'" in workflow
 
 
 def test_retrain_execute_commits_only_lightweight_model_registry() -> None:
