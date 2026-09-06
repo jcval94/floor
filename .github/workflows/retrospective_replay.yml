@@ -77,6 +77,53 @@ jobs:
             --end "${{ steps.window.outputs.end }}" \
             --output "$out"
 
+      - name: Stamp counterfactual diagnostic evidence contract
+        run: |
+          set -euo pipefail
+          out="data/replay/${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
+          python - "$out" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          description = (
+              "Counterfactual diagnostic replay of the fully repaired Floor system using "
+              "serving-compatible schema-v2 champions trained strictly before the replay window."
+          )
+          manifest_path = root / "replay_manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          manifest["description"] = description
+          manifest["prospective_evidence"] = False
+          manifest.setdefault("isolation", {})["strategy_league_v3_writes"] = False
+          manifest["historical_strategy_league_epochs_preserved"] = [
+              "strategy_league_v1",
+              "strategy_league_v2",
+          ]
+          manifest_path.write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          report_path = root / "REPLAY_REPORT.md"
+          report = report_path.read_text(encoding="utf-8")
+          old = (
+              "> Diagnostic retrospective evidence only. This replay is isolated from "
+              "Strategy League v2 and is not prospective evidence."
+          )
+          new = (
+              f"> {description}\n> Retrospective diagnostic evidence only; it is not "
+              "prospective evidence and does not claim to reproduce the exact models that "
+              "would have run absent the historical serving bug."
+          )
+          report = report.replace(old, new)
+          report = report.replace(
+              "- This replay never writes to runtime-state, Pages, production predictions, or Strategy League v2.",
+              "- This replay never writes to runtime-state, Pages, production predictions, or prospective Strategy League v3; v1/v2 remain historical.",
+          )
+          report_path.write_text(report, encoding="utf-8")
+          PY
+
       - name: Audit replay isolation and temporal contract
         run: |
           set -euo pipefail
@@ -91,6 +138,7 @@ jobs:
           assert manifest["prospective_evidence"] is False
           assert manifest["blocked_count"] == 0
           assert all(value is False for value in manifest["isolation"].values())
+          assert manifest["description"].startswith("Counterfactual diagnostic replay")
           audits = [
               json.loads(line)
               for line in (root / "point_in_time_audit.jsonl").read_text(encoding="utf-8").splitlines()
@@ -103,6 +151,7 @@ jobs:
               "prediction_count": manifest["prediction_count"],
               "audits": len(audits),
               "isolation": manifest["isolation"],
+              "description": manifest["description"],
           }, indent=2))
           PY
 
