@@ -77,8 +77,64 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     assert output.exists()
 
 
+def test_publish_league_payload_rejects_stale_runtime_state(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    source = data_dir / "metrics" / "strategy_league" / "leaderboard.json"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v4_old",
+                "status": "RUNNING",
+                "initial_nav_usd": 100000.0,
+                "rows": [
+                    {
+                        "strategy": "weekly_opportunity_ridge",
+                        "return": 0.50,
+                        "nav": 150000.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    league_config = tmp_path / "strategy_league.json"
+    league_config.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v6_all_strategies_10k",
+                "initial_nav_usd": 10000.0,
+                "members": [
+                    {"id": "weekly_opportunity_ridge"},
+                    {"id": "capital_allocation_challenger"},
+                    {"id": "benchmark_spy"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output = tmp_path / "site" / "data" / "strategy_league.json"
+    payload = publish_league_payload(data_dir, output, league_config)
+
+    assert payload["league_id"] == "strategy_league_v6_all_strategies_10k"
+    assert payload["status"] == "WAITING_FOR_GENESIS"
+    assert payload["rows"] == []
+    assert payload["initial_nav_usd"] == 10000.0
+    assert payload["scheduled_members"] == [
+        "weekly_opportunity_ridge",
+        "capital_allocation_challenger",
+        "benchmark_spy",
+    ]
+    assert "previous league strategy_league_v4_old" in payload["detail"]
+
+
 def test_strategy_league_config_tracks_every_base_strategy() -> None:
-    config = json.loads((ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8"))
+    config = json.loads(
+        (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
+    )
     member_ids = {str(member["id"]) for member in config["members"]}
     assert config["league_id"] == "strategy_league_v6_all_strategies_10k"
     assert float(config["initial_nav_usd"]) == 10000.0
@@ -112,6 +168,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "mean_reversion_floor_w1: 'Mean Reversion + Floor'" in script
     assert "cross_horizon_asymmetry: 'Cross-Horizon Asymmetry'" in script
     assert "SERIES_ORDER" in script
+    assert "scheduled_members" in script
     assert "multiLineSvg" in script
     assert "challenger_vs_best_base" in script
     assert "costs_paid" in script
