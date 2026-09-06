@@ -5,7 +5,13 @@ activation:
   require_canonical_serving: true
 
 portfolio:
-  nav_usd: 1000000
+  nav_usd: 10000
+  initial_equity_usd: 10000
+  max_position_pct_nav: 0.20
+  max_gross_exposure_pct_nav: 0.90
+  max_portfolio_heat_pct_nav: 0.04
+  max_sector_exposure_pct_nav: 0.35
+  min_cash_pct_nav: 0.10
   max_orders_per_cycle: 8
   max_orders_per_ticker: 1
   max_orders_per_sector: 3
@@ -59,6 +65,7 @@ strategies:
       relative_strength_weight: 0.35
     position_sizing:
       risk_budget_pct_nav: 0.006
+      max_weight_pct_nav: 0.20
       max_notional_usd: 50000
     risk:
       stop_buffer_pct: 0.002
@@ -90,6 +97,7 @@ strategies:
       max_fading_momentum: 0.005
     position_sizing:
       risk_budget_pct_nav: 0.007
+      max_weight_pct_nav: 0.20
       max_notional_usd: 50000
     risk:
       stop_buffer_pct: 0.003
@@ -124,6 +132,7 @@ strategies:
       relative_strength_weight: 0.40
     position_sizing:
       risk_budget_pct_nav: 0.008
+      max_weight_pct_nav: 0.20
       max_notional_usd: 65000
     risk:
       stop_buffer_pct: 0.003
