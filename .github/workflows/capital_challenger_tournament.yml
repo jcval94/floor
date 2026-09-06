@@ -13,12 +13,13 @@ on:
         default: "2026-09-04"
   push:
     branches:
-      - codex/capital-allocation-challenger
+      - main
     paths:
       - capital_tournament_request.json
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   tournament:
@@ -77,7 +78,7 @@ jobs:
             --end "${{ steps.window.outputs.end }}" \
             --output "$out" | tee "$RUNNER_TEMP/tournament_stdout.json"
 
-      - name: Assert challenger was evaluated without future data
+      - name: Assert challenger was evaluated without future market data
         run: |
           set -euo pipefail
           out="data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
@@ -91,24 +92,68 @@ jobs:
           assert payload["future_data_used"] is False
           rows = payload["leaderboard"]["rows"]
           by_id = {row["strategy"]: row for row in rows}
-          assert "capital_allocation_challenger" in by_id
+          expected = {
+              "weekly_opportunity_ridge",
+              "breakout_protected_by_floor",
+              "mean_reversion_floor_w1",
+              "cross_horizon_asymmetry",
+              "capital_allocation_challenger",
+              "benchmark_spy",
+              "benchmark_equal_weight",
+          }
+          missing = sorted(expected - set(by_id))
+          assert not missing, f"missing tournament members: {missing}"
           challenger = by_id["capital_allocation_challenger"]
-          weekly = by_id["weekly_opportunity_ridge"]
-          breakout = by_id["breakout_protected_by_floor"]
+          bases = [
+              by_id["weekly_opportunity_ridge"],
+              by_id["breakout_protected_by_floor"],
+              by_id["mean_reversion_floor_w1"],
+              by_id["cross_horizon_asymmetry"],
+          ]
           print(json.dumps({
               "challenger": challenger,
-              "weekly": weekly,
-              "breakout": breakout,
+              "best_base_return": max(row["return"] for row in bases),
               "challenger_best_existing_strategy": (
-                  challenger["return"] > max(weekly["return"], breakout["return"])
+                  challenger["return"] > max(row["return"] for row in bases)
               ),
           }, indent=2))
           PY
+
+      - name: Build public retrospective strategy report
+        run: |
+          set -euo pipefail
+          out="data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
+          PYTHONPATH=src python -m replay.publish_tournament_report \
+            --input "$out/capital_tournament.json" \
+            --output data/reports/strategy.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("data/reports/strategy.json").read_text(encoding="utf-8"))
+          assert report["status"] == "RETROSPECTIVE_OK"
+          assert report["prospective_evidence"] is False
+          assert report["future_data_used"] is False
+          assert len(report["rows"]) == 7
+          assert report["equity_curve"]
+          print(json.dumps(report["summary"], indent=2))
+          PY
+
+      - name: Publish retrospective report to rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
+      - name: Trigger audited Pages rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main
 
       - name: Upload tournament evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: capital-tournament-${{ steps.window.outputs.start }}-${{ steps.window.outputs.end }}-${{ github.run_id }}
-          path: data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}
+          path: |
+            data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}
+            data/reports/strategy.json
           if-no-files-found: error
           retention-days: 30
