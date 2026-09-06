@@ -8,6 +8,38 @@ La direccion proviene de evidencia que si es direccional —momentum, fuerza rel
 
 `HOLD` es una salida de primera clase: si una oportunidad no supera los costos y guardrails, el sistema registra la razon y no genera una orden.
 
+## Arquitectura por estrategia
+
+Cada estrategia activa tiene un paquete propio. Ninguna implementacion direccional puede vivir en el registry, runner, allocator o en un archivo monolitico compartido.
+
+```text
+src/strategies/
+├── common/
+│   ├── __init__.py
+│   └── mechanics.py
+├── weekly_opportunity_ridge/
+│   ├── __init__.py
+│   └── strategy.py
+├── breakout_protected_by_floor/
+│   ├── __init__.py
+│   └── strategy.py
+├── mean_reversion_floor_w1/
+│   ├── __init__.py
+│   └── strategy.py
+├── cross_horizon_asymmetry/
+│   ├── __init__.py
+│   └── strategy.py
+├── registry.py
+├── run_strategies.py
+├── activation.py
+├── portfolio_allocator.py
+└── base.py
+```
+
+`registry.py` es la unica lista de implementaciones activas y solo enlaza `strategy_id -> generate_orders`. `common/` contiene exclusivamente mecanica compartida: costos, geometria Floor/Ceiling, liquidez, sizing, contexto M3 y construccion de HOLD.
+
+Las rutas historicas `strategy_pack_v2.py`, `strategy_breakout_floor.py`, `strategy_mean_reversion.py` y `strategy_weekly_opportunity.py` se conservan solo como fachadas de compatibilidad sin logica. Un test estructural impide que vuelvan a acumular implementaciones.
+
 ## Contrato de costos
 
 La plataforma cobra 0.24% por cada compra y 0.24% por cada venta. El strategy layer modela por lado:
@@ -46,7 +78,7 @@ Nuevo challenger. Combina la geometria D1/W1/Q1 con pesos 20%/30%/50%. Solo toma
 - `model_only`
 - `consensus`
 
-Sus archivos legacy pueden permanecer temporalmente para trazabilidad, pero ya no se registran ni configuran como estrategias activas. Las tres dependian de señales direccionales que el contrato actual de Floor ya no considera evidencia suficiente.
+Sus implementaciones activas fueron retiradas del source root. La historia permanece en Git, pero ninguna de las tres se registra ni participa en research, paper o live. Dependian de señales direccionales que el contrato actual de Floor ya no considera evidencia suficiente.
 
 ## M3 como contexto
 
@@ -61,4 +93,4 @@ El numero de acciones se limita por:
 3. friccion round-trip estimada;
 4. notional maximo por estrategia.
 
-PAPER y LIVE permanecen desactivados. Ningun cambio activa ejecucion real ni promocion automatica. Como el contrato de estrategia y costos cambio, la evidencia prospectiva de Strategy League reinicia bajo `strategy_league_v4`; las ligas anteriores permanecen como historia y no deben mezclarse con v4.
+PAPER y LIVE permanecen desactivados. Ningun cambio activa ejecucion real ni promocion automatica. Como este refactor es exclusivamente estructural, no reinicia `strategy_league_v4`: IDs, parametros, costos y comportamiento de las estrategias permanecen iguales.
