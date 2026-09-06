@@ -2,8 +2,12 @@
   "task": "value",
   "format": "pkl",
   "file_name": "value_champion.pkl",
-  "sha256": "614b7fb1ce78670d91c7bd92f9bbc5cd7b2de0642e05d6e13dc4999d86aa3688",
+  "sha256": "c3426ff2d08274f40b2cf1a4535c6304d4e8a079250be647a9031ec07f049676",
   "model_name": "m3_value_linear",
-  "model_version": "20260318T223030Z",
-  "created_at": "2026-03-18T22:31:38.308699+00:00"
+  "model_version": "cutoff-20260821-schema2",
+  "version": "cutoff-20260821-schema2",
+  "scoring_version": "m3-quality-v3",
+  "selection_decision": "promote_first",
+  "selection_objective": "minimize_scale_free_out_of_time_error",
+  "created_at": "2026-09-06T02:22:55.573336+00:00"
 }

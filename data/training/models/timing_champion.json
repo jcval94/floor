@@ -8090,7 +8090,7 @@
     "decision": "promote_first",
     "reason": "No champion exists; bootstrap champion with first valid artifact.",
     "scoring_version": "m3-quality-v3",
-    "evaluated_at": "2026-09-06T01:45:24.918153Z",
+    "evaluated_at": "2026-09-06T02:22:55.552605Z",
     "new_score": 3.05821836863253,
     "existing_score": null,
     "objective": "minimize_scale_free_out_of_time_error"
