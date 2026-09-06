@@ -90,12 +90,12 @@ export function multiLineSvg(series = [], options = {}) {
       const y = 86 - ((point.value - yMin) / Math.max(yMax - yMin, 1e-9)) * 68;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
-    return `<polyline class="league-series league-series-${entry.seriesIndex % 6}" points="${coords}" data-series="${escapeHTML(entry.id)}" />`;
+    return `<polyline class="league-series league-series-${entry.seriesIndex % 7}" points="${coords}" data-series="${escapeHTML(entry.id)}" />`;
   }).join('');
 
   const legend = cleanSeries.map((entry) => {
     const last = entry.points[entry.points.length - 1]?.value;
-    return `<span class="league-legend-item"><i class="league-legend-swatch league-series-${entry.seriesIndex % 6}"></i><strong>${escapeHTML(entry.label)}</strong><span>${fmt(last)}</span></span>`;
+    return `<span class="league-legend-item"><i class="league-legend-swatch league-series-${entry.seriesIndex % 7}"></i><strong>${escapeHTML(entry.label)}</strong><span>${fmt(last)}</span></span>`;
   }).join('');
 
   const title = escapeHTML(options.title || 'Comparación de NAV');
