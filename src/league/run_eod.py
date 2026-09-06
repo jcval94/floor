@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from floor.universe import parse_universe_yaml
+from league.capital_challenger import build_capital_challenger_targets
 from league.engine import (
     advance_league,
     initialize_league,
@@ -16,6 +17,8 @@ from league.engine import (
 from league.market_features import build_league_market_snapshot
 from models.train_weekly_opportunity import predict_weekly_opportunity
 from strategies.breakout_protected_by_floor import generate_breakout_floor_orders
+from strategies.cross_horizon_asymmetry import generate_cross_horizon_orders
+from strategies.mean_reversion_floor_w1 import generate_mean_reversion_orders
 from strategies.run_strategies import load_simple_yaml
 from strategies.weekly_opportunity_ridge import generate_weekly_opportunity_orders
 
@@ -82,6 +85,8 @@ def _strategy_targets(
     weekly_artifact: dict,
     *,
     include_weekly: bool,
+    include_challenger: bool,
+    challenger_cfg: dict,
 ) -> dict[str, dict[str, dict]]:
     scored = [dict(row) for row in rows]
     params = weekly_artifact.get("params", {})
@@ -94,17 +99,29 @@ def _strategy_targets(
     rows_by_symbol = {str(row.get("symbol")): row for row in scored}
 
     targets: dict[str, dict[str, dict]] = {}
-    if include_weekly:
-        cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
-        decisions = generate_weekly_opportunity_orders(scored, strategies_cfg, cfg, "CLOSE")
-        raw_targets = _decision_targets(decisions, rows_by_symbol, strategies_cfg)
-        max_weight = float(
-            cfg.get("position_sizing", {}).get("max_weight_pct_nav", 0.20) or 0.20
+    weekly_decisions: list[Any] = []
+    if include_weekly or include_challenger:
+        weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
+        weekly_decisions = generate_weekly_opportunity_orders(
+            scored,
+            strategies_cfg,
+            weekly_cfg,
+            "CLOSE",
         )
-        targets["weekly_opportunity_ridge"] = _equal_weight_capped_targets(
-            raw_targets,
-            max_weight,
-        )
+        if include_weekly:
+            raw_targets = _decision_targets(
+                weekly_decisions,
+                rows_by_symbol,
+                strategies_cfg,
+            )
+            max_weight = float(
+                weekly_cfg.get("position_sizing", {}).get("max_weight_pct_nav", 0.20)
+                or 0.20
+            )
+            targets["weekly_opportunity_ridge"] = _equal_weight_capped_targets(
+                raw_targets,
+                max_weight,
+            )
 
     breakout_cfg = strategies_cfg["strategies"]["breakout_protected_by_floor"]
     breakout = generate_breakout_floor_orders(
@@ -118,6 +135,34 @@ def _strategy_targets(
         rows_by_symbol,
         strategies_cfg,
     )
+
+    if include_challenger:
+        mean_cfg = strategies_cfg["strategies"]["mean_reversion_floor_w1"]
+        cross_cfg = strategies_cfg["strategies"]["cross_horizon_asymmetry"]
+        mean_reversion = generate_mean_reversion_orders(
+            scored,
+            strategies_cfg,
+            mean_cfg,
+            "CLOSE",
+        )
+        cross_horizon = generate_cross_horizon_orders(
+            scored,
+            strategies_cfg,
+            cross_cfg,
+            "CLOSE",
+        )
+        targets["capital_allocation_challenger"] = build_capital_challenger_targets(
+            {
+                "weekly_opportunity_ridge": weekly_decisions,
+                "breakout_protected_by_floor": breakout,
+                "mean_reversion_floor_w1": mean_reversion,
+                "cross_horizon_asymmetry": cross_horizon,
+            },
+            rows_by_symbol,
+            strategies_cfg,
+            challenger_cfg,
+        )
+
     return targets
 
 
@@ -186,15 +231,24 @@ def run_league_eod(
     weekly_artifact = _load_json(model_path)
     strategies_cfg = load_simple_yaml(strategies_config_path)
     weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
-    max_holding_sessions = int(
+    weekly_max_holding_sessions = int(
         weekly_cfg.get("exits", {}).get("temporal_exit_business_days", 10) or 10
     )
-    if max_holding_sessions <= 0:
+    if weekly_max_holding_sessions <= 0:
         raise RuntimeError("Weekly Strategy League max holding sessions must be positive")
+
+    challenger_cfg = dict(league_cfg.get("capital_allocation_challenger", {}))
+    challenger_max_holding_sessions = int(
+        challenger_cfg.get("max_holding_sessions", 10) or 10
+    )
+    if challenger_max_holding_sessions <= 0:
+        raise RuntimeError("Capital challenger max holding sessions must be positive")
+
     runtime_league_cfg = {
         **league_cfg,
         "strategy_max_holding_sessions": {
-            "weekly_opportunity_ridge": max_holding_sessions,
+            "weekly_opportunity_ridge": weekly_max_holding_sessions,
+            "capital_allocation_challenger": challenger_max_holding_sessions,
         },
     }
 
@@ -235,18 +289,24 @@ def run_league_eod(
     rows = list(snapshot.get("rows", []))
     next_targets: dict[str, dict[str, dict]] = {}
     if snapshot.get("status") == "OK":
-        frequency = max(
+        weekly_frequency = max(
             1,
             int(league_cfg.get("weekly_review_frequency_sessions", 5)),
         )
-        include_weekly = (
-            state is None or int(state.get("session_count", 0)) % frequency == 0
+        challenger_frequency = max(
+            1,
+            int(challenger_cfg.get("review_frequency_sessions", weekly_frequency)),
         )
+        current_count = int(state.get("session_count", 0)) if state is not None else 0
+        include_weekly = state is None or current_count % weekly_frequency == 0
+        include_challenger = state is None or current_count % challenger_frequency == 0
         next_targets = _strategy_targets(
             rows,
             strategies_cfg,
             weekly_artifact,
             include_weekly=include_weekly,
+            include_challenger=include_challenger,
+            challenger_cfg=challenger_cfg,
         )
 
     if state is None:
@@ -286,7 +346,8 @@ def run_league_eod(
         "market_input_status": snapshot.get("status"),
         "live_execution_enabled": False,
         "operational_paper_gateway_used": False,
-        "weekly_max_holding_sessions": max_holding_sessions,
+        "weekly_max_holding_sessions": weekly_max_holding_sessions,
+        "capital_challenger_max_holding_sessions": challenger_max_holding_sessions,
         "platform_fee_bps_per_side": float(
             league_cfg.get("execution", {}).get("platform_fee_bps_per_side", 0.0)
         ),
