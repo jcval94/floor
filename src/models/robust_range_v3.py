@@ -82,6 +82,8 @@ CHALLENGER_WEIGHT = 0.20
 def _number(value: object, default: float = 0.0) -> float:
     if isinstance(value, bool) or value is None:
         return default
+    if not isinstance(value, (str, int, float)):
+        return default
     try:
         result = float(value)
     except (TypeError, ValueError):

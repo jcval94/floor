@@ -194,7 +194,7 @@ def assign_split(
 
     train_days = set(days[:train_end_idx])
     valid_days = set(days[train_end_idx:valid_end_idx])
-    test_days = set(days[valid_end_idx:])
+    held_out_days = set(days[valid_end_idx:])
 
     for row in rows:
         day = _to_datetime(row["timestamp"]).date()
@@ -210,8 +210,8 @@ def assign_split(
         split_end["train"] = max(train_days)
     if valid_days:
         split_end["validation"] = max(valid_days)
-    if test_days:
-        split_end["test"] = max(test_days)
+    if held_out_days:
+        split_end["test"] = max(held_out_days)
 
     _annotate_split_eligibility(rows, split_end)
     return rows

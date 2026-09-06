@@ -78,7 +78,9 @@ class ParityChampionModelSet(ChampionModelSet):
             )
 
         validation_key = (id(floor_params), id(ceiling_params), family)
-        validated = getattr(self, "_validated_classic_heads", set())
+        validated: set[tuple[int, int, str]] = getattr(
+            self, "_validated_classic_heads", set()
+        )
         if validation_key not in validated:
             validate_family_params(family, floor_params)
             validate_family_params(family, ceiling_params)
