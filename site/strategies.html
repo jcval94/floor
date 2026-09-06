@@ -16,12 +16,44 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest, riesgo y estrategias compitiendo.</h1><p class="lead">Esta página separa el backtest retrospectivo de la Strategy League prospectiva. La liga compara carteras shadow-paper bajo las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest, riesgo y estrategias compitiendo.</h1><p class="lead">Esta página separa el replay retrospectivo de la Strategy League prospectiva. Ambos usan las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
   <section id="strategyMetrics" class="metrics-grid"></section>
   <p id="strategyHint" class="small" aria-live="polite"></p>
   <section class="section two-column">
-    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva de equity histórica</h2></div></div><div id="equityCurve"></div></article>
-    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown histórico</h2></div></div><div id="drawdownCurve"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva del challenger retrospectivo</h2></div></div><div id="equityCurve"></div></article>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown del challenger</h2></div></div><div id="drawdownCurve"></div></article>
+  </section>
+
+  <section id="retrospective-tournament" class="section">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Retrospective diagnostic · 2 semanas</span>
+        <h2>Torneo retrospectivo · mismas reglas, mismo capital</h2>
+        <p class="lead">Replay point-in-time de las dos semanas bursátiles más recientes configuradas. Sirve para comparar las 7 carteras bajo $10,000 iniciales; no cuenta como evidencia prospectiva ni promoción.</p>
+      </div>
+    </div>
+
+    <div id="replayStatus" aria-live="polite"></div>
+    <div id="replaySummary" class="league-summary-grid" aria-label="Resumen retrospectivo"></div>
+
+    <article class="panel league-race-panel">
+      <div class="league-race-head">
+        <div><span class="eyebrow">Retrospective NAV race</span><h3>Cómo habrían competido</h3><p>Las siete carteras comparten escala y capital inicial; se incluyen costos de transacción del motor de liga.</p></div>
+        <span class="status-badge neutral"><span class="status-dot"></span>Retrospectivo</span>
+      </div>
+      <div id="replayCompetitionChart" aria-live="polite"></div>
+    </article>
+
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Retrospective leaderboard</span><h3>Clasificación de las 2 semanas</h3><p>Retorno acumulado, Sharpe, drawdown, trades y costos se calculan sobre el mismo replay.</p></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead>
+          <tbody id="replayTable"></tbody>
+        </table>
+      </div>
+    </article>
+    <p id="replayNote" class="small" aria-live="polite"></p>
   </section>
 
   <section id="strategy-league" class="section">
@@ -58,11 +90,11 @@
     <p id="leagueNote" class="small" aria-live="polite"></p>
     <div class="league-automation-note">
       <span class="status-badge ok"><span class="status-dot"></span>Automático</span>
-      <p><strong>EOD → Strategy League → runtime state → Pages.</strong> La publicación toma el leaderboard prospectivo más reciente, recalcula el ranking y vuelve a desplegar esta vista. El replay de investigación se mantiene separado y no se presenta como evidencia prospectiva.</p>
+      <p><strong>EOD → Strategy League → runtime state → Pages.</strong> La publicación toma el leaderboard prospectivo más reciente, recalcula el ranking y vuelve a desplegar esta vista. El replay retrospectivo se publica por separado y nunca se presenta como evidencia prospectiva.</p>
     </div>
   </section>
 
-  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">El backtest es retrospectivo. La Strategy League es prospectiva y conserva reglas y modelo congelados mediante hashes. Que una estrategia supere los umbrales solo la hace elegible para revisión humana; nunca activa PAPER operativo ni LIVE automáticamente.</p></section>
+  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">El torneo de 2 semanas es retrospectivo y diagnóstico. La Strategy League es prospectiva y conserva reglas y modelo congelados mediante hashes. Ningún resultado de esta página activa PAPER operativo ni LIVE automáticamente.</p></section>
 </main>
 <footer class="site-footer"><span>Floor · Analítica histórica y prospectiva</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="models.html">Modelos</a><a href="system.html">Estado</a></nav></footer>
 <script type="module" src="assets/app.js"></script>
