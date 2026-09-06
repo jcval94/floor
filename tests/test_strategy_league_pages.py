@@ -175,6 +175,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "promotion_review_eligible" in script
 
     assert "export function multiLineSvg" in charts
+    assert "seriesIndex % 7" in charts
     assert ".league-summary-grid" in styles
     assert ".league-series-0" in styles
+    assert ".league-series-6" in styles
     assert ".league-challenger-row" in styles
