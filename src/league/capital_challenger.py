@@ -16,19 +16,19 @@ def _float(value: Any, default: float = 0.0) -> float:
 
 def _ranked_buys(decisions: list[StrategyDecision]) -> list[tuple[StrategyDecision, float]]:
     buys = [
-        decision
-        for decision in decisions
-        if str(decision.side).upper() == "BUY" and int(decision.qty) > 0
+        item
+        for item in decisions
+        if str(item.side).upper() == "BUY" and int(item.qty) > 0
     ]
-    buys.sort(key=lambda decision: float(decision.score))
+    buys.sort(key=lambda item: float(item.score))
     if not buys:
         return []
     if len(buys) == 1:
         return [(buys[0], 1.0)]
     denominator = max(len(buys) - 1, 1)
     return [
-        (decision, 0.50 + 0.50 * (index / denominator))
-        for index, decision in enumerate(buys)
+        (item, 0.50 + 0.50 * (index / denominator))
+        for index, item in enumerate(buys)
     ]
 
 
@@ -62,13 +62,13 @@ def build_capital_challenger_targets(
     min_weight = max(0.0, min(1.0, _float(challenger_cfg.get("min_position_weight"), 0.02)))
 
     by_symbol: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for strategy_id, decisions in decisions_by_strategy.items():
+    for strategy_id, source_decisions in decisions_by_strategy.items():
         source_weight = max(0.0, _float(source_weights.get(strategy_id), 1.0))
-        for decision, percentile_quality in _ranked_buys(decisions):
-            symbol = str(decision.symbol)
+        for ranked_decision, percentile_quality in _ranked_buys(source_decisions):
+            symbol = str(ranked_decision.symbol)
             row = rows_by_symbol.get(symbol, {})
             close = _float(row.get("close"))
-            stop = _float(decision.stop_price)
+            stop = _float(ranked_decision.stop_price)
             if close <= 0 or stop <= 0 or stop >= close:
                 continue
             source_quality = min(1.0, percentile_quality * source_weight)
@@ -76,7 +76,7 @@ def build_capital_challenger_targets(
                 continue
             by_symbol[symbol].append(
                 {
-                    "decision": decision,
+                    "decision": ranked_decision,
                     "strategy_id": strategy_id,
                     "source_quality": source_quality,
                     "close": close,
@@ -95,9 +95,9 @@ def build_capital_challenger_targets(
                 float(signal["decision"].score),
             ),
         )
-        decision: StrategyDecision = best["decision"]
+        selected_decision: StrategyDecision = best["decision"]
         close = float(best["close"])
-        stop = float(decision.stop_price)
+        stop = float(selected_decision.stop_price)
         stop_risk_pct = abs(close - stop) / close + cost_pct
         if stop_risk_pct <= 0:
             continue
@@ -117,7 +117,7 @@ def build_capital_challenger_targets(
         candidates.append(
             {
                 "symbol": symbol,
-                "decision": decision,
+                "decision": selected_decision,
                 "sector": str(best["sector"]),
                 "sources": sources,
                 "consensus_count": consensus_count,
@@ -158,13 +158,13 @@ def build_capital_challenger_targets(
         if weight < min_weight:
             continue
 
-        decision: StrategyDecision = candidate["decision"]
+        target_decision: StrategyDecision = candidate["decision"]
         targets[str(candidate["symbol"])] = {
             "weight": weight,
-            "stop_price": float(decision.stop_price or 0.0),
-            "take_profit_price": float(decision.take_profit_price or 0.0),
+            "stop_price": float(target_decision.stop_price or 0.0),
+            "take_profit_price": float(target_decision.take_profit_price or 0.0),
             "score": float(candidate["allocation_score"]),
-            "source_strategy": str(decision.strategy_id),
+            "source_strategy": str(target_decision.strategy_id),
             "source_strategies": list(candidate["sources"]),
             "consensus_count": int(candidate["consensus_count"]),
             "stop_risk_pct": risk_pct,
