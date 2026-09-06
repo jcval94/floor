@@ -53,6 +53,11 @@ jobs:
             --site-data-dir "$RUNNER_TEMP/pages-site/data" \
             --universe-path config/universe.yaml \
             --source-commit "${GITHUB_SHA}"
+          PYTHONPATH=src python -m league.publish_site \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --output "$RUNNER_TEMP/pages-site/data/strategy_league.json" \
+            --observation-output "$RUNNER_TEMP/pages-site/data/experiment_observation.json"
           PYTHONPATH=src python -m utils.pages_security \
             --site-dir "$RUNNER_TEMP/pages-site"
           PYTHONPATH=src python -m utils.pages_publish \
@@ -61,6 +66,8 @@ jobs:
           PYTHONPATH=src python -m utils.pages_security \
             --site-dir "$RUNNER_TEMP/pages-site" \
             --validate-only
+          node --check site/assets/league.js
+          node --check site/assets/charts.js
           python - <<'PY'
           import json
           import os
@@ -69,14 +76,20 @@ jobs:
           root = Path(os.environ['RUNNER_TEMP']) / 'pages-site' / 'data'
           audit = json.loads((root / 'audit.json').read_text(encoding='utf-8'))
           forecasts = json.loads((root / 'forecasts.json').read_text(encoding='utf-8'))
+          league = json.loads((root / 'strategy_league.json').read_text(encoding='utf-8'))
           assert audit['safe_to_deploy'] is True
           if audit['publishable_forecasts']:
               assert len(forecasts['rows']) == audit['expected_prediction_rows']
           else:
               assert forecasts['rows'] == []
+          assert league['live_execution_enabled'] is False
+          assert league['automatic_promotion'] is False
+          assert league['evidence_type'] == 'prospective_shadow_paper'
           print('pages_dry_run_status=', audit['status'])
           print('pages_publishable_forecasts=', audit['publishable_forecasts'])
           print('pages_blockers=', audit.get('blockers', []))
+          print('strategy_league_status=', league.get('status'))
+          print('strategy_league_id=', league.get('league_id'))
           PY
 
       - name: Enforce minimum coverage
