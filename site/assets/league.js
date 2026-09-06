@@ -72,6 +72,17 @@ function statusCard(data) {
   </div>`;
 }
 
+function retrospectiveStatusCard(data) {
+  const ready = data?.status === 'RETROSPECTIVE_OK' && Array.isArray(data?.rows) && data.rows.length > 0;
+  const detail = ready
+    ? `${data.start_session || '—'} → ${data.end_session || '—'} · ${data.sessions || 0} sesiones · ${money(data.initial_nav_usd)} iniciales por cartera`
+    : 'El torneo retrospectivo aún no ha sido publicado.';
+  return `<div class="trust-strip ${ready ? 'ok' : 'warn'}">
+    <div><strong>${escapeHTML(ready ? 'Replay retrospectivo disponible' : String(data?.status || 'PENDIENTE'))}</strong></div>
+    <span class="trust-detail">${escapeHTML(detail)}</span>
+  </div>`;
+}
+
 function fallbackSummary(rows) {
   const sorted = [...rows].sort((a, b) => Number(b?.return ?? -Infinity) - Number(a?.return ?? -Infinity));
   const strategies = sorted.filter((row) => !isBenchmark(row));
@@ -83,6 +94,7 @@ function fallbackSummary(rows) {
   const bestBaseReturn = Number(bestBase?.return);
   return {
     overall_leader: sorted[0]?.strategy || null,
+    overall_leader_return: Number(sorted[0]?.return),
     strategy_leader: strategies[0]?.strategy || null,
     strategy_leader_return: Number(strategies[0]?.return),
     challenger_rank: challenger?.rank || (challenger ? sorted.indexOf(challenger) + 1 : null),
@@ -148,6 +160,44 @@ function summaryCards(data, rows) {
   </article>`).join('');
 }
 
+function retrospectiveSummaryCards(data, rows) {
+  if (!rows.length) {
+    return '<div class="empty-state league-empty"><strong>Sin replay publicado todavía.</strong><p>Cuando termine el torneo de dos semanas aparecerán aquí el líder y las comparaciones.</p></div>';
+  }
+  const summary = data?.summary && typeof data.summary === 'object' ? data.summary : fallbackSummary(rows);
+  const cards = [
+    {
+      label: 'Ganador retrospectivo',
+      value: labelFor(summary.overall_leader),
+      detail: `${pct(summary.overall_leader_return)} retorno`,
+      tone: summary.overall_leader === 'capital_allocation_challenger' ? 'ok' : '',
+    },
+    {
+      label: 'Challenger · posición',
+      value: summary.challenger_rank ? `#${summary.challenger_rank}` : '—',
+      detail: `${pct(summary.challenger_return)} retorno`,
+      tone: summary.challenger_rank === 1 ? 'ok' : '',
+    },
+    {
+      label: 'Challenger vs SPY',
+      value: signedPct(summary.challenger_vs_spy),
+      detail: 'exceso retrospectivo',
+      tone: Number(summary.challenger_vs_spy) > 0 ? 'ok' : Number(summary.challenger_vs_spy) < 0 ? 'bad' : '',
+    },
+    {
+      label: 'Ventana',
+      value: `${data.sessions || 0} sesiones`,
+      detail: `${data.start_session || '—'} → ${data.end_session || '—'}`,
+      tone: '',
+    },
+  ];
+  return cards.map((card) => `<article class="metric-card league-metric ${card.tone}">
+    <span class="metric-label">${escapeHTML(card.label)}</span>
+    <strong class="metric-value">${escapeHTML(card.value)}</strong>
+    <span class="metric-detail">${escapeHTML(card.detail)}</span>
+  </article>`).join('');
+}
+
 function promotionBadge(row) {
   if (isBenchmark(row)) return '<span class="status-badge neutral"><span class="status-dot"></span>Benchmark</span>';
   if (row?.promotion_review_eligible === true) {
@@ -180,7 +230,31 @@ function tableRows(rows) {
   }).join('');
 }
 
-function competitionChart(rows) {
+function retrospectiveTableRows(rows) {
+  if (!rows.length) {
+    return '<tr><td colspan="11"><div class="empty-state"><strong>Sin torneo retrospectivo todavía.</strong><p>El workflow publicará esta tabla al terminar el replay.</p></div></td></tr>';
+  }
+  return rows.map((row, index) => {
+    const rank = row.rank ?? index + 1;
+    const isChallenger = row.strategy === 'capital_allocation_challenger';
+    return `
+    <tr class="${isChallenger ? 'league-challenger-row' : ''}">
+      <td><strong class="league-rank">#${escapeHTML(String(rank))}</strong></td>
+      <td><strong>${escapeHTML(labelFor(row.strategy))}</strong>${isChallenger ? '<span class="league-chip">Challenger</span>' : ''}</td>
+      <td>${isBenchmark(row) ? 'Benchmark' : 'Estrategia'}</td>
+      <td>${money(row.nav, 2)}</td>
+      <td class="${Number(row.return) >= 0 ? 'positive' : 'negative'}">${pct(row.return)}</td>
+      <td class="${Number(row.vs_spy) >= 0 ? 'positive' : 'negative'}">${pct(row.vs_spy)}</td>
+      <td>${number(row.sharpe)}</td>
+      <td class="negative">${pct(row.max_drawdown)}</td>
+      <td>${escapeHTML(String(row.trades ?? '—'))}</td>
+      <td>${money(row.costs_paid, 2)}</td>
+      <td><span class="status-badge neutral"><span class="status-dot"></span>Diagnóstico</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy League') {
   const withCurves = rows
     .filter((row) => Array.isArray(row.equity_curve) && row.equity_curve.length > 0)
     .sort((a, b) => {
@@ -196,7 +270,30 @@ function competitionChart(rows) {
       value: point.nav,
     })),
   }));
-  return multiLineSvg(series, { title: 'Carrera prospectiva de NAV de Strategy League' });
+  return multiLineSvg(series, { title });
+}
+
+async function renderRetrospective() {
+  const statusRoot = document.getElementById('replayStatus');
+  const summaryRoot = document.getElementById('replaySummary');
+  const table = document.getElementById('replayTable');
+  const chartRoot = document.getElementById('replayCompetitionChart');
+  if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
+
+  const result = await loadJSONState('data/strategy.json', { status: 'UNKNOWN', rows: [] });
+  const data = result.data || { status: 'UNKNOWN', rows: [] };
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  if (statusRoot) statusRoot.innerHTML = retrospectiveStatusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = retrospectiveSummaryCards(data, rows);
+  if (table) table.innerHTML = retrospectiveTableRows(rows);
+  if (chartRoot) chartRoot.innerHTML = competitionChart(rows, 'Torneo retrospectivo de NAV · dos semanas');
+
+  const note = document.getElementById('replayNote');
+  if (note) {
+    note.textContent = rows.length
+      ? `${data.methodology_note || 'Replay retrospectivo diagnóstico.'} Ningún resultado de esta sección cuenta como promoción ni evidencia prospectiva.`
+      : 'Aún no hay un reporte retrospectivo publicado.';
+  }
 }
 
 async function renderLeague() {
@@ -223,4 +320,5 @@ async function renderLeague() {
   }
 }
 
+renderRetrospective();
 renderLeague();
