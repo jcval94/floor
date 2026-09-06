@@ -85,6 +85,8 @@ def _strategy_targets(
     weekly_artifact: dict,
     *,
     include_weekly: bool,
+    include_mean_reversion: bool = True,
+    include_cross_horizon: bool = True,
     include_challenger: bool = False,
     challenger_cfg: dict | None = None,
 ) -> dict[str, dict[str, dict]]:
@@ -137,21 +139,39 @@ def _strategy_targets(
         strategies_cfg,
     )
 
-    if include_challenger:
+    mean_reversion: list[Any] = []
+    if include_mean_reversion or include_challenger:
         mean_cfg = strategies_cfg["strategies"]["mean_reversion_floor_w1"]
-        cross_cfg = strategies_cfg["strategies"]["cross_horizon_asymmetry"]
         mean_reversion = generate_mean_reversion_orders(
             scored,
             strategies_cfg,
             mean_cfg,
             "CLOSE",
         )
+        if include_mean_reversion:
+            targets["mean_reversion_floor_w1"] = _decision_targets(
+                mean_reversion,
+                rows_by_symbol,
+                strategies_cfg,
+            )
+
+    cross_horizon: list[Any] = []
+    if include_cross_horizon or include_challenger:
+        cross_cfg = strategies_cfg["strategies"]["cross_horizon_asymmetry"]
         cross_horizon = generate_cross_horizon_orders(
             scored,
             strategies_cfg,
             cross_cfg,
             "CLOSE",
         )
+        if include_cross_horizon:
+            targets["cross_horizon_asymmetry"] = _decision_targets(
+                cross_horizon,
+                rows_by_symbol,
+                strategies_cfg,
+            )
+
+    if include_challenger:
         targets["capital_allocation_challenger"] = build_capital_challenger_targets(
             {
                 "weekly_opportunity_ridge": weekly_decisions,
@@ -187,7 +207,7 @@ def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> di
         "start_session": None,
         "last_session": None,
         "sessions": 0,
-        "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 100000.0)),
+        "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 10000.0)),
         "automatic_promotion": False,
         "live_execution_enabled": False,
         "rows": [],
@@ -198,6 +218,16 @@ def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> di
         encoding="utf-8",
     )
     return payload
+
+
+def _holding_sessions(strategy_cfg: dict, default: int) -> int:
+    value = int(
+        strategy_cfg.get("exits", {}).get("temporal_exit_business_days", default)
+        or default
+    )
+    if value <= 0:
+        raise RuntimeError("Strategy League max holding sessions must be positive")
+    return value
 
 
 def run_league_eod(
@@ -231,12 +261,14 @@ def run_league_eod(
 
     weekly_artifact = _load_json(model_path)
     strategies_cfg = load_simple_yaml(strategies_config_path)
-    weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
-    weekly_max_holding_sessions = int(
-        weekly_cfg.get("exits", {}).get("temporal_exit_business_days", 10) or 10
-    )
-    if weekly_max_holding_sessions <= 0:
-        raise RuntimeError("Weekly Strategy League max holding sessions must be positive")
+    strategy_configs = strategies_cfg["strategies"]
+    weekly_cfg = strategy_configs["weekly_opportunity_ridge"]
+    mean_cfg = strategy_configs["mean_reversion_floor_w1"]
+    cross_cfg = strategy_configs["cross_horizon_asymmetry"]
+
+    weekly_max_holding_sessions = _holding_sessions(weekly_cfg, 10)
+    mean_max_holding_sessions = _holding_sessions(mean_cfg, 5)
+    cross_max_holding_sessions = _holding_sessions(cross_cfg, 10)
 
     challenger_cfg = dict(league_cfg.get("capital_allocation_challenger", {}))
     challenger_max_holding_sessions = int(
@@ -249,6 +281,8 @@ def run_league_eod(
         **league_cfg,
         "strategy_max_holding_sessions": {
             "weekly_opportunity_ridge": weekly_max_holding_sessions,
+            "mean_reversion_floor_w1": mean_max_holding_sessions,
+            "cross_horizon_asymmetry": cross_max_holding_sessions,
             "capital_allocation_challenger": challenger_max_holding_sessions,
         },
     }
@@ -294,18 +328,24 @@ def run_league_eod(
             1,
             int(league_cfg.get("weekly_review_frequency_sessions", 5)),
         )
+        mean_frequency = mean_max_holding_sessions
+        cross_frequency = cross_max_holding_sessions
         challenger_frequency = max(
             1,
             int(challenger_cfg.get("review_frequency_sessions", weekly_frequency)),
         )
         current_count = int(state.get("session_count", 0)) if state is not None else 0
         include_weekly = state is None or current_count % weekly_frequency == 0
+        include_mean_reversion = state is None or current_count % mean_frequency == 0
+        include_cross_horizon = state is None or current_count % cross_frequency == 0
         include_challenger = state is None or current_count % challenger_frequency == 0
         next_targets = _strategy_targets(
             rows,
             strategies_cfg,
             weekly_artifact,
             include_weekly=include_weekly,
+            include_mean_reversion=include_mean_reversion,
+            include_cross_horizon=include_cross_horizon,
             include_challenger=include_challenger,
             challenger_cfg=challenger_cfg,
         )
@@ -348,6 +388,8 @@ def run_league_eod(
         "live_execution_enabled": False,
         "operational_paper_gateway_used": False,
         "weekly_max_holding_sessions": weekly_max_holding_sessions,
+        "mean_reversion_max_holding_sessions": mean_max_holding_sessions,
+        "cross_horizon_max_holding_sessions": cross_max_holding_sessions,
         "capital_challenger_max_holding_sessions": challenger_max_holding_sessions,
         "platform_fee_bps_per_side": float(
             league_cfg.get("execution", {}).get("platform_fee_bps_per_side", 0.0)
