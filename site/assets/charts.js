@@ -56,6 +56,67 @@ export function lineSvg(points = [], options = {}) {
   </svg>`;
 }
 
+export function multiLineSvg(series = [], options = {}) {
+  const cleanSeries = series
+    .map((entry, seriesIndex) => ({
+      id: String(entry?.id || `series-${seriesIndex}`),
+      label: String(entry?.label || entry?.id || `Serie ${seriesIndex + 1}`),
+      seriesIndex,
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .map((point, pointIndex) => ({
+          idx: pointIndex,
+          value: Number(point?.value ?? point?.nav ?? point?.equity),
+          label: String(point?.label ?? point?.session ?? ''),
+        }))
+        .filter((point) => Number.isFinite(point.value)),
+    }))
+    .filter((entry) => entry.points.length > 0);
+
+  if (!cleanSeries.length) {
+    return '<div class="empty-chart">La liga aún no tiene sesiones suficientes para comparar curvas.</div>';
+  }
+
+  const allValues = cleanSeries.flatMap((entry) => entry.points.map((point) => point.value));
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const pad = Math.max((max - min) * 0.10, Math.max(Math.abs(max), 1) * 0.0025);
+  const yMin = min - pad;
+  const yMax = max + pad;
+  const maxPoints = Math.max(...cleanSeries.map((entry) => entry.points.length));
+
+  const polylines = cleanSeries.map((entry) => {
+    const coords = entry.points.map((point, index) => {
+      const x = 7 + (index / Math.max(maxPoints - 1, 1)) * 88;
+      const y = 86 - ((point.value - yMin) / Math.max(yMax - yMin, 1e-9)) * 68;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    return `<polyline class="league-series league-series-${entry.seriesIndex % 7}" points="${coords}" data-series="${escapeHTML(entry.id)}" />`;
+  }).join('');
+
+  const legend = cleanSeries.map((entry) => {
+    const last = entry.points[entry.points.length - 1]?.value;
+    return `<span class="league-legend-item"><i class="league-legend-swatch league-series-${entry.seriesIndex % 7}"></i><strong>${escapeHTML(entry.label)}</strong><span>${fmt(last)}</span></span>`;
+  }).join('');
+
+  const title = escapeHTML(options.title || 'Comparación de NAV');
+  const firstLabel = cleanSeries[0]?.points[0]?.label || '';
+  const lastLabel = cleanSeries[0]?.points[cleanSeries[0].points.length - 1]?.label || '';
+
+  return `<div class="league-chart-shell">
+    <svg class="league-chart" viewBox="0 0 100 100" role="img" aria-label="${title}. Mínimo ${fmt(min)}, máximo ${fmt(max)}">
+      <line class="chart-grid" x1="7" y1="18" x2="95" y2="18" />
+      <line class="chart-grid" x1="7" y1="52" x2="95" y2="52" />
+      <line class="chart-grid" x1="7" y1="86" x2="95" y2="86" />
+      ${polylines}
+      <text x="7" y="13" class="chart-label">${fmt(max)}</text>
+      <text x="7" y="96" class="chart-label">${fmt(min)}</text>
+      <text x="7" y="91" class="chart-label">${escapeHTML(firstLabel)}</text>
+      <text x="95" y="91" text-anchor="end" class="chart-label">${escapeHTML(lastLabel)}</text>
+    </svg>
+    <div class="league-legend" aria-label="Leyenda de estrategias">${legend}</div>
+  </div>`;
+}
+
 export function m3WeekBarsSvg(top3 = []) {
   if (!Array.isArray(top3) || !top3.length) {
     return '<div class="empty-inline">Timing no disponible</div>';

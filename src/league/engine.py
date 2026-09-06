@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 
-STRATEGY_MEMBERS = {"weekly_opportunity_ridge", "breakout_protected_by_floor"}
+STRATEGY_MEMBERS = {
+    "weekly_opportunity_ridge",
+    "breakout_protected_by_floor",
+    "capital_allocation_challenger",
+}
 
 
 def _canonical_json(payload: object) -> str:
@@ -499,7 +503,7 @@ def advance_league(
             )
         member["pending_targets"] = None
 
-        if member_id == "weekly_opportunity_ridge":
+        if member_id in max_holding_by_strategy:
             max_holding_sessions = int(
                 max_holding_by_strategy.get(member_id, 0) or 0
             )
