@@ -6,6 +6,7 @@
   <meta name="description" content="Analítica histórica y Strategy League prospectiva de Floor." />
   <title>Floor · Analítica</title>
   <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="assets/league.css" />
 </head>
 <body data-page="strategies">
 <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -15,7 +16,7 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest y riesgo con contexto.</h1><p class="lead">Esta sección separa evidencia histórica de evidencia prospectiva. Los resultados pasados o simulados no son una promesa de rendimiento futuro.</p></div><div id="strategyStatus"></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest, riesgo y estrategias compitiendo.</h1><p class="lead">Esta página separa el backtest retrospectivo de la Strategy League prospectiva. La liga compara carteras shadow-paper bajo las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
   <section id="strategyMetrics" class="metrics-grid"></section>
   <p id="strategyHint" class="small" aria-live="polite"></p>
   <section class="section two-column">
@@ -23,19 +24,42 @@
     <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown histórico</h2></div></div><div id="drawdownCurve"></div></article>
   </section>
 
-  <section class="section">
-    <div class="section-heading"><div><span class="eyebrow">Prospective shadow-paper</span><h2>Strategy League</h2><p class="lead">Cuatro carteras virtuales arrancan con $100,000 USD el mismo día. Las decisiones de hoy solo pueden ejecutarse en la apertura de la siguiente sesión.</p></div><a class="text-link" href="models.html">Ver desempeño de modelos</a></div>
-    <div id="leagueStatus"></div>
-    <p id="leagueNote" class="small" aria-live="polite"></p>
-    <article class="panel">
+  <section id="strategy-league" class="section">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Prospective shadow-paper</span>
+        <h2>Strategy League · la carrera</h2>
+        <p class="lead">Cada miembro arranca con el mismo capital. El ranking, NAV, drawdown y costos se actualizan automáticamente después de cada EOD publicado.</p>
+      </div>
+      <a class="text-link" href="models.html">Ver desempeño de modelos</a>
+    </div>
+
+    <div id="leagueStatus" aria-live="polite"></div>
+    <div id="leagueSummary" class="league-summary-grid" aria-label="Resumen de Strategy League"></div>
+
+    <article class="panel league-race-panel">
+      <div class="league-race-head">
+        <div><span class="eyebrow">NAV race</span><h3>Quién está ganando</h3><p>Todas las curvas usan la misma escala de NAV; benchmarks y estrategias compiten en el mismo gráfico.</p></div>
+        <span class="status-badge neutral"><span class="status-dot"></span>Prospectivo</span>
+      </div>
+      <div id="leagueCompetitionChart" aria-live="polite"></div>
+    </article>
+
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Leaderboard</span><h3>Clasificación completa</h3><p>El ranking se ordena por retorno acumulado; Sharpe, drawdown y costos muestran la calidad de ese resultado.</p></div></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Estrategia</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th></tr></thead>
+          <thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead>
           <tbody id="leagueTable"></tbody>
         </table>
       </div>
     </article>
-    <div id="leagueCurves" class="section two-column"></div>
+
+    <p id="leagueNote" class="small" aria-live="polite"></p>
+    <div class="league-automation-note">
+      <span class="status-badge ok"><span class="status-dot"></span>Automático</span>
+      <p><strong>EOD → Strategy League → runtime state → Pages.</strong> La publicación toma el leaderboard prospectivo más reciente, recalcula el ranking y vuelve a desplegar esta vista. El replay de investigación se mantiene separado y no se presenta como evidencia prospectiva.</p>
+    </div>
   </section>
 
   <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">El backtest es retrospectivo. La Strategy League es prospectiva y conserva reglas y modelo congelados mediante hashes. Que una estrategia supere los umbrales solo la hace elegible para revisión humana; nunca activa PAPER operativo ni LIVE automáticamente.</p></section>
