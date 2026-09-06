@@ -115,7 +115,7 @@ def publish_league_payload(data_dir: Path, output_path: Path) -> dict[str, Any]:
     if not payload:
         payload = {
             "schema_version": 1,
-            "league_id": "strategy_league_v5_capital_10k",
+            "league_id": "strategy_league_v6_all_strategies_10k",
             "mode": "shadow_paper",
             "status": "WAITING_FOR_WEEKLY_MODEL",
             "detail": "The prospective league has not started yet.",
