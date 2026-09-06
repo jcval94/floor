@@ -11,7 +11,8 @@ portfolio:
   max_orders_per_sector: 3
 
 costs:
-  commission_bps: 2.0
+  commission_bps: 26.0
+  broker_commission_bps: 2.0
   slippage_bps: 3.0
   platform_fee_bps_per_side: 24.0
 
