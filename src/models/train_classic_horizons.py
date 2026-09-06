@@ -10,6 +10,14 @@ from typing import Any, Callable
 
 from features.model_competition import HORIZONS, build_model_specs
 from models.horizon_timing import fit_horizon_timing
+from models.robust_range_v3 import (
+    ROBUST_RANGE_FEATURES,
+    build_anchored_blend,
+    feature_value as robust_feature_value,
+    fit_ceiling_head,
+    fit_floor_head,
+    predict_head as predict_robust_head,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +28,7 @@ HORIZON_TARGETS = {
 }
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "robust_range_v3": ROBUST_RANGE_FEATURES,
     "regularized_linear": (
         "atr_14",
         "trend_context_m3",
@@ -143,6 +152,8 @@ def _number(value: object) -> float | None:
 
 
 def _feature(row: dict, name: str, close: float) -> float:
+    if name in ROBUST_RANGE_FEATURES:
+        return robust_feature_value(row, name, close)
     value = _number(row.get(name))
     if value is None:
         return 0.0
@@ -397,6 +408,22 @@ def _family_model(
     training_mode: str,
 ) -> tuple[dict[str, Any], Callable[[_PreparedRow], float]]:
     del training_mode
+    if family == "robust_range_v3":
+        challenger = (
+            fit_floor_head(rows)
+            if target_key == "floor_delta"
+            else fit_ceiling_head(rows)
+        )
+        anchor = _fit_boosted_stumps(
+            rows,
+            FEATURES_BY_FAMILY["boosted_stumps"],
+            target_key,
+        )
+        params = build_anchored_blend(anchor, challenger)
+        return params, lambda item: _clamp(
+            predict_robust_head(params, item.features, validate=False)
+        )
+
     if family in {"regime_median", "evt_changepoint_hybrid"}:
         params = _fit_evt(rows, target_key)
         return params, lambda item: _predict_evt(item, params)
@@ -498,6 +525,7 @@ def train_horizon_competition(
     horizon: str,
     version: str,
     training_mode: str = "standard",
+    model_families: tuple[str, ...] | list[str] | None = None,
 ) -> tuple[list[HorizonCompetitionCandidate], HorizonCompetitionCandidate]:
     if horizon not in HORIZON_TARGETS:
         raise ValueError(f"Unsupported horizon: {horizon}")
@@ -521,7 +549,16 @@ def train_horizon_competition(
 
     timing = fit_horizon_timing(train_raw, horizon)
     candidates: list[HorizonCompetitionCandidate] = []
-    for spec in [spec for spec in build_model_specs() if spec.horizon == horizon]:
+    allowed_families = set(model_families or ())
+    specs = [
+        spec
+        for spec in build_model_specs()
+        if spec.horizon == horizon
+        and (not allowed_families or spec.model_family in allowed_families)
+    ]
+    if not specs:
+        raise ValueError(f"No model families selected for horizon={horizon}")
+    for spec in specs:
         floor_params, floor_fn = _family_model(
             spec.model_family, train, "floor_delta", training_mode
         )
@@ -580,6 +617,7 @@ def run(
     version: str,
     tasks: tuple[str, ...] | list[str] | None = None,
     training_mode: str = "standard",
+    model_families: tuple[str, ...] | list[str] | None = None,
 ) -> Path:
     rows = _load_rows(dataset_path)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -594,7 +632,7 @@ def run(
     artifacts: list[HorizonBaselineArtifact] = []
     for horizon in selected:
         candidates, champion = train_horizon_competition(
-            rows, horizon, version, training_mode
+            rows, horizon, version, training_mode, model_families
         )
         artifact = HorizonBaselineArtifact(
             horizon=horizon,
@@ -625,6 +663,7 @@ def run(
                     "selection_split": "validation",
                     "test_used_for_selection": False,
                     "training_mode": training_mode,
+                    "model_families": list(model_families or ()),
                     "selected_model_id": champion.model_id,
                     "timing_status": timing_status,
                     "candidates": [asdict(candidate) for candidate in candidates],
@@ -710,9 +749,17 @@ def main() -> None:
         default="standard",
         choices=["standard", "manual", "retrain", "renewal"],
     )
+    parser.add_argument(
+        "--families",
+        default="",
+        help="Optional comma-separated model-family allowlist",
+    )
     args = parser.parse_args()
     tasks = tuple(
         part.strip() for part in str(args.tasks).split(",") if part.strip()
+    )
+    families = tuple(
+        part.strip() for part in str(args.families).split(",") if part.strip()
     )
     run(
         Path(args.dataset),
@@ -720,6 +767,7 @@ def main() -> None:
         args.version,
         tasks,
         args.training_mode,
+        families,
     )
 
 

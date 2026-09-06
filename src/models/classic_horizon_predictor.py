@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from models.robust_range_v3 import (
+    ROBUST_RANGE_FEATURES,
+    feature_value as robust_feature_value,
+    predict_head as predict_robust_head,
+    validate_head as validate_robust_head,
+)
+
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "robust_range_v3": ROBUST_RANGE_FEATURES,
     "regularized_linear": (
         "atr_14",
         "trend_context_m3",
@@ -41,6 +49,8 @@ def model_family(model_name: str) -> str:
     """
 
     name = str(model_name or "").lower()
+    if name.startswith("robust_range_v3_"):
+        return "robust_range_v3"
     if name.startswith("regime_median_") or name.startswith("evt_cp_"):
         return "regime_median"
     if name.startswith("boosted_stumps_") or name.startswith("xgboost_"):
@@ -59,15 +69,21 @@ def build_runtime_features(row: dict[str, Any]) -> dict[str, float]:
     names = sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
     features: dict[str, float] = {}
     for name in names:
-        value = _to_float(row.get(name), 0.0)
-        if name == "atr_14":
-            value = value / max(close, 1.0)
+        value = (
+            robust_feature_value(row, name, close)
+            if name in ROBUST_RANGE_FEATURES
+            else _to_float(row.get(name), 0.0)
+        )
         features[name] = value
     return features
 
 
 def validate_family_params(family: str, params: dict[str, Any]) -> None:
     """Validate a serialized trained model contract before serving it."""
+
+    if family == "robust_range_v3":
+        validate_robust_head(params)
+        return
 
     if family == "regime_median":
         if not _is_number(params.get("global")):
@@ -124,10 +140,15 @@ def predict_family_delta(
     family: str,
     params: dict[str, Any],
     features: dict[str, float],
+    *,
+    validate: bool = True,
 ) -> float:
     """Execute one trained classic horizon model exactly from serialized params."""
 
-    validate_family_params(family, params)
+    if validate:
+        validate_family_params(family, params)
+    if family == "robust_range_v3":
+        return clamp_delta(predict_robust_head(params, features, validate=False))
     if family == "regime_median":
         return _predict_regime_median(params, features)
     if family == "boosted_stumps":

@@ -167,6 +167,9 @@ def assign_split(
     rows: list[dict],
     train_ratio: float = 0.7,
     valid_ratio: float = 0.15,
+    *,
+    validation_days: int | None = None,
+    test_days: int | None = None,
 ) -> list[dict]:
     """Assign chronological splits and horizon-specific leakage-safe eligibility."""
     days = sorted({_to_datetime(r["timestamp"]).date() for r in rows})
@@ -174,8 +177,20 @@ def assign_split(
     if n == 0:
         return rows
 
-    train_end_idx = max(1, min(n, int(n * train_ratio)))
-    valid_end_idx = max(train_end_idx, min(n, int(n * (train_ratio + valid_ratio))))
+    if (validation_days is None) != (test_days is None):
+        raise ValueError("validation_days and test_days must be supplied together")
+    if validation_days is not None and test_days is not None:
+        if validation_days <= 0 or test_days <= 0:
+            raise ValueError("fixed-tail validation/test days must be positive")
+        if validation_days + test_days >= n:
+            raise ValueError("fixed-tail validation/test windows leave no training days")
+        train_end_idx = n - validation_days - test_days
+        valid_end_idx = n - test_days
+    else:
+        train_end_idx = max(1, min(n, int(n * train_ratio)))
+        valid_end_idx = max(
+            train_end_idx, min(n, int(n * (train_ratio + valid_ratio)))
+        )
 
     train_days = set(days[:train_end_idx])
     valid_days = set(days[train_end_idx:valid_end_idx])
@@ -217,7 +232,12 @@ def _horizon_coverage(rows: list[dict], horizon: str, columns: list[str]) -> dic
     }
 
 
-def build_modelable_dataset(rows: list[dict]) -> dict:
+def build_modelable_dataset(
+    rows: list[dict],
+    *,
+    validation_days: int | None = None,
+    test_days: int | None = None,
+) -> dict:
     logger.info("[etl:features] building modelable dataset input_rows=%s", len(rows))
     rows = _coerce_numeric(rows)
 
@@ -230,7 +250,11 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
 
     try:
         labeled_rows = build_labels(feat_rows)
-        labeled_rows = assign_split(labeled_rows)
+        labeled_rows = assign_split(
+            labeled_rows,
+            validation_days=validation_days,
+            test_days=test_days,
+        )
         wf = build_walk_forward_splits(labeled_rows)
     except Exception as exc:
         logger.exception("[etl:features] labeling/splitting failed: %s", exc)
@@ -319,6 +343,20 @@ def build_modelable_dataset(rows: list[dict]) -> dict:
         "model_competition": competition_plan,
         "horizon_coverage": horizon_coverage,
         "split_counts": dict(split_counts),
+        "split_policy": (
+            {
+                "strategy": "fixed_tail_sessions",
+                "validation_days": validation_days,
+                "test_days": test_days,
+            }
+            if validation_days is not None and test_days is not None
+            else {
+                "strategy": "chronological_ratio",
+                "train_ratio": 0.7,
+                "validation_ratio": 0.15,
+                "test_ratio": 0.15,
+            }
+        ),
     }
     logger.info(
         "[etl:features] artifact ready rows=%s folds=%s columns=%s split_counts=%s",
@@ -340,11 +378,27 @@ def main() -> None:
     )
     parser.add_argument("--input", required=True, help="Input path (.csv|.jsonl)")
     parser.add_argument("--output", required=True, help="Output JSON path")
+    parser.add_argument(
+        "--validation-days",
+        type=int,
+        default=None,
+        help="Use this many trailing sessions before the test window for validation",
+    )
+    parser.add_argument(
+        "--test-days",
+        type=int,
+        default=None,
+        help="Reserve this many trailing sessions as a sealed chronological test",
+    )
     args = parser.parse_args()
 
     try:
         rows = _load_rows(Path(args.input))
-        artifact = build_modelable_dataset(rows)
+        artifact = build_modelable_dataset(
+            rows,
+            validation_days=args.validation_days,
+            test_days=args.test_days,
+        )
         Path(args.output).write_text(
             json.dumps(artifact, ensure_ascii=False, indent=2),
             encoding="utf-8",

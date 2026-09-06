@@ -104,10 +104,33 @@ def test_split_and_walk_forward_exist() -> None:
     assert "m3" in artifact["horizon_coverage"]
 
 
-def test_model_competition_has_four_truthfully_named_models_per_horizon() -> None:
+def test_fixed_tail_split_keeps_stable_validation_and_test_windows() -> None:
+    artifact = build_modelable_dataset(
+        _synthetic_rows(), validation_days=40, test_days=40
+    )
+    days_by_split = {
+        split: sorted(
+            {row["timestamp"][:10] for row in artifact["rows"] if row["split"] == split}
+        )
+        for split in ("train", "validation", "test")
+    }
+
+    assert len(days_by_split["validation"]) == 40
+    assert len(days_by_split["test"]) == 40
+    assert max(days_by_split["train"]) < min(days_by_split["validation"])
+    assert max(days_by_split["validation"]) < min(days_by_split["test"])
+    assert artifact["split_policy"] == {
+        "strategy": "fixed_tail_sessions",
+        "validation_days": 40,
+        "test_days": 40,
+    }
+
+
+def test_model_competition_has_five_truthfully_named_models_per_horizon() -> None:
     artifact = build_modelable_dataset(_synthetic_rows())
     competition = artifact["model_competition"]["models_by_horizon"]
     expected = {
+        "robust_range_v3",
         "regime_median",
         "boosted_stumps",
         "sequence_linear",
@@ -115,7 +138,7 @@ def test_model_competition_has_four_truthfully_named_models_per_horizon() -> Non
     }
     for horizon in ("d1", "w1", "q1"):
         models = competition[horizon]
-        assert len(models) == 4
+        assert len(models) == 5
         assert {m["model_family"] for m in models} == expected
         assert not any(
             token in m["model_id"]
@@ -128,7 +151,7 @@ def test_model_competition_exposes_flat_models_list_for_workflow_guards() -> Non
     artifact = build_modelable_dataset(_synthetic_rows())
     models = artifact["model_competition"]["models"]
 
-    assert len(models) == 12
+    assert len(models) == 15
     assert {m["horizon"] for m in models} == {"d1", "w1", "q1"}
 
 
