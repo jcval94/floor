@@ -9,10 +9,11 @@ from typing import Any
 
 BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
 CHALLENGER_ID = "capital_allocation_challenger"
+DEFAULT_LEAGUE_ID = "strategy_league_v6_all_strategies_10k"
 
 
-def _load_object(path: Path) -> dict[str, Any]:
-    if not path.exists():
+def _load_object(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -109,24 +110,68 @@ def _competition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def publish_league_payload(data_dir: Path, output_path: Path) -> dict[str, Any]:
+def _member_ids(league_cfg: dict[str, Any]) -> list[str]:
+    raw = league_cfg.get("members", [])
+    if not isinstance(raw, list):
+        return []
+    return [
+        str(member.get("id"))
+        for member in raw
+        if isinstance(member, dict) and member.get("id")
+    ]
+
+
+def _waiting_payload(
+    league_cfg: dict[str, Any],
+    *,
+    status: str,
+    detail: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "league_id": str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID),
+        "mode": "shadow_paper",
+        "status": status,
+        "detail": detail,
+        "start_session": None,
+        "last_session": None,
+        "sessions": 0,
+        "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 10000.0)),
+        "scheduled_members": _member_ids(league_cfg),
+        "automatic_promotion": False,
+        "live_execution_enabled": False,
+        "rows": [],
+    }
+
+
+def publish_league_payload(
+    data_dir: Path,
+    output_path: Path,
+    league_config_path: Path | None = None,
+) -> dict[str, Any]:
     source = data_dir / "metrics" / "strategy_league" / "leaderboard.json"
-    payload = _load_object(source)
-    if not payload:
-        payload = {
-            "schema_version": 1,
-            "league_id": "strategy_league_v6_all_strategies_10k",
-            "mode": "shadow_paper",
-            "status": "WAITING_FOR_WEEKLY_MODEL",
-            "detail": "The prospective league has not started yet.",
-            "start_session": None,
-            "last_session": None,
-            "sessions": 0,
-            "initial_nav_usd": 10000.0,
-            "automatic_promotion": False,
-            "live_execution_enabled": False,
-            "rows": [],
-        }
+    source_payload = _load_object(source)
+    league_cfg = _load_object(league_config_path)
+    expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+
+    if not source_payload:
+        payload = _waiting_payload(
+            league_cfg,
+            status="WAITING_FOR_WEEKLY_MODEL",
+            detail="The prospective league has not started yet.",
+        )
+    elif league_cfg and str(source_payload.get("league_id") or "") != expected_league_id:
+        previous_id = str(source_payload.get("league_id") or "unknown")
+        payload = _waiting_payload(
+            league_cfg,
+            status="WAITING_FOR_GENESIS",
+            detail=(
+                f"Current runtime evidence belongs to previous league {previous_id}; "
+                f"waiting for first complete EOD of {expected_league_id}."
+            ),
+        )
+    else:
+        payload = dict(source_payload)
 
     rows = _rank_rows(payload.get("rows", []))
     payload["rows"] = rows
@@ -196,12 +241,17 @@ def main() -> None:
     )
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--output", default="site/data/strategy_league.json")
+    parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument(
         "--observation-output",
         default="site/data/experiment_observation.json",
     )
     args = parser.parse_args()
-    payload = publish_league_payload(Path(args.data_dir), Path(args.output))
+    payload = publish_league_payload(
+        Path(args.data_dir),
+        Path(args.output),
+        Path(args.league_config),
+    )
     observation = publish_observation_payload(
         Path(args.data_dir),
         Path(args.observation_output),
