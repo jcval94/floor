@@ -22,6 +22,11 @@ jobs:
           pip install -e .[dev]
           pip install mypy pyyaml
 
+      - name: Validate serving champion schema and smoke
+        run: |
+          PYTHONPATH=src python -m utils.model_artifact_guard \
+            --registry data/training/models
+
       - name: Lint
         run: |
           ruff check src tests scripts
