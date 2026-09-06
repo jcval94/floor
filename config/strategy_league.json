@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v5_capital_10k",
+  "league_id": "strategy_league_v6_all_strategies_10k",
   "enabled": true,
   "mode": "shadow_paper",
   "initial_nav_usd": 10000.0,
@@ -16,6 +16,8 @@
   "members": [
     {"id": "weekly_opportunity_ridge", "type": "strategy", "required": true},
     {"id": "breakout_protected_by_floor", "type": "strategy", "required": true},
+    {"id": "mean_reversion_floor_w1", "type": "strategy", "required": true},
+    {"id": "cross_horizon_asymmetry", "type": "strategy", "required": true},
     {"id": "capital_allocation_challenger", "type": "strategy", "required": true},
     {"id": "benchmark_spy", "type": "benchmark", "required": true},
     {"id": "benchmark_equal_weight", "type": "benchmark", "required": true}
