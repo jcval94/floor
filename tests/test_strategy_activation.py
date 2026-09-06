@@ -5,7 +5,7 @@ from pathlib import Path
 
 from strategies.activation import activation_snapshot, strategy_activation_decision
 from strategies.run_strategies import load_simple_yaml, run_strategies
-from strategies.strategy_weekly_opportunity import generate_weekly_opportunity_orders
+from strategies.strategy_pack_v2 import generate_weekly_opportunity_orders
 
 
 def _config() -> dict:
@@ -26,14 +26,19 @@ def test_repository_config_keeps_all_execution_modes_off() -> None:
     assert cfg["activation"]["live_execution_enabled"] is False
 
 
-def test_research_remains_available_without_enabling_execution() -> None:
+def test_research_remains_available_for_rebuilt_pack() -> None:
     cfg = _config()
     backtest = activation_snapshot(cfg, "backtest")
 
-    assert backtest["weekly_opportunity_ridge"]["allowed"] is True
-    assert backtest["weekly_opportunity_ridge"]["readiness"] == "challenger_waiting_out_of_sample"
-    assert backtest["weekly_opportunity_ridge"]["canonical_serving_enabled"] is False
-    assert backtest["weekly_opportunity_ridge"]["promotion_eligible"] is False
+    assert set(backtest) == {
+        "weekly_opportunity_ridge",
+        "breakout_protected_by_floor",
+        "mean_reversion_floor_w1",
+        "cross_horizon_asymmetry",
+    }
+    assert all(item["allowed"] is True for item in backtest.values())
+    assert all(item["canonical_serving_enabled"] is False for item in backtest.values())
+    assert all(item["promotion_eligible"] is False for item in backtest.values())
 
 
 def test_paper_challenger_can_be_enabled_without_canonical_promotion() -> None:
@@ -70,26 +75,19 @@ def test_paper_runner_is_empty_with_repository_defaults() -> None:
             "symbol": "AAPL",
             "sector": "Technology",
             "close": 190.0,
-            "floor_d1": 185.0,
-            "ceiling_d1": 200.0,
-            "expected_range_d1": 15.0,
-            "ai_alignment_score": 0.9,
-            "expected_return_d1": 0.02,
-            "breach_prob_d1": 0.2,
-            "composite_signal_score": 0.9,
+            "floor_d1": 180.0,
+            "ceiling_d1": 210.0,
+            "floor_w1": 175.0,
+            "ceiling_w1": 220.0,
+            "floor_q1": 165.0,
+            "ceiling_q1": 235.0,
             "confidence_score": 0.9,
             "momentum_20": 0.05,
+            "rel_strength_20": 0.03,
             "avg_dollar_volume": 50_000_000,
-            "floor_w1": 180.0,
-            "ceiling_w1": 205.0,
-            "expected_return_w1": 0.03,
-            "floor_m3": 170.0,
+            "floor_m3": 160.0,
             "floor_week_m3": 8,
             "floor_week_m3_confidence": 0.7,
-            "reward_risk_ratio": 2.0,
-            "expected_return_m3": 0.02,
-            "floor_q1": 175.0,
-            "ceiling_q1": 215.0,
             "weekly_opportunity_score": 1.5,
         }
     ]
@@ -97,29 +95,62 @@ def test_paper_runner_is_empty_with_repository_defaults() -> None:
     out = run_strategies(rows, cfg, session="OPEN_PLUS_2H", mode="paper")
 
     assert out["mode"] == "paper"
+    assert out["n_signals"] == 0
     assert out["n_candidates"] == 0
     assert out["orders"] == []
 
 
-def test_weekly_adapter_matches_positive_top_fraction_contract() -> None:
+def test_weekly_adapter_emits_buy_sell_and_hold() -> None:
     cfg = _config()
     strategy_cfg = cfg["strategies"]["weekly_opportunity_ridge"]
-    rows = []
-    for idx, score in enumerate([2.0, 1.0, 0.5, 0.1, -0.2]):
-        rows.append(
-            {
-                "symbol": f"S{idx}",
-                "close": 100.0,
-                "floor_q1": 90.0,
-                "ceiling_q1": 120.0,
-                "avg_dollar_volume": 50_000_000,
-                "weekly_opportunity_score": score,
-            }
-        )
+    rows = [
+        {
+            "symbol": "BUY",
+            "close": 100.0,
+            "floor_q1": 90.0,
+            "ceiling_q1": 125.0,
+            "avg_dollar_volume": 50_000_000,
+            "weekly_opportunity_score": 2.0,
+        },
+        {
+            "symbol": "MID1",
+            "close": 100.0,
+            "floor_q1": 90.0,
+            "ceiling_q1": 120.0,
+            "avg_dollar_volume": 50_000_000,
+            "weekly_opportunity_score": 0.5,
+        },
+        {
+            "symbol": "MID2",
+            "close": 100.0,
+            "floor_q1": 90.0,
+            "ceiling_q1": 120.0,
+            "avg_dollar_volume": 50_000_000,
+            "weekly_opportunity_score": 0.0,
+        },
+        {
+            "symbol": "MID3",
+            "close": 100.0,
+            "floor_q1": 90.0,
+            "ceiling_q1": 120.0,
+            "avg_dollar_volume": 50_000_000,
+            "weekly_opportunity_score": -0.5,
+        },
+        {
+            "symbol": "SELL",
+            "close": 100.0,
+            "floor_q1": 75.0,
+            "ceiling_q1": 110.0,
+            "avg_dollar_volume": 50_000_000,
+            "weekly_opportunity_score": -2.0,
+        },
+    ]
 
-    orders = generate_weekly_opportunity_orders(rows, cfg, strategy_cfg, session="CLOSE")
+    signals = generate_weekly_opportunity_orders(rows, cfg, strategy_cfg, session="CLOSE")
+    actions = {signal.symbol: signal.side for signal in signals}
 
-    # ceil(5 * 20%) = 1, and only positive scores are eligible.
-    assert [order.symbol for order in orders] == ["S0"]
-    assert orders[0].side == "BUY"
-    assert orders[0].horizon == "q1"
+    assert actions["BUY"] == "BUY"
+    assert actions["SELL"] == "SELL"
+    assert actions["MID1"] == "HOLD"
+    assert actions["MID2"] == "HOLD"
+    assert actions["MID3"] == "HOLD"
