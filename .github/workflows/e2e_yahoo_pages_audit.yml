@@ -1,12 +1,19 @@
 name: e2e-yahoo-pages-audit
 
 on:
-  push:
-    branches:
-      - audit/e2e-yahoo-pages-20260906
   pull_request:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'site/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - '.github/workflows/e2e_yahoo_pages_audit.yml'
+  schedule:
+    - cron: '17 16 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -92,10 +99,19 @@ jobs:
       - name: Bootstrap isolated Strategy League weekly model
         run: |
           set -euo pipefail
+          STARTED_AT=$(date +%s)
           PYTHONPATH=src python -m league.bootstrap_weekly_model \
             --dataset artifacts/e2e/modelable_dataset.json \
             --output data/metrics/strategy_league/models/weekly_opportunity_challenger.json \
             --version "e2e-${GITHUB_RUN_ID}"
+          ELAPSED_SECONDS=$(( $(date +%s) - STARTED_AT ))
+          python - <<PY
+          import json
+          from pathlib import Path
+          payload = {'elapsed_seconds': int('${ELAPSED_SECONDS}')}
+          Path('artifacts/e2e/weekly_bootstrap_timing.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          print(json.dumps(payload))
+          PY
 
       - name: Run canonical CLOSE forecast cycle on fresh Yahoo state
         run: |
@@ -234,7 +250,7 @@ jobs:
           print(json.dumps(summary, indent=2))
           PY
 
-      - name: Serve Pages build and verify rendering in Chromium
+      - name: Serve Pages build and verify all views in Chromium
         run: |
           set -euo pipefail
           python -m http.server 8765 --directory artifacts/e2e/site > artifacts/e2e/http_server.log 2>&1 &
@@ -249,38 +265,65 @@ jobs:
           from pathlib import Path
           from playwright.sync_api import sync_playwright
 
-          errors = []
-          failed_requests = []
+          views = {
+              'home': 'index.html',
+              'forecasts': 'forecasts.html',
+              'tickers': 'tickers.html',
+              'strategies': 'strategies.html',
+              'system': 'system.html',
+          }
+          results = {}
+          all_console_errors = []
+          all_failed_requests = []
+          all_http_errors = []
+
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
-              page = browser.new_page(viewport={'width': 1440, 'height': 1200})
-              page.on('console', lambda msg: errors.append(f'console:{msg.type}:{msg.text}') if msg.type == 'error' else None)
-              page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
-              page.on('requestfailed', lambda req: failed_requests.append(f'{req.method} {req.url}: {req.failure}'))
-              response = page.goto('http://127.0.0.1:8765/', wait_until='networkidle', timeout=30000)
-              assert response is not None and response.ok, response.status if response else None
-              page.wait_for_timeout(1500)
-              title = page.title()
-              body = page.locator('body').inner_text()
-              assert title.strip(), 'empty document title'
-              assert len(body.strip()) > 200, 'page rendered nearly empty body'
-              assert 'Floor' in body or 'floor' in body.lower(), 'expected product identity not visible'
-              page.screenshot(path='artifacts/e2e/pages_home.png', full_page=True)
-              links = page.locator('a').count()
-              scripts = page.locator('script').count()
-              result = {
-                  'title': title,
-                  'body_chars': len(body),
-                  'links': links,
-                  'scripts': scripts,
-                  'console_errors': errors,
-                  'failed_requests': failed_requests,
-              }
-              Path('artifacts/e2e/browser_audit.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-              print(json.dumps(result, indent=2))
-              assert not errors, errors
-              assert not failed_requests, failed_requests
+              for name, path in views.items():
+                  page = browser.new_page(viewport={'width': 1440, 'height': 1200})
+                  console_errors = []
+                  failed_requests = []
+                  http_errors = []
+                  page.on('console', lambda msg, target=console_errors: target.append(f'{msg.type}:{msg.text}') if msg.type == 'error' else None)
+                  page.on('pageerror', lambda exc, target=console_errors: target.append(f'pageerror:{exc}'))
+                  page.on('requestfailed', lambda req, target=failed_requests: target.append(f'{req.method} {req.url}: {req.failure}'))
+                  page.on('response', lambda response, target=http_errors: target.append(f'{response.status} {response.url}') if response.status >= 400 else None)
+
+                  response = page.goto(f'http://127.0.0.1:8765/{path}', wait_until='networkidle', timeout=30000)
+                  assert response is not None and response.ok, response.status if response else None
+                  page.wait_for_timeout(1000)
+                  title = page.title()
+                  body = page.locator('body').inner_text()
+                  assert title.strip(), f'{name}: empty document title'
+                  assert len(body.strip()) > 200, f'{name}: page rendered nearly empty body'
+                  assert 'Floor' in body or 'floor' in body.lower(), f'{name}: expected product identity not visible'
+                  page.screenshot(path=f'artifacts/e2e/pages_{name}.png', full_page=True)
+                  results[name] = {
+                      'title': title,
+                      'body_chars': len(body),
+                      'links': page.locator('a').count(),
+                      'scripts': page.locator('script').count(),
+                      'console_errors': console_errors,
+                      'failed_requests': failed_requests,
+                      'http_errors': http_errors,
+                  }
+                  all_console_errors.extend(f'{name}:{item}' for item in console_errors)
+                  all_failed_requests.extend(f'{name}:{item}' for item in failed_requests)
+                  all_http_errors.extend(f'{name}:{item}' for item in http_errors)
+                  page.close()
               browser.close()
+
+          result = {
+              'views': results,
+              'console_errors': all_console_errors,
+              'failed_requests': all_failed_requests,
+              'http_errors': all_http_errors,
+          }
+          Path('artifacts/e2e/browser_audit.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+          print(json.dumps(result, indent=2))
+          assert not all_console_errors, all_console_errors
+          assert not all_failed_requests, all_failed_requests
+          assert not all_http_errors, all_http_errors
           PY
 
       - name: Run repository E2E and Pages regression tests
@@ -292,7 +335,8 @@ jobs:
             tests/test_forecasting.py \
             tests/test_pages_publish.py \
             tests/test_strategy_package_structure.py \
-            tests/test_experiment_observation.py
+            tests/test_experiment_observation.py \
+            tests/test_weekly_opportunity_vectorized.py
 
       - name: Build compact E2E audit report
         if: always()
@@ -322,6 +366,7 @@ jobs:
               'modelable_rows': len(rows),
               'modelable_columns': len(rows[0]) if rows else 0,
               'split_counts': modelable.get('split_counts'),
+              'weekly_bootstrap': load('artifacts/e2e/weekly_bootstrap_timing.json'),
               'prediction_batch': load('artifacts/e2e/prediction_batch.json'),
               'pages': load('artifacts/e2e/pages_audit_summary.json'),
               'browser': load('artifacts/e2e/browser_audit.json'),
