@@ -22,7 +22,7 @@
   ],
   "weekly_model_path": "data/metrics/strategy_league/models/weekly_opportunity_challenger.json",
   "capital_allocation_challenger": {
-    "review_frequency_sessions": 5,
+    "review_frequency_sessions": 10,
     "max_holding_sessions": 10,
     "risk_budget_pct_nav": 0.0075,
     "min_risk_scale": 0.65,
