@@ -1,0 +1,6 @@
+{
+  "start": "2026-08-24",
+  "end": "2026-09-04",
+  "purpose": "Counterfactual diagnostic replay of the fully repaired Floor system using serving-compatible schema-v2 champions trained strictly before the replay window",
+  "attempt": 2
+}

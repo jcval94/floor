@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v2",
+  "league_id": "strategy_league_v3",
   "enabled": true,
   "mode": "shadow_paper",
   "initial_nav_usd": 100000.0,

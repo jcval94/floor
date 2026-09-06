@@ -51,6 +51,13 @@ jobs:
       - name: Revalidate close under writer lock
         id: lock_guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
+
+      - name: Preflight serving-compatible schema-v2 champions
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m utils.model_artifact_guard \
+            --registry data/training/models
+
       - name: Initialize DBs
         if: steps.lock_guard.outputs.run == 'true'
         run: make init-dbs

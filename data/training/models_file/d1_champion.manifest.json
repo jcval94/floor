@@ -2,8 +2,8 @@
   "task": "d1",
   "format": "pkl",
   "file_name": "d1_champion.pkl",
-  "sha256": "37878177f1956d6ab6a487b077f93bd9484e532051eef724150d71ee05b3b6a9",
-  "model_name": "evt_cp_d1",
-  "model_version": "20260318T223030Z",
-  "created_at": "2026-03-18T22:31:38.305847+00:00"
+  "sha256": "3ea44dcc11c802abf4bd18706faf8f718944c84fce906ed15e810431f7cb9ded",
+  "model_name": "boosted_stumps_d1",
+  "model_version": "cutoff-20260821-schema2",
+  "created_at": "2026-09-06T02:22:55.633125+00:00"
 }
