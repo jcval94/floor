@@ -1,5 +1,6 @@
 {
   "cutoff": "2026-08-21",
   "version": "cutoff-20260821-schema2",
-  "reason": "Repair serving artifact schema compatibility before retrospective replay and Strategy League v2 live observation"
+  "reason": "Repair serving artifact schema compatibility before retrospective replay and Strategy League v2 live observation",
+  "attempt": 2
 }
