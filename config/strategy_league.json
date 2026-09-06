@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v4",
+  "league_id": "strategy_league_v5_capital_10k",
   "enabled": true,
   "mode": "shadow_paper",
-  "initial_nav_usd": 100000.0,
+  "initial_nav_usd": 10000.0,
   "benchmark_spy": "SPY",
   "weekly_review_frequency_sessions": 5,
   "execution": {
@@ -16,10 +16,30 @@
   "members": [
     {"id": "weekly_opportunity_ridge", "type": "strategy", "required": true},
     {"id": "breakout_protected_by_floor", "type": "strategy", "required": true},
+    {"id": "capital_allocation_challenger", "type": "strategy", "required": true},
     {"id": "benchmark_spy", "type": "benchmark", "required": true},
     {"id": "benchmark_equal_weight", "type": "benchmark", "required": true}
   ],
   "weekly_model_path": "data/metrics/strategy_league/models/weekly_opportunity_challenger.json",
+  "capital_allocation_challenger": {
+    "review_frequency_sessions": 5,
+    "max_holding_sessions": 10,
+    "risk_budget_pct_nav": 0.0075,
+    "min_risk_scale": 0.65,
+    "max_position_pct_nav": 0.20,
+    "max_gross_exposure_pct_nav": 0.90,
+    "max_portfolio_heat_pct_nav": 0.04,
+    "max_sector_exposure_pct_nav": 0.35,
+    "min_position_weight": 0.02,
+    "quality_floor": 0.55,
+    "consensus_bonus": 0.15,
+    "source_weights": {
+      "weekly_opportunity_ridge": 1.0,
+      "breakout_protected_by_floor": 1.0,
+      "mean_reversion_floor_w1": 0.90,
+      "cross_horizon_asymmetry": 0.95
+    }
+  },
   "promotion_review": {
     "min_sessions": 63,
     "min_trades": 10,
