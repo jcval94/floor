@@ -76,11 +76,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/baseline artifacts/candidate artifacts/audit
-          cp \
-            data/training/models/d1_champion.json \
-            data/training/models/w1_champion.json \
-            data/training/models/q1_champion.json \
-            artifacts/baseline/
+          git fetch --no-tags --depth=1 origin main
+          BASELINE_SHA="$(git rev-parse FETCH_HEAD)"
+          for horizon in d1 w1 q1; do
+            git show "${BASELINE_SHA}:data/training/models/${horizon}_champion.json" \
+              > "artifacts/baseline/${horizon}_champion.json"
+          done
           PYTHONPATH=src python -m models.train_classic_horizons \
             --dataset data/training/modelable_dataset.json \
             --output-dir artifacts/candidate \
