@@ -16,8 +16,10 @@ from league.engine import (
 from league.market_features import build_league_market_snapshot
 from models.train_weekly_opportunity import predict_weekly_opportunity
 from strategies.run_strategies import load_simple_yaml
-from strategies.strategy_breakout_floor import generate_breakout_floor_orders
-from strategies.strategy_weekly_opportunity import generate_weekly_opportunity_orders
+from strategies.strategy_pack_v2 import (
+    generate_breakout_floor_orders,
+    generate_weekly_opportunity_orders,
+)
 
 
 def _load_json(path: Path) -> dict:
@@ -32,9 +34,17 @@ def _decision_targets(
     rows_by_symbol: dict[str, dict],
     strategies_cfg: dict,
 ) -> dict[str, dict]:
+    """Translate only BUY signals into long-only shadow-paper targets.
+
+    SELL means do not own / exit on the next rebalance; HOLD creates no new
+    target. This keeps Strategy League long-only while the research layer can
+    still evaluate symmetric BUY/SELL/HOLD recommendations.
+    """
     global_nav = float(strategies_cfg.get("portfolio", {}).get("nav_usd", 1.0) or 1.0)
     targets: dict[str, dict] = {}
     for decision in decisions:
+        if str(getattr(decision, "side", "")).upper() != "BUY":
+            continue
         row = rows_by_symbol.get(str(decision.symbol), {})
         close = float(row.get("close", 0.0) or 0.0)
         if close <= 0 or int(decision.qty) <= 0:
@@ -53,12 +63,7 @@ def _equal_weight_capped_targets(
     targets: dict[str, dict],
     max_weight: float,
 ) -> dict[str, dict]:
-    """Apply the research contract min(1 / n_selected, max_weight).
-
-    The helper is deliberately applied after candidate validation so ``n`` is
-    the number of actually investable Weekly names. This prevents dictionary
-    order or cash exhaustion from deciding which selected names receive capital.
-    """
+    """Apply the research contract min(1 / n_selected, max_weight)."""
     if not targets:
         return {}
     cap = max(0.0, min(1.0, float(max_weight)))
@@ -83,7 +88,9 @@ def _strategy_targets(
     scored = [dict(row) for row in rows]
     params = weekly_artifact.get("params", {})
     if params.get("canonical_serving_enabled") is not False:
-        raise RuntimeError("Strategy League refuses Weekly artifact unless canonical_serving_enabled=false")
+        raise RuntimeError(
+            "Strategy League refuses Weekly artifact unless canonical_serving_enabled=false"
+        )
     for row in scored:
         row["weekly_opportunity_score"] = predict_weekly_opportunity(row, params)
     rows_by_symbol = {str(row.get("symbol")): row for row in scored}
@@ -102,7 +109,12 @@ def _strategy_targets(
         )
 
     breakout_cfg = strategies_cfg["strategies"]["breakout_protected_by_floor"]
-    breakout = generate_breakout_floor_orders(scored, strategies_cfg, breakout_cfg, "CLOSE")
+    breakout = generate_breakout_floor_orders(
+        scored,
+        strategies_cfg,
+        breakout_cfg,
+        "CLOSE",
+    )
     targets["breakout_protected_by_floor"] = _decision_targets(
         breakout,
         rows_by_symbol,
@@ -225,8 +237,13 @@ def run_league_eod(
     rows = list(snapshot.get("rows", []))
     next_targets: dict[str, dict[str, dict]] = {}
     if snapshot.get("status") == "OK":
-        frequency = max(1, int(league_cfg.get("weekly_review_frequency_sessions", 5)))
-        include_weekly = state is None or int(state.get("session_count", 0)) % frequency == 0
+        frequency = max(
+            1,
+            int(league_cfg.get("weekly_review_frequency_sessions", 5)),
+        )
+        include_weekly = (
+            state is None or int(state.get("session_count", 0)) % frequency == 0
+        )
         next_targets = _strategy_targets(
             rows,
             strategies_cfg,
@@ -272,6 +289,9 @@ def run_league_eod(
         "live_execution_enabled": False,
         "operational_paper_gateway_used": False,
         "weekly_max_holding_sessions": max_holding_sessions,
+        "platform_fee_bps_per_side": float(
+            league_cfg.get("execution", {}).get("platform_fee_bps_per_side", 0.0)
+        ),
     }
     (root / "status.json").write_text(
         json.dumps(status_payload, ensure_ascii=False, indent=2),

@@ -1,13 +1,15 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v3",
+  "league_id": "strategy_league_v4",
   "enabled": true,
   "mode": "shadow_paper",
   "initial_nav_usd": 100000.0,
   "benchmark_spy": "SPY",
   "weekly_review_frequency_sessions": 5,
   "execution": {
-    "commission_bps": 2.0,
+    "commission_bps": 26.0,
+    "broker_commission_bps": 2.0,
+    "platform_fee_bps_per_side": 24.0,
     "slippage_bps": 3.0,
     "sell_fee_bps": 3.0
   },
