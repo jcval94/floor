@@ -1,5 +1,6 @@
 cost_model:
   currency: USD
+  platform_fee_bps_per_side: 24.0
   commission_bps: 0.5
   spread_bps: 1.0
   slippage_bps_open: 3.0
