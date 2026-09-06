@@ -7,6 +7,9 @@ errores exigidos —floor, ceiling y spread— para `d1`, `w1` y `q1`. La mejora
 repite en validacion y en un test cronologico ciego. El test no se uso para
 elegir arquitectura, hiperparametros ni peso del ensemble.
 
+El resultado completo y machine-readable producido por GitHub Actions esta en
+[`robust_range_v3_audit.json`](robust_range_v3_audit.json).
+
 ### Validacion usada para seleccion
 
 | Horizonte | Floor MAE pct (base -> v3) | Mejora | Ceiling MAE pct (base -> v3) | Mejora | Spread MAE pct (base -> v3) | Mejora | Cobertura conjunta delta |
