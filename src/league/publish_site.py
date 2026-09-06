@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
+CHALLENGER_ID = "capital_allocation_challenger"
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -24,24 +29,108 @@ def _write_object(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def _number(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric
+
+
+def _rank_rows(raw_rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_rows, list):
+        return []
+    rows = [dict(row) for row in raw_rows if isinstance(row, dict)]
+    rows.sort(
+        key=lambda row: (
+            _number(row.get("return")) is not None,
+            _number(row.get("return")) or float("-inf"),
+        ),
+        reverse=True,
+    )
+    for index, row in enumerate(rows, start=1):
+        row["rank"] = index
+        strategy_id = str(row.get("strategy") or "")
+        row["member_type"] = (
+            "benchmark" if strategy_id in BENCHMARK_IDS else "strategy"
+        )
+    return rows
+
+
+def _row_by_id(rows: list[dict[str, Any]], strategy_id: str) -> dict[str, Any] | None:
+    return next(
+        (row for row in rows if str(row.get("strategy")) == strategy_id),
+        None,
+    )
+
+
+def _return_of(row: dict[str, Any] | None) -> float | None:
+    return _number(row.get("return")) if row else None
+
+
+def _delta(left: float | None, right: float | None) -> float | None:
+    if left is None or right is None:
+        return None
+    return left - right
+
+
+def _competition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    strategy_rows = [row for row in rows if row.get("member_type") == "strategy"]
+    base_rows = [
+        row
+        for row in strategy_rows
+        if str(row.get("strategy")) != CHALLENGER_ID
+    ]
+
+    overall_leader = rows[0] if rows else None
+    strategy_leader = strategy_rows[0] if strategy_rows else None
+    challenger = _row_by_id(rows, CHALLENGER_ID)
+    spy = _row_by_id(rows, "benchmark_spy")
+    best_base = base_rows[0] if base_rows else None
+
+    challenger_return = _return_of(challenger)
+    return {
+        "overall_leader": overall_leader.get("strategy") if overall_leader else None,
+        "strategy_leader": strategy_leader.get("strategy") if strategy_leader else None,
+        "strategy_leader_return": _return_of(strategy_leader),
+        "challenger_rank": challenger.get("rank") if challenger else None,
+        "challenger_return": challenger_return,
+        "challenger_vs_spy": _delta(challenger_return, _return_of(spy)),
+        "best_base_strategy": best_base.get("strategy") if best_base else None,
+        "challenger_vs_best_base": _delta(
+            challenger_return,
+            _return_of(best_base),
+        ),
+        "members": len(rows),
+        "strategies": len(strategy_rows),
+        "benchmarks": len(rows) - len(strategy_rows),
+    }
+
+
 def publish_league_payload(data_dir: Path, output_path: Path) -> dict[str, Any]:
     source = data_dir / "metrics" / "strategy_league" / "leaderboard.json"
     payload = _load_object(source)
     if not payload:
         payload = {
             "schema_version": 1,
-            "league_id": "strategy_league_v1",
+            "league_id": "strategy_league_v5_capital_10k",
             "mode": "shadow_paper",
             "status": "WAITING_FOR_WEEKLY_MODEL",
             "detail": "The prospective league has not started yet.",
             "start_session": None,
             "last_session": None,
             "sessions": 0,
-            "initial_nav_usd": 100000.0,
+            "initial_nav_usd": 10000.0,
             "automatic_promotion": False,
             "live_execution_enabled": False,
             "rows": [],
         }
+
+    rows = _rank_rows(payload.get("rows", []))
+    payload["rows"] = rows
+    payload["summary"] = _competition_summary(rows)
+    payload["evidence_type"] = "prospective_shadow_paper"
+    payload["published_at"] = datetime.now(timezone.utc).isoformat()
     payload["automatic_promotion"] = False
     payload["live_execution_enabled"] = False
     _write_object(output_path, payload)
@@ -120,6 +209,7 @@ def main() -> None:
             {
                 "status": payload.get("status"),
                 "sessions": payload.get("sessions"),
+                "leader": (payload.get("summary") or {}).get("strategy_leader"),
                 "observation_status": observation.get("status"),
             },
             ensure_ascii=False,
