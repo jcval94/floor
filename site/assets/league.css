@@ -58,6 +58,7 @@
 .league-series-3 { stroke: var(--warning); background: var(--warning); stroke-dasharray: 5 3; }
 .league-series-4 { stroke: var(--neutral); background: var(--neutral); stroke-dasharray: 2 3; }
 .league-series-5 { stroke: var(--accent-strong); background: var(--accent-strong); stroke-dasharray: 7 3; }
+.league-series-6 { stroke: var(--text-strong); background: var(--text-strong); stroke-dasharray: 1 4; }
 
 .league-legend {
   display: flex;
