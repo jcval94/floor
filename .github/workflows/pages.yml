@@ -122,6 +122,7 @@ jobs:
             --source-commit "$SOURCE_COMMIT"
           PYTHONPATH=src python -m league.publish_site \
             --data-dir data \
+            --league-config config/strategy_league.json \
             --output site/data/strategy_league.json \
             --observation-output site/data/experiment_observation.json
           PYTHONPATH=src python -m utils.pages_security --site-dir site
@@ -198,6 +199,7 @@ jobs:
           node --check site/assets/app.js
           node --check site/assets/audit.js
           node --check site/assets/league.js
+          node --check site/assets/charts.js
           node --check site/assets/experiment.js
           python - <<'PY'
           import json
@@ -229,7 +231,10 @@ jobs:
               for match in re.findall(r'(?:src|href)="([^"]+)"', text):
                   if match.startswith(('http://', 'https://', '#')):
                       continue
-                  target = (html.parent / match.split('?', 1)[0]).resolve()
+                  local_path = match.split('?', 1)[0].split('#', 1)[0]
+                  if not local_path:
+                      continue
+                  target = (html.parent / local_path).resolve()
                   if not target.exists():
                       raise SystemExit(f'broken local asset reference {html}: {match}')
           print('static-site integrity OK')
