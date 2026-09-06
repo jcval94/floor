@@ -15,11 +15,9 @@ from league.engine import (
 )
 from league.market_features import build_league_market_snapshot
 from models.train_weekly_opportunity import predict_weekly_opportunity
+from strategies.breakout_protected_by_floor import generate_breakout_floor_orders
 from strategies.run_strategies import load_simple_yaml
-from strategies.strategy_pack_v2 import (
-    generate_breakout_floor_orders,
-    generate_weekly_opportunity_orders,
-)
+from strategies.weekly_opportunity_ridge import generate_weekly_opportunity_orders
 
 
 def _load_json(path: Path) -> dict:
