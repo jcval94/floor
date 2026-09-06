@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+import numpy as np
+
 from models.temporal_cv import purged_expanding_folds
 
 
@@ -82,27 +84,31 @@ def _scaled(row: dict, means: list[float], scales: list[float]) -> list[float]:
 
 
 def _fit_ridge(rows: list[dict], *, l2: float = 0.03, lr: float = 0.02, epochs: int = 300) -> dict:
+    """Fit the frozen batch-gradient Ridge contract with vectorized arithmetic.
+
+    The objective, regularization, scaler, initialization, learning rate and
+    epoch count are unchanged from the original implementation. The only
+    difference is computational: the standardized design matrix is built once
+    and each full-batch gradient is evaluated by NumPy instead of repeatedly
+    scaling every row inside every epoch.
+    """
+
     usable = _usable(rows)
     if not usable:
         raise ValueError("No complete q1 opportunity rows available")
+
     means, scales = _fit_scaler(usable)
-    weights = [0.0] * len(FEATURE_NAMES)
-    targets = [float(_target(row) or 0.0) for row in usable]
-    bias = sum(targets) / len(targets)
+    design = np.asarray([_scaled(row, means, scales) for row in usable], dtype=np.float64)
+    targets = np.asarray([float(_target(row) or 0.0) for row in usable], dtype=np.float64)
+    weights = np.zeros(len(FEATURE_NAMES), dtype=np.float64)
+    bias = float(targets.mean())
     n = float(len(usable))
 
     for _ in range(epochs):
-        grad_w = [0.0] * len(FEATURE_NAMES)
-        grad_b = 0.0
-        for row, target in zip(usable, targets):
-            x = _scaled(row, means, scales)
-            pred = bias + sum(weight * value for weight, value in zip(weights, x))
-            error = pred - target
-            grad_b += 2.0 * error / n
-            for j in range(len(weights)):
-                grad_w[j] += 2.0 * error * x[j] / n
-        for j in range(len(weights)):
-            weights[j] -= lr * (grad_w[j] + 2.0 * l2 * weights[j])
+        errors = bias + design @ weights - targets
+        grad_b = 2.0 * float(errors.sum()) / n
+        grad_w = (2.0 / n) * (design.T @ errors)
+        weights -= lr * (grad_w + 2.0 * l2 * weights)
         bias -= lr * grad_b
 
     return {
@@ -111,8 +117,8 @@ def _fit_ridge(rows: list[dict], *, l2: float = 0.03, lr: float = 0.02, epochs: 
         "feature_names": list(FEATURE_NAMES),
         "feature_means": means,
         "feature_scales": scales,
-        "weights": weights,
-        "bias": bias,
+        "weights": [float(value) for value in weights],
+        "bias": float(bias),
         "l2": l2,
         "learning_rate": lr,
         "epochs": epochs,
