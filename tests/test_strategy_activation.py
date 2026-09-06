@@ -5,7 +5,7 @@ from pathlib import Path
 
 from strategies.activation import activation_snapshot, strategy_activation_decision
 from strategies.run_strategies import load_simple_yaml, run_strategies
-from strategies.strategy_pack_v2 import generate_weekly_opportunity_orders
+from strategies.weekly_opportunity_ridge import generate_weekly_opportunity_orders
 
 
 def _config() -> dict:
