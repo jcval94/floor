@@ -83,8 +83,9 @@ def run_strategies(
     cooldown_state: dict[str, int] | None = None,
     current_cycle: int = 0,
     mode: str = "backtest",
+    portfolio_state: dict | None = None,
 ) -> dict:
-    """Generate auditable BUY/SELL/HOLD signals and executable BUY/SELL orders."""
+    """Generate auditable signals and portfolio-constrained executable orders."""
     rows = [dict(r) for r in forecast_rows]
     rows_by_symbol = {str(r.get("symbol")): r for r in rows}
     normalized_mode = str(mode or "backtest").strip().lower()
@@ -113,6 +114,7 @@ def run_strategies(
         config,
         cooldown_state=cooldown_state,
         current_cycle=current_cycle,
+        portfolio_state=portfolio_state,
     )
 
     rt_cost = round_trip_cost_bps(config)
@@ -132,6 +134,7 @@ def run_strategies(
         "action_counts": action_counts,
         "orders": allocation["orders"],
         "blocked": allocation["blocked_collisions"],
+        "portfolio_summary": allocation["portfolio_summary"],
         "n_signals": len(signals),
         "n_candidates": len(trade_candidates),
     }
