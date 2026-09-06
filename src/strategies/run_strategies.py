@@ -8,23 +8,23 @@ from typing import Callable
 from strategies.activation import VALID_MODES, activation_snapshot
 from strategies.base import StrategyDecision
 from strategies.portfolio_allocator import allocate_orders
-from strategies.strategy_ai_only import generate_ai_only_orders
-from strategies.strategy_breakout_floor import generate_breakout_floor_orders
-from strategies.strategy_consensus import generate_consensus_orders
-from strategies.strategy_mean_reversion import generate_mean_reversion_orders
-from strategies.strategy_model_only import generate_model_only_orders
-from strategies.strategy_weekly_opportunity import generate_weekly_opportunity_orders
+from strategies.strategy_pack_v2 import (
+    generate_breakout_floor_orders,
+    generate_cross_horizon_orders,
+    generate_mean_reversion_orders,
+    generate_weekly_opportunity_orders,
+    platform_fee_bps_per_side,
+    round_trip_cost_bps,
+)
 
 
 StrategyGenerator = Callable[[list[dict], dict, dict, str], list[StrategyDecision]]
 
 STRATEGY_GENERATORS: dict[str, StrategyGenerator] = {
-    "ai_only": generate_ai_only_orders,
-    "model_only": generate_model_only_orders,
-    "consensus": generate_consensus_orders,
-    "mean_reversion_floor_w1": generate_mean_reversion_orders,
-    "breakout_protected_by_floor": generate_breakout_floor_orders,
     "weekly_opportunity_ridge": generate_weekly_opportunity_orders,
+    "breakout_protected_by_floor": generate_breakout_floor_orders,
+    "mean_reversion_floor_w1": generate_mean_reversion_orders,
+    "cross_horizon_asymmetry": generate_cross_horizon_orders,
 }
 
 
@@ -78,6 +78,21 @@ def _eligible(row: dict, strategy_cfg: dict) -> bool:
     return sector not in excluded
 
 
+def _signal_payload(signal: StrategyDecision, config: dict) -> dict:
+    return {
+        "strategy_id": signal.strategy_id,
+        "symbol": signal.symbol,
+        "action": signal.side,
+        "score": round(float(signal.score), 8),
+        "horizon": signal.horizon,
+        "reason": signal.entry_reason,
+        "round_trip_cost_bps": round(round_trip_cost_bps(config), 4),
+        "platform_fee_bps_per_side": round(platform_fee_bps_per_side(config), 4),
+        "m3_context": signal.m3_context or {},
+        "priority_adjustment": int(signal.priority_adjustment or 0),
+    }
+
+
 def run_strategies(
     forecast_rows: list[dict],
     config: dict,
@@ -86,11 +101,7 @@ def run_strategies(
     current_cycle: int = 0,
     mode: str = "backtest",
 ) -> dict:
-    """Generate strategy orders only for strategies explicitly enabled in ``mode``.
-
-    ``backtest`` remains the research path used by historical tests. ``paper`` and
-    ``live`` are fail-closed and require explicit activation flags in config.
-    """
+    """Generate auditable BUY/SELL/HOLD signals and executable BUY/SELL orders."""
     rows = [dict(r) for r in forecast_rows]
     rows_by_symbol = {str(r.get("symbol")): r for r in rows}
     normalized_mode = str(mode or "backtest").strip().lower()
@@ -100,42 +111,53 @@ def run_strategies(
         cfg = config["strategies"][strategy_id]
         return [r for r in rows if _eligible(r, cfg)]
 
-    candidates: list[StrategyDecision] = []
+    signals: list[StrategyDecision] = []
     for strategy_id, generator in STRATEGY_GENERATORS.items():
         decision = decisions.get(strategy_id, {})
         if decision.get("allowed") is not True:
             continue
         strategy_cfg = config["strategies"][strategy_id]
-        candidates += generator(filt(strategy_id), config, strategy_cfg, session)
+        signals += generator(filt(strategy_id), config, strategy_cfg, session)
 
+    trade_candidates = [
+        signal
+        for signal in signals
+        if signal.side in {"BUY", "SELL"} and int(signal.qty) > 0
+    ]
     allocation = allocate_orders(
-        candidates,
+        trade_candidates,
         rows_by_symbol,
         config,
         cooldown_state=cooldown_state,
         current_cycle=current_cycle,
     )
-    m3_influenced_candidates = sum(
-        1 for candidate in candidates if (candidate.m3_context or {}).get("enabled") is True
-    )
-    m3_priority_adjusted_candidates = sum(
-        1
-        for candidate in candidates
-        if int((candidate.m3_context or {}).get("priority_adjustment", 0) or 0) != 0
-    )
+
+    rt_cost = round_trip_cost_bps(config)
+    platform = platform_fee_bps_per_side(config)
+    for order in allocation["orders"]:
+        order["round_trip_cost_bps"] = rt_cost
+        order["platform_fee_bps_per_side"] = platform
+
+    action_counts = {"BUY": 0, "SELL": 0, "HOLD": 0}
+    for signal in signals:
+        action_counts[signal.side] = action_counts.get(signal.side, 0) + 1
+
     return {
         "mode": normalized_mode,
         "activation": decisions,
+        "signals": [_signal_payload(signal, config) for signal in signals],
+        "action_counts": action_counts,
         "orders": allocation["orders"],
         "blocked": allocation["blocked_collisions"],
-        "n_candidates": len(candidates),
-        "n_m3_influenced_candidates": m3_influenced_candidates,
-        "n_m3_priority_adjusted_candidates": m3_priority_adjusted_candidates,
+        "n_signals": len(signals),
+        "n_candidates": len(trade_candidates),
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run registered strategy pack on forecast dataset")
+    parser = argparse.ArgumentParser(
+        description="Run BUY/SELL/HOLD strategy pack on forecast dataset"
+    )
     parser.add_argument("--forecasts", required=True, help="Forecast dataset json path")
     parser.add_argument("--config", default="config/strategies.yaml", help="Strategies config path")
     parser.add_argument("--session", required=True, help="Operational session")
