@@ -54,17 +54,16 @@ jobs:
           PYTHONPATH=src python -m utils.model_artifact_guard \
             --registry data/training/schema2_repair_stage/models
 
-      - name: Promote Git-managed champion JSON inside repair branch
+      - name: Promote repaired artifacts to canonical paths
         run: |
           set -euo pipefail
           stage=data/training/schema2_repair_stage
-          mkdir -p data/training/models data/training/metrics
+          mkdir -p data/training/models data/training/models_file data/training/metrics
           for task in d1 w1 q1 value timing; do
             cp "$stage/models/${task}_champion.json" "data/training/models/${task}_champion.json"
+            cp "$stage/models_file/${task}_champion.pkl" "data/training/models_file/${task}_champion.pkl"
+            cp "$stage/models_file/${task}_champion.manifest.json" "data/training/models_file/${task}_champion.manifest.json"
           done
-          # Keep the detailed repair manifest only in the job workspace for
-          # verification. Git policy intentionally versions champion JSON only;
-          # PKL/manifests and metrics are reconstructable generated state.
           cp "$stage/schema2_repair_manifest.json" data/training/metrics/schema2_repair_latest.json
 
       - name: Validate canonical paths after promotion
@@ -90,7 +89,7 @@ jobs:
           }, indent=2))
           PY
 
-      - name: Commit validated Git-managed champions to repair branch
+      - name: Commit validated repaired artifacts to repair branch
         env:
           BRANCH: feat/point-in-time-replay
         run: |
@@ -104,6 +103,18 @@ jobs:
             data/training/models/q1_champion.json \
             data/training/models/value_champion.json \
             data/training/models/timing_champion.json
-          git diff --cached --quiet && { echo "::error::Repair produced no champion JSON changes"; exit 1; }
-          git commit -m "fix: regenerate serving-compatible schema-v2 champions"
+          git add -f \
+            data/training/models_file/d1_champion.pkl \
+            data/training/models_file/w1_champion.pkl \
+            data/training/models_file/q1_champion.pkl \
+            data/training/models_file/value_champion.pkl \
+            data/training/models_file/timing_champion.pkl \
+            data/training/models_file/d1_champion.manifest.json \
+            data/training/models_file/w1_champion.manifest.json \
+            data/training/models_file/q1_champion.manifest.json \
+            data/training/models_file/value_champion.manifest.json \
+            data/training/models_file/timing_champion.manifest.json \
+            data/training/metrics/schema2_repair_latest.json
+          git diff --cached --quiet && { echo "::error::Repair produced no persisted artifact changes"; exit 1; }
+          git commit -m "fix: persist schema-v2 repair artifacts"
           git push origin "HEAD:$BRANCH"
