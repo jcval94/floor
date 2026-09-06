@@ -5,11 +5,23 @@ const LABELS = {
   capital_allocation_challenger: 'Capital Allocation Challenger',
   weekly_opportunity_ridge: 'Weekly Opportunity',
   breakout_protected_by_floor: 'Momentum + Floor',
+  mean_reversion_floor_w1: 'Mean Reversion + Floor',
+  cross_horizon_asymmetry: 'Cross-Horizon Asymmetry',
   benchmark_spy: 'SPY',
   benchmark_equal_weight: 'Equal Weight',
 };
 
 const BENCHMARKS = new Set(['benchmark_spy', 'benchmark_equal_weight']);
+const SERIES_ORDER = [
+  'capital_allocation_challenger',
+  'weekly_opportunity_ridge',
+  'breakout_protected_by_floor',
+  'mean_reversion_floor_w1',
+  'cross_horizon_asymmetry',
+  'benchmark_spy',
+  'benchmark_equal_weight',
+];
+const SERIES_RANK = new Map(SERIES_ORDER.map((strategy, index) => [strategy, index]));
 
 function pct(value) {
   const numeric = Number(value);
@@ -163,7 +175,13 @@ function tableRows(rows) {
 }
 
 function competitionChart(rows) {
-  const withCurves = rows.filter((row) => Array.isArray(row.equity_curve) && row.equity_curve.length > 0);
+  const withCurves = rows
+    .filter((row) => Array.isArray(row.equity_curve) && row.equity_curve.length > 0)
+    .sort((a, b) => {
+      const aRank = SERIES_RANK.get(String(a.strategy)) ?? SERIES_ORDER.length;
+      const bRank = SERIES_RANK.get(String(b.strategy)) ?? SERIES_ORDER.length;
+      return aRank - bRank || String(a.strategy).localeCompare(String(b.strategy));
+    });
   const series = withCurves.map((row) => ({
     id: row.strategy,
     label: labelFor(row.strategy),
