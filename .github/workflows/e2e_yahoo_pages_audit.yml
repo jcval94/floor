@@ -385,6 +385,17 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: e2e-yahoo-pages-${{ github.run_id }}
-          path: artifacts/e2e
-          if-no-files-found: error
+          path: |
+            artifacts/e2e/e2e_audit_report.json
+            artifacts/e2e/model_preflight.txt
+            artifacts/e2e/yahoo_ingest.txt
+            artifacts/e2e/training_data_guard.txt
+            artifacts/e2e/weekly_bootstrap_timing.json
+            artifacts/e2e/canonical_cycle.txt
+            artifacts/e2e/prediction_batch.json
+            artifacts/e2e/pages_audit_summary.json
+            artifacts/e2e/browser_audit.json
+            artifacts/e2e/pages_*.png
+            artifacts/e2e/http_server.log
+          if-no-files-found: warn
           retention-days: 30
