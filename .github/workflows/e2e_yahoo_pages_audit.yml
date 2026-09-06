@@ -109,14 +109,10 @@ jobs:
           import json
           from collections import Counter
           from pathlib import Path
-          import yaml
 
-          cfg = yaml.safe_load(Path('config/universe.yaml').read_text(encoding='utf-8'))
-          if isinstance(cfg, dict):
-              raw_universe = cfg.get('symbols') or cfg.get('universe') or cfg.get('tickers') or []
-          else:
-              raw_universe = cfg or []
-          universe = [str(item).strip().upper() for item in raw_universe if str(item).strip()]
+          from floor.universe import parse_universe_yaml
+
+          universe = parse_universe_yaml(Path('config/universe.yaml'))
           prediction_rows = []
           signal_rows = []
           for path in sorted(Path('data/predictions').glob('*.jsonl')):
@@ -129,7 +125,7 @@ jobs:
           latest = [row for row in prediction_rows if str(row.get('as_of') or '') == latest_as_of]
           counts = Counter(str(row.get('horizon') or '') for row in latest)
           symbols = {str(row.get('symbol') or '').upper() for row in latest}
-          expected_symbols = set(universe)
+          expected_symbols = {str(symbol).upper() for symbol in universe}
           expected_rows = len(expected_symbols) * 4
           assert symbols == expected_symbols, (sorted(expected_symbols - symbols), sorted(symbols - expected_symbols))
           assert len(latest) == expected_rows, (len(latest), expected_rows)
@@ -324,7 +320,7 @@ jobs:
               'github_run_id': os.environ.get('GITHUB_RUN_ID'),
               'scope': 'isolated real-Yahoo-to-local-Pages-render audit; no LIVE/PAPER publication',
               'modelable_rows': len(rows),
-              'modelable_columns': len((modelable.get('columns') or [])),
+              'modelable_columns': len(rows[0]) if rows else 0,
               'split_counts': modelable.get('split_counts'),
               'prediction_batch': load('artifacts/e2e/prediction_batch.json'),
               'pages': load('artifacts/e2e/pages_audit_summary.json'),
