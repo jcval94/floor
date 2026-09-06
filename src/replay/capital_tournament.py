@@ -15,7 +15,7 @@ from league.engine import (
     write_leaderboard,
 )
 from league.market_features import _feature_row
-from league.run_eod import _benchmark_targets, _strategy_targets
+from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
 from replay.point_in_time import build_point_in_time_feature_rows, group_by_symbol
 from replay.runner import (
     _bar_for_day,
@@ -60,11 +60,15 @@ def run_capital_tournament(
     weekly_artifact = _load_json(weekly_model_path)
     challenger_cfg = dict(league_cfg.get("capital_allocation_challenger", {}))
 
-    weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
-    weekly_max_holding = int(
-        weekly_cfg.get("exits", {}).get("temporal_exit_business_days", 10) or 10
-    )
+    strategy_configs = strategies_cfg["strategies"]
+    weekly_cfg = strategy_configs["weekly_opportunity_ridge"]
+    mean_cfg = strategy_configs["mean_reversion_floor_w1"]
+    cross_cfg = strategy_configs["cross_horizon_asymmetry"]
+    weekly_max_holding = _holding_sessions(weekly_cfg, 10)
+    mean_max_holding = _holding_sessions(mean_cfg, 5)
+    cross_max_holding = _holding_sessions(cross_cfg, 10)
     challenger_max_holding = int(challenger_cfg.get("max_holding_sessions", 10) or 10)
+
     league_cfg = {
         **league_cfg,
         "league_id": (
@@ -73,6 +77,8 @@ def run_capital_tournament(
         ),
         "strategy_max_holding_sessions": {
             "weekly_opportunity_ridge": weekly_max_holding,
+            "mean_reversion_floor_w1": mean_max_holding,
+            "cross_horizon_asymmetry": cross_max_holding,
             "capital_allocation_challenger": challenger_max_holding,
         },
     }
@@ -91,6 +97,8 @@ def run_capital_tournament(
         1,
         int(league_cfg.get("weekly_review_frequency_sessions", 5)),
     )
+    mean_frequency = mean_max_holding
+    cross_frequency = cross_max_holding
     challenger_frequency = max(
         1,
         int(challenger_cfg.get("review_frequency_sessions", weekly_frequency)),
@@ -162,12 +170,16 @@ def run_capital_tournament(
 
         current_count = int(state.get("session_count", 0)) if state is not None else 0
         include_weekly = state is None or current_count % weekly_frequency == 0
+        include_mean_reversion = state is None or current_count % mean_frequency == 0
+        include_cross_horizon = state is None or current_count % cross_frequency == 0
         include_challenger = state is None or current_count % challenger_frequency == 0
         next_targets = _strategy_targets(
             feature_rows,
             strategies_cfg,
             weekly_artifact,
             include_weekly=include_weekly,
+            include_mean_reversion=include_mean_reversion,
+            include_cross_horizon=include_cross_horizon,
             include_challenger=include_challenger,
             challenger_cfg=challenger_cfg,
         )
