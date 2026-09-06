@@ -20,7 +20,7 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     source.write_text(
         json.dumps(
             {
-                "league_id": "strategy_league_v5_capital_10k",
+                "league_id": "strategy_league_v6_all_strategies_10k",
                 "status": "RUNNING",
                 "initial_nav_usd": 10000.0,
                 "rows": [
@@ -33,6 +33,11 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
                         "strategy": "benchmark_spy",
                         "return": 0.002,
                         "nav": 10020.0,
+                    },
+                    {
+                        "strategy": "mean_reversion_floor_w1",
+                        "return": 0.0,
+                        "nav": 10000.0,
                     },
                     {
                         "strategy": "capital_allocation_challenger",
@@ -56,19 +61,36 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     assert [row["strategy"] for row in payload["rows"]] == [
         "capital_allocation_challenger",
         "benchmark_spy",
+        "mean_reversion_floor_w1",
         "weekly_opportunity_ridge",
         "breakout_protected_by_floor",
     ]
-    assert [row["rank"] for row in payload["rows"]] == [1, 2, 3, 4]
+    assert [row["rank"] for row in payload["rows"]] == [1, 2, 3, 4, 5]
     assert payload["summary"]["strategy_leader"] == "capital_allocation_challenger"
     assert payload["summary"]["challenger_rank"] == 1
-    assert payload["summary"]["best_base_strategy"] == "weekly_opportunity_ridge"
+    assert payload["summary"]["best_base_strategy"] == "mean_reversion_floor_w1"
     assert payload["summary"]["challenger_vs_spy"] == pytest.approx(0.004)
-    assert payload["summary"]["challenger_vs_best_base"] == pytest.approx(0.016)
+    assert payload["summary"]["challenger_vs_best_base"] == pytest.approx(0.006)
     assert payload["evidence_type"] == "prospective_shadow_paper"
     assert payload["automatic_promotion"] is False
     assert payload["live_execution_enabled"] is False
     assert output.exists()
+
+
+def test_strategy_league_config_tracks_every_base_strategy() -> None:
+    config = json.loads((ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8"))
+    member_ids = {str(member["id"]) for member in config["members"]}
+    assert config["league_id"] == "strategy_league_v6_all_strategies_10k"
+    assert float(config["initial_nav_usd"]) == 10000.0
+    assert {
+        "weekly_opportunity_ridge",
+        "breakout_protected_by_floor",
+        "mean_reversion_floor_w1",
+        "cross_horizon_asymmetry",
+        "capital_allocation_challenger",
+        "benchmark_spy",
+        "benchmark_equal_weight",
+    } == member_ids
 
 
 def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
@@ -87,6 +109,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'href="strategies.html#strategy-league"' in home
 
     assert "capital_allocation_challenger: 'Capital Allocation Challenger'" in script
+    assert "mean_reversion_floor_w1: 'Mean Reversion + Floor'" in script
+    assert "cross_horizon_asymmetry: 'Cross-Horizon Asymmetry'" in script
+    assert "SERIES_ORDER" in script
     assert "multiLineSvg" in script
     assert "challenger_vs_best_base" in script
     assert "costs_paid" in script
