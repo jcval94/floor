@@ -29,6 +29,19 @@ def build_model_specs() -> list[ModelSpec]:
         specs.extend(
             [
                 ModelSpec(
+                    model_id=f"robust_range_v3_{horizon}",
+                    model_family="robust_range_v3",
+                    horizon=horizon,
+                    predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
+                    objective="robust_hybrid_median_absolute_error",
+                    notes=(
+                        "Ensemble conservador: 80% boosted-stumps como ancla y 20% challenger. "
+                        "El challenger usa floor estructural ATR-mediana y ceiling mediante "
+                        "HistGradientBoosting poco profundo con perdida absoluta. Los arboles "
+                        "se exportan a JSON y se sirven sin sklearn."
+                    ),
+                ),
+                ModelSpec(
                     model_id=f"regime_median_{horizon}",
                     model_family="regime_median",
                     horizon=horizon,
@@ -101,6 +114,10 @@ def competition_protocol() -> dict:
             "purge_contract": "split_eligible_<horizon> / target_end_date_<horizon>",
         },
         "implementation_traceability": {
+            "robust_range_v3": (
+                "80/20 anchored ensemble: boosted-stumps + ATR-normalized median "
+                "floor / serialized shallow histogram gradient booster ceiling"
+            ),
             "regime_median": "volatility terciles + trend sign + observed median",
             "boosted_stumps": "in-repo additive decision stumps",
             "sequence_linear": "L2-regularized linear baseline on temporal-context features",

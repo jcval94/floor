@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
+*.egg-info/
 
 # Runtime / generated state is stored outside Git history.
 # GitHub Release `runtime-state-v1` keeps the rolling operational state;
