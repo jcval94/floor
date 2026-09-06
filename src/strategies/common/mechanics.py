@@ -75,10 +75,15 @@ def risk_sized_qty(
     if close <= 0 or stop <= 0:
         return 0
 
-    nav = to_float(global_cfg.get("portfolio", {}).get("nav_usd"))
+    portfolio = global_cfg.get("portfolio", {})
+    nav = to_float(portfolio.get("nav_usd"))
     sizing = strategy_cfg.get("position_sizing", {})
     risk_pct = to_float(sizing.get("risk_budget_pct_nav"))
     max_notional = to_float(sizing.get("max_notional_usd"))
+    max_weight = to_float(
+        sizing.get("max_weight_pct_nav", portfolio.get("max_position_pct_nav", 1.0)),
+        1.0,
+    )
     risk_budget = nav * risk_pct * max(multiplier, 0.0)
 
     friction = close * round_trip_cost_bps(global_cfg) / 10000.0
@@ -88,7 +93,8 @@ def risk_sized_qty(
 
     by_risk = int(risk_budget / risk_per_share)
     by_notional = int(max_notional / close) if max_notional > 0 else by_risk
-    return max(0, min(by_risk, by_notional))
+    by_weight = int((nav * max(max_weight, 0.0)) / close) if nav > 0 else 0
+    return max(0, min(by_risk, by_notional, by_weight))
 
 
 def apply_m3_context(
