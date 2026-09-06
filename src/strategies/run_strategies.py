@@ -3,29 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Callable
 
 from strategies.activation import VALID_MODES, activation_snapshot
 from strategies.base import StrategyDecision
+from strategies.common import platform_fee_bps_per_side, round_trip_cost_bps
 from strategies.portfolio_allocator import allocate_orders
-from strategies.strategy_pack_v2 import (
-    generate_breakout_floor_orders,
-    generate_cross_horizon_orders,
-    generate_mean_reversion_orders,
-    generate_weekly_opportunity_orders,
-    platform_fee_bps_per_side,
-    round_trip_cost_bps,
-)
-
-
-StrategyGenerator = Callable[[list[dict], dict, dict, str], list[StrategyDecision]]
-
-STRATEGY_GENERATORS: dict[str, StrategyGenerator] = {
-    "weekly_opportunity_ridge": generate_weekly_opportunity_orders,
-    "breakout_protected_by_floor": generate_breakout_floor_orders,
-    "mean_reversion_floor_w1": generate_mean_reversion_orders,
-    "cross_horizon_asymmetry": generate_cross_horizon_orders,
-}
+from strategies.registry import STRATEGY_GENERATORS
 
 
 def _parse_scalar(value: str):
