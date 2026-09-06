@@ -41,22 +41,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
-      - name: Validate frozen model artifacts
+      - name: Preflight serving-compatible schema-v2 champions
         run: |
           set -euo pipefail
-          for artifact in \
-            data/training/models/d1_champion.json \
-            data/training/models/w1_champion.json \
-            data/training/models/q1_champion.json \
-            data/training/models/value_champion.json \
-            data/training/models/timing_champion.json \
-            data/metrics/strategy_league/models/weekly_opportunity_challenger.json; do
-            test -s "$artifact" || { echo "::error::Missing replay artifact: $artifact"; exit 1; }
-            if head -c 120 "$artifact" | grep -q 'version https://git-lfs.github.com/spec/v1'; then
-              echo "::error::Replay artifact is an unresolved LFS pointer: $artifact"
-              exit 1
-            fi
-          done
+          PYTHONPATH=src python -m utils.model_artifact_guard \
+            --registry data/training/models
+          artifact=data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+          test -s "$artifact" || { echo "::error::Missing replay artifact: $artifact"; exit 1; }
+          if head -c 120 "$artifact" | grep -q 'version https://git-lfs.github.com/spec/v1'; then
+            echo "::error::Replay artifact is an unresolved LFS pointer: $artifact"
+            exit 1
+          fi
 
       - name: Resolve replay window
         id: window
