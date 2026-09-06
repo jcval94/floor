@@ -37,17 +37,19 @@ def _number(value: Any) -> float | None:
     return numeric
 
 
+def _return_sort_key(row: dict[str, Any]) -> tuple[bool, float]:
+    value = _number(row.get("return"))
+    return (
+        value is not None,
+        value if value is not None else float("-inf"),
+    )
+
+
 def _rank_rows(raw_rows: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_rows, list):
         return []
     rows = [dict(row) for row in raw_rows if isinstance(row, dict)]
-    rows.sort(
-        key=lambda row: (
-            _number(row.get("return")) is not None,
-            _number(row.get("return")) or float("-inf"),
-        ),
-        reverse=True,
-    )
+    rows.sort(key=_return_sort_key, reverse=True)
     for index, row in enumerate(rows, start=1):
         row["rank"] = index
         strategy_id = str(row.get("strategy") or "")
