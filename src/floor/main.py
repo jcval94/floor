@@ -11,6 +11,7 @@ from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.training.review import run_training_review
 from floor.universe import parse_universe_yaml
 from utils.market_data_guard import validate_market_data_freshness
+from utils.model_artifact_guard import validate_registry
 from utils.prediction_batch_guard import validate_latest_prediction_batch
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,15 @@ def main() -> None:
                 symbols = [symbol.strip().upper() for symbol in args.symbols.split(",") if symbol.strip()]
             else:
                 symbols = parse_universe_yaml(cfg.root_dir / "config" / "universe.yaml")
+
+            artifact_preflight = validate_registry(
+                cfg.data_dir / "training" / "models",
+                run_smoke=True,
+            )
+            logger.info(
+                "[main] serving champion preflight OK model_version=%s",
+                artifact_preflight.get("model_version"),
+            )
 
             freshness_symbols = sorted(set(symbols + ["SPY"]))
             freshness = validate_market_data_freshness(
