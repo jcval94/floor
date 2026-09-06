@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: feat/point-in-time-replay
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -54,16 +54,17 @@ jobs:
           PYTHONPATH=src python -m utils.model_artifact_guard \
             --registry data/training/schema2_repair_stage/models
 
-      - name: Promote generated artifacts only inside repair branch
+      - name: Promote Git-managed champion JSON inside repair branch
         run: |
           set -euo pipefail
           stage=data/training/schema2_repair_stage
-          mkdir -p data/training/models data/training/models_file data/training/metrics
+          mkdir -p data/training/models data/training/metrics
           for task in d1 w1 q1 value timing; do
             cp "$stage/models/${task}_champion.json" "data/training/models/${task}_champion.json"
-            cp "$stage/models_file/${task}_champion.pkl" "data/training/models_file/${task}_champion.pkl"
-            cp "$stage/models_file/${task}_champion.manifest.json" "data/training/models_file/${task}_champion.manifest.json"
           done
+          # Keep the detailed repair manifest only in the job workspace for
+          # verification. Git policy intentionally versions champion JSON only;
+          # PKL/manifests and metrics are reconstructable generated state.
           cp "$stage/schema2_repair_manifest.json" data/training/metrics/schema2_repair_latest.json
 
       - name: Validate canonical paths after promotion
@@ -89,7 +90,7 @@ jobs:
           }, indent=2))
           PY
 
-      - name: Commit validated artifacts to repair branch
+      - name: Commit validated Git-managed champions to repair branch
         env:
           BRANCH: feat/point-in-time-replay
         run: |
@@ -102,18 +103,7 @@ jobs:
             data/training/models/w1_champion.json \
             data/training/models/q1_champion.json \
             data/training/models/value_champion.json \
-            data/training/models/timing_champion.json \
-            data/training/models_file/d1_champion.pkl \
-            data/training/models_file/w1_champion.pkl \
-            data/training/models_file/q1_champion.pkl \
-            data/training/models_file/value_champion.pkl \
-            data/training/models_file/timing_champion.pkl \
-            data/training/models_file/d1_champion.manifest.json \
-            data/training/models_file/w1_champion.manifest.json \
-            data/training/models_file/q1_champion.manifest.json \
-            data/training/models_file/value_champion.manifest.json \
-            data/training/models_file/timing_champion.manifest.json \
-            data/training/metrics/schema2_repair_latest.json
-          git diff --cached --quiet && { echo "::error::Repair produced no artifact changes"; exit 1; }
+            data/training/models/timing_champion.json
+          git diff --cached --quiet && { echo "::error::Repair produced no champion JSON changes"; exit 1; }
           git commit -m "fix: regenerate serving-compatible schema-v2 champions"
           git push origin "HEAD:$BRANCH"
