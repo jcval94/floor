@@ -98,7 +98,13 @@ function fallbackSummary(rows) {
 
 function summaryCards(data, rows) {
   if (!rows.length) {
-    return '<div class="empty-state league-empty"><strong>La carrera aún no tiene sesiones.</strong><p>El primer EOD completo de la nueva liga generará el ranking y las curvas automáticamente.</p></div>';
+    const scheduled = Array.isArray(data?.scheduled_members)
+      ? data.scheduled_members.map((strategy) => labelFor(String(strategy)))
+      : [];
+    const roster = scheduled.length
+      ? `${scheduled.length} carteras registradas: ${scheduled.join(' · ')}`
+      : 'El primer EOD completo de la nueva liga generará el ranking y las curvas automáticamente.';
+    return `<div class="empty-state league-empty"><strong>La carrera está lista y espera su primera sesión.</strong><p>${escapeHTML(roster)}</p></div>`;
   }
   const summary = data?.summary && typeof data.summary === 'object' ? data.summary : fallbackSummary(rows);
   const leaderId = summary.strategy_leader;
@@ -152,7 +158,7 @@ function promotionBadge(row) {
 
 function tableRows(rows) {
   if (!rows.length) {
-    return '<tr><td colspan="11"><div class="empty-state"><strong>Sin historial prospectivo todavía.</strong><p>La liga comenzará cuando exista el modelo semanal congelado y un batch completo.</p></div></td></tr>';
+    return '<tr><td colspan="11"><div class="empty-state"><strong>Sin historial prospectivo todavía.</strong><p>El primer cierre válido de la nueva liga poblará esta clasificación.</p></div></td></tr>';
   }
   return rows.map((row, index) => {
     const rank = row.rank ?? index + 1;
