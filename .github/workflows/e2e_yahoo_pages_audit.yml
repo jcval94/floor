@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - audit/e2e-yahoo-pages-20260906
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -106,12 +109,14 @@ jobs:
           import json
           from collections import Counter
           from pathlib import Path
+          import yaml
 
-          universe = []
-          for line in Path('config/universe.yaml').read_text(encoding='utf-8').splitlines():
-              raw = line.strip()
-              if raw.startswith('- '):
-                  universe.append(raw[2:].strip().upper())
+          cfg = yaml.safe_load(Path('config/universe.yaml').read_text(encoding='utf-8'))
+          if isinstance(cfg, dict):
+              raw_universe = cfg.get('symbols') or cfg.get('universe') or cfg.get('tickers') or []
+          else:
+              raw_universe = cfg or []
+          universe = [str(item).strip().upper() for item in raw_universe if str(item).strip()]
           prediction_rows = []
           signal_rows = []
           for path in sorted(Path('data/predictions').glob('*.jsonl')):
@@ -119,6 +124,7 @@ jobs:
           for path in sorted(Path('data/signals').glob('*.jsonl')):
               signal_rows.extend(json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip())
 
+          assert prediction_rows, 'no predictions generated'
           latest_as_of = max(str(row.get('as_of') or '') for row in prediction_rows)
           latest = [row for row in prediction_rows if str(row.get('as_of') or '') == latest_as_of]
           counts = Counter(str(row.get('horizon') or '') for row in latest)
