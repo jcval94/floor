@@ -8,6 +8,7 @@ from models.classic_horizon_predictor import (
     build_runtime_features,
     model_family,
     predict_family_delta,
+    validate_family_params,
 )
 from models.horizon_timing import predict_horizon_timing
 from models.inference import predict_timing_week_probabilities, predict_value_floor_m3
@@ -76,9 +77,21 @@ class ParityChampionModelSet(ChampionModelSet):
                 f"Classic champion {horizon} missing floor/ceiling trained params"
             )
 
+        validation_key = (id(floor_params), id(ceiling_params), family)
+        validated = getattr(self, "_validated_classic_heads", set())
+        if validation_key not in validated:
+            validate_family_params(family, floor_params)
+            validate_family_params(family, ceiling_params)
+            validated.add(validation_key)
+            self._validated_classic_heads = validated
+
         features = build_runtime_features(row)
-        floor_delta = predict_family_delta(family, floor_params, features)
-        ceiling_delta = predict_family_delta(family, ceiling_params, features)
+        floor_delta = predict_family_delta(
+            family, floor_params, features, validate=False
+        )
+        ceiling_delta = predict_family_delta(
+            family, ceiling_params, features, validate=False
+        )
 
         close = float(row["close"])
         floor = close * (1.0 - floor_delta)

@@ -118,6 +118,34 @@ def test_classic_gate_keeps_historical_champion_when_candidate_is_worse(
     assert competition["test_used_for_promotion"] is False
 
 
+def test_classic_gate_rejects_spread_win_when_one_boundary_regresses(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset.json"
+    registry = tmp_path / "registry"
+    previous = tmp_path / "previous"
+    _dataset(dataset)
+
+    # Actual deltas are floor=.02, ceiling=.03.  The candidate has a better
+    # spread but damages the previously exact floor, so Pareto promotion must fail.
+    old = _artifact(version="old", floor_delta=0.02, ceiling_delta=0.05)
+    candidate = _artifact(version="new", floor_delta=0.03, ceiling_delta=0.03)
+    _write(previous / "d1_champion.json", old)
+    _write(registry / "d1_champion.json", candidate)
+
+    result = gate_one_horizon(
+        dataset_path=dataset,
+        registry_dir=registry,
+        previous_dir=previous,
+        horizon="d1",
+        version="new",
+    )
+
+    assert result["decision"] == "challenger_only"
+    active = json.loads((registry / "d1_champion.json").read_text(encoding="utf-8"))
+    assert active["version"] == "old"
+
+
 def test_classic_gate_migrates_incompatible_legacy_champion(tmp_path: Path) -> None:
     dataset = tmp_path / "dataset.json"
     registry = tmp_path / "registry"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
 from statistics import mean, pstdev
 
 
@@ -91,6 +92,12 @@ def build_features(rows: list[dict]) -> list[dict]:
             volume = float(row.get("volume", 0.0))
             bench_close = _to_float_or_fallback(row.get("benchmark_close"), close)
             typical_price = (high + low + close) / 3
+            row["open_to_close"] = open_ / close - 1.0 if close else None
+            row["high_to_close"] = high / close - 1.0 if close else None
+            row["low_to_close"] = low / close - 1.0 if close else None
+            month_angle = 2.0 * math.pi * ts.month / 12.0
+            row["month_sin"] = math.sin(month_angle)
+            row["month_cos"] = math.cos(month_angle)
 
             if idx == 0:
                 ret_1 = None

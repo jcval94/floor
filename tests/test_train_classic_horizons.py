@@ -51,7 +51,7 @@ def test_train_classic_horizons_outputs_json_and_csv(tmp_path: Path) -> None:
         assert payload["horizon"] == horizon
         assert payload["train_rows"] > 0
         assert payload["test_rows"] == 5  # legacy field name; these are validation rows
-        assert len(competition["candidates"]) == 4
+        assert len(competition["candidates"]) == 5
         assert payload["model_name"] in {c["model_id"] for c in competition["candidates"]}
         assert competition["selection_split"] == "validation"
         assert competition["test_used_for_selection"] is False

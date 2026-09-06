@@ -38,6 +38,7 @@ def test_truthful_classic_model_names_do_not_claim_unimplemented_algorithms() ->
     families = {spec.model_family for spec in specs}
     ids = {spec.model_id for spec in specs}
     assert families == {
+        "robust_range_v3",
         "regime_median",
         "boosted_stumps",
         "sequence_linear",
