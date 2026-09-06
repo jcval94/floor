@@ -85,9 +85,10 @@ def _strategy_targets(
     weekly_artifact: dict,
     *,
     include_weekly: bool,
-    include_challenger: bool,
-    challenger_cfg: dict,
+    include_challenger: bool = False,
+    challenger_cfg: dict | None = None,
 ) -> dict[str, dict[str, dict]]:
+    challenger_cfg = challenger_cfg or {}
     scored = [dict(row) for row in rows]
     params = weekly_artifact.get("params", {})
     if params.get("canonical_serving_enabled") is not False:
