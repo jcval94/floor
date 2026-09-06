@@ -1,0 +1,343 @@
+name: e2e-yahoo-pages-audit
+
+on:
+  push:
+    branches:
+      - audit/e2e-yahoo-pages-20260906
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-yahoo-pages-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project and browser tooling
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]' pyyaml playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Reset mutable runtime state for isolated audit
+        run: |
+          set -euo pipefail
+          rm -f data/market/market_data.sqlite data/persistence/app.sqlite
+          rm -rf data/predictions data/signals data/reports data/snapshots data/metrics/strategy_league
+          mkdir -p data/market data/persistence data/predictions data/signals data/reports data/snapshots data/metrics/strategy_league/models artifacts/e2e
+          make init-dbs
+
+      - name: Validate serving champions before touching Yahoo
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.model_artifact_guard --registry data/training/models | tee artifacts/e2e/model_preflight.txt
+
+      - name: Ingest five years from Yahoo
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m storage.yahoo_ingest \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --range 5y \
+            --interval 1d \
+            --sleep-seconds 0.15 | tee artifacts/e2e/yahoo_ingest.txt
+
+      - name: Audit Yahoo completeness and freshness
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.training_data_guard \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --min-rows-per-symbol 250 \
+            --max-age-days 7 | tee artifacts/e2e/training_data_guard.txt
+
+      - name: Build full modelable dataset from ingested Yahoo bars
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m features.build_training_from_db \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --output artifacts/e2e/yahoo_market_rows.jsonl
+          PYTHONPATH=src python -m features.run_features \
+            --input artifacts/e2e/yahoo_market_rows.jsonl \
+            --output artifacts/e2e/modelable_dataset.json \
+            --validation-days 75 \
+            --test-days 76
+
+      - name: Bootstrap isolated Strategy League weekly model
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m league.bootstrap_weekly_model \
+            --dataset artifacts/e2e/modelable_dataset.json \
+            --output data/metrics/strategy_league/models/weekly_opportunity_challenger.json \
+            --version "e2e-${GITHUB_RUN_ID}"
+
+      - name: Run canonical CLOSE forecast cycle on fresh Yahoo state
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m floor.main run-cycle --event CLOSE | tee artifacts/e2e/canonical_cycle.txt
+
+      - name: Audit generated prediction batch
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          universe = []
+          for line in Path('config/universe.yaml').read_text(encoding='utf-8').splitlines():
+              raw = line.strip()
+              if raw.startswith('- '):
+                  universe.append(raw[2:].strip().upper())
+          prediction_rows = []
+          signal_rows = []
+          for path in sorted(Path('data/predictions').glob('*.jsonl')):
+              prediction_rows.extend(json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip())
+          for path in sorted(Path('data/signals').glob('*.jsonl')):
+              signal_rows.extend(json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip())
+
+          latest_as_of = max(str(row.get('as_of') or '') for row in prediction_rows)
+          latest = [row for row in prediction_rows if str(row.get('as_of') or '') == latest_as_of]
+          counts = Counter(str(row.get('horizon') or '') for row in latest)
+          symbols = {str(row.get('symbol') or '').upper() for row in latest}
+          expected_symbols = set(universe)
+          expected_rows = len(expected_symbols) * 4
+          assert symbols == expected_symbols, (sorted(expected_symbols - symbols), sorted(symbols - expected_symbols))
+          assert len(latest) == expected_rows, (len(latest), expected_rows)
+          assert counts == {'d1': len(expected_symbols), 'w1': len(expected_symbols), 'q1': len(expected_symbols), 'm3': len(expected_symbols)}, counts
+          assert all(str(row.get('action') or '').upper() == 'HOLD' for row in signal_rows), 'canonical range cycle emitted non-HOLD signal'
+          payload = {
+              'latest_as_of': latest_as_of,
+              'prediction_rows': len(latest),
+              'expected_rows': expected_rows,
+              'symbols': len(symbols),
+              'horizons': dict(counts),
+              'signals': len(signal_rows),
+              'non_hold_signals': sum(str(row.get('action') or '').upper() != 'HOLD' for row in signal_rows),
+          }
+          Path('artifacts/e2e/prediction_batch.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          print(json.dumps(payload, indent=2))
+          PY
+
+      - name: Build Strategy League and experiment observation
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m league.run_eod \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --strategies-config config/strategies.yaml \
+            --universe config/universe.yaml
+          PYTHONPATH=src python -m league.experiment_observation --data-dir data
+
+      - name: Build and validate exact Pages payload
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/e2e/site
+          cp -R site artifacts/e2e/site
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          PYTHONPATH=src python -m utils.pages_publish \
+            --data-dir data \
+            --site-data-dir artifacts/e2e/site/data \
+            --universe-path config/universe.yaml \
+            --source-commit "$SOURCE_COMMIT"
+          PYTHONPATH=src python -m league.publish_site \
+            --data-dir data \
+            --output artifacts/e2e/site/data/strategy_league.json \
+            --observation-output artifacts/e2e/site/data/experiment_observation.json
+          PYTHONPATH=src python -m utils.pages_security --site-dir artifacts/e2e/site
+          touch artifacts/e2e/site/.nojekyll
+          PYTHONPATH=src python -m utils.pages_publish \
+            --site-data-dir artifacts/e2e/site/data \
+            --validate-only
+          PYTHONPATH=src python -m utils.pages_security \
+            --site-dir artifacts/e2e/site \
+            --validate-only
+          node --check artifacts/e2e/site/assets/app.js
+          node --check artifacts/e2e/site/assets/audit.js
+          node --check artifacts/e2e/site/assets/league.js
+          node --check artifacts/e2e/site/assets/experiment.js
+
+      - name: Assert Pages data coherence and safety
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('artifacts/e2e/site/data')
+          audit = json.loads((root / 'audit.json').read_text(encoding='utf-8'))
+          forecasts = json.loads((root / 'forecasts.json').read_text(encoding='utf-8'))
+          dashboard = json.loads((root / 'dashboard.json').read_text(encoding='utf-8'))
+          models = json.loads((root / 'models.json').read_text(encoding='utf-8'))
+          league = json.loads((root / 'strategy_league.json').read_text(encoding='utf-8'))
+          observation = json.loads((root / 'experiment_observation.json').read_text(encoding='utf-8'))
+
+          assert audit.get('safe_to_deploy') is True, audit
+          publishable = bool(audit.get('publishable_forecasts'))
+          rows = forecasts.get('rows', [])
+          expected = int(audit.get('expected_prediction_rows') or 0)
+          if publishable:
+              assert len(rows) == expected, (len(rows), expected)
+          else:
+              assert rows == [], 'blocked publication leaked actionable forecast rows'
+          batch_as_of = (audit.get('batch') or {}).get('as_of')
+          assert (dashboard.get('publication_audit') or {}).get('batch_as_of') == batch_as_of
+          assert (models.get('publication_audit') or {}).get('batch_as_of') == batch_as_of
+          assert league.get('live_execution_enabled') is False
+          assert league.get('automatic_promotion') is False
+          safety = observation.get('safety') or {}
+          assert safety.get('live_execution_enabled') is False
+          assert safety.get('operational_paper_gateway_used') is False
+          assert safety.get('automatic_promotion') is False
+
+          summary = {
+              'status': audit.get('status'),
+              'safe_to_deploy': audit.get('safe_to_deploy'),
+              'publishable_forecasts': publishable,
+              'batch_as_of': batch_as_of,
+              'expected_prediction_rows': expected,
+              'published_prediction_rows': len(rows),
+              'model_compatibility': (audit.get('models') or {}).get('status'),
+              'freshness': (audit.get('freshness') or {}).get('status'),
+              'blockers': audit.get('blockers', []),
+              'warnings': audit.get('warnings', []),
+              'league_status': league.get('status'),
+              'league_sessions': league.get('sessions'),
+              'experiment_status': observation.get('status'),
+          }
+          Path('artifacts/e2e/pages_audit_summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Serve Pages build and verify rendering in Chromium
+        run: |
+          set -euo pipefail
+          python -m http.server 8765 --directory artifacts/e2e/site > artifacts/e2e/http_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8765/ >/dev/null; then break; fi
+            sleep 0.5
+          done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          errors = []
+          failed_requests = []
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1440, 'height': 1200})
+              page.on('console', lambda msg: errors.append(f'console:{msg.type}:{msg.text}') if msg.type == 'error' else None)
+              page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
+              page.on('requestfailed', lambda req: failed_requests.append(f'{req.method} {req.url}: {req.failure}'))
+              response = page.goto('http://127.0.0.1:8765/', wait_until='networkidle', timeout=30000)
+              assert response is not None and response.ok, response.status if response else None
+              page.wait_for_timeout(1500)
+              title = page.title()
+              body = page.locator('body').inner_text()
+              assert title.strip(), 'empty document title'
+              assert len(body.strip()) > 200, 'page rendered nearly empty body'
+              assert 'Floor' in body or 'floor' in body.lower(), 'expected product identity not visible'
+              page.screenshot(path='artifacts/e2e/pages_home.png', full_page=True)
+              links = page.locator('a').count()
+              scripts = page.locator('script').count()
+              result = {
+                  'title': title,
+                  'body_chars': len(body),
+                  'links': links,
+                  'scripts': scripts,
+                  'console_errors': errors,
+                  'failed_requests': failed_requests,
+              }
+              Path('artifacts/e2e/browser_audit.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+              print(json.dumps(result, indent=2))
+              assert not errors, errors
+              assert not failed_requests, failed_requests
+              browser.close()
+          PY
+
+      - name: Run repository E2E and Pages regression tests
+        run: |
+          set -euo pipefail
+          python scripts/validate_repo.py --smoke
+          pytest -q \
+            tests/test_canonical_intraday_cycle.py \
+            tests/test_forecasting.py \
+            tests/test_pages_publish.py \
+            tests/test_strategy_package_structure.py \
+            tests/test_experiment_observation.py
+
+      - name: Build compact E2E audit report
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def load(path):
+              p = Path(path)
+              if not p.exists():
+                  return None
+              try:
+                  return json.loads(p.read_text(encoding='utf-8'))
+              except Exception:
+                  return None
+
+          modelable = load('artifacts/e2e/modelable_dataset.json') or {}
+          rows = modelable.get('rows') or []
+          report = {
+              'generated_at': datetime.now(timezone.utc).isoformat(),
+              'source_commit': os.environ.get('GITHUB_SHA'),
+              'github_run_id': os.environ.get('GITHUB_RUN_ID'),
+              'scope': 'isolated real-Yahoo-to-local-Pages-render audit; no LIVE/PAPER publication',
+              'modelable_rows': len(rows),
+              'modelable_columns': len((modelable.get('columns') or [])),
+              'split_counts': modelable.get('split_counts'),
+              'prediction_batch': load('artifacts/e2e/prediction_batch.json'),
+              'pages': load('artifacts/e2e/pages_audit_summary.json'),
+              'browser': load('artifacts/e2e/browser_audit.json'),
+          }
+          Path('artifacts/e2e/e2e_audit_report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write('## Yahoo → Floor → Strategy League → Pages E2E audit\n\n')
+              out.write('```json\n')
+              out.write(json.dumps(report, indent=2))
+              out.write('\n```\n')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: e2e-yahoo-pages-${{ github.run_id }}
+          path: artifacts/e2e
+          if-no-files-found: error
+          retention-days: 30
