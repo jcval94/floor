@@ -85,8 +85,8 @@ def _strategy_targets(
     weekly_artifact: dict,
     *,
     include_weekly: bool,
-    include_mean_reversion: bool = True,
-    include_cross_horizon: bool = True,
+    include_mean_reversion: bool = False,
+    include_cross_horizon: bool = False,
     include_challenger: bool = False,
     challenger_cfg: dict | None = None,
 ) -> dict[str, dict[str, dict]]:
