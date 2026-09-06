@@ -4,6 +4,13 @@ README de onboarding tecnico para entender el flujo real del sistema, desde la i
 
 Este documento esta basado solo en lo que existe hoy en el repositorio: codigo, workflows, tests y artefactos versionados. Cuando una pieza no esta implementada, esta rota o es ambigua, se indica de forma explicita.
 
+## Modelo robusto de rango v3
+
+El benchmark reproducible de `robust_range_v3` esta documentado en
+[`docs/robust_range_v3.md`](docs/robust_range_v3.md). El modelo mejora por
+separado el MAE de floor, ceiling y spread en `d1`, `w1` y `q1`, tanto en
+validacion como en un test cronologico ciego no usado para seleccion.
+
 ## Mapa breve del flujo detectado
 
 ```text

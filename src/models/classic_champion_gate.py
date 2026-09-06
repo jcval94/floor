@@ -24,12 +24,14 @@ from models.train_classic_horizons import (
 
 
 TRUTHFUL_PREFIXES = {
+    "robust_range_v3": "robust_range_v3_",
     "regime_median": "regime_median_",
     "boosted_stumps": "boosted_stumps_",
     "sequence_linear": "sequence_linear_",
     "regularized_linear": "regularized_linear_",
 }
-SCORING_VERSION = "classic-current-validation-v1"
+SCORING_VERSION = "classic-boundary-pareto-v2"
+MAX_INTERVAL_COVERAGE_REGRESSION = 0.05
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -158,11 +160,11 @@ def _evaluate_artifact(
     floor_params = _mapping(params.get("floor"))
     ceiling_params = _mapping(params.get("ceiling"))
     floor_predictions = [
-        predict_family_delta(family, floor_params, item.features)
+        predict_family_delta(family, floor_params, item.features, validate=False)
         for item in evaluation
     ]
     ceiling_predictions = [
-        predict_family_delta(family, ceiling_params, item.features)
+        predict_family_delta(family, ceiling_params, item.features, validate=False)
         for item in evaluation
     ]
     return _metrics(evaluation, floor_predictions, ceiling_predictions)
@@ -174,6 +176,16 @@ def _score(metrics: dict[str, float]) -> tuple[float, float]:
         metrics.get("mae_ceiling_pct", math.inf)
     )
     return spread, boundaries
+
+
+def _strictly_dominates_boundaries_and_spread(
+    candidate: dict[str, float],
+    existing: dict[str, float],
+) -> bool:
+    """Require a challenger to improve floor, ceiling, and range width separately."""
+
+    keys = ("mae_floor_pct", "mae_ceiling_pct", "mae_spread_pct")
+    return all(float(candidate.get(key, math.inf)) < float(existing.get(key, math.inf)) for key in keys)
 
 
 def _score_json(score: tuple[float, float] | None) -> list[float] | None:
@@ -281,18 +293,29 @@ def gate_one_horizon(
     else:
         existing_metrics = _evaluate_artifact(previous, horizon, evaluation)
         existing_score = _score(existing_metrics)
-        if candidate_score < existing_score:
+        coverage_delta = float(candidate_metrics["test_interval_coverage"]) - float(
+            existing_metrics["test_interval_coverage"]
+        )
+        strict_error_dominance = _strictly_dominates_boundaries_and_spread(
+            candidate_metrics, existing_metrics
+        )
+        coverage_guard_pass = coverage_delta >= -MAX_INTERVAL_COVERAGE_REGRESSION
+        if strict_error_dominance and coverage_guard_pass:
             decision = "promote"
             reason = (
-                "Candidate improved on the same current leakage-safe validation split: "
+                "Candidate strictly improved floor MAE, ceiling MAE, and spread MAE "
+                "while keeping interval-coverage regression within five percentage "
+                "points on the same current leakage-safe validation split: "
                 f"existing={existing_score} candidate={candidate_score}."
             )
             active = candidate
         else:
             decision = "challenger_only"
             reason = (
-                "Existing champion is at least as good on the same current leakage-safe "
-                f"validation split: existing={existing_score} candidate={candidate_score}."
+                "Candidate did not strictly improve all of floor MAE, ceiling MAE, and "
+                "spread MAE with the five-point coverage guard on the same current "
+                "leakage-safe validation split: "
+                f"existing={existing_score} candidate={candidate_score}."
             )
             active = previous
 
@@ -305,7 +328,13 @@ def gate_one_horizon(
         "candidate_current_validation_score": _score_json(candidate_score),
         "existing_current_validation_score": _score_json(existing_score),
         "candidate_current_validation_rows": len(evaluation),
+        "max_interval_coverage_regression": MAX_INTERVAL_COVERAGE_REGRESSION,
     }
+    if previous is not None and previous_ok:
+        selection["candidate_interval_coverage_delta"] = (
+            float(candidate_metrics["test_interval_coverage"])
+            - float(existing_metrics["test_interval_coverage"])
+        )
 
     if decision == "challenger_only":
         challenger_path = registry_dir / f"{horizon}_challenger_{_slug(version)}.json"
