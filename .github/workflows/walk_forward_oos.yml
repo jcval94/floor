@@ -76,7 +76,16 @@ jobs:
             --freeze config/frozen/capital_challenger_v1.json
 
       - name: Initialize isolated market DB
-        run: make init-dbs
+        run: |
+          set -euo pipefail
+          rm -rf data/market
+          mkdir -p data/market
+          PYTHONPATH=src python - <<'PY'
+          from pathlib import Path
+          from storage.market_db import init_market_db
+          init_market_db(Path("data/market/market_data.sqlite"))
+          print("isolated market DB initialized")
+          PY
 
       - name: Refresh daily market history from Yahoo
         run: |
