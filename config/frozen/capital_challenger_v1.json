@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "freeze_id": "capital_challenger_v1_frozen_20260906",
+  "purpose": "Freeze the challenger before prospective observation and model-OOS replay. Any parameter change requires a new freeze_id and a new Strategy League league_id.",
+  "frozen_at": "2026-09-06",
+  "source_league_id": "strategy_league_v6_all_strategies_10k",
+  "challenger_config_sha256": "796fc1a227774360e48101dc1226868bbb7e3915d76eead06811fe3c69aa3bc2",
+  "challenger_config": {
+    "review_frequency_sessions": 10,
+    "max_holding_sessions": 10,
+    "risk_budget_pct_nav": 0.0075,
+    "min_risk_scale": 0.65,
+    "max_position_pct_nav": 0.2,
+    "max_gross_exposure_pct_nav": 0.9,
+    "max_portfolio_heat_pct_nav": 0.04,
+    "max_sector_exposure_pct_nav": 0.35,
+    "min_position_weight": 0.02,
+    "quality_floor": 0.55,
+    "consensus_bonus": 0.15,
+    "source_weights": {
+      "weekly_opportunity_ridge": 1.0,
+      "breakout_protected_by_floor": 1.0,
+      "mean_reversion_floor_w1": 0.9,
+      "cross_horizon_asymmetry": 0.95
+    }
+  }
+}
