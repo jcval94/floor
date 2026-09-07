@@ -27,6 +27,12 @@ jobs:
           PYTHONPATH=src python -m utils.model_artifact_guard \
             --registry data/training/models
 
+      - name: Enforce frozen challenger experiment
+        run: |
+          PYTHONPATH=src python -m league.freeze \
+            --league-config config/strategy_league.json \
+            --freeze config/frozen/capital_challenger_v1.json
+
       - name: Lint
         run: |
           ruff check src tests scripts
@@ -68,6 +74,7 @@ jobs:
             --validate-only
           node --check site/assets/league.js
           node --check site/assets/charts.js
+          node --check site/assets/research.js
           python - <<'PY'
           import json
           import os
@@ -77,6 +84,9 @@ jobs:
           audit = json.loads((root / 'audit.json').read_text(encoding='utf-8'))
           forecasts = json.loads((root / 'forecasts.json').read_text(encoding='utf-8'))
           league = json.loads((root / 'strategy_league.json').read_text(encoding='utf-8'))
+          oos = json.loads((root / 'walk_forward_oos.json').read_text(encoding='utf-8'))
+          retro_attr = json.loads((root / 'strategy_attribution.json').read_text(encoding='utf-8'))
+          prospective_attr = json.loads((root / 'strategy_league_attribution.json').read_text(encoding='utf-8'))
           assert audit['safe_to_deploy'] is True
           if audit['publishable_forecasts']:
               assert len(forecasts['rows']) == audit['expected_prediction_rows']
@@ -85,11 +95,15 @@ jobs:
           assert league['live_execution_enabled'] is False
           assert league['automatic_promotion'] is False
           assert league['evidence_type'] == 'prospective_shadow_paper'
+          assert oos['prospective_evidence'] is False
+          assert oos['historical_model_out_of_sample'] is True
+          assert retro_attr['member'] == 'capital_allocation_challenger'
+          assert prospective_attr['prospective_evidence'] is True
           print('pages_dry_run_status=', audit['status'])
-          print('pages_publishable_forecasts=', audit['publishable_forecasts'])
-          print('pages_blockers=', audit.get('blockers', []))
           print('strategy_league_status=', league.get('status'))
-          print('strategy_league_id=', league.get('league_id'))
+          print('walk_forward_status=', oos.get('status'))
+          print('retrospective_attribution=', retro_attr.get('status'))
+          print('prospective_attribution=', prospective_attr.get('status'))
           PY
 
       - name: Enforce minimum coverage

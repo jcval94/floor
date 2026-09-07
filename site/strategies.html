@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="Analítica histórica y Strategy League prospectiva de Floor." />
+  <meta name="description" content="Analítica histórica, model-OOS y Strategy League prospectiva de Floor." />
   <title>Floor · Analítica</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <link rel="stylesheet" href="assets/league.css" />
@@ -16,7 +16,7 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Historical analytics</span><h1>Backtest, riesgo y estrategias compitiendo.</h1><p class="lead">Esta página separa el replay retrospectivo de la Strategy League prospectiva. Ambos usan las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Evidence ladder</span><h1>Backtest, model-OOS y estrategias compitiendo.</h1><p class="lead">Esta página separa tres niveles de evidencia: replay retrospectivo, walk-forward con modelos entrenados sólo con pasado y Strategy League prospectiva. Todos usan las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
   <section id="strategyMetrics" class="metrics-grid"></section>
   <p id="strategyHint" class="small" aria-live="polite"></p>
   <section class="section two-column">
@@ -25,79 +25,49 @@
   </section>
 
   <section id="retrospective-tournament" class="section">
-    <div class="section-heading">
-      <div>
-        <span class="eyebrow">Retrospective diagnostic · 2 semanas</span>
-        <h2>Torneo retrospectivo · mismas reglas, mismo capital</h2>
-        <p class="lead">Replay point-in-time de las dos semanas bursátiles más recientes configuradas. Sirve para comparar las 7 carteras bajo $10,000 iniciales; no cuenta como evidencia prospectiva ni promoción.</p>
-      </div>
-    </div>
-
+    <div class="section-heading"><div><span class="eyebrow">Retrospective diagnostic · 2 semanas</span><h2>Torneo retrospectivo · mismas reglas, mismo capital</h2><p class="lead">Replay point-in-time de las dos semanas bursátiles más recientes configuradas. Sirve para comparar las 7 carteras bajo $10,000 iniciales; no cuenta como evidencia prospectiva ni promoción.</p></div></div>
     <div id="replayStatus" aria-live="polite"></div>
     <div id="replaySummary" class="league-summary-grid" aria-label="Resumen retrospectivo"></div>
-
-    <article class="panel league-race-panel">
-      <div class="league-race-head">
-        <div><span class="eyebrow">Retrospective NAV race</span><h3>Cómo habrían competido</h3><p>Las siete carteras comparten escala y capital inicial; se incluyen costos de transacción del motor de liga.</p></div>
-        <span class="status-badge neutral"><span class="status-dot"></span>Retrospectivo</span>
-      </div>
-      <div id="replayCompetitionChart" aria-live="polite"></div>
-    </article>
-
-    <article class="panel league-table-panel">
-      <div class="section-heading"><div><span class="eyebrow">Retrospective leaderboard</span><h3>Clasificación de las 2 semanas</h3><p>Retorno acumulado, Sharpe, drawdown, trades y costos se calculan sobre el mismo replay.</p></div></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead>
-          <tbody id="replayTable"></tbody>
-        </table>
-      </div>
-    </article>
+    <article class="panel league-race-panel"><div class="league-race-head"><div><span class="eyebrow">Retrospective NAV race</span><h3>Cómo habrían competido</h3><p>Las siete carteras comparten escala y capital inicial; se incluyen costos de transacción del motor de liga.</p></div><span class="status-badge neutral"><span class="status-dot"></span>Retrospectivo</span></div><div id="replayCompetitionChart" aria-live="polite"></div></article>
+    <article class="panel league-table-panel"><div class="section-heading"><div><span class="eyebrow">Retrospective leaderboard</span><h3>Clasificación de las 2 semanas</h3><p>Retorno acumulado, Sharpe, drawdown, trades y costos se calculan sobre el mismo replay.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead><tbody id="replayTable"></tbody></table></div></article>
     <p id="replayNote" class="small" aria-live="polite"></p>
+  </section>
+
+  <section id="walk-forward-oos" class="section">
+    <div class="section-heading">
+      <div><span class="eyebrow">Historical model-OOS · walk-forward</span><h2>La prueba que evita que el modelo vea el futuro</h2><p class="lead">Cada fold reentrena D1/W1/Q1/M3 y Weekly usando sólo observaciones cuyo target de 3 meses ya había madurado antes del inicio del fold. El challenger permanece congelado.</p></div>
+      <span class="status-badge neutral"><span class="status-dot"></span>Model-OOS</span>
+    </div>
+    <div id="oosStatus" aria-live="polite"></div>
+    <div id="oosSummary" class="league-summary-grid" aria-label="Resumen walk-forward"></div>
+    <article class="panel league-race-panel"><div class="league-race-head"><div><span class="eyebrow">Chained NAV race</span><h3>¿Sobrevive el edge al retraining por fold?</h3><p>Las curvas encadenan cada fold desde el NAV terminado por el anterior para mantener una comparación sobre $10,000 iniciales.</p></div><span class="status-badge neutral"><span class="status-dot"></span>Model-OOS</span></div><div id="oosCompetitionChart" aria-live="polite"></div></article>
+    <article class="panel league-table-panel"><div class="section-heading"><div><span class="eyebrow">Walk-forward leaderboard</span><h3>Clasificación fuera de muestra del modelo</h3><p>Incluye consistencia entre folds además de retorno, Sharpe, drawdown y costos.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Miembro</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Folds +</th><th>Costos*</th></tr></thead><tbody id="oosTable"></tbody></table></div><p class="small">* Suma de costos normalizados por fold de $10,000; sirve como métrica comparativa de fricción.</p></article>
+    <p id="oosNote" class="small" aria-live="polite"></p>
+  </section>
+
+  <section id="strategy-attribution" class="section">
+    <div class="section-heading"><div><span class="eyebrow">Explainability · capital & P&L</span><h2>Por qué gana o pierde el challenger</h2><p class="lead">Atribución por estrategia fuente, P&L realizado y uso de capital: exposición bruta, cash, concentración y portfolio heat aproximado hasta stops.</p></div></div>
+    <div id="attributionPanels" class="two-column" aria-live="polite"></div>
   </section>
 
   <section id="strategy-league" class="section">
     <div class="section-heading">
-      <div>
-        <span class="eyebrow">Prospective shadow-paper</span>
-        <h2>Strategy League · la carrera</h2>
-        <p class="lead">Cada miembro arranca con el mismo capital. El ranking, NAV, drawdown y costos se actualizan automáticamente después de cada EOD publicado.</p>
-      </div>
+      <div><span class="eyebrow">Prospective shadow-paper</span><h2>Strategy League · la carrera</h2><p class="lead">Cada miembro arranca con el mismo capital. El ranking, NAV, drawdown y costos se actualizan automáticamente después de cada EOD publicado.</p></div>
       <a class="text-link" href="models.html">Ver desempeño de modelos</a>
     </div>
-
     <div id="leagueStatus" aria-live="polite"></div>
     <div id="leagueSummary" class="league-summary-grid" aria-label="Resumen de Strategy League"></div>
-
-    <article class="panel league-race-panel">
-      <div class="league-race-head">
-        <div><span class="eyebrow">NAV race</span><h3>Quién está ganando</h3><p>Todas las curvas usan la misma escala de NAV; benchmarks y estrategias compiten en el mismo gráfico.</p></div>
-        <span class="status-badge neutral"><span class="status-dot"></span>Prospectivo</span>
-      </div>
-      <div id="leagueCompetitionChart" aria-live="polite"></div>
-    </article>
-
-    <article class="panel league-table-panel">
-      <div class="section-heading"><div><span class="eyebrow">Leaderboard</span><h3>Clasificación completa</h3><p>El ranking se ordena por retorno acumulado; Sharpe, drawdown y costos muestran la calidad de ese resultado.</p></div></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead>
-          <tbody id="leagueTable"></tbody>
-        </table>
-      </div>
-    </article>
-
+    <article class="panel league-race-panel"><div class="league-race-head"><div><span class="eyebrow">NAV race</span><h3>Quién está ganando</h3><p>Todas las curvas usan la misma escala de NAV; benchmarks y estrategias compiten en el mismo gráfico.</p></div><span class="status-badge neutral"><span class="status-dot"></span>Prospectivo</span></div><div id="leagueCompetitionChart" aria-live="polite"></div></article>
+    <article class="panel league-table-panel"><div class="section-heading"><div><span class="eyebrow">Leaderboard</span><h3>Clasificación completa</h3><p>El ranking se ordena por retorno acumulado; Sharpe, drawdown y costos muestran la calidad de ese resultado.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV</th><th>Retorno</th><th>vs SPY</th><th>Sharpe</th><th>Máx. DD</th><th>Trades</th><th>Costos</th><th>Estado</th></tr></thead><tbody id="leagueTable"></tbody></table></div></article>
     <p id="leagueNote" class="small" aria-live="polite"></p>
-    <div class="league-automation-note">
-      <span class="status-badge ok"><span class="status-dot"></span>Automático</span>
-      <p><strong>EOD → Strategy League → runtime state → Pages.</strong> La publicación toma el leaderboard prospectivo más reciente, recalcula el ranking y vuelve a desplegar esta vista. El replay retrospectivo se publica por separado y nunca se presenta como evidencia prospectiva.</p>
-    </div>
+    <div class="league-automation-note"><span class="status-badge ok"><span class="status-dot"></span>Automático</span><p><strong>EOD → Strategy League → runtime state → Pages.</strong> La publicación toma el leaderboard prospectivo más reciente, recalcula el ranking y vuelve a desplegar esta vista. El challenger v1 queda congelado: cualquier cambio de parámetros exige nueva versión y nueva liga.</p></div>
   </section>
 
-  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer esta página</h2><p class="lead">El torneo de 2 semanas es retrospectivo y diagnóstico. La Strategy League es prospectiva y conserva reglas y modelo congelados mediante hashes. Ningún resultado de esta página activa PAPER operativo ni LIVE automáticamente.</p></section>
+  <section class="section panel"><span class="eyebrow">Interpretación</span><h2>Cómo leer la escalera de evidencia</h2><p class="lead">El replay de 2 semanas es diagnóstico. El walk-forward evita leakage de entrenamiento del modelo, pero usa una configuración de estrategia elegida retrospectivamente. La Strategy League es la prueba prospectiva decisiva. Ningún resultado activa PAPER operativo ni LIVE automáticamente.</p></section>
 </main>
-<footer class="site-footer"><span>Floor · Analítica histórica y prospectiva</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="models.html">Modelos</a><a href="system.html">Estado</a></nav></footer>
+<footer class="site-footer"><span>Floor · Analítica histórica, OOS y prospectiva</span><nav aria-label="Enlaces secundarios"><a href="about.html">Metodología</a><a href="models.html">Modelos</a><a href="system.html">Estado</a></nav></footer>
 <script type="module" src="assets/app.js"></script>
 <script type="module" src="assets/league.js"></script>
+<script type="module" src="assets/research.js"></script>
 </body>
 </html>

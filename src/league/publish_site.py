@@ -247,14 +247,27 @@ def main() -> None:
         default="site/data/experiment_observation.json",
     )
     args = parser.parse_args()
+    data_dir = Path(args.data_dir)
+    league_config = Path(args.league_config)
+    output_path = Path(args.output)
     payload = publish_league_payload(
-        Path(args.data_dir),
-        Path(args.output),
-        Path(args.league_config),
+        data_dir,
+        output_path,
+        league_config,
     )
     observation = publish_observation_payload(
-        Path(args.data_dir),
+        data_dir,
         Path(args.observation_output),
+    )
+
+    # Research evidence is published beside the league payload, but remains
+    # explicitly labeled retrospective/model-OOS/prospective as appropriate.
+    from replay.publish_research_site import publish_research_payloads
+
+    research = publish_research_payloads(
+        data_dir=data_dir,
+        site_data_dir=output_path.parent,
+        league_config_path=league_config,
     )
     print(
         json.dumps(
@@ -263,6 +276,7 @@ def main() -> None:
                 "sessions": payload.get("sessions"),
                 "leader": (payload.get("summary") or {}).get("strategy_leader"),
                 "observation_status": observation.get("status"),
+                **research,
             },
             ensure_ascii=False,
         )
