@@ -42,6 +42,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
+      - name: Verify frozen challenger contract
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m league.freeze \
+            --league-config config/strategy_league.json \
+            --freeze config/frozen/capital_challenger_v1.json
+
       - name: Preflight replay artifacts
         run: |
           set -euo pipefail
@@ -119,23 +126,29 @@ jobs:
           }, indent=2))
           PY
 
-      - name: Build public retrospective strategy report
+      - name: Build public retrospective strategy report and attribution
         run: |
           set -euo pipefail
           out="data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
+          league_id="capital_tournament_$(echo '${{ steps.window.outputs.start }}' | tr -d '-')_$(echo '${{ steps.window.outputs.end }}' | tr -d '-')"
           PYTHONPATH=src python -m replay.publish_tournament_report \
             --input "$out/capital_tournament.json" \
             --output data/reports/strategy.json
+          PYTHONPATH=src python -m league.attribution \
+            --history "$out/runs/$league_id/history.jsonl" \
+            --output data/reports/strategy_attribution.json
           python - <<'PY'
           import json
           from pathlib import Path
           report = json.loads(Path("data/reports/strategy.json").read_text(encoding="utf-8"))
+          attribution = json.loads(Path("data/reports/strategy_attribution.json").read_text(encoding="utf-8"))
           assert report["status"] == "RETROSPECTIVE_OK"
           assert report["prospective_evidence"] is False
           assert report["future_data_used"] is False
           assert len(report["rows"]) == 7
           assert report["equity_curve"]
-          print(json.dumps(report["summary"], indent=2))
+          assert attribution["member"] == "capital_allocation_challenger"
+          print(json.dumps({"summary": report["summary"], "attribution": attribution.get("summary")}, indent=2))
           PY
 
       - name: Publish retrospective report to rolling runtime state
@@ -155,5 +168,6 @@ jobs:
           path: |
             data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}
             data/reports/strategy.json
+            data/reports/strategy_attribution.json
           if-no-files-found: error
           retention-days: 30
