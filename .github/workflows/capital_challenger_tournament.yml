@@ -18,7 +18,7 @@ on:
       - capital_tournament_request.json
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   tournament:
@@ -160,3 +160,54 @@ jobs:
             data/reports/strategy_attribution.json
           if-no-files-found: error
           retention-days: 30
+
+  publish_runtime:
+    needs: tournament
+    if: github.ref_name == 'main' && needs.tournament.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: floor-runtime-state-writer
+      cancel-in-progress: false
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+
+      - name: Restore latest rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+
+      - name: Download validated retrospective report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: capital-tournament-*-${{ github.run_id }}
+          path: ${{ runner.temp }}/capital-tournament
+          merge-multiple: true
+
+      - name: Overlay only public retrospective reports
+        run: |
+          set -euo pipefail
+          test -s "${RUNNER_TEMP}/capital-tournament/data/reports/strategy.json"
+          test -s "${RUNNER_TEMP}/capital-tournament/data/reports/strategy_attribution.json"
+          mkdir -p data/reports
+          cp "${RUNNER_TEMP}/capital-tournament/data/reports/strategy.json" data/reports/strategy.json
+          cp "${RUNNER_TEMP}/capital-tournament/data/reports/strategy_attribution.json" data/reports/strategy_attribution.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          strategy = json.loads(Path("data/reports/strategy.json").read_text(encoding="utf-8"))
+          attribution = json.loads(Path("data/reports/strategy_attribution.json").read_text(encoding="utf-8"))
+          assert strategy["status"] == "RETROSPECTIVE_OK"
+          assert strategy["prospective_evidence"] is False
+          assert strategy["future_data_used"] is False
+          assert attribution["member"] == "capital_allocation_challenger"
+          PY
+
+      - name: Publish retrospective reports into rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh publish
+
