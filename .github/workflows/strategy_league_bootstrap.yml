@@ -173,11 +173,11 @@ jobs:
         run: |
           {
             echo "## Strategy League clean genesis"
-            echo "- League: `${{ steps.contract.outputs.league_id }}`"
-            echo "- Challenger already existed: `${{ steps.challenger.outputs.exists }}`"
-            echo "- Model path: `${{ steps.contract.outputs.model_path }}`"
+            echo "- League: ${{ steps.contract.outputs.league_id }}"
+            echo "- Challenger already existed: ${{ steps.challenger.outputs.exists }}"
+            echo "- Model path: ${{ steps.contract.outputs.model_path }}"
             echo "- Trigger: explicit dispatch or committed genesis request."
             echo "- Prospective history starts only on the first complete EOD for this league."
-            echo "- Operational PAPER gateway: `disabled`"
-            echo "- LIVE execution: `disabled`"
+            echo "- Operational PAPER gateway: disabled"
+            echo "- LIVE execution: disabled"
           } >> "$GITHUB_STEP_SUMMARY"
