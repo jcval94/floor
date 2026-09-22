@@ -25,10 +25,10 @@ on:
       - walk_forward_request.json
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: walk-forward-oos
+  group: floor-research-state-writer
   cancel-in-progress: false
 
 jobs:
@@ -73,6 +73,11 @@ jobs:
           PYTHONPATH=src python -m league.freeze \
             --league-config config/strategy_league.json \
             --freeze config/frozen/capital_challenger_v1_v7.json
+
+      - name: Restore durable research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/research_state.sh restore
 
       - name: Initialize isolated market DB
         run: |
@@ -171,6 +176,11 @@ jobs:
           out="data/replay/walk_forward_oos_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
           mkdir -p data/reports
           cp "$out/walk_forward_oos.json" data/reports/walk_forward_oos.json
+
+      - name: Publish durable research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/research_state.sh publish
 
       - name: Upload OOS evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

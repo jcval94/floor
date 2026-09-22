@@ -500,14 +500,33 @@ async function strategies() {
   if (hint) hint.textContent = curve.length ? 'Resultados históricos del reporte de estrategia. No representan rendimiento futuro.' : 'Aún no hay una curva de backtest publicable.';
 }
 
+function flattenNumericMetrics(value, prefix = '') {
+  if (!value || typeof value !== 'object') return [];
+  const rows = [];
+  Object.entries(value).forEach(([key, item]) => {
+    const label = prefix ? `${prefix}.${key}` : key;
+    const numeric = Number(item);
+    if (item !== null && item !== '' && Number.isFinite(numeric)) rows.push([label, numeric]);
+    else if (item && typeof item === 'object' && !Array.isArray(item)) rows.push(...flattenNumericMetrics(item, label));
+  });
+  return rows;
+}
+
+function publicModelMetricSet(detail) {
+  const monitoring = flattenNumericMetrics(detail?.monitoring_metrics || detail?.metrics?.current || {});
+  if (monitoring.length) return { source: 'Monitoring actual', rows: monitoring.slice(0, 4) };
+  const validation = flattenNumericMetrics(detail?.validation_metrics || {});
+  if (validation.length) return { source: 'Validación del champion', rows: validation.slice(0, 4) };
+  return { source: 'Sin métricas públicas', rows: [] };
+}
+
 function modelCards(models) {
   return Object.values(models?.details || {}).map((detail) => {
-    const current = detail?.metrics?.current || {};
-    const metrics = Object.entries(current).slice(0, 4);
+    const metricSet = publicModelMetricSet(detail);
     return `<article class="model-card">
       <div class="card-head"><div><span class="eyebrow">${escapeHTML(detail.model_key || 'Modelo')}</span><h3>${escapeHTML(detail.model_name || 'Sin nombre')}</h3></div>${badge(detail.status || 'UNKNOWN')}</div>
-      <div class="model-version">Versión ${escapeHTML(detail.current_version || '—')}</div>
-      <div class="model-metrics">${metrics.length ? metrics.map(([key, value]) => `<div><span>${escapeHTML(key)}</span><strong>${fmt(value, 3)}</strong></div>`).join('') : '<span class="muted">Sin métricas públicas actuales.</span>'}</div>
+      <div class="model-version">Versión ${escapeHTML(detail.current_version || '—')} · <span class="muted">${escapeHTML(metricSet.source)}</span></div>
+      <div class="model-metrics">${metricSet.rows.length ? metricSet.rows.map(([key, value]) => `<div><span>${escapeHTML(key)}</span><strong>${fmt(value, 3)}</strong></div>`).join('') : '<span class="muted">Sin métricas públicas disponibles.</span>'}</div>
       <div class="model-footer"><span>Drift ${badge(detail.drift_level || 'UNKNOWN')}</span><span>${escapeHTML(detail.recommendation || 'Sin recomendación')}</span></div>
       <details class="advanced-details"><summary>Detalles técnicos</summary><pre>${safeJSON(detail.artifact?.params || {})}</pre><p>${escapeHTML(detail.reason || '')}</p></details>
     </article>`;
