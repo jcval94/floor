@@ -6,6 +6,7 @@ import pytest
 
 import forecasting.generate_forecasts as forecast_module
 from forecasting.load_models import HorizonForecast, M3Forecast
+from forecasting.parity_models import ParityChampionModelSet
 from utils.pages_publish import validate_prediction_contract
 
 
@@ -144,3 +145,29 @@ def test_pages_rejects_abstention_when_confidence_exceeds_threshold() -> None:
         "abstention_confidence_not_below_threshold" in error
         for error in audit["errors"]
     )
+
+
+def test_parity_timing_forces_abstention_when_oos_skill_is_nonpositive() -> None:
+    model = object.__new__(ParityChampionModelSet)
+    model._timing_champion = {
+        "metrics": {
+            "abstention_threshold": 0.12,
+            "quality_log_loss": 2.5986577797,
+            "uniform_log_loss": 2.5649493575,
+            "log_loss_skill": -0.0131419446,
+        }
+    }
+    assert model.m3_timing_abstention_threshold == 1.0
+
+
+def test_parity_timing_keeps_trained_threshold_after_positive_oos_skill() -> None:
+    model = object.__new__(ParityChampionModelSet)
+    model._timing_champion = {
+        "metrics": {
+            "abstention_threshold": 0.18,
+            "quality_log_loss": 2.40,
+            "uniform_log_loss": 2.5649493575,
+            "log_loss_skill": 0.064,
+        }
+    }
+    assert model.m3_timing_abstention_threshold == 0.18
