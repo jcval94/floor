@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           PYTHONPATH=src python -m league.freeze \
             --league-config config/strategy_league.json \
-            --freeze config/frozen/capital_challenger_v1.json
+            --freeze config/frozen/capital_challenger_v1_v7.json
 
       - name: Initialize isolated market DB
         run: |
@@ -130,7 +130,7 @@ jobs:
             --start "${{ steps.window.outputs.start }}" \
             --end "${{ steps.window.outputs.end }}" \
             --fold-sessions "${{ steps.window.outputs.fold_sessions }}" \
-            --freeze config/frozen/capital_challenger_v1.json \
+            --freeze config/frozen/capital_challenger_v1_v7.json \
             | tee "$RUNNER_TEMP/walk_forward_summary.json"
 
       - name: Validate OOS evidence contract

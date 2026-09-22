@@ -100,9 +100,16 @@ jobs:
         run: |
           set -euo pipefail
           STARTED_AT=$(date +%s)
+          MODEL=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))["weekly_model_path"])
+          PY
+          )
+          mkdir -p "$(dirname "$MODEL")"
           PYTHONPATH=src python -m league.bootstrap_weekly_model \
             --dataset artifacts/e2e/modelable_dataset.json \
-            --output data/metrics/strategy_league/models/weekly_opportunity_challenger.json \
+            --output "$MODEL" \
             --version "e2e-${GITHUB_RUN_ID}"
           ELAPSED_SECONDS=$(( $(date +%s) - STARTED_AT ))
           python - <<PY
@@ -168,7 +175,7 @@ jobs:
             --league-config config/strategy_league.json \
             --strategies-config config/strategies.yaml \
             --universe config/universe.yaml
-          PYTHONPATH=src python -m league.experiment_observation --data-dir data
+          PYTHONPATH=src python -m league.experiment_observation --data-dir data --league-config config/strategy_league.json
 
       - name: Build and validate exact Pages payload
         run: |

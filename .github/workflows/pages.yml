@@ -17,6 +17,8 @@ on:
       - 'src/league/publish_site.py'
       - 'src/league/experiment_observation.py'
       - 'config/universe.yaml'
+      - 'config/strategy_league.json'
+      - 'config/strategy_league_epochs.json'
   workflow_dispatch:
 
 permissions:

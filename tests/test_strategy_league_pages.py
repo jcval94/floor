@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from league.publish_site import publish_league_payload
+from league.publish_site import publish_league_payload, publish_observation_payload
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +20,7 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     source.write_text(
         json.dumps(
             {
-                "league_id": "strategy_league_v6_all_strategies_10k",
+                "league_id": "strategy_league_v7_clean_genesis_10k",
                 "status": "RUNNING",
                 "initial_nav_usd": 10000.0,
                 "rows": [
@@ -104,7 +104,7 @@ def test_publish_league_payload_rejects_stale_runtime_state(
     league_config.write_text(
         json.dumps(
             {
-                "league_id": "strategy_league_v6_all_strategies_10k",
+                "league_id": "strategy_league_v7_clean_genesis_10k",
                 "initial_nav_usd": 10000.0,
                 "members": [
                     {"id": "weekly_opportunity_ridge"},
@@ -119,7 +119,7 @@ def test_publish_league_payload_rejects_stale_runtime_state(
     output = tmp_path / "site" / "data" / "strategy_league.json"
     payload = publish_league_payload(data_dir, output, league_config)
 
-    assert payload["league_id"] == "strategy_league_v6_all_strategies_10k"
+    assert payload["league_id"] == "strategy_league_v7_clean_genesis_10k"
     assert payload["status"] == "WAITING_FOR_GENESIS"
     assert payload["rows"] == []
     assert payload["initial_nav_usd"] == 10000.0
@@ -131,12 +131,44 @@ def test_publish_league_payload_rejects_stale_runtime_state(
     assert "previous league strategy_league_v4_old" in payload["detail"]
 
 
+
+def test_publish_observation_payload_rejects_previous_epoch(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    source = data_dir / "metrics" / "strategy_league" / "experiment_observation.json"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v6_all_strategies_10k",
+                "status": "RUNNING",
+                "sessions": 9,
+                "evidence": {"prediction_count_since_genesis": 999},
+                "safety": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    league_config = tmp_path / "strategy_league.json"
+    league_config.write_text(
+        json.dumps({"league_id": "strategy_league_v7_clean_genesis_10k"}),
+        encoding="utf-8",
+    )
+    output = tmp_path / "site" / "data" / "experiment_observation.json"
+    payload = publish_observation_payload(data_dir, output, league_config)
+
+    assert payload["league_id"] == "strategy_league_v7_clean_genesis_10k"
+    assert payload["status"] == "WAITING_FOR_GENESIS"
+    assert payload["sessions"] == 0
+    assert payload["evidence"]["prediction_count_since_genesis"] == 0
+
+
 def test_strategy_league_config_tracks_every_base_strategy() -> None:
     config = json.loads(
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
     )
     member_ids = {str(member["id"]) for member in config["members"]}
-    assert config["league_id"] == "strategy_league_v6_all_strategies_10k"
+    assert config["league_id"] == "strategy_league_v7_clean_genesis_10k"
+    assert "strategy_league_v7_clean_genesis_10k" in config["weekly_model_path"]
     assert float(config["initial_nav_usd"]) == 10000.0
     assert {
         "weekly_opportunity_ridge",

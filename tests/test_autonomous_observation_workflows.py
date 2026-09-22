@@ -46,13 +46,16 @@ def test_eod_closes_the_prospective_evidence_loop() -> None:
     assert 'LIVE_TRADING_ENABLED: "true"' not in workflow
 
 
-def test_bootstrap_requires_explicit_confirmed_dispatch() -> None:
+def test_bootstrap_requires_explicit_confirmed_genesis_request() -> None:
     workflow = _text(".github/workflows/strategy_league_bootstrap.yml")
 
     assert "workflow_dispatch:" in workflow
     assert "confirm_league_id:" in workflow
-    assert "Confirm explicit league genesis" in workflow
-    assert "push:" not in workflow
+    assert "push:" in workflow
+    assert "config/strategy_league_genesis_request.json" in workflow
+    assert "Resolve and confirm explicit league genesis" in workflow
+    assert "BOOTSTRAP_CLEAN_GENESIS" in workflow
+    assert "state but its frozen Weekly artifact is missing" in workflow
     assert 'pip install -e ".[modeling]"' in workflow
 
 
