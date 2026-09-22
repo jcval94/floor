@@ -257,3 +257,29 @@ def test_retrain_execute_requires_explicit_human_authorization() -> None:
     assert 'control["execution"] = "COMPLETED"' in workflow
     assert "make init-db-schemas" in workflow
     assert "make init-dbs" not in workflow
+
+
+def test_retrain_assessment_avoids_full_persistence_hydration() -> None:
+    workflow = _text(WORKFLOWS / "retrain_assessment.yml")
+    assert "make init-db-schemas" in workflow
+    assert "make init-dbs" not in workflow
+    assert "data/persistence/app.sqlite" not in workflow
+    assert "Install modeling dependencies" in workflow
+    assert "--universe config/universe.yaml" in workflow
+    assert "--benchmark SPY" in workflow
+
+
+def test_robust_range_strict_dominance_is_scoped_to_model_changes() -> None:
+    workflow = _text(WORKFLOWS / "robust_range_v3.yml")
+    assert "Determine whether strict promotion dominance is required" in workflow
+    assert "steps.promotion_gate.outputs.require_dominance" in workflow
+    assert "src/models/robust_range_v3.py" in workflow
+    assert "src/models/train_classic_horizons.py" in workflow
+    assert "src/features/*" in workflow
+    assert "BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert "HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in workflow
+    assert 'git diff --name-only "${BASE_SHA}" "${HEAD_SHA}"' in workflow
+    assert "origin/${BASE_REF}...HEAD" not in workflow
+    assert "src/forecasting/parity_models.py" not in workflow.split(
+        "case \"$path\" in", 1
+    )[1].split("esac", 1)[0]
