@@ -263,14 +263,10 @@ jobs:
           payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
           control = payload.setdefault("retraining_control", {})
           tasks = [x for x in os.environ["TASKS_TO_RUN"].split(",") if x]
-          control.update(
-              {
-                  "authorization": os.environ["AUTHORIZATION"],
-                  "authorized_tasks": tasks,
-                  "execution": "COMPLETED",
-                  "executed_tasks": tasks,
-              }
-          )
+          control["authorization"] = os.environ["AUTHORIZATION"]
+          control["authorized_tasks"] = tasks
+          control["execution"] = "COMPLETED"
+          control["executed_tasks"] = tasks
           path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
           PY
 
