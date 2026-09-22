@@ -113,7 +113,6 @@ def _input_snapshot_id(market_rows: list[dict], forecasts: list[dict]) -> str:
         sort_keys=True,
         separators=(",", ":"),
         default=str,
-        allow_nan=False,
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
