@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from utils.pages_publish import (
     _inject_audit_script,
+    _monitoring_warnings,
+    _normalize_monitoring_payloads,
     model_suite_compatibility,
     select_latest_global_batch,
     validate_prediction_contract,
@@ -261,3 +264,54 @@ def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     assert "utils.pages_publish" in workflow
     assert "utils.pages_security" in workflow
     assert "workflow_run.head_sha || github.sha" not in workflow
+
+
+def test_monitoring_audit_separates_fresh_health_from_stale_subreports(
+    tmp_path: Path,
+) -> None:
+    site_data = tmp_path / "site" / "data"
+    now = datetime.now(timezone.utc)
+    _write_json(
+        site_data / "metrics.json",
+        {
+            "generated_at": now.isoformat(),
+            "state_changed_at": (now - timedelta(hours=6)).isoformat(),
+            "status": "DEGRADED",
+            "series": [],
+            "alerts": ["m3 timing degraded"],
+        },
+    )
+    _write_json(
+        site_data / "drift.json",
+        {
+            "status": "OK",
+            "decision": "KEEP",
+            "drift_level": "GREEN",
+            "source_file": "retraining_review_old.json",
+            "source_date": (now - timedelta(days=60)).isoformat(),
+        },
+    )
+    _write_json(
+        site_data / "incidents.json",
+        {
+            "status": "OK",
+            "severity": "SEV4",
+            "summary": {"symptom": "No incidents"},
+            "source_file": None,
+            "source_date": None,
+        },
+    )
+
+    audit = _normalize_monitoring_payloads(site_data)
+    warnings = _monitoring_warnings(audit)
+
+    assert audit["status"] == "DEGRADED"
+    assert audit["sources"]["health"]["status"] == "OK"
+    assert audit["sources"]["health"]["health_status"] == "DEGRADED"
+    assert audit["sources"]["drift"]["status"] == "STALE"
+    assert audit["sources"]["incidents"]["status"] == "UNKNOWN"
+    assert "monitoring_health_missing_or_stale" not in warnings
+    assert "monitoring_health_degraded" in warnings
+    assert "drift_report_missing_or_stale" in warnings
+    assert "incident_report_missing_or_stale" in warnings
+    assert "monitoring_report_missing_or_stale" not in warnings
