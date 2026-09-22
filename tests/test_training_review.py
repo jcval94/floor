@@ -119,3 +119,22 @@ def test_schema_review_fails_closed_when_required_input_disappears(tmp_path: Pat
 
     assert summary["models"]["value"]["summary"]["schema"]["state"] == "RED"
     assert "close" in summary["models"]["value"]["summary"]["schema"]["removed_columns"]
+
+
+def test_unused_config_feature_shift_does_not_trigger_model_drift(tmp_path: Path) -> None:
+    data_dir = _setup_training(tmp_path)
+    dataset_path = data_dir / "training" / "modelable_dataset.json"
+    payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+    for row in payload["rows"]:
+        row["ai_consensus_score"] = 999.0
+    dataset_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    for model in summary["models"].values():
+        assert "ai_consensus_score" not in model["summary"]["shared_data"]["features"]
