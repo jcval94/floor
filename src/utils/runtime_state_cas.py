@@ -5,6 +5,7 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -15,6 +16,106 @@ class RuntimeStateRevision:
     exists: bool
     sha256: str | None
     generation: int
+
+
+@dataclass(frozen=True)
+class RuntimeStateFrontier:
+    checkpoint_at: str | None
+    event: str | None
+
+
+def _checkpoint_dt(value: str | None) -> datetime | None:
+    if value in (None, ""):
+        return None
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise RuntimeError(f"Runtime-state checkpoint must be timezone-aware: {value!r}")
+    return parsed
+
+
+def frontier_from_metadata(metadata_path: Path | None) -> RuntimeStateFrontier:
+    if metadata_path is None or not metadata_path.exists():
+        return RuntimeStateFrontier(None, None)
+    payload = _load_metadata(metadata_path)
+    raw = payload.get("checkpoint_frontier")
+    if raw in (None, {}):
+        return RuntimeStateFrontier(None, None)
+    if not isinstance(raw, dict):
+        raise RuntimeError("Runtime-state checkpoint_frontier must be an object")
+    checkpoint_at = str(raw.get("checkpoint_at") or "").strip() or None
+    event = str(raw.get("event") or "").strip() or None
+    if checkpoint_at is None:
+        if event is not None:
+            raise RuntimeError("Runtime-state frontier event requires checkpoint_at")
+        return RuntimeStateFrontier(None, None)
+    _checkpoint_dt(checkpoint_at)
+    if event is None:
+        raise RuntimeError("Runtime-state frontier checkpoint requires event")
+    return RuntimeStateFrontier(checkpoint_at, event)
+
+
+def latest_marker_frontier(marker_dir: Path | None) -> RuntimeStateFrontier:
+    if marker_dir is None or not marker_dir.exists():
+        return RuntimeStateFrontier(None, None)
+    latest: tuple[datetime, RuntimeStateFrontier] | None = None
+    for path in sorted(marker_dir.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Invalid checkpoint marker: {path}") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Checkpoint marker must be an object: {path}")
+        checkpoint_at = str(payload.get("checkpoint_at") or "").strip() or None
+        event = str(payload.get("event") or "").strip() or None
+        if checkpoint_at is None:
+            continue
+        if event is None:
+            raise RuntimeError(f"Checkpoint marker lacks event: {path}")
+        parsed = _checkpoint_dt(checkpoint_at)
+        assert parsed is not None
+        frontier = RuntimeStateFrontier(checkpoint_at, event)
+        if latest is None or parsed > latest[0]:
+            latest = (parsed, frontier)
+    return latest[1] if latest is not None else RuntimeStateFrontier(None, None)
+
+
+def resolve_publish_frontier(
+    *,
+    parent_metadata_path: Path | None,
+    marker_dir: Path | None,
+    checkpoint_at: str | None,
+    event: str | None,
+) -> RuntimeStateFrontier:
+    parent = frontier_from_metadata(parent_metadata_path)
+    candidate = RuntimeStateFrontier(
+        str(checkpoint_at or "").strip() or None,
+        str(event or "").strip() or None,
+    )
+    if candidate.checkpoint_at is None:
+        if candidate.event is not None:
+            raise RuntimeError("Checkpoint event requires checkpoint_at")
+        return parent
+    if candidate.event is None:
+        raise RuntimeError("Checkpoint publish requires event")
+
+    candidate_dt = _checkpoint_dt(candidate.checkpoint_at)
+    assert candidate_dt is not None
+    floors = [parent, latest_marker_frontier(marker_dir)]
+    for floor in floors:
+        floor_dt = _checkpoint_dt(floor.checkpoint_at)
+        if floor_dt is None:
+            continue
+        if candidate_dt < floor_dt:
+            raise RuntimeError(
+                "Runtime-state checkpoint regression refused: "
+                f"candidate={candidate} frontier={floor}"
+            )
+        if candidate_dt == floor_dt and floor.event not in (None, candidate.event):
+            raise RuntimeError(
+                "Runtime-state checkpoint event mismatch at same timestamp: "
+                f"candidate={candidate} frontier={floor}"
+            )
+    return candidate
 
 
 def _read_checksum(path: Path) -> str:
@@ -129,11 +230,31 @@ def main() -> int:
     verify.add_argument("--remote-missing", action="store_true")
     verify.add_argument("--format", choices=["json", "tsv"], default="json")
 
+    frontier = sub.add_parser("resolve-frontier")
+    frontier.add_argument("--metadata")
+    frontier.add_argument("--marker-dir")
+    frontier.add_argument("--checkpoint-at")
+    frontier.add_argument("--event")
+    frontier.add_argument("--format", choices=["json", "tsv"], default="json")
+
     args = parser.parse_args()
     try:
         if args.cmd == "write-token":
             revision = _remote_from_args(args)
             print(json.dumps(write_token(Path(args.token), revision), sort_keys=True))
+            return 0
+
+        if args.cmd == "resolve-frontier":
+            resolved = resolve_publish_frontier(
+                parent_metadata_path=Path(args.metadata) if args.metadata else None,
+                marker_dir=Path(args.marker_dir) if args.marker_dir else None,
+                checkpoint_at=args.checkpoint_at,
+                event=args.event,
+            )
+            if args.format == "tsv":
+                print(f"{resolved.checkpoint_at or '-'}\t{resolved.event or '-'}")
+            else:
+                print(json.dumps(asdict(resolved), sort_keys=True))
             return 0
 
         token = load_token(Path(args.token))
