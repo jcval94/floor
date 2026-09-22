@@ -13,8 +13,8 @@ from utils.prediction_batch_guard import inspect_latest_prediction_batch
 
 ET = ZoneInfo("America/New_York")
 _STATUS_RANK = {"OK": 0, "DEGRADED": 1, "CRITICAL": 2}
-_CHECKPOINT_GRACE = timedelta(minutes=90)
-_CHECKPOINT_CRITICAL_AFTER = timedelta(minutes=180)
+_CHECKPOINT_GRACE = timedelta(minutes=180)
+_CHECKPOINT_CRITICAL_AFTER = timedelta(minutes=240)
 
 
 def _parse_dt(value: object) -> datetime | None:

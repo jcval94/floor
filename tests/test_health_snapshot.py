@@ -81,8 +81,8 @@ def test_retrain_alert_degrades_health_instead_of_reporting_ok(tmp_path: Path) -
 
 
 def test_scheduler_delay_inside_grace_does_not_raise_false_alarm(tmp_path: Path) -> None:
-    # OPEN was 60 minutes ago. GitHub Actions can be delayed; the engine still
-    # has time to catch the checkpoint inside its 90-minute execution window.
+    # OPEN was 60 minutes ago. Lightweight polling plus the immutable context
+    # leaves the engine ample time to catch the accepted checkpoint.
     now_et = datetime(2026, 8, 21, 10, 30, tzinfo=ET)
     _write_dashboard(tmp_path, now_et)
     _write_review(tmp_path)
@@ -94,7 +94,7 @@ def test_scheduler_delay_inside_grace_does_not_raise_false_alarm(tmp_path: Path)
 
 
 def test_missing_checkpoint_degrades_after_scheduler_grace(tmp_path: Path) -> None:
-    now_et = datetime(2026, 8, 21, 11, 0, tzinfo=ET)  # OPEN is 90 minutes old.
+    now_et = datetime(2026, 8, 21, 12, 31, tzinfo=ET)  # OPEN is > 180 minutes old.
     _write_dashboard(tmp_path, now_et)
     _write_review(tmp_path)
 

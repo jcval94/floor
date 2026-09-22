@@ -47,7 +47,11 @@ def _patch_minimal_cycle(
     written_paths: list[str] = []
     written_records: list[object] = []
 
-    monkeypatch.setattr(canonical, "_latest_feature_rows", lambda _cfg, _symbols: [{"symbol": "AAPL"}])
+    monkeypatch.setattr(
+        canonical,
+        "_latest_feature_rows",
+        lambda _cfg, _symbols, max_market_session=None: [{"symbol": "AAPL"}],
+    )
     monkeypatch.setattr(canonical, "_validate_feature_rows", lambda _rows: None)
     monkeypatch.setattr(canonical, "_log_model_registry_preflight", lambda _cfg: None)
     monkeypatch.setattr(canonical, "_model_input_snapshot", lambda _row, _ai: {})
@@ -130,3 +134,29 @@ def test_floor_main_routes_run_cycle_to_canonical_runtime() -> None:
     from floor import main as floor_main
 
     assert floor_main.run_intraday_cycle.__module__ == "floor.pipeline.canonical_intraday_cycle"
+
+
+def test_canonical_cycle_uses_accepted_checkpoint_as_batch_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    written_paths, written_records = _patch_minimal_cycle(monkeypatch)
+    cfg = RuntimeConfig(root_dir=tmp_path, data_dir=tmp_path / "data")
+    checkpoint = datetime(2026, 8, 21, 9, 30, tzinfo=ZoneInfo("America/New_York"))
+
+    canonical.run_intraday_cycle(
+        "OPEN",
+        ["AAPL"],
+        cfg,
+        as_of=checkpoint,
+        market_session=date(2026, 8, 20),
+    )
+
+    predictions = [
+        record for path, record in zip(written_paths, written_records) if "/predictions/" in path
+    ]
+    assert predictions
+    assert all(getattr(record, "as_of") == checkpoint for record in predictions)
