@@ -184,12 +184,10 @@ def test_critical_market_workflows_skip_full_ledger_hydration_when_cache_exists(
 
 
 def test_critical_runtime_installs_explicit_dependencies() -> None:
-    pyproject = _text(ROOT / "pyproject.toml")
-    assert 'runtime = ["numpy>=2.0,<3"]' in pyproject
     for filename in ("intraday_engine.yml", "eod.yml", "monitoring.yml"):
         workflow = _text(WORKFLOWS / filename)
         assert 'python-version: "3.12"' in workflow
-        assert 'pip install -e ".[runtime]"' in workflow
+        assert 'pip install -e . "numpy>=2.0,<3"' in workflow
 
 
 def test_eod_refuses_to_retrain_missing_frozen_weekly_model() -> None:
