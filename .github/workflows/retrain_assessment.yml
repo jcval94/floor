@@ -3,6 +3,17 @@ name: retrain_assessment
 on:
   schedule:
     - cron: "0 12 1,15 * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/retrain_assessment.yml"
+      - "config/retraining.yaml"
+      - "src/floor/training/review.py"
+      - "src/floor/training/run_retrain_assessment.py"
+      - "src/floor/training/governance.py"
+      - "src/monitoring/drift_detection.py"
+      - "src/features/**"
+      - "data/training/models/*.json"
   workflow_dispatch:
 
 permissions:
