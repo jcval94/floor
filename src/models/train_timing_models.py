@@ -218,6 +218,17 @@ def predict_week_probabilities(
     return [max(0.0, value) / total for value in probs]
 
 
+def _empirical_prior_probabilities(rows: list[dict]) -> list[float]:
+    """Laplace-smoothed train-only class prior for leakage-safe baseline scoring."""
+
+    eligible = _eligible_rows(rows)
+    counts = [1.0] * N_CLASSES
+    for row in eligible:
+        counts[int(row["floor_week_m3"]) - 1] += 1.0
+    total = sum(counts) or float(N_CLASSES)
+    return [count / total for count in counts]
+
+
 def _cross_entropy(rows: list[dict], params: dict, *, calibrated: bool = False) -> float:
     eligible = _eligible_rows(rows)
     if not eligible:
@@ -369,17 +380,42 @@ def train_floor_week_m3_timing_model(
     metrics = timing_metrics(monitoring_y_true, monitoring_probabilities)
 
     uniform_log_loss = math.log(N_CLASSES)
+    empirical_prior = _empirical_prior_probabilities(train_eligible)
+    empirical_prior_metrics = timing_metrics(
+        y_true,
+        [list(empirical_prior) for _ in evaluation_rows],
+    )
+    quality_log_loss = float(quality_metrics.get("log_loss", uniform_log_loss))
+    empirical_prior_log_loss = float(
+        empirical_prior_metrics.get("log_loss", uniform_log_loss)
+    )
+    feature_skill_vs_prior = (
+        1.0 - (quality_log_loss / empirical_prior_log_loss)
+        if empirical_prior_log_loss > 0.0
+        else float("-inf")
+    )
     confidences = [max(probs) for probs in probabilities]
     metrics.update(
         {
             "quality_top1_accuracy": float(quality_metrics.get("top1_accuracy", 0.0)),
             "quality_top3_accuracy": float(quality_metrics.get("top3_accuracy", 0.0)),
-            "quality_log_loss": float(quality_metrics.get("log_loss", uniform_log_loss)),
+            "quality_log_loss": quality_log_loss,
             "quality_brier_score": float(quality_metrics.get("brier_score", 0.0)),
             "quality_expected_week_distance": float(quality_metrics.get("expected_week_distance", 0.0)),
             "quality_calibration_error": float(quality_metrics.get("calibration_error", 0.0)),
             "uniform_log_loss": uniform_log_loss,
-            "log_loss_skill": 1.0 - (float(quality_metrics.get("log_loss", uniform_log_loss)) / uniform_log_loss),
+            "log_loss_skill": 1.0 - (quality_log_loss / uniform_log_loss),
+            "empirical_prior_log_loss": empirical_prior_log_loss,
+            "empirical_prior_top1_accuracy": float(
+                empirical_prior_metrics.get("top1_accuracy", 0.0)
+            ),
+            "empirical_prior_top3_accuracy": float(
+                empirical_prior_metrics.get("top3_accuracy", 0.0)
+            ),
+            "empirical_prior_expected_week_distance": float(
+                empirical_prior_metrics.get("expected_week_distance", 0.0)
+            ),
+            "feature_log_loss_skill_vs_empirical_prior": feature_skill_vs_prior,
             "mean_max_probability": sum(confidences) / len(confidences) if confidences else 0.0,
             "abstention_threshold": ABSTAIN_CONFIDENCE,
             "abstention_rate": (
