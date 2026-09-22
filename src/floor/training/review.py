@@ -11,7 +11,7 @@ from models.dataset_summary import summarize_modelable_rows
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
 from monitoring.drift_detection import js_divergence
 from monitoring.run_retrain_assessment import load_simple_yaml
-from models.evaluate import timing_metrics, value_metrics
+from models.evaluate import timing_metrics, timing_serving_quality_blocked, value_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -302,9 +302,14 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
         "expected_week_distance": float(current_metrics.get("expected_week_distance", 0.0)) - float(baseline_metrics.get("expected_week_distance", 0.0)),
     }
 
+    serving_quality_blocked = timing_serving_quality_blocked(baseline_metrics)
+    if serving_quality_blocked:
+        deltas["serving_quality_blocked"] = 1.0
+
     state = "GREEN"
     if (
-        deltas["top1_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top1_accuracy_m3_drop_fail"])
+        serving_quality_blocked
+        or deltas["top1_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top1_accuracy_m3_drop_fail"])
         or deltas["top3_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top3_accuracy_m3_drop_fail"])
         or deltas["log_loss"] >= float(cfg["timing_thresholds"]["log_loss_fail"])
         or deltas["brier_score"] >= float(cfg["timing_thresholds"]["brier_fail"])
