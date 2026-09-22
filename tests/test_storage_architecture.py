@@ -322,3 +322,14 @@ def test_eod_generates_fresh_close_forecast_after_market_refresh() -> None:
     assert "python -m floor.main run-cycle" in workflow
     assert "--event CLOSE" in workflow
     assert '--required-market-session "${{ needs.gate.outputs.required_market_session }}"' in workflow
+
+
+def test_monitoring_has_runtime_completion_backstop() -> None:
+    workflow = _text(WORKFLOWS / "monitoring.yml")
+
+    assert "workflow_run:" in workflow
+    assert 'workflows: ["intraday_engine", "eod"]' in workflow
+    assert "types: [completed]" in workflow
+    assert "branches: [main]" in workflow
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert "github.event.workflow_run.head_branch == 'main'" in workflow

@@ -15,6 +15,7 @@ ET = ZoneInfo("America/New_York")
 _STATUS_RANK = {"OK": 0, "DEGRADED": 1, "CRITICAL": 2}
 _CHECKPOINT_GRACE = timedelta(minutes=180)
 _CHECKPOINT_CRITICAL_AFTER = timedelta(minutes=240)
+_M3_CAPABILITY_DEGRADED_RATIO = 0.4
 
 
 def _parse_dt(value: object) -> datetime | None:
@@ -101,6 +102,75 @@ def _dashboard_checks(data_dir: Path, now_utc: datetime) -> list[dict[str, str]]
     else:
         checks.append(_check("prediction_recency", "OK", "latest prediction age <= 24h"))
     return checks
+
+
+def _m3_capability_check(data_dir: Path) -> dict[str, str]:
+    payload = _read_json(data_dir / "reports" / "dashboard.json")
+    if payload is None:
+        return _check(
+            "m3_capability",
+            "OK",
+            "dashboard unavailable; capability covered by dashboard_present",
+        )
+
+    predictions = payload.get("latest_predictions")
+    if not isinstance(predictions, list) or not predictions:
+        return _check(
+            "m3_capability",
+            "DEGRADED",
+            "latest dashboard has no prediction rows for m3 capability assessment",
+        )
+
+    m3_rows = [
+        row
+        for row in predictions
+        if isinstance(row, dict)
+        and str(row.get("horizon") or "").strip().lower() == "m3"
+    ]
+    if not m3_rows:
+        return _check(
+            "m3_capability",
+            "DEGRADED",
+            "latest dashboard has no m3 horizon rows",
+        )
+
+    total = len(m3_rows)
+    blocked = sum(
+        1
+        for row in m3_rows
+        if str(row.get("m3_status") or "").strip().lower()
+        in {"blocked", "unavailable"}
+    )
+    timing_abstained = sum(
+        1
+        for row in m3_rows
+        if str(row.get("m3_status") or "").strip().lower() == "timing_abstained"
+    )
+    blocked_ratio = blocked / total
+    timing_abstained_ratio = timing_abstained / total
+
+    if blocked_ratio > _M3_CAPABILITY_DEGRADED_RATIO:
+        return _check(
+            "m3_capability",
+            "DEGRADED",
+            "m3 value capability degraded "
+            f"blocked_or_unavailable={blocked}/{total} ratio={blocked_ratio:.2%}",
+        )
+    if timing_abstained_ratio > _M3_CAPABILITY_DEGRADED_RATIO:
+        return _check(
+            "m3_capability",
+            "DEGRADED",
+            "m3 timing capability degraded "
+            f"timing_abstained={timing_abstained}/{total} "
+            f"ratio={timing_abstained_ratio:.2%}",
+        )
+    return _check(
+        "m3_capability",
+        "OK",
+        "m3 capability within tolerance "
+        f"blocked_or_unavailable={blocked}/{total} "
+        f"timing_abstained={timing_abstained}/{total}",
+    )
 
 
 def _prediction_batch_check(data_dir: Path, universe_path: Path | None) -> dict[str, str]:
@@ -209,6 +279,7 @@ def build_health_snapshot(
 
     checks = _dashboard_checks(data_dir, now_utc)
     checks.append(_prediction_batch_check(data_dir, universe_path))
+    checks.append(_m3_capability_check(data_dir))
     checks.append(_retraining_check(data_dir))
     checks.append(_checkpoint_check(data_dir, now_et))
     status = _max_status(checks)
