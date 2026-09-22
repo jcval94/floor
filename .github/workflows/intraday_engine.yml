@@ -21,6 +21,12 @@ on:
         default: "OPEN"
         type: choice
         options: [OPEN, OPEN_PLUS_2H, OPEN_PLUS_4H, OPEN_PLUS_6H, CLOSE]
+      repair_existing_checkpoint:
+        description: "Re-run the latest already-completed checkpoint to repair runtime state"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 permissions:
   contents: write
@@ -58,10 +64,18 @@ jobs:
         id: guard
         run: |
           set -euo pipefail
+          if [ "${{ github.event.inputs.repair_existing_checkpoint || 'false' }}" = "true" ] && [ "${{ github.event.inputs.force_run || 'false' }}" != "true" ]; then
+            echo "::error::repair_existing_checkpoint requires force_run=true"
+            exit 1
+          fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_run || 'false' }}" = "true" ]; then
+            reason=manual_force
+            if [ "${{ github.event.inputs.repair_existing_checkpoint || 'false' }}" = "true" ]; then
+              reason=manual_repair
+            fi
             PYTHONPATH=src python -m utils.workflow_guards resolve-context \
               --event "${{ github.event.inputs.force_event || 'OPEN' }}" \
-              --reason manual_force
+              --reason "$reason"
           else
             PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 180 --data-dir data
           fi
@@ -93,12 +107,18 @@ jobs:
       - name: Revalidate immutable checkpoint context under writer lock
         id: lock_guard
         run: |
+          set -euo pipefail
+          repair_args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.repair_existing_checkpoint || 'false' }}" = "true" ]; then
+            repair_args+=(--allow-existing-repair)
+          fi
           PYTHONPATH=src python -m utils.workflow_guards validate-context \
             --kind intraday \
             --event "${{ needs.gate.outputs.event }}" \
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
-            --data-dir data
+            --data-dir data \
+            "${repair_args[@]}"
 
       - name: Initialize DB schemas and repair cache only if absent
         if: steps.lock_guard.outputs.run == 'true'
@@ -245,6 +265,8 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
+          RUNTIME_STATE_CHECKPOINT_EVENT: ${{ needs.gate.outputs.event }}
         run: bash scripts/runtime_state.sh publish
 
       - name: Publish lightweight checkpoint index

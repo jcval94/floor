@@ -283,3 +283,30 @@ def test_robust_range_strict_dominance_is_scoped_to_model_changes() -> None:
     assert "src/forecasting/parity_models.py" not in workflow.split(
         "case \"$path\" in", 1
     )[1].split("esac", 1)[0]
+
+
+def test_checkpoint_publish_declares_monotonic_runtime_frontier() -> None:
+    runtime_script = _text(ROOT / "scripts" / "runtime_state.sh")
+    intraday = _text(WORKFLOWS / "intraday_engine.yml")
+    eod = _text(WORKFLOWS / "eod.yml")
+
+    assert "resolve-frontier" in runtime_script
+    assert "checkpoint_frontier" in runtime_script
+    assert "RUNTIME_STATE_CHECKPOINT_AT" in runtime_script
+    assert "RUNTIME_STATE_CHECKPOINT_AT" in intraday
+    assert "RUNTIME_STATE_CHECKPOINT_EVENT" in intraday
+    assert "RUNTIME_STATE_CHECKPOINT_AT" in eod
+    assert "RUNTIME_STATE_CHECKPOINT_EVENT: CLOSE" in eod
+
+
+def test_checkpoint_repair_is_explicit_audited_and_latest_only() -> None:
+    intraday = _text(WORKFLOWS / "intraday_engine.yml")
+    repair = _text(WORKFLOWS / "runtime_checkpoint_repair.yml")
+
+    assert "repair_existing_checkpoint:" in intraday
+    assert "--allow-existing-repair" in intraday
+    assert "REPAIR_LATEST_COMPLETED_CHECKPOINT" in repair
+    assert "request_superseded_by_" in repair
+    assert "gh workflow run intraday_engine.yml" in repair
+    assert "repair_existing_checkpoint=true" in repair
+    assert "actions: write" in repair
