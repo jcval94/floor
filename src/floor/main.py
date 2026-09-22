@@ -86,7 +86,7 @@ def main() -> None:
                 cfg=cfg,
                 as_of=checkpoint_at,
                 market_session=required_market_session,
-            )
+            ) or {"status": "WRITTEN"}
             if cycle_result.get("status") == "WRITTEN":
                 batch = validate_latest_prediction_batch(
                     cfg.data_dir,
