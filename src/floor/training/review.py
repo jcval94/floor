@@ -116,8 +116,17 @@ def _relative_increase(baseline: float, current: float) -> float:
     return max((current - baseline) / max(abs(baseline), 1e-6), 0.0)
 
 
-def _feature_drift(reference_summary: dict, current_summary: dict, cfg: dict) -> dict:
-    important_features = [item.strip() for item in str(cfg["important_features"]["columns"]).split(",") if item.strip()]
+def _feature_drift(
+    reference_summary: dict,
+    current_summary: dict,
+    cfg: dict,
+    input_columns: list[str],
+) -> dict:
+    important_features = input_columns or [
+        item.strip()
+        for item in str(cfg["important_features"]["columns"]).split(",")
+        if item.strip()
+    ]
     ref_stats = reference_summary.get("numeric_stats", {})
     cur_stats = current_summary.get("numeric_stats", {})
     per_feature: dict[str, dict] = {}
@@ -350,7 +359,7 @@ def _build_record(model_key: str, artifact: dict | None, current_rows: list[dict
     reference_summary = artifact.get("dataset_summary") or current_summary
     eval_rows = _split_eval_rows(current_rows)
     input_columns = _artifact_input_columns(model_key, artifact, cfg)
-    shared = _feature_drift(reference_summary, current_summary, cfg)
+    shared = _feature_drift(reference_summary, current_summary, cfg, input_columns)
     schema = _schema_drift(reference_summary, current_summary, cfg, input_columns)
     target = (
         _value_target_drift(reference_summary, current_summary, cfg)
