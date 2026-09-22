@@ -183,6 +183,7 @@ publish_state() {
   fi
 
   local parent_generation next_generation parent_sha
+  local parent_result="$TMP/runtime-state-parent.tsv"
   if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     mkdir -p "$TMP/current"
     rm -f "$TMP/current/$ASSET.sha256" "$TMP/current/$ASSET.metadata.json"
@@ -190,21 +191,24 @@ publish_state() {
       --pattern "$ASSET.sha256" --dir "$TMP/current" --clobber
     gh release download "$TAG" --repo "$REPO" \
       --pattern "$ASSET.metadata.json" --dir "$TMP/current" --clobber
-    read -r parent_generation next_generation parent_sha < <(
-      PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
-        --token "$TOKEN_FILE" \
-        --metadata "$TMP/current/$ASSET.metadata.json" \
-        --checksum "$TMP/current/$ASSET.sha256" \
-        --format tsv
-    )
+    if ! PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
+      --token "$TOKEN_FILE" \
+      --metadata "$TMP/current/$ASSET.metadata.json" \
+      --checksum "$TMP/current/$ASSET.sha256" \
+      --format tsv > "$parent_result"; then
+      echo "::error::Runtime-state CAS parent verification failed." >&2
+      exit 1
+    fi
   else
-    read -r parent_generation next_generation parent_sha < <(
-      PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
-        --token "$TOKEN_FILE" \
-        --remote-missing \
-        --format tsv
-    )
+    if ! PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
+      --token "$TOKEN_FILE" \
+      --remote-missing \
+      --format tsv > "$parent_result"; then
+      echo "::error::Runtime-state CAS genesis verification failed." >&2
+      exit 1
+    fi
   fi
+  read -r parent_generation next_generation parent_sha < "$parent_result"
   echo "runtime_state_parent_generation=$parent_generation next_generation=$next_generation parent_sha256=$parent_sha"
 
   # Compact semantically before packaging. Resolved old predictions age out,
