@@ -18,7 +18,11 @@ on:
       - capital_tournament_request.json
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: floor-research-state-writer
+  cancel-in-progress: false
 
 jobs:
   tournament:
@@ -40,6 +44,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Restore durable research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/research_state.sh restore
 
       - name: Verify frozen challenger contract
         run: |
@@ -149,6 +158,11 @@ jobs:
           assert attribution["member"] == "capital_allocation_challenger"
           print(json.dumps({"summary": report["summary"], "attribution": attribution.get("summary")}, indent=2))
           PY
+
+      - name: Publish durable research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/research_state.sh publish
 
       - name: Upload tournament evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
