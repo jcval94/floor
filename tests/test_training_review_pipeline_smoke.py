@@ -108,3 +108,70 @@ def test_training_and_review_cli_smoke_generates_summary(tmp_path: Path) -> None
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     assert set(summary["models"].keys()) == {"value", "timing"}
     assert "suite_recommendation" in summary
+
+def test_training_rejects_tiny_real_m3_validation_window(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    training_dir = data_dir / "training"
+    training_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[dict] = [
+        {
+            "split": "train",
+            "timestamp": "2025-01-02T00:00:00",
+            "target_end_date_m3": "2025-04-04",
+            "split_eligible_m3": True,
+            "close": 100.0,
+            "atr_14": 1.0,
+            "trend_context_m3": 0.1,
+            "drawdown_13w": -0.03,
+            "dist_to_low_3m": 0.08,
+            "momentum_20": 0.01,
+            "floor_m3": 95.0,
+            "realized_floor_m3": 94.5,
+            "floor_week_m3": 4,
+        }
+    ]
+    for day in range(1, 11):
+        rows.append(
+            {
+                "split": "validation",
+                "timestamp": f"2026-02-{day:02d}T00:00:00",
+                "target_end_date_m3": "2026-05-15",
+                "split_eligible_m3": True,
+                "close": 101.0,
+                "atr_14": 1.1,
+                "trend_context_m3": 0.1,
+                "drawdown_13w": -0.02,
+                "dist_to_low_3m": 0.09,
+                "momentum_20": 0.01,
+                "floor_m3": 95.1,
+                "realized_floor_m3": 94.6,
+                "floor_week_m3": 5,
+            }
+        )
+
+    dataset_path = training_dir / "modelable_dataset.json"
+    dataset_path.write_text(json.dumps({"rows": rows}), encoding="utf-8")
+    train = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "models.run_training",
+            "--dataset",
+            str(dataset_path),
+            "--output-dir",
+            str(training_dir),
+            "--tasks",
+            "value,timing",
+            "--training-mode",
+            "retrain",
+        ],
+        cwd=REPO_ROOT,
+        env=_pythonpath_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert train.returncode != 0
+    assert "M3 validation evidence is too narrow" in (train.stderr + train.stdout)
+
