@@ -183,14 +183,8 @@ def _horizon_summary(
     }
 
 
-def _weekly_challenger(data_dir: Path) -> dict[str, Any]:
-    artifact = _load_json(
-        data_dir
-        / "metrics"
-        / "strategy_league"
-        / "models"
-        / "weekly_opportunity_challenger.json"
-    )
+def _weekly_challenger(model_path: Path) -> dict[str, Any]:
+    artifact = _load_json(model_path)
     if not artifact:
         return {"status": "WAITING", "version": None, "validation_metrics": {}}
     return {
@@ -223,23 +217,49 @@ def _append_history_once(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def build_experiment_observation(data_dir: Path) -> dict[str, Any]:
+def build_experiment_observation(
+    data_dir: Path,
+    league_config_path: Path = Path("config/strategy_league.json"),
+) -> dict[str, Any]:
     league_root = data_dir / "metrics" / "strategy_league"
-    leaderboard = _load_json(league_root / "leaderboard.json")
-    start_session_raw = str(leaderboard.get("start_session") or "").strip()
-    start_session = start_session_raw or None
-    last_session = str(leaderboard.get("last_session") or "").strip() or None
+    league_cfg = _load_json(league_config_path)
+    expected_league_id = str(league_cfg.get("league_id") or "")
+    configured_model = Path(str(league_cfg.get("weekly_model_path") or ""))
+    if configured_model and not configured_model.is_absolute():
+        configured_model = league_config_path.parent.parent / configured_model
 
-    reconciliations = [
-        row
-        for row in _load_reconciliations(data_dir)
-        if _after_start(row.get("predicted_as_of"), start_session)
-    ]
-    predictions = [
-        row
-        for row in _load_predictions(data_dir)
-        if _after_start(row.get("as_of"), start_session)
-    ]
+    leaderboard = _load_json(league_root / "leaderboard.json")
+    current_epoch = bool(
+        expected_league_id
+        and str(leaderboard.get("league_id") or "") == expected_league_id
+        and str(leaderboard.get("start_session") or "").strip()
+    )
+    start_session = (
+        str(leaderboard.get("start_session") or "").strip() or None
+        if current_epoch
+        else None
+    )
+    last_session = (
+        str(leaderboard.get("last_session") or "").strip() or None
+        if current_epoch
+        else None
+    )
+
+    if current_epoch:
+        reconciliations = [
+            row
+            for row in _load_reconciliations(data_dir)
+            if _after_start(row.get("predicted_as_of"), start_session)
+        ]
+        predictions = [
+            row
+            for row in _load_predictions(data_dir)
+            if _after_start(row.get("as_of"), start_session)
+        ]
+    else:
+        reconciliations = []
+        predictions = []
+
     resolved_keys = {
         str(row.get("prediction_key") or "")
         for row in reconciliations
@@ -248,16 +268,20 @@ def build_experiment_observation(data_dir: Path) -> dict[str, Any]:
 
     payload: dict[str, Any] = {
         "schema_version": 1,
-        "league_id": leaderboard.get("league_id"),
+        "league_id": expected_league_id or leaderboard.get("league_id"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "status": "RUNNING" if start_session else "WAITING_FOR_GENESIS",
+        "status": "RUNNING" if current_epoch else "WAITING_FOR_GENESIS",
         "start_session": start_session,
         "last_session": last_session,
-        "sessions": int(leaderboard.get("sessions", 0) or 0),
+        "sessions": int(leaderboard.get("sessions", 0) or 0) if current_epoch else 0,
         "strategy_league": {
-            "status": leaderboard.get("status", "WAITING"),
-            "initial_nav_usd": leaderboard.get("initial_nav_usd", 100000.0),
-            "rows": leaderboard.get("rows", []),
+            "status": leaderboard.get("status", "WAITING") if current_epoch else "WAITING_FOR_GENESIS",
+            "initial_nav_usd": (
+                leaderboard.get("initial_nav_usd", league_cfg.get("initial_nav_usd", 10000.0))
+                if current_epoch
+                else league_cfg.get("initial_nav_usd", 10000.0)
+            ),
+            "rows": leaderboard.get("rows", []) if current_epoch else [],
             "automatic_promotion": False,
             "live_execution_enabled": False,
         },
@@ -272,7 +296,7 @@ def build_experiment_observation(data_dir: Path) -> dict[str, Any]:
                 )
                 for horizon in HORIZON_SESSIONS
             ],
-            "weekly_opportunity_challenger": _weekly_challenger(data_dir),
+            "weekly_opportunity_challenger": _weekly_challenger(configured_model),
         },
         "evidence": {
             "prediction_count_since_genesis": len(predictions),
@@ -298,14 +322,17 @@ def build_experiment_observation(data_dir: Path) -> dict[str, Any]:
     _append_history_once(league_root / "experiment_observation_history.jsonl", payload)
     return payload
 
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build the prospective Strategy League and model observation report"
     )
     parser.add_argument("--data-dir", default="data")
+    parser.add_argument("--league-config", default="config/strategy_league.json")
     args = parser.parse_args()
-    payload = build_experiment_observation(Path(args.data_dir))
+    payload = build_experiment_observation(
+        Path(args.data_dir),
+        Path(args.league_config),
+    )
     print(
         json.dumps(
             {

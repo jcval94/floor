@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "current_league_id": "strategy_league_v7_clean_genesis_10k",
+  "epochs": [
+    {
+      "league_id": "strategy_league_v6_all_strategies_10k",
+      "status": "INTERRUPTED_INFRASTRUCTURE",
+      "declared_on": "2026-09-06",
+      "interruption_detected_on": "2026-09-08",
+      "closed_on": "2026-09-22",
+      "evidence_policy": "Preserve all available artifacts, but do not stitch its incomplete prospective series into a later league.",
+      "reason": "The authoritative runtime state could be overwritten by research workflows and scheduled market workflows subsequently lost continuous trustworthy checkpoints."
+    },
+    {
+      "league_id": "strategy_league_v7_clean_genesis_10k",
+      "status": "DECLARED_CLEAN_EPOCH",
+      "declared_on": "2026-09-22",
+      "freeze_id": "capital_challenger_v1_refrozen_20260922_v7",
+      "strategy_parameters_changed": false,
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for this league. No v6 sessions are inherited."
+    }
+  ]
+}
