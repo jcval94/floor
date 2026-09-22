@@ -20,6 +20,7 @@ from models.train_value_models import train_floor_m3_value_model
 logger = logging.getLogger(__name__)
 M3_TASKS = ("value", "timing")
 HORIZON_TASKS = {"d1", "w1", "q1"}
+MIN_M3_VALIDATION_DATES = 65
 
 
 def _load_dataset(path: Path) -> list[dict]:
@@ -44,6 +45,34 @@ def _split_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         raise ValueError("Training dataset has no explicit validation split")
     logger.info("[training] split train=%s validation=%s", len(train), len(validation))
     return train, validation
+
+
+def _validate_m3_validation_window(validation: list[dict]) -> None:
+    """Fail closed when real M3 selection evidence is too narrow in time.
+
+    Daily M3 labels consume 65 future sessions. On production modelable
+    datasets, require at least 65 distinct eligible validation dates so
+    calibration/selection cannot be decided from only a handful of sessions.
+    Synthetic/back-compat datasets without integrity metadata are unaffected.
+    """
+
+    if not any("target_end_date_m3" in row for row in validation):
+        return
+    eligible_dates = {
+        str(row.get("timestamp") or "")[:10]
+        for row in validation
+        if row.get("split_eligible_m3") is True
+        and row.get("floor_m3") not in (None, "")
+        and row.get("floor_week_m3") not in (None, "")
+        and row.get("timestamp") not in (None, "")
+    }
+    if len(eligible_dates) < MIN_M3_VALIDATION_DATES:
+        raise ValueError(
+            "M3 validation evidence is too narrow: "
+            f"{len(eligible_dates)} eligible dates < {MIN_M3_VALIDATION_DATES}. "
+            "Increase the raw validation window to include the 65-session "
+            "label horizon plus a meaningful out-of-time evaluation span."
+        )
 
 
 def _resolve_persistence_db_path(
@@ -191,6 +220,7 @@ def run_training(
     selected_tasks = _normalize_m3_tasks(tasks)
     if not selected_tasks:
         raise ValueError("No m3 tasks requested; use value, timing, or m3")
+    _validate_m3_validation_window(validation)
 
     models_dir = output_dir / "models"
     models_file_dir = output_dir / "models_file"
