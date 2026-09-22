@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "action": "REPAIR_LATEST_COMPLETED_CHECKPOINT",
+  "request_id": "repair-20260922-open-plus-2h-after-stale-open-publish",
+  "session_day": "2026-09-22",
+  "event": "OPEN_PLUS_2H",
+  "requested_on": "2026-09-22",
+  "reason": "OPEN_PLUS_2H was published successfully, then an already-queued manual OPEN run overwrote the authoritative runtime before superseded-checkpoint protection was merged. Re-publish the latest completed checkpoint without fabricating new point-in-time evidence."
+}

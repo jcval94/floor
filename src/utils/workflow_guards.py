@@ -252,6 +252,7 @@ def validate_accepted_context(
     session_day: str,
     checkpoint_at: str,
     data_dir: Path,
+    allow_existing_repair: bool = False,
 ) -> dict[str, str]:
     checkpoint = _parse_dt(checkpoint_at)
     if checkpoint.date().isoformat() != session_day:
@@ -297,6 +298,18 @@ def validate_accepted_context(
             }
 
     exists = _marker_exists(data_dir, kind, session_day, event)
+    if exists and allow_existing_repair:
+        if kind != "intraday":
+            raise RuntimeError("Existing-checkpoint repair is supported only for intraday")
+        return {
+            "run": "true",
+            "reason": "repair_existing_checkpoint",
+            "event": event,
+            "session_day": session_day,
+            "checkpoint_at": checkpoint.isoformat(),
+            "lateness_minutes": "",
+            "required_market_session": _required_session(kind, checkpoint),
+        }
     return {
         "run": "false" if exists else "true",
         "reason": "already_ran" if exists else "accepted_context",
@@ -356,6 +369,7 @@ def main() -> None:
     p_validate.add_argument("--session-day", required=True)
     p_validate.add_argument("--checkpoint-at", required=True)
     p_validate.add_argument("--data-dir", default="data")
+    p_validate.add_argument("--allow-existing-repair", action="store_true")
 
     p_mark = sub.add_parser("mark")
     p_mark.add_argument("--kind", required=True)
@@ -379,6 +393,7 @@ def main() -> None:
                 session_day=args.session_day,
                 checkpoint_at=args.checkpoint_at,
                 data_dir=Path(args.data_dir),
+                allow_existing_repair=args.allow_existing_repair,
             )
         )
     elif args.cmd == "mark":

@@ -1,0 +1,112 @@
+name: runtime_checkpoint_repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "config/runtime_checkpoint_repair_request.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: floor-runtime-checkpoint-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Restore lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh restore
+
+      - name: Validate repair request against latest completed checkpoint
+        id: request
+        run: |
+          PYTHONPATH=src python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from datetime import datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          from utils.market_session import get_session_info
+
+          request = json.loads(
+              Path("config/runtime_checkpoint_repair_request.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if request.get("action") != "REPAIR_LATEST_COMPLETED_CHECKPOINT":
+              raise SystemExit("Unsupported runtime checkpoint repair action")
+
+          now = datetime.now(tz=ZoneInfo("America/New_York"))
+          info = get_session_info(now)
+          requested_day = str(request.get("session_day") or "")
+          requested_event = str(request.get("event") or "")
+          if requested_day != info.session_day.isoformat():
+              print("run=false")
+              print("reason=request_not_current_session")
+              raise SystemExit(0)
+
+          marker_dir = Path("data/snapshots/workflow_runs")
+          completed = []
+          for path in marker_dir.glob(f"intraday_{requested_day}_*.json"):
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              raw = str(payload.get("checkpoint_at") or "")
+              event = str(payload.get("event") or "")
+              if not raw or not event:
+                  continue
+              completed.append(
+                  (datetime.fromisoformat(raw.replace("Z", "+00:00")), event)
+              )
+          if not completed:
+              raise SystemExit("No completed intraday checkpoint exists to repair")
+
+          latest_at, latest_event = max(completed, key=lambda item: item[0])
+          if latest_event != requested_event:
+              print("run=false")
+              print(f"reason=request_superseded_by_{latest_event}")
+              print(f"latest_event={latest_event}")
+              raise SystemExit(0)
+
+          print("run=true")
+          print("reason=repair_latest_completed_checkpoint")
+          print(f"event={requested_event}")
+          print(f"checkpoint_at={latest_at.isoformat()}")
+          PY
+
+      - name: Dispatch guarded checkpoint repair
+        if: steps.request.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ steps.request.outputs.event }}
+        run: |
+          gh workflow run intraday_engine.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f force_run=true \
+            -f force_event="$EVENT" \
+            -f repair_existing_checkpoint=true
+
+      - name: Summary
+        run: |
+          {
+            echo "## Runtime checkpoint repair"
+            echo "- run: ${{ steps.request.outputs.run }}"
+            echo "- reason: ${{ steps.request.outputs.reason }}"
+            echo "- event: ${{ steps.request.outputs.event || steps.request.outputs.latest_event }}"
+            echo "- repair is allowed only for the latest completed checkpoint"
+          } >> "$GITHUB_STEP_SUMMARY"
