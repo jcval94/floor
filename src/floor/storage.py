@@ -97,9 +97,8 @@ def _remember_jsonl_key(path: Path, key: tuple[str, str, str] | None) -> None:
     if cached is None:
         _IDEMPOTENCY_CACHE[cache_path] = (signature, {key})
         return
-    keys = set(cached[1])
-    keys.add(key)
-    _IDEMPOTENCY_CACHE[cache_path] = (signature, keys)
+    cached[1].add(key)
+    _IDEMPOTENCY_CACHE[cache_path] = (signature, cached[1])
 
 
 def append_jsonl(path: Path, record: object, *, batch_id: str = "") -> bool:
