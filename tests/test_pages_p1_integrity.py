@@ -81,3 +81,16 @@ def test_tournament_uses_versioned_weekly_model_path_from_config() -> None:
         "weekly_opportunity_challenger.json"
     ) not in workflow
 
+def test_tournament_runner_uses_league_config_as_weekly_model_source() -> None:
+    runner = (ROOT / "src" / "replay" / "capital_tournament.py").read_text(
+        encoding="utf-8"
+    )
+
+    legacy = (
+        "data/metrics/strategy_league/models/"
+        "weekly_opportunity_challenger.json"
+    )
+    assert legacy not in runner
+    assert 'league_cfg.get("weekly_model_path")' in runner
+    assert 'parser.add_argument("--weekly-model", default=None)' in runner
+
