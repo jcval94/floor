@@ -57,3 +57,13 @@ def test_retrain_execute_reserves_full_m3_validation_and_test_windows() -> None:
     assert "--test-days 141" in workflow
     assert "M3 labels consume 65 future sessions" in workflow
 
+def test_retrain_execute_m3_split_cli_is_contiguous() -> None:
+    workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")
+
+    expected = (
+        '--output "$DATASET_PATH" \\\n'
+        '            --validation-days 140 \\\n'
+        '            --test-days 141'
+    )
+    assert expected in workflow
+
