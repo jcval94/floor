@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from utils.pages_publish import (
     _inject_audit_script,
+    _monitoring_warning_codes,
+    _normalize_monitoring_payloads,
     model_suite_compatibility,
     select_latest_global_batch,
     validate_prediction_contract,
@@ -261,3 +264,86 @@ def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     assert "utils.pages_publish" in workflow
     assert "utils.pages_security" in workflow
     assert "workflow_run.head_sha || github.sha" not in workflow
+
+
+def test_monitoring_audit_separates_live_health_from_historical_reports(
+    tmp_path: Path,
+) -> None:
+    site_data = tmp_path / "site" / "data"
+    now = datetime(2026, 9, 22, 19, 0, tzinfo=timezone.utc)
+    _write_json(
+        site_data / "metrics.json",
+        {
+            "generated_at": "2026-09-22T18:49:17+00:00",
+            "status": "DEGRADED",
+            "alerts": ["m3 timing capability degraded"],
+        },
+    )
+    _write_json(
+        site_data / "drift.json",
+        {
+            "source_file": "retraining_review_2026-03-12.json",
+            "source_date": "2026-03-12T21:59:42+00:00",
+            "status": "WARN",
+            "decision": "RETRAIN_SOON",
+            "drift_level": "YELLOW",
+        },
+    )
+    _write_json(
+        site_data / "incidents.json",
+        {
+            "source_file": None,
+            "source_date": None,
+            "status": "OK",
+            "severity": "SEV4",
+            "summary": {"symptom": "No incidents"},
+        },
+    )
+
+    audit = _normalize_monitoring_payloads(site_data, now=now)
+    warnings = _monitoring_warning_codes(audit)
+
+    assert audit["status"] == "DEGRADED"
+    assert audit["operational_health"]["status"] == "DEGRADED"
+    assert audit["operational_health"]["reported_status"] == "DEGRADED"
+    assert audit["diagnostic_reports"]["sources"]["drift"]["status"] == "STALE"
+    assert audit["diagnostic_reports"]["sources"]["incidents"]["status"] == "UNKNOWN"
+    assert "operational_health_degraded" in warnings
+    assert "drift_report_stale_or_missing" in warnings
+    assert "incident_report_stale_or_missing" in warnings
+    assert "monitoring_report_missing_or_stale" not in warnings
+
+
+def test_monitoring_audit_is_ok_when_live_and_diagnostic_evidence_are_current(
+    tmp_path: Path,
+) -> None:
+    site_data = tmp_path / "site" / "data"
+    now = datetime(2026, 9, 22, 19, 0, tzinfo=timezone.utc)
+    _write_json(
+        site_data / "metrics.json",
+        {
+            "generated_at": "2026-09-22T18:50:00+00:00",
+            "status": "OK",
+            "alerts": [],
+        },
+    )
+    for name in ("drift.json", "incidents.json"):
+        _write_json(
+            site_data / name,
+            {
+                "source_file": "current.json",
+                "source_date": "2026-09-22T18:45:00+00:00",
+                "status": "OK",
+                "decision": "KEEP",
+                "drift_level": "GREEN",
+                "severity": "SEV4",
+                "summary": {"symptom": "No incidents"},
+            },
+        )
+
+    audit = _normalize_monitoring_payloads(site_data, now=now)
+
+    assert audit["status"] == "OK"
+    assert audit["operational_health"]["status"] == "OK"
+    assert audit["diagnostic_reports"]["status"] == "OK"
+    assert _monitoring_warning_codes(audit) == []
