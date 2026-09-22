@@ -108,10 +108,14 @@ def _minimum_quality_gate(task: str, metrics: dict) -> dict:
         quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
         skill = float(metrics.get("log_loss_skill", -999.0))
         top3 = float(metrics.get("quality_top3_accuracy", 0.0))
+        unique_classes = int(metrics.get("quality_top1_unique_classes", 0))
+        dominant_share = float(metrics.get("quality_top1_dominant_share", 1.0))
         checks = {
             "positive_log_loss_skill": skill > 0.0,
             "beats_uniform_log_loss": quality_log_loss < uniform_log_loss,
             "top3_beats_uniform_expectation": top3 > (3.0 / 13.0),
+            "top1_uses_multiple_classes": unique_classes >= 2,
+            "top1_not_collapsed": dominant_share < 0.95,
         }
     elif task == "value":
         checks = {
@@ -187,6 +191,8 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
                     "quality_brier_score",
                     "quality_expected_week_distance",
                     "quality_calibration_error",
+                    "quality_top1_unique_classes",
+                    "quality_top1_dominant_share",
                     "log_loss_skill",
                     "abstention_rate",
                 )
@@ -210,6 +216,12 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     decision = "promote_first"
     reason = "No champion exists; bootstrap champion with first valid artifact."
+    if existing is None and task in {"value", "timing"} and not quality_gate["passed"]:
+        decision = "challenger_only"
+        reason = (
+            "No champion exists, but the first artifact failed the minimum m3 "
+            f"quality gate and cannot bootstrap serving: {quality_gate['reason']}."
+        )
     previous_champion_version = None
     archived_path = None
     archived: Path | None = None
@@ -231,6 +243,23 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
                 "[champion-selection] task=%s blocked_by_minimum_quality reason=%s new_score=%.6f",
                 task,
                 quality_gate["reason"],
+                new_score,
+            )
+        elif task in {"value", "timing"} and not _minimum_quality_gate(
+            task,
+            existing.get("metrics", {}) if isinstance(existing.get("metrics"), dict) else {},
+        )["passed"]:
+            decision = "promote"
+            reason = (
+                "Existing champion fails the minimum m3 quality gate; "
+                "replace it with the first challenger that passes the gate."
+            )
+            archived = registry_dir / f"{task}_champion_archived_{now.replace(':', '').replace('-', '')}.json"
+            archived_path = str(archived)
+            logger.warning(
+                "[champion-selection] task=%s replace_invalid_champion old_version=%s new_score=%.6f",
+                task,
+                previous_champion_version,
                 new_score,
             )
         elif _incompatible_champion_schema(task, existing):
