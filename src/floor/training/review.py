@@ -398,26 +398,29 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     baseline_unique_raw = baseline_metrics.get("quality_top1_unique_classes")
     baseline_dominant_raw = baseline_metrics.get("quality_top1_dominant_share")
     baseline_quality_reasons: list[str] = []
-    if baseline_skill <= 0.0:
-        baseline_quality_reasons.append("non_positive_log_loss_skill")
-    if baseline_top3 <= (3.0 / 13.0):
-        baseline_quality_reasons.append("top3_not_above_uniform")
-    if baseline_unique_raw is not None and int(baseline_unique_raw) < 2:
-        baseline_quality_reasons.append("top1_single_class")
-    if baseline_dominant_raw is not None and float(baseline_dominant_raw) >= 0.95:
-        baseline_quality_reasons.append("top1_collapsed")
+    baseline_quality_rows = int(baseline_metrics.get("validation_rows", 0) or 0)
+    if baseline_quality_rows >= 30:
+        if baseline_skill <= 0.0:
+            baseline_quality_reasons.append("non_positive_log_loss_skill")
+        if baseline_top3 <= (3.0 / 13.0):
+            baseline_quality_reasons.append("top3_not_above_uniform")
+        if baseline_unique_raw is not None and int(baseline_unique_raw) < 2:
+            baseline_quality_reasons.append("top1_single_class")
+        if baseline_dominant_raw is not None and float(baseline_dominant_raw) >= 0.95:
+            baseline_quality_reasons.append("top1_collapsed")
 
     current_unique = int(current_metrics.get("top1_unique_classes", 0))
     current_dominant = float(current_metrics.get("top1_dominant_share", 1.0))
     current_quality_reasons: list[str] = []
-    if current_unique < 2:
-        current_quality_reasons.append("top1_single_class")
-    if current_dominant >= 0.95:
-        current_quality_reasons.append("top1_collapsed")
     current_log_loss = float(current_metrics.get("log_loss", uniform_log_loss))
     current_skill = 1.0 - (current_log_loss / uniform_log_loss)
-    if current_skill <= 0.0:
-        current_quality_reasons.append("non_positive_log_loss_skill")
+    if len(eval_rows) >= 30:
+        if current_unique < 2:
+            current_quality_reasons.append("top1_single_class")
+        if current_dominant >= 0.95:
+            current_quality_reasons.append("top1_collapsed")
+        if current_skill <= 0.0:
+            current_quality_reasons.append("non_positive_log_loss_skill")
 
     deltas = {
         "top1_accuracy_drop": max(
@@ -471,6 +474,9 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
             "current_log_loss_skill": current_skill,
             "current_top1_unique_classes": current_unique,
             "current_top1_dominant_share": current_dominant,
+            "baseline_quality_rows": baseline_quality_rows,
+            "current_quality_rows": len(eval_rows),
+            "hard_quality_min_rows": 30,
         },
     }
 
