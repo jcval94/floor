@@ -352,8 +352,31 @@ def _build_record(model_key: str, artifact: dict | None, current_rows: list[dict
     input_columns = _artifact_input_columns(model_key, artifact, cfg)
     shared = _feature_drift(reference_summary, current_summary, cfg)
     schema = _schema_drift(reference_summary, current_summary, cfg, input_columns)
-    target = _value_target_drift(reference_summary, current_summary, cfg) if model_key == "value" else _timing_target_drift(reference_summary, current_summary, cfg)
-    performance = _value_performance(artifact, eval_rows, cfg) if model_key == "value" else _timing_performance(artifact, eval_rows, cfg)
+    target = (
+        _value_target_drift(reference_summary, current_summary, cfg)
+        if model_key == "value"
+        else _timing_target_drift(reference_summary, current_summary, cfg)
+    )
+    schema_blocks_inference = bool(
+        schema["missing_reference_contract"]
+        or schema["removed_columns"]
+        or schema["low_coverage_columns"]
+    )
+    if schema_blocks_inference:
+        performance = {
+            "state": "RED",
+            "score": 1.0,
+            "current_metrics": {},
+            "baseline_metrics": artifact.get("metrics", {}),
+            "deltas": {"evaluation_blocked_by_schema": 1.0},
+            "blocked_reason": "required model inputs are missing or below coverage threshold",
+        }
+    else:
+        performance = (
+            _value_performance(artifact, eval_rows, cfg)
+            if model_key == "value"
+            else _timing_performance(artifact, eval_rows, cfg)
+        )
 
     overall_state = _worst_state([shared["state"], schema["state"], target["state"], performance["state"]])
     recommendation = _recommendation_from_state(overall_state)
