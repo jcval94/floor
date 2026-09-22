@@ -31,6 +31,7 @@ def test_operational_workflows_do_not_commit_generated_state_to_git() -> None:
     for filename in (
         "intraday_engine.yml",
         "eod.yml",
+        "monitoring.yml",
         "ingest.yml",
         "retrain_assessment.yml",
     ):
@@ -49,7 +50,6 @@ def test_authoritative_runtime_writers_are_main_only() -> None:
     for filename in (
         "intraday_engine.yml",
         "eod.yml",
-        "monitoring.yml",
         "ingest.yml",
         "retrain_assessment.yml",
         "retrain_execute.yml",
