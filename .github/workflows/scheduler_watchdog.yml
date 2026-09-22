@@ -44,7 +44,9 @@ jobs:
             echo "EOD not yet in UTC close window; skip watchdog dispatch."
           fi
 
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "35 13-23 * * 1-5" ]; then
+          if [ "$((10#$utc_hour))" -ge 14 ] \
+            && [ "${{ github.event_name }}" = "schedule" ] \
+            && [ "${{ github.event.schedule }}" = "35 13-23 * * 1-5" ]; then
             echo "Dispatching hourly monitoring backstop."
             gh workflow run monitoring.yml --repo "$repo" --ref main
           fi
