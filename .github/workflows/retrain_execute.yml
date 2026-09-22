@@ -178,8 +178,10 @@ jobs:
           PYTHONPATH=src python -m features.run_features \
             --input data/training/yahoo_market_rows.jsonl \
             --output "$DATASET_PATH" \
-            --validation-days 75 \
-            --test-days 76
+            # M3 labels consume 65 future sessions. Reserve 65 purge sessions
+            # plus 75/76 usable OOT sessions for validation/test.
+            --validation-days 140 \
+            --test-days 141
 
       - name: Retrain selected models
         if: steps.gate.outputs.run == 'true'
