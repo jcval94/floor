@@ -80,15 +80,26 @@ def main() -> None:
             )
             logger.info("[main] market-session freshness OK summary=%s", freshness)
             logger.info("[main] running canonical signal-only cycle event=%s symbols=%s", event, len(symbols))
-            run_intraday_cycle(
+            cycle_result = run_intraday_cycle(
                 event_type=event,
                 symbols=symbols,
                 cfg=cfg,
                 as_of=checkpoint_at,
                 market_session=required_market_session,
             )
-            batch = validate_latest_prediction_batch(cfg.data_dir, symbols, event_type=event)
-            logger.info("[main] prediction batch completeness OK summary=%s", batch)
+            if cycle_result.get("status") == "WRITTEN":
+                batch = validate_latest_prediction_batch(
+                    cfg.data_dir,
+                    symbols,
+                    event_type=event,
+                )
+                logger.info("[main] prediction batch completeness OK summary=%s", batch)
+            else:
+                logger.info(
+                    "[main] checkpoint produced no new evidence status=%s input_snapshot_id=%s",
+                    cycle_result.get("status"),
+                    cycle_result.get("input_snapshot_id"),
+                )
             build_dashboard_snapshot(
                 cfg.data_dir,
                 output_path=cfg.data_dir / "reports" / "dashboard.json",
