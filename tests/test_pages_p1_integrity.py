@@ -69,3 +69,15 @@ def test_research_state_script_has_valid_bash_syntax() -> None:
         ["bash", "-n", str(ROOT / "scripts" / "research_state.sh")],
         check=True,
     )
+
+def test_tournament_uses_versioned_weekly_model_path_from_config() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "capital_challenger_tournament.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'config["weekly_model_path"]' in workflow
+    assert (
+        "artifact=data/metrics/strategy_league/models/"
+        "weekly_opportunity_challenger.json"
+    ) not in workflow
+
