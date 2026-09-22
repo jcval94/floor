@@ -38,6 +38,22 @@ def _setup_training(tmp_path: Path) -> Path:
     dataset_path = training_dir / "modelable_dataset.json"
     dataset_path.write_text(json.dumps({"rows": _rows()}, ensure_ascii=False), encoding="utf-8")
     run_training(dataset_path, training_dir, version="v1", tasks="value,timing")
+
+    # This fixture represents a healthy serving champion. Individual tests can
+    # override these frozen OOS quality metrics to exercise fail-closed review.
+    timing_path = training_dir / "models" / "timing_champion.json"
+    timing_payload = json.loads(timing_path.read_text(encoding="utf-8"))
+    timing_payload["metrics"].update(
+        {
+            "quality_log_loss": 2.40,
+            "uniform_log_loss": 2.56,
+            "log_loss_skill": 0.0625,
+        }
+    )
+    timing_path.write_text(
+        json.dumps(timing_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return data_dir
 
 
