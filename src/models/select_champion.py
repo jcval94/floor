@@ -81,8 +81,13 @@ def _value_score(metrics: dict) -> float:
 def _timing_score(metrics: dict) -> float:
     uniform_log_loss = float(metrics.get("uniform_log_loss", math.log(13)))
     quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
-    normalized_log_loss = quality_log_loss / max(uniform_log_loss, 1e-9)
+    prior_log_loss = float(metrics.get("empirical_prior_log_loss", uniform_log_loss))
+    normalized_log_loss = quality_log_loss / max(prior_log_loss, 1e-9)
     negative_skill_penalty = max(0.0, -float(metrics.get("log_loss_skill", -999.0)))
+    negative_prior_skill_penalty = max(
+        0.0,
+        -float(metrics.get("feature_log_loss_skill_vs_empirical_prior", -999.0)),
+    )
     return (
         (1.0 - float(metrics.get("quality_top1_accuracy", 0.0)))
         + (1.0 - float(metrics.get("quality_top3_accuracy", 0.0)))
@@ -92,6 +97,7 @@ def _timing_score(metrics: dict) -> float:
         + float(metrics.get("quality_calibration_error", 999.0))
         + 0.50 * float(metrics.get("abstention_rate", 1.0))
         + negative_skill_penalty
+        + negative_prior_skill_penalty
     )
 
 
@@ -106,11 +112,21 @@ def _minimum_quality_gate(task: str, metrics: dict) -> dict:
     if task == "timing":
         uniform_log_loss = float(metrics.get("uniform_log_loss", math.log(13)))
         quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
+        empirical_prior_log_loss = float(
+            metrics.get("empirical_prior_log_loss", uniform_log_loss)
+        )
         skill = float(metrics.get("log_loss_skill", -999.0))
+        prior_skill = float(
+            metrics.get("feature_log_loss_skill_vs_empirical_prior", -999.0)
+        )
         top3 = float(metrics.get("quality_top3_accuracy", 0.0))
         checks = {
             "positive_log_loss_skill": skill > 0.0,
             "beats_uniform_log_loss": quality_log_loss < uniform_log_loss,
+            "positive_skill_vs_empirical_prior": prior_skill > 0.0,
+            "beats_empirical_prior_log_loss": (
+                quality_log_loss < empirical_prior_log_loss
+            ),
             "top3_beats_uniform_expectation": top3 > (3.0 / 13.0),
         }
     elif task == "value":
@@ -188,6 +204,8 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
                     "quality_expected_week_distance",
                     "quality_calibration_error",
                     "log_loss_skill",
+                    "empirical_prior_log_loss",
+                    "feature_log_loss_skill_vs_empirical_prior",
                     "abstention_rate",
                 )
             )
@@ -273,7 +291,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
     payload["selection"] = {
         "decision": decision,
         "reason": reason,
-        "scoring_version": "m3-quality-v3" if task in {"value", "timing"} else "m3-v1",
+        "scoring_version": "m3-quality-v4" if task in {"value", "timing"} else "m3-v1",
         "evaluated_at": now,
         "new_score": new_score,
         "existing_score": old_score,
