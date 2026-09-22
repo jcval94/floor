@@ -457,3 +457,85 @@ def test_build_pages_data_exposes_champion_validation_metrics_without_review(tmp
     assert detail["artifact"]["test_rows"] == 25
     assert models["suite_status"] == "UNREVIEWED"
     assert models["suite_recommendation"] == "REVIEW_PENDING"
+
+def test_build_pages_data_prefers_current_governed_health_sources(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "metrics").mkdir(parents=True)
+    (data_dir / "training").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+    (data_dir / "metrics" / "public_metrics.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-09-22T18:50:00+00:00",
+                "status": "DEGRADED",
+                "alerts": ["m3 timing capability degraded"],
+                "series": [
+                    {
+                        "name": "m3_capability",
+                        "status": "DEGRADED",
+                        "detail": "timing_abstained=50/50",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps(
+            {
+                "as_of": "2026-09-22T18:45:00+00:00",
+                "suite_status": "WARN",
+                "suite_recommendation": "RETRAIN_SOON",
+                "models": {
+                    "timing": {
+                        "drift_level": "YELLOW",
+                        "summary": {
+                            "shared_data": {"state": "GREEN", "score": 0.01},
+                            "schema": {"state": "GREEN", "score": 0.0},
+                            "target": {"state": "YELLOW", "score": 0.08},
+                            "performance": {"state": "YELLOW", "score": 0.4},
+                        },
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    drift = json.loads((site_data / "drift.json").read_text(encoding="utf-8"))
+    assert drift["source_file"] == "training/review_summary_latest.json"
+    assert drift["source_date"] == "2026-09-22T18:45:00+00:00"
+    assert drift["drift_level"] == "YELLOW"
+    assert drift["decision"] == "RETRAIN_SOON"
+    assert {row["name"] for row in drift["thresholds"]} == {
+        "timing.target",
+        "timing.performance",
+    }
+
+    incidents = json.loads((site_data / "incidents.json").read_text(encoding="utf-8"))
+    assert incidents["source_file"] == "metrics/public_metrics.json"
+    assert incidents["source_date"] == "2026-09-22T18:50:00+00:00"
+    assert incidents["status"] == "MONITORING"
+    assert incidents["severity"] == "SEV3"
+    assert "m3 timing capability degraded" in incidents["summary"]["symptom"]
+    assert incidents["impact"]["m3_capability"] == "DEGRADED"
+
+
+def test_retrain_assessment_has_auditable_push_refresh_trigger() -> None:
+    workflow = (
+        Path(".github") / "workflows" / "retrain_assessment.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "push:" in workflow
+    assert "retrain_assessment_request.json" in workflow
+
