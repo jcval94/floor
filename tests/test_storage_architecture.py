@@ -310,3 +310,15 @@ def test_checkpoint_repair_is_explicit_audited_and_latest_only() -> None:
     assert "gh workflow run intraday_engine.yml" in repair
     assert "repair_existing_checkpoint=true" in repair
     assert "actions: write" in repair
+
+
+def test_eod_generates_fresh_close_forecast_after_market_refresh() -> None:
+    workflow = _text(WORKFLOWS / "eod.yml")
+    refresh_pos = workflow.index("Refresh only recent daily market bars")
+    forecast_pos = workflow.index("Generate canonical close forecast from refreshed daily bar")
+    reconcile_pos = workflow.index("Reconcile matured predictions against realized bars")
+
+    assert refresh_pos < forecast_pos < reconcile_pos
+    assert "python -m floor.main run-cycle" in workflow
+    assert "--event CLOSE" in workflow
+    assert '--required-market-session "${{ needs.gate.outputs.required_market_session }}"' in workflow
