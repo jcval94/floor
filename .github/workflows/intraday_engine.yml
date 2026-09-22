@@ -141,7 +141,6 @@ jobs:
             --db data/market/market_data.sqlite \
             --symbols "$symbols" \
             --max-stale-sessions 0 \
-            --required-session "${{ needs.gate.outputs.required_market_session }}" \
             --required-session "${{ needs.gate.outputs.required_market_session }}"; then
             echo "::warning::Market DB is stale for the accepted checkpoint; refreshing recent daily bars once."
             PYTHONPATH=src python -m storage.yahoo_ingest \
@@ -156,7 +155,8 @@ jobs:
           PYTHONPATH=src python -m utils.market_data_guard \
             --db data/market/market_data.sqlite \
             --symbols "$symbols" \
-            --max-stale-sessions 0
+            --max-stale-sessions 0 \
+            --required-session "${{ needs.gate.outputs.required_market_session }}"
 
       - name: Validate champion artifacts
         if: steps.lock_guard.outputs.run == 'true'
