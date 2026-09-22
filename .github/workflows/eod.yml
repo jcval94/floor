@@ -103,6 +103,17 @@ jobs:
             --interval 1d \
             --sleep-seconds 0.15
 
+      - name: Validate accepted close market session
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          symbols=$(PYTHONPATH=src python -c "from pathlib import Path; from floor.universe import parse_universe_yaml; print(','.join(sorted(set(parse_universe_yaml(Path('config/universe.yaml')) + ['SPY']))))")
+          PYTHONPATH=src python -m utils.market_data_guard \
+            --db data/market/market_data.sqlite \
+            --symbols "$symbols" \
+            --max-stale-sessions 0 \
+            --required-session "${{ needs.gate.outputs.required_market_session }}"
+
       - name: Validate frozen Weekly challenger
         if: steps.lock_guard.outputs.run == 'true'
         run: |
