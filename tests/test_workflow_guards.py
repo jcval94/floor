@@ -351,3 +351,22 @@ def test_existing_checkpoint_repair_requires_completed_marker(tmp_path: Path) ->
             data_dir=tmp_path,
             allow_existing_repair=True,
         )
+
+
+def test_resolve_context_rejects_future_forced_checkpoint() -> None:
+    with pytest.raises(RuntimeError, match="Cannot force a future market checkpoint"):
+        workflow_guards.resolve_event_context(
+            "OPEN_PLUS_4H",
+            now=datetime(2026, 3, 12, 12, 45, tzinfo=ET),
+            reason="manual_force",
+        )
+
+
+def test_resolve_context_allows_checkpoint_once_due() -> None:
+    result = workflow_guards.resolve_event_context(
+        "OPEN_PLUS_4H",
+        now=datetime(2026, 3, 12, 13, 31, tzinfo=ET),
+        reason="manual_force",
+    )
+    assert result["event"] == "OPEN_PLUS_4H"
+    assert result["checkpoint_at"] == "2026-03-12T13:30:00-04:00"
