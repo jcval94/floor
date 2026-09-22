@@ -7,6 +7,10 @@ on:
         description: "Force retrain even if no drift"
         required: false
         default: "false"
+      approve_recommended:
+        description: "Authorize tasks recommended by the latest governed assessment"
+        required: false
+        default: "false"
       dataset_path:
         description: "Ephemeral modelable dataset path"
         required: false
@@ -19,16 +23,12 @@ on:
         description: "Comma-separated tasks"
         required: false
         default: "d1,w1,q1,value,timing"
-  workflow_run:
-    workflows: ["retrain_assessment"]
-    types: [completed]
-
 permissions:
   contents: write
 
 jobs:
   retrain_critical:
-    if: github.ref_name == 'main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -51,8 +51,8 @@ jobs:
       - name: Decide retrain gate
         id: gate
         env:
-          EVENT_NAME: ${{ github.event_name }}
           FORCE: ${{ github.event.inputs.force }}
+          APPROVE_RECOMMENDED: ${{ github.event.inputs.approve_recommended }}
           INPUT_TASKS: ${{ github.event.inputs.tasks }}
           INPUT_DATASET_PATH: ${{ github.event.inputs.dataset_path }}
         run: |
@@ -61,31 +61,79 @@ jobs:
           import os
           from pathlib import Path
 
-          event_name = os.environ.get("EVENT_NAME", "workflow_dispatch")
           force = os.environ.get("FORCE", "false").lower() == "true"
-          requested = [x.strip() for x in os.environ.get("INPUT_TASKS", "d1,w1,q1,value,timing").split(",") if x.strip()]
-          dataset_path = os.environ.get("INPUT_DATASET_PATH", "").strip() or "data/training/modelable_dataset.json"
+          approve_recommended = (
+              os.environ.get("APPROVE_RECOMMENDED", "false").lower() == "true"
+          )
+          requested = [
+              x.strip()
+              for x in os.environ.get("INPUT_TASKS", "d1,w1,q1,value,timing").split(",")
+              if x.strip()
+          ]
+          dataset_path = (
+              os.environ.get("INPUT_DATASET_PATH", "").strip()
+              or "data/training/modelable_dataset.json"
+          )
           summary_path = Path("data/training/review_summary_latest.json")
           tasks = []
-          reason = "no_summary"
-          if event_name == "workflow_dispatch" and force:
+          reason = "manual_approval_required"
+          authorization = "NOT_AUTHORIZED"
+          if force:
               tasks = requested
               reason = "manual_force"
-          elif summary_path.exists():
+              authorization = "MANUAL_FORCE"
+          elif approve_recommended and summary_path.exists():
               payload = json.loads(summary_path.read_text(encoding="utf-8"))
-              tasks = [str(x).strip() for x in payload.get("tasks_for_auto_retrain", []) if str(x).strip()]
-              reason = "summary_tasks" if tasks else "summary_no_retrain_now"
-          elif event_name == "workflow_dispatch":
-              reason = "manual_without_force_or_summary"
+              tasks = [
+                  str(x).strip()
+                  for x in payload.get("tasks_for_auto_retrain_requested", [])
+                  if str(x).strip()
+              ]
+              reason = (
+                  "manual_approval_of_recommendation"
+                  if tasks
+                  else "no_recommended_tasks"
+              )
+              authorization = "MANUAL_APPROVAL" if tasks else "NOT_REQUIRED"
+          elif approve_recommended:
+              reason = "missing_governed_summary"
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
               fh.write(f"run={'true' if tasks else 'false'}\n")
               fh.write(f"tasks={','.join(tasks)}\n")
               fh.write(f"reason={reason}\n")
+              fh.write(f"authorization={authorization}\n")
               fh.write(f"dataset_path={dataset_path}\n")
           PY
 
-      - name: Initialize DBs
-        run: make init-dbs
+      - name: Record retrain authorization
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TASKS_TO_RUN: ${{ steps.gate.outputs.tasks }}
+          AUTHORIZATION: ${{ steps.gate.outputs.authorization }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("data/training/review_summary_latest.json")
+          payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          control = payload.setdefault("retraining_control", {})
+          tasks = [x for x in os.environ["TASKS_TO_RUN"].split(",") if x]
+          control.update(
+              {
+                  "authorization": os.environ["AUTHORIZATION"],
+                  "authorized_tasks": tasks,
+                  "execution": "AUTHORIZED_PENDING_EXECUTION",
+              }
+          )
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Initialize DB schemas
+        if: steps.gate.outputs.run == 'true'
+        run: make init-db-schemas
 
       - name: Refresh market data and rebuild ephemeral dataset
         if: steps.gate.outputs.run == 'true'
@@ -164,6 +212,26 @@ jobs:
             done
           fi
 
+      - name: Record completed retrain execution
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TASKS_TO_RUN: ${{ steps.gate.outputs.tasks }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("data/training/review_summary_latest.json")
+          payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+          control = payload.setdefault("retraining_control", {})
+          control["execution"] = "COMPLETED"
+          control["executed_tasks"] = [
+              x for x in os.environ["TASKS_TO_RUN"].split(",") if x
+          ]
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+
       - name: Publish rolling runtime state outside Git
         if: steps.gate.outputs.run == 'true'
         env:
@@ -192,4 +260,5 @@ jobs:
       - name: Summary
         run: |
           echo "retrain_execute result=${{ needs.retrain_critical.result }}"
+          echo "authorization=manual_only"
           echo "git_payload=lightweight_model_json_only"

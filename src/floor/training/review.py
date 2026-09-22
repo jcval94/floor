@@ -82,8 +82,51 @@ def _read_artifact(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _feature_drift(reference_summary: dict, current_summary: dict, cfg: dict) -> dict:
-    important_features = [item.strip() for item in str(cfg["important_features"]["columns"]).split(",") if item.strip()]
+def _artifact_input_columns(model_key: str, artifact: dict, cfg: dict) -> list[str]:
+    raw_params = artifact.get("params")
+    params: dict = raw_params if isinstance(raw_params, dict) else {}
+    explicit = params.get("input_columns")
+    if isinstance(explicit, list) and explicit:
+        return sorted({str(item).strip() for item in explicit if str(item).strip()})
+
+    features = params.get("features")
+    if not isinstance(features, list):
+        features = params.get("feature_names")
+    raw_features = (
+        [str(item).strip() for item in features if str(item).strip()]
+        if isinstance(features, list)
+        else []
+    )
+    derived_sources = {"atr_ratio_14": {"atr_14", "close"}}
+    required: set[str] = set()
+    for feature in raw_features:
+        required.update(derived_sources.get(feature, {feature}))
+    if model_key == "value":
+        required.add("close")
+    if not required:
+        required.update(
+            item.strip()
+            for item in str(cfg["important_features"]["columns"]).split(",")
+            if item.strip()
+        )
+    return sorted(required)
+
+
+def _relative_increase(baseline: float, current: float) -> float:
+    return max((current - baseline) / max(abs(baseline), 1e-6), 0.0)
+
+
+def _feature_drift(
+    reference_summary: dict,
+    current_summary: dict,
+    cfg: dict,
+    input_columns: list[str],
+) -> dict:
+    important_features = input_columns or [
+        item.strip()
+        for item in str(cfg["important_features"]["columns"]).split(",")
+        if item.strip()
+    ]
     ref_stats = reference_summary.get("numeric_stats", {})
     cur_stats = current_summary.get("numeric_stats", {})
     per_feature: dict[str, dict] = {}
@@ -104,26 +147,29 @@ def _feature_drift(reference_summary: dict, current_summary: dict, cfg: dict) ->
     }
 
 
-def _schema_drift(reference_summary: dict, current_summary: dict, cfg: dict) -> dict:
+def _schema_drift(
+    reference_summary: dict,
+    current_summary: dict,
+    cfg: dict,
+    required_columns: list[str],
+) -> dict:
     ref_cols = set(reference_summary.get("columns", []))
     cur_cols = set(current_summary.get("columns", []))
-    removed = sorted(ref_cols - cur_cols)
-    added = sorted(cur_cols - ref_cols)
+    required = set(required_columns)
+    missing_reference_contract = sorted(required - ref_cols)
+    removed = sorted(required - cur_cols)
     min_coverage = float(cfg["thresholds"]["min_column_coverage"])
     low_coverage = sorted(
         column
-        for column in ref_cols
-        if float(current_summary.get("coverage_by_column", {}).get(column, 0.0)) < min_coverage
+        for column in required & cur_cols
+        if float(current_summary.get("coverage_by_column", {}).get(column, 0.0))
+        < min_coverage
     )
+    ignored_added = sorted(cur_cols - ref_cols)
 
-    state = "GREEN"
-    if removed or low_coverage:
-        state = "RED"
-    elif added:
-        state = "YELLOW"
-
+    state = "RED" if missing_reference_contract or removed or low_coverage else "GREEN"
     coverage_gap = 0.0
-    for column in ref_cols:
+    for column in required & ref_cols:
         ref_cov = float(reference_summary.get("coverage_by_column", {}).get(column, 0.0))
         cur_cov = float(current_summary.get("coverage_by_column", {}).get(column, 0.0))
         coverage_gap = max(coverage_gap, max(ref_cov - cur_cov, 0.0))
@@ -131,8 +177,11 @@ def _schema_drift(reference_summary: dict, current_summary: dict, cfg: dict) -> 
     return {
         "state": state,
         "score": coverage_gap,
+        "required_columns": sorted(required),
+        "missing_reference_contract": missing_reference_contract,
         "removed_columns": removed,
-        "added_columns": added,
+        "added_columns": [],
+        "ignored_added_columns": ignored_added,
         "low_coverage_columns": low_coverage,
     }
 
@@ -183,8 +232,14 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     current_metrics = value_metrics(y_true, y_pred, confidences)
     baseline_metrics = artifact.get("metrics", {})
 
+    baseline_pinball = float(baseline_metrics.get("pinball_loss", 0.0))
+    current_pinball = float(current_metrics.get("pinball_loss", 0.0))
     deltas = {
-        "pinball_loss": float(current_metrics.get("pinball_loss", 0.0)) - float(baseline_metrics.get("pinball_loss", 0.0)),
+        "pinball_loss_relative_increase": _relative_increase(
+            baseline_pinball,
+            current_pinball,
+        ),
+        "pinball_loss_absolute_increase": max(current_pinball - baseline_pinball, 0.0),
         "breach_rate": abs(float(current_metrics.get("breach_rate", 0.0)) - float(baseline_metrics.get("breach_rate", 0.0))),
         "calibration_error": abs(float(current_metrics.get("calibration_error", 0.0)) - float(baseline_metrics.get("calibration_error", 0.0))),
         "temporal_stability_drop": max(float(baseline_metrics.get("temporal_stability", 0.0)) - float(current_metrics.get("temporal_stability", 0.0)), 0.0),
@@ -196,13 +251,13 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     calibration_fail = float(cfg["thresholds"]["coverage_calibration_fail"])
     state = "GREEN"
     if (
-        deltas["pinball_loss"] >= fail
+        deltas["pinball_loss_relative_increase"] >= fail
         or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_fail"])
         or deltas["calibration_error"] >= calibration_fail
     ):
         state = "RED"
     elif (
-        deltas["pinball_loss"] >= warn
+        deltas["pinball_loss_relative_increase"] >= warn
         or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_warn"])
         or deltas["calibration_error"] >= calibration_warn
         or deltas["temporal_stability_drop"] >= warn
@@ -211,7 +266,12 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
 
     return {
         "state": state,
-        "score": max(deltas.values()) if deltas else 0.0,
+        "score": max(
+            deltas["pinball_loss_relative_increase"],
+            deltas["breach_rate"],
+            deltas["calibration_error"],
+            deltas["temporal_stability_drop"],
+        ),
         "current_metrics": current_metrics,
         "baseline_metrics": baseline_metrics,
         "deltas": deltas,
@@ -298,10 +358,34 @@ def _build_record(model_key: str, artifact: dict | None, current_rows: list[dict
 
     reference_summary = artifact.get("dataset_summary") or current_summary
     eval_rows = _split_eval_rows(current_rows)
-    shared = _feature_drift(reference_summary, current_summary, cfg)
-    schema = _schema_drift(reference_summary, current_summary, cfg)
-    target = _value_target_drift(reference_summary, current_summary, cfg) if model_key == "value" else _timing_target_drift(reference_summary, current_summary, cfg)
-    performance = _value_performance(artifact, eval_rows, cfg) if model_key == "value" else _timing_performance(artifact, eval_rows, cfg)
+    input_columns = _artifact_input_columns(model_key, artifact, cfg)
+    shared = _feature_drift(reference_summary, current_summary, cfg, input_columns)
+    schema = _schema_drift(reference_summary, current_summary, cfg, input_columns)
+    target = (
+        _value_target_drift(reference_summary, current_summary, cfg)
+        if model_key == "value"
+        else _timing_target_drift(reference_summary, current_summary, cfg)
+    )
+    schema_blocks_inference = bool(
+        schema["missing_reference_contract"]
+        or schema["removed_columns"]
+        or schema["low_coverage_columns"]
+    )
+    if schema_blocks_inference:
+        performance = {
+            "state": "RED",
+            "score": 1.0,
+            "current_metrics": {},
+            "baseline_metrics": artifact.get("metrics", {}),
+            "deltas": {"evaluation_blocked_by_schema": 1.0},
+            "blocked_reason": "required model inputs are missing or below coverage threshold",
+        }
+    else:
+        performance = (
+            _value_performance(artifact, eval_rows, cfg)
+            if model_key == "value"
+            else _timing_performance(artifact, eval_rows, cfg)
+        )
 
     overall_state = _worst_state([shared["state"], schema["state"], target["state"], performance["state"]])
     recommendation = _recommendation_from_state(overall_state)
@@ -337,6 +421,7 @@ def _build_record(model_key: str, artifact: dict | None, current_rows: list[dict
         "performance_decay": performance["score"],
         "thresholds": cfg,
         "summary": {
+            "input_contract": {"required_columns": input_columns},
             "shared_data": shared,
             "schema": schema,
             "target": target,
