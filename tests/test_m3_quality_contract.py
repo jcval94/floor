@@ -68,18 +68,28 @@ def _review_cfg() -> dict:
     }
 
 
-def test_first_collapsed_timing_artifact_cannot_bootstrap_champion(
+def test_collapsed_timing_challenger_cannot_replace_valid_champion(
     tmp_path: Path,
 ) -> None:
     registry = tmp_path / "models"
+    registry.mkdir(parents=True)
+    good = _timing_artifact("good-v1", unique_classes=4, dominant_share=0.45)
+    (registry / "timing_champion.json").write_text(
+        __import__("json").dumps(good),
+        encoding="utf-8",
+    )
+
     result = select_and_persist_champion(
-        _timing_artifact("bad-v1", unique_classes=1, dominant_share=1.0),
+        _timing_artifact("bad-v2", unique_classes=1, dominant_share=1.0),
         registry,
         task="timing",
     )
 
     assert result["decision"] == "challenger_only"
-    assert not (registry / "timing_champion.json").exists()
+    champion = __import__("json").loads(
+        (registry / "timing_champion.json").read_text(encoding="utf-8")
+    )
+    assert champion["version"] == "good-v1"
 
 
 def test_valid_timing_challenger_replaces_invalid_incumbent_even_without_score_comparison(
