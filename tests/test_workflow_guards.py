@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 from zoneinfo import ZoneInfo
 
 import utils.workflow_guards as workflow_guards
@@ -337,3 +339,15 @@ def test_completed_checkpoint_repair_is_blocked_when_later_marker_exists(
     assert repaired["run"] == "false"
     assert repaired["reason"] == "superseded_checkpoint"
     assert repaired["superseded_by"] == "OPEN_PLUS_4H"
+
+
+def test_existing_checkpoint_repair_requires_completed_marker(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="requires a completed checkpoint marker"):
+        workflow_guards.validate_accepted_context(
+            kind="intraday",
+            event="OPEN_PLUS_2H",
+            session_day="2026-03-12",
+            checkpoint_at="2026-03-12T11:30:00-04:00",
+            data_dir=tmp_path,
+            allow_existing_repair=True,
+        )
