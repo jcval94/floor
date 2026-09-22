@@ -9,7 +9,7 @@ from typing import Any
 
 BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
 CHALLENGER_ID = "capital_allocation_challenger"
-DEFAULT_LEAGUE_ID = "strategy_league_v6_all_strategies_10k"
+DEFAULT_LEAGUE_ID = "strategy_league_v7_clean_genesis_10k"
 
 
 def _load_object(path: Path | None) -> dict[str, Any]:
@@ -187,6 +187,7 @@ def publish_league_payload(
 def publish_observation_payload(
     data_dir: Path,
     output_path: Path,
+    league_config_path: Path | None = None,
 ) -> dict[str, Any]:
     source = (
         data_dir
@@ -195,15 +196,23 @@ def publish_observation_payload(
         / "experiment_observation.json"
     )
     payload = _load_object(source)
-    if not payload:
+    league_cfg = _load_object(league_config_path)
+    expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+    stale_epoch = bool(
+        payload
+        and league_cfg
+        and str(payload.get("league_id") or "") != expected_league_id
+    )
+    if not payload or stale_epoch:
         payload = {
             "schema_version": 1,
+            "league_id": expected_league_id,
             "status": "WAITING_FOR_GENESIS",
             "start_session": None,
             "last_session": None,
             "sessions": 0,
             "strategy_league": {
-                "status": "WAITING",
+                "status": "WAITING_FOR_GENESIS",
                 "rows": [],
                 "automatic_promotion": False,
                 "live_execution_enabled": False,
@@ -258,6 +267,7 @@ def main() -> None:
     observation = publish_observation_payload(
         data_dir,
         Path(args.observation_output),
+        league_config,
     )
 
     # Research evidence is published beside the league payload, but remains

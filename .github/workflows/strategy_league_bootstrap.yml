@@ -7,6 +7,10 @@ on:
         description: "Type the exact league_id to authorize a one-time frozen Weekly bootstrap"
         required: true
         type: string
+  push:
+    branches: [main]
+    paths:
+      - 'config/strategy_league_genesis_request.json'
 
 permissions:
   contents: write
@@ -32,21 +36,42 @@ jobs:
       - name: Install modeling dependencies
         run: python -m pip install -e ".[modeling]"
 
-      - name: Confirm explicit league genesis
+      - name: Resolve and confirm explicit league genesis
+        id: contract
         env:
-          CONFIRM_LEAGUE_ID: ${{ github.event.inputs.confirm_league_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_LEAGUE_ID: ${{ github.event.inputs.confirm_league_id }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
           from pathlib import Path
 
-          league_id = str(json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))["league_id"])
-          confirmation = os.environ.get("CONFIRM_LEAGUE_ID", "")
+          cfg = json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))
+          league_id = str(cfg["league_id"])
+          model_path = str(cfg["weekly_model_path"])
+          event_name = os.environ.get("EVENT_NAME", "")
+
+          if event_name == "push":
+              request = json.loads(
+                  Path("config/strategy_league_genesis_request.json").read_text(encoding="utf-8")
+              )
+              if request.get("action") != "BOOTSTRAP_CLEAN_GENESIS":
+                  raise SystemExit("Bootstrap refused: genesis request action is not BOOTSTRAP_CLEAN_GENESIS")
+              confirmation = str(request.get("league_id") or "")
+          else:
+              confirmation = os.environ.get("INPUT_LEAGUE_ID", "")
+
           if confirmation != league_id:
-              raise SystemExit(f"Bootstrap refused: confirmation must exactly match league_id={league_id!r}")
-          print(f"explicit bootstrap authorized for league_id={league_id}")
+              raise SystemExit(
+                  f"Bootstrap refused: confirmation must exactly match league_id={league_id!r}"
+              )
+
+          state_path = f"data/metrics/strategy_league/runs/{league_id}/state.json"
+          print(f"league_id={league_id}")
+          print(f"model_path={model_path}")
+          print(f"state_path={state_path}")
           PY
 
       - name: Restore rolling runtime state
@@ -54,12 +79,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
-      - name: Check frozen challenger
+      - name: Check clean-genesis preconditions
         id: challenger
+        env:
+          MODEL: ${{ steps.contract.outputs.model_path }}
+          STATE: ${{ steps.contract.outputs.state_path }}
         run: |
-          if [ -s data/metrics/strategy_league/models/weekly_opportunity_challenger.json ]; then
+          set -euo pipefail
+          if [ -s "$STATE" ] && [ ! -s "$MODEL" ]; then
+            echo "::error::Current league already has state but its frozen Weekly artifact is missing. Refusing to reconstruct history."
+            exit 1
+          fi
+          if [ -s "$MODEL" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Frozen challenger already exists; heavy bootstrap will be skipped."
+            echo "Frozen challenger already exists for this league; bootstrap skipped."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -92,6 +125,7 @@ jobs:
         if: steps.challenger.outputs.exists != 'true'
         run: |
           set -euo pipefail
+          rm -rf data/metrics/strategy_league/bootstrap
           mkdir -p data/metrics/strategy_league/bootstrap
           PYTHONPATH=src python -m features.build_training_from_db \
             --db data/market/market_data.sqlite \
@@ -104,12 +138,16 @@ jobs:
 
       - name: Train only Weekly Opportunity challenger
         if: steps.challenger.outputs.exists != 'true'
+        env:
+          MODEL: ${{ steps.contract.outputs.model_path }}
+          LEAGUE_ID: ${{ steps.contract.outputs.league_id }}
         run: |
           set -euo pipefail
-          VERSION="league-$(date -u +%Y%m%dT%H%M%SZ)"
+          mkdir -p "$(dirname "$MODEL")"
+          VERSION="${LEAGUE_ID}-weekly-$(date -u +%Y%m%dT%H%M%SZ)"
           PYTHONPATH=src python -m league.bootstrap_weekly_model \
             --dataset data/metrics/strategy_league/bootstrap/modelable_dataset.json \
-            --output data/metrics/strategy_league/models/weekly_opportunity_challenger.json \
+            --output "$MODEL" \
             --version "$VERSION"
 
       - name: Remove temporary bootstrap rows
@@ -126,20 +164,20 @@ jobs:
         if: steps.challenger.outputs.exists != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: strategy-league-weekly-model-${{ github.run_id }}
-          path: data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+          name: strategy-league-weekly-model-${{ steps.contract.outputs.league_id }}-${{ github.run_id }}
+          path: ${{ steps.contract.outputs.model_path }}
           if-no-files-found: error
           retention-days: 90
 
       - name: Summary
         run: |
           {
-            echo "## Strategy League bootstrap"
-            echo "- Challenger already existed: \`${{ steps.challenger.outputs.exists }}\`"
-            echo "- Trigger: explicit workflow_dispatch with exact league_id confirmation."
-            echo "- Heavy training runs only when the frozen challenger is absent."
-            echo "- Normal market-data refresh: \`none\`"
-            echo "- One-time 2y fallback: only if retained history is insufficient."
-            echo "- Operational PAPER gateway: \`disabled\`"
-            echo "- LIVE execution: \`disabled\`"
+            echo "## Strategy League clean genesis"
+            echo "- League: `${{ steps.contract.outputs.league_id }}`"
+            echo "- Challenger already existed: `${{ steps.challenger.outputs.exists }}`"
+            echo "- Model path: `${{ steps.contract.outputs.model_path }}`"
+            echo "- Trigger: explicit dispatch or committed genesis request."
+            echo "- Prospective history starts only on the first complete EOD for this league."
+            echo "- Operational PAPER gateway: `disabled`"
+            echo "- LIVE execution: `disabled`"
           } >> "$GITHUB_STEP_SUMMARY"
