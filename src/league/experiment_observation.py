@@ -219,26 +219,45 @@ def _append_history_once(path: Path, payload: dict[str, Any]) -> None:
 
 def build_experiment_observation(
     data_dir: Path,
-    league_config_path: Path = Path("config/strategy_league.json"),
+    league_config_path: Path | None = None,
 ) -> dict[str, Any]:
     league_root = data_dir / "metrics" / "strategy_league"
-    league_cfg = _load_json(league_config_path)
-    expected_league_id = str(league_cfg.get("league_id") or "")
-    configured_model = Path(str(league_cfg.get("weekly_model_path") or ""))
-    if configured_model and not configured_model.is_absolute():
-        configured_model = league_config_path.parent.parent / configured_model
-
     leaderboard = _load_json(league_root / "leaderboard.json")
+    league_cfg = _load_json(league_config_path) if league_config_path is not None else {}
+
+    configured_epoch = league_config_path is not None and bool(league_cfg)
+    expected_league_id = (
+        str(league_cfg.get("league_id") or "")
+        if configured_epoch
+        else str(leaderboard.get("league_id") or "")
+    )
+
+    if configured_epoch:
+        configured_model = Path(str(league_cfg.get("weekly_model_path") or ""))
+        if configured_model and not configured_model.is_absolute():
+            configured_model = league_config_path.parent.parent / configured_model
+    else:
+        configured_model = (
+            data_dir
+            / "metrics"
+            / "strategy_league"
+            / "models"
+            / "weekly_opportunity_challenger.json"
+        )
+
+    leaderboard_start = str(leaderboard.get("start_session") or "").strip()
     current_epoch = bool(
-        expected_league_id
-        and str(leaderboard.get("league_id") or "") == expected_league_id
-        and str(leaderboard.get("start_session") or "").strip()
+        leaderboard_start
+        and (
+            not configured_epoch
+            or (
+                expected_league_id
+                and str(leaderboard.get("league_id") or "") == expected_league_id
+            )
+        )
     )
-    start_session = (
-        str(leaderboard.get("start_session") or "").strip() or None
-        if current_epoch
-        else None
-    )
+
+    start_session = leaderboard_start or None if current_epoch else None
     last_session = (
         str(leaderboard.get("last_session") or "").strip() or None
         if current_epoch
@@ -275,9 +294,16 @@ def build_experiment_observation(
         "last_session": last_session,
         "sessions": int(leaderboard.get("sessions", 0) or 0) if current_epoch else 0,
         "strategy_league": {
-            "status": leaderboard.get("status", "WAITING") if current_epoch else "WAITING_FOR_GENESIS",
+            "status": (
+                leaderboard.get("status", "WAITING")
+                if current_epoch
+                else "WAITING_FOR_GENESIS"
+            ),
             "initial_nav_usd": (
-                leaderboard.get("initial_nav_usd", league_cfg.get("initial_nav_usd", 10000.0))
+                leaderboard.get(
+                    "initial_nav_usd",
+                    league_cfg.get("initial_nav_usd", 10000.0),
+                )
                 if current_epoch
                 else league_cfg.get("initial_nav_usd", 10000.0)
             ),
