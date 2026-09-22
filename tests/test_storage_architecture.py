@@ -234,3 +234,26 @@ def test_pages_overlay_isolated_monitoring_state() -> None:
     workflow = _text(WORKFLOWS / "pages.yml")
     assert "monitoring_state.sh restore" in workflow
     assert "monitoring_state_source" in workflow
+
+
+def test_runtime_state_publish_uses_optimistic_concurrency_token() -> None:
+    script = _text(ROOT / "scripts" / "runtime_state.sh")
+    assert "floor-runtime-state-restore-token.json" in script
+    assert "utils.runtime_state_cas write-token" in script
+    assert "utils.runtime_state_cas verify-parent" in script
+    assert "generation" in script
+    assert "parent_sha256" in script
+    assert "restore token missing" in script
+
+
+def test_retrain_execute_requires_explicit_human_authorization() -> None:
+    workflow = _text(WORKFLOWS / "retrain_execute.yml")
+    assert "workflow_run:" not in workflow
+    assert "approve_recommended:" in workflow
+    assert "tasks_for_auto_retrain_requested" in workflow
+    assert "MANUAL_APPROVAL" in workflow
+    assert "MANUAL_FORCE" in workflow
+    assert "AUTHORIZED_PENDING_EXECUTION" in workflow
+    assert 'control["execution"] = "COMPLETED"' in workflow
+    assert "make init-db-schemas" in workflow
+    assert "make init-dbs" not in workflow
