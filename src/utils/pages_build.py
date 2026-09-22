@@ -130,6 +130,106 @@ def _latest_report_file(reports_dir: Path, pattern: str) -> Path | None:
     return max(candidates, key=_sort_key)
 
 
+def _review_drift_payload(review_summary: Any) -> dict[str, Any] | None:
+    if not isinstance(review_summary, dict):
+        return None
+    source_date = review_summary.get("as_of")
+    models = review_summary.get("models")
+    if not source_date or not isinstance(models, dict) or not models:
+        return None
+
+    rank = {"GREEN": 0, "YELLOW": 1, "RED": 2}
+    worst = "GREEN"
+    thresholds: list[dict[str, Any]] = []
+    metrics: dict[str, Any] = {}
+
+    for model_key, raw_model in sorted(models.items()):
+        if not isinstance(raw_model, dict):
+            continue
+        level = str(raw_model.get("drift_level") or "GREEN").upper()
+        if rank.get(level, 0) > rank.get(worst, 0):
+            worst = level
+        summary = raw_model.get("summary")
+        summary = summary if isinstance(summary, dict) else {}
+        component_metrics: dict[str, Any] = {}
+        for component in ("shared_data", "schema", "target", "performance"):
+            raw_component = summary.get(component)
+            if not isinstance(raw_component, dict):
+                continue
+            state = str(raw_component.get("state") or "UNKNOWN").upper()
+            score = raw_component.get("score")
+            component_metrics[component] = {"state": state, "score": score}
+            if state not in {"", "GREEN", "OK"}:
+                thresholds.append(
+                    {
+                        "name": f"{model_key}.{component}",
+                        "observed": score,
+                        "threshold": "GREEN required",
+                        "severity": state,
+                    }
+                )
+        metrics[str(model_key)] = component_metrics
+
+    return {
+        "status": review_summary.get("suite_status", "UNKNOWN"),
+        "decision": review_summary.get("suite_recommendation", "PENDING"),
+        "drift_level": worst,
+        "thresholds": thresholds,
+        "metrics": metrics,
+        "source_file": "training/review_summary_latest.json",
+        "source_date": source_date,
+        "source_kind": "governed_training_review",
+    }
+
+
+def _operational_incident_payload(metrics_payload: Any) -> dict[str, Any] | None:
+    if not isinstance(metrics_payload, dict):
+        return None
+    source_date = metrics_payload.get("generated_at")
+    reported = str(metrics_payload.get("status") or "").upper()
+    if not source_date or reported not in {"OK", "DEGRADED", "CRITICAL"}:
+        return None
+
+    alerts = metrics_payload.get("alerts")
+    alerts = [str(item) for item in alerts] if isinstance(alerts, list) else []
+    series = metrics_payload.get("series")
+    series = series if isinstance(series, list) else []
+    non_ok = [
+        item
+        for item in series
+        if isinstance(item, dict)
+        and str(item.get("status") or "UNKNOWN").upper() != "OK"
+    ]
+
+    if reported == "CRITICAL":
+        status, severity = "ESCALATE", "SEV2"
+        symptom = "; ".join(alerts) or "Operational health is CRITICAL."
+    elif reported == "DEGRADED":
+        status, severity = "MONITORING", "SEV3"
+        symptom = "; ".join(alerts) or "Operational health is DEGRADED."
+    else:
+        status, severity = "OK", "SEV4"
+        symptom = "No active operational incidents."
+
+    impact = {
+        str(item.get("name") or f"check_{idx}"): str(item.get("status") or "UNKNOWN")
+        for idx, item in enumerate(non_ok)
+    }
+    return {
+        "status": status,
+        "severity": severity,
+        "summary": {
+            "symptom": symptom,
+            "operational_health": reported,
+        },
+        "impact": impact,
+        "alerts": alerts,
+        "source_file": "metrics/public_metrics.json",
+        "source_date": source_date,
+        "source_kind": "operational_health_snapshot",
+    }
+
+
 def _parse_iso_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -683,39 +783,68 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     (site_data_dir / "opportunities.json").write_text(json.dumps(_sanitize(opportunities[:10]), indent=2), encoding="utf-8")
 
     reports_dir = data_dir / "reports"
-
-    retraining_default = {
-        "status": "UNKNOWN", "decision": "PENDING", "drift_level": "GREEN", "thresholds_disparados": []
-    }
-    retraining_src = _latest_report_file(reports_dir, "retraining_review_*.json")
-    retraining = _read_json(retraining_src, retraining_default) if retraining_src else retraining_default
-    drift: dict[str, Any] = {
-        "status": retraining.get("status", "UNKNOWN"),
-        "decision": retraining.get("decision", "PENDING"),
-        "drift_level": retraining.get("drift_level", "GREEN"),
-        "thresholds": retraining.get("thresholds_disparados", []),
-        "metrics": retraining.get("metrics", {}),
-        "source_file": retraining_src.name if retraining_src else None,
-        "source_date": retraining.get("as_of") or retraining.get("date") or retraining.get("generated_at"),
-    }
-    (site_data_dir / "drift.json").write_text(json.dumps(_sanitize(drift), indent=2), encoding="utf-8")
-
-    incident_default = {
-        "status": "OK", "severity": "SEV4", "summary": {"symptom": "No incidents"}, "impact": {}
-    }
-    incident_src = _latest_report_file(reports_dir, "incident_review_*.json")
-    incident_payload: dict[str, Any] = _read_json(incident_src, incident_default) if incident_src else dict(incident_default)
-    incident_payload["source_file"] = incident_src.name if incident_src else None
-    incident_payload["source_date"] = (
-        incident_payload.get("as_of")
-        or incident_payload.get("date")
-        or incident_payload.get("generated_at")
-    )
-    (site_data_dir / "incidents.json").write_text(json.dumps(_sanitize(incident_payload), indent=2), encoding="utf-8")
-
     review_summary = _read_json(
         data_dir / "training" / "review_summary_latest.json",
         {"suite_version": "", "models": {}, "as_of": None, "suite_status": "UNKNOWN", "suite_recommendation": "PENDING"},
+    )
+
+    drift = _review_drift_payload(review_summary)
+    if drift is None:
+        retraining_default = {
+            "status": "UNKNOWN",
+            "decision": "PENDING",
+            "drift_level": "UNKNOWN",
+            "thresholds_disparados": [],
+        }
+        retraining_src = _latest_report_file(reports_dir, "retraining_review_*.json")
+        retraining = (
+            _read_json(retraining_src, retraining_default)
+            if retraining_src
+            else retraining_default
+        )
+        drift = {
+            "status": retraining.get("status", "UNKNOWN"),
+            "decision": retraining.get("decision", "PENDING"),
+            "drift_level": retraining.get("drift_level", "UNKNOWN"),
+            "thresholds": retraining.get("thresholds_disparados", []),
+            "metrics": retraining.get("metrics", {}),
+            "source_file": retraining_src.name if retraining_src else None,
+            "source_date": (
+                retraining.get("as_of")
+                or retraining.get("date")
+                or retraining.get("generated_at")
+            ),
+            "source_kind": "legacy_retraining_report",
+        }
+    (site_data_dir / "drift.json").write_text(
+        json.dumps(_sanitize(drift), indent=2),
+        encoding="utf-8",
+    )
+
+    incident_payload = _operational_incident_payload(metrics_payload)
+    if incident_payload is None:
+        incident_default = {
+            "status": "UNKNOWN",
+            "severity": "UNKNOWN",
+            "summary": {"symptom": "No current incident evidence"},
+            "impact": {},
+        }
+        incident_src = _latest_report_file(reports_dir, "incident_review_*.json")
+        incident_payload = (
+            _read_json(incident_src, incident_default)
+            if incident_src
+            else dict(incident_default)
+        )
+        incident_payload["source_file"] = incident_src.name if incident_src else None
+        incident_payload["source_date"] = (
+            incident_payload.get("as_of")
+            or incident_payload.get("date")
+            or incident_payload.get("generated_at")
+        )
+        incident_payload["source_kind"] = "legacy_incident_report"
+    (site_data_dir / "incidents.json").write_text(
+        json.dumps(_sanitize(incident_payload), indent=2),
+        encoding="utf-8",
     )
     retraining_cfg = _read_json(data_dir / "reports" / "retraining_config_snapshot.json", {})
     if isinstance(retraining_cfg, dict):
