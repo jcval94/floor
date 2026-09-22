@@ -286,6 +286,7 @@ def build_health_snapshot(
     alerts = [item["detail"] for item in checks if item["status"] != "OK"]
     return {
         "generated_at": now_utc.isoformat(),
+        "state_changed_at": now_utc.isoformat(),
         "status": status,
         "series": checks,
         "alerts": alerts,
@@ -309,9 +310,9 @@ def write_health_snapshot(
     payload = build_health_snapshot(data_dir, now=now, universe_path=universe_path)
     previous = _read_json(output_path)
     if previous is not None and _semantic_state(previous) == _semantic_state(payload):
-        previous_generated_at = previous.get("generated_at")
-        if isinstance(previous_generated_at, str) and previous_generated_at:
-            payload["generated_at"] = previous_generated_at
+        previous_changed_at = previous.get("state_changed_at") or previous.get("generated_at")
+        if isinstance(previous_changed_at, str) and previous_changed_at:
+            payload["state_changed_at"] = previous_changed_at
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
