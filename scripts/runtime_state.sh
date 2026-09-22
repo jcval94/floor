@@ -6,6 +6,7 @@ TAG="${RUNTIME_STATE_TAG:-runtime-state-v1}"
 ASSET="${RUNTIME_STATE_ASSET:-floor-runtime-state.tar.gz}"
 MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"
 REPO="${GITHUB_REPOSITORY:-}"
+TOKEN_FILE="${RUNTIME_STATE_TOKEN_FILE:-${RUNNER_TEMP:-.}/floor-runtime-state-restore-token.json}"
 
 if [[ -z "$MODE" || -z "$REPO" ]]; then
   echo "usage: GITHUB_REPOSITORY=owner/repo GH_TOKEN=... bash scripts/runtime_state.sh <restore|publish>" >&2
@@ -129,7 +130,11 @@ collect_paths() {
 }
 
 restore_state() {
+  mkdir -p "$(dirname "$TOKEN_FILE")"
   if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+    PYTHONPATH=src python -m utils.runtime_state_cas write-token \
+      --token "$TOKEN_FILE" \
+      --remote-missing
     echo "No runtime-state release exists yet; using checkout/bootstrap state."
     return 0
   fi
@@ -137,11 +142,16 @@ restore_state() {
   local restored=false
   local attempt
   for attempt in 1 2 3; do
-    rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256"
+    rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256" "$TMP/$ASSET.metadata.json"
     if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber \
       && gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.sha256" --dir "$TMP" --clobber \
+      && gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.metadata.json" --dir "$TMP" --clobber \
       && (cd "$TMP" && sha256sum -c "$ASSET.sha256") \
-      && validate_archive "$TMP/$ASSET"; then
+      && validate_archive "$TMP/$ASSET" \
+      && PYTHONPATH=src python -m utils.runtime_state_cas write-token \
+        --token "$TOKEN_FILE" \
+        --metadata "$TMP/$ASSET.metadata.json" \
+        --checksum "$TMP/$ASSET.sha256"; then
       restored=true
       break
     fi
@@ -167,6 +177,35 @@ publish_state() {
     echo "No runtime state exists to publish."
     return 0
   fi
+  if [[ ! -s "$TOKEN_FILE" ]]; then
+    echo "::error::Runtime-state publish refused: restore token missing. Run restore first." >&2
+    exit 1
+  fi
+
+  local parent_generation next_generation parent_sha
+  if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+    mkdir -p "$TMP/current"
+    rm -f "$TMP/current/$ASSET.sha256" "$TMP/current/$ASSET.metadata.json"
+    gh release download "$TAG" --repo "$REPO" \
+      --pattern "$ASSET.sha256" --dir "$TMP/current" --clobber
+    gh release download "$TAG" --repo "$REPO" \
+      --pattern "$ASSET.metadata.json" --dir "$TMP/current" --clobber
+    read -r parent_generation next_generation parent_sha < <(
+      PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
+        --token "$TOKEN_FILE" \
+        --metadata "$TMP/current/$ASSET.metadata.json" \
+        --checksum "$TMP/current/$ASSET.sha256" \
+        --format tsv
+    )
+  else
+    read -r parent_generation next_generation parent_sha < <(
+      PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
+        --token "$TOKEN_FILE" \
+        --remote-missing \
+        --format tsv
+    )
+  fi
+  echo "runtime_state_parent_generation=$parent_generation next_generation=$next_generation parent_sha256=$parent_sha"
 
   # Compact semantically before packaging. Resolved old predictions age out,
   # but unresolved predictions are retained regardless of age so a 65-session
@@ -203,7 +242,7 @@ publish_state() {
     sha256sum "$ASSET" > "$ASSET.sha256"
   )
 
-  python - "$TMP/$ASSET.metadata.json" "$TMP/$ASSET.sha256" "$asset_bytes" <<'PY'
+  python - "$TMP/$ASSET.metadata.json" "$TMP/$ASSET.sha256" "$asset_bytes" "$next_generation" "$parent_sha" <<'PY'
 import json
 import os
 import sys
@@ -213,10 +252,14 @@ from pathlib import Path
 out = Path(sys.argv[1])
 checksum = Path(sys.argv[2]).read_text(encoding="utf-8").split()[0]
 asset_bytes = int(sys.argv[3])
+generation = int(sys.argv[4])
+parent_sha = None if sys.argv[5] == "-" else sys.argv[5]
 out.write_text(
     json.dumps(
         {
-            "schema_version": 2,
+            "schema_version": 3,
+            "generation": generation,
+            "parent_sha256": parent_sha,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "repository": os.getenv("GITHUB_REPOSITORY"),
             "source_sha": os.getenv("GITHUB_SHA"),
@@ -250,7 +293,11 @@ PY
     "$TMP/$ASSET.metadata.json" \
     --repo "$REPO" \
     --clobber
-  echo "Published checksum-verified rolling runtime state to release tag=$TAG bytes=$asset_bytes cap_mb=$MAX_MB"
+  PYTHONPATH=src python -m utils.runtime_state_cas write-token \
+    --token "$TOKEN_FILE" \
+    --metadata "$TMP/$ASSET.metadata.json" \
+    --checksum "$TMP/$ASSET.sha256"
+  echo "Published checksum-verified rolling runtime state to release tag=$TAG generation=$next_generation bytes=$asset_bytes cap_mb=$MAX_MB"
 }
 
 case "$MODE" in

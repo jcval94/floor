@@ -31,6 +31,13 @@ def block_automatic_retrain(summary_path: Path) -> dict[str, Any]:
     payload["tasks_for_auto_retrain"] = []
     payload["auto_retrain_enabled"] = False
     payload["auto_retrain_block_reason"] = BLOCK_REASON
+    payload["retraining_control"] = {
+        "recommendation": payload.get("suite_recommendation", "SKIP_RETRAIN"),
+        "recommended_tasks": requested,
+        "authorization": "BLOCKED_BY_GOVERNANCE" if requested else "NOT_REQUIRED",
+        "authorized_tasks": [],
+        "execution": "NOT_RUN",
+    }
 
     models = payload.get("models")
     if isinstance(models, dict):
@@ -40,6 +47,11 @@ def block_automatic_retrain(summary_path: Path) -> dict[str, Any]:
             requested_flag = bool(record.get("auto_retrain", False))
             record["auto_retrain_requested"] = requested_flag
             record["auto_retrain"] = False
+            record["retrain_recommendation"] = record.get("recommendation", "SKIP_RETRAIN")
+            record["retrain_authorization"] = (
+                "BLOCKED_BY_GOVERNANCE" if requested_flag else "NOT_REQUIRED"
+            )
+            record["retrain_execution"] = "NOT_RUN"
 
     summary_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -66,6 +78,7 @@ def main() -> int:
                 "auto_retrain_enabled": payload["auto_retrain_enabled"],
                 "tasks_for_auto_retrain_requested": payload["tasks_for_auto_retrain_requested"],
                 "tasks_for_auto_retrain": payload["tasks_for_auto_retrain"],
+                "retraining_control": payload["retraining_control"],
             },
             ensure_ascii=False,
         )

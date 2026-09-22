@@ -19,6 +19,7 @@ def _rows(n: int = 80) -> list[dict]:
                 "trend_context_m3": 0.05,
                 "drawdown_13w": -0.03,
                 "dist_to_low_3m": 0.08,
+                "momentum_20": 0.02,
                 "ai_conviction_long": 0.7,
                 "ai_horizon_alignment": 1.0,
                 "ai_recency_long": 2.0,
@@ -78,3 +79,43 @@ def test_run_training_review_marks_only_value_for_auto_retrain(tmp_path: Path) -
     assert summary["tasks_for_auto_retrain"] == ["value"]
     assert summary["models"]["value"]["recommendation"] == "RETRAIN_NOW"
     assert summary["models"]["timing"]["recommendation"] == "SKIP_RETRAIN"
+
+
+def test_schema_review_ignores_irrelevant_dataset_columns(tmp_path: Path) -> None:
+    data_dir = _setup_training(tmp_path)
+    dataset_path = data_dir / "training" / "modelable_dataset.json"
+    payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+    for row in payload["rows"]:
+        row["new_irrelevant_debug_column"] = None
+    dataset_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    for model in summary["models"].values():
+        schema = model["summary"]["schema"]
+        assert schema["state"] == "GREEN"
+        assert "new_irrelevant_debug_column" in schema["ignored_added_columns"]
+
+
+def test_schema_review_fails_closed_when_required_input_disappears(tmp_path: Path) -> None:
+    data_dir = _setup_training(tmp_path)
+    dataset_path = data_dir / "training" / "modelable_dataset.json"
+    payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+    for row in payload["rows"]:
+        row.pop("close", None)
+    dataset_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    assert summary["models"]["value"]["summary"]["schema"]["state"] == "RED"
+    assert "close" in summary["models"]["value"]["summary"]["schema"]["removed_columns"]
