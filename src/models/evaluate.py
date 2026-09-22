@@ -89,6 +89,12 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
     top1 = [max(range(13), key=lambda i: pr[i]) + 1 for pr in probs]
     conf = [max(pr) for pr in probs]
     outcomes = [1 if p == t else 0 for p, t in zip(top1, y_true)]
+    top1_unique_classes = len(set(top1))
+    top1_dominant_share = (
+        max(top1.count(label) for label in set(top1)) / len(top1)
+        if top1
+        else 1.0
+    )
     return {
         "top1_accuracy": topk_accuracy(y_true, probs, k=1),
         "top3_accuracy": topk_accuracy(y_true, probs, k=3),
@@ -97,6 +103,8 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
         "expected_week_distance": expected_week_distance(y_true, probs),
         "confusion_matrix": confusion_matrix(y_true, top1, n_classes=13),
         "calibration_error": expected_calibration_error(conf, outcomes),
+        "top1_unique_classes": top1_unique_classes,
+        "top1_dominant_share": top1_dominant_share,
     }
 
 
