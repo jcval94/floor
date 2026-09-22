@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install runtime dependencies
-        run: python -m pip install -e ".[runtime]"
+        run: python -m pip install -e . "numpy>=2.0,<3"
 
       - name: Detect market session
         id: session
