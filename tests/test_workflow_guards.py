@@ -256,3 +256,48 @@ def test_eod_waits_for_daily_bar_completion_window(tmp_path: Path) -> None:
     assert ready["run"] == "true"
     assert ready["reason"] == "close_due"
     assert ready["required_market_session"] == "2026-03-12"
+
+
+def test_intraday_never_backfills_older_checkpoint_after_newer_completed(
+    tmp_path: Path,
+) -> None:
+    _write_marker(tmp_path, "2026-03-12", "OPEN_PLUS_2H")
+
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 12, 25, tzinfo=ET),
+    )
+
+    assert result["run"] == "false"
+    assert result["reason"] == "already_ran"
+    assert result["event"] == "OPEN_PLUS_2H"
+
+
+def test_accepted_older_checkpoint_is_suppressed_if_newer_completed_while_waiting(
+    tmp_path: Path,
+) -> None:
+    accepted = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 10, 20, tzinfo=ET),
+    )
+    assert accepted["event"] == "OPEN"
+
+    _write_marker(tmp_path, "2026-03-12", "OPEN_PLUS_2H")
+
+    fixed = workflow_guards.validate_accepted_context(
+        kind="intraday",
+        event=accepted["event"],
+        session_day=accepted["session_day"],
+        checkpoint_at=accepted["checkpoint_at"],
+        data_dir=tmp_path,
+    )
+
+    assert fixed["run"] == "false"
+    assert fixed["reason"] == "superseded_checkpoint"
+    assert fixed["superseded_by"] == "OPEN_PLUS_2H"
