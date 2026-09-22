@@ -234,7 +234,11 @@ def test_timing_review_flags_collapsed_current_predictions(
         "predict_timing_week_probabilities",
         lambda row, artifact: [0.3] + [0.7 / 12.0] * 12,
     )
-    rows = [{"floor_week_m3": week} for week in range(1, 14)]
+    rows = [
+        {"floor_week_m3": week}
+        for _ in range(4)
+        for week in range(1, 14)
+    ]
 
     result = review._timing_performance(artifact, rows, _review_cfg())
 
