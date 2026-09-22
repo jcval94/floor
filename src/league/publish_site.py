@@ -121,6 +121,31 @@ def _member_ids(league_cfg: dict[str, Any]) -> list[str]:
     ]
 
 
+def _configured_data_path(data_dir: Path, raw_path: Any) -> Path | None:
+    raw = str(raw_path or "").strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if path.is_absolute():
+        return path
+    if path.parts and path.parts[0] == "data":
+        return data_dir.joinpath(*path.parts[1:])
+    return data_dir / path
+
+
+def _weekly_model_summary(data_dir: Path, league_cfg: dict[str, Any]) -> dict[str, Any]:
+    model_path = _configured_data_path(data_dir, league_cfg.get("weekly_model_path"))
+    payload = _load_object(model_path)
+    metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
+    return {
+        "status": "FROZEN" if payload else "MISSING",
+        "model_name": payload.get("model_name") if payload else None,
+        "version": payload.get("version") if payload else None,
+        "trained_at": (payload.get("trained_at") or payload.get("as_of")) if payload else None,
+        "validation_metrics": metrics,
+    }
+
+
 def _waiting_payload(
     league_cfg: dict[str, Any],
     *,
@@ -153,21 +178,39 @@ def publish_league_payload(
     source_payload = _load_object(source)
     league_cfg = _load_object(league_config_path)
     expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+    weekly_model = _weekly_model_summary(data_dir, league_cfg)
+    weekly_ready = weekly_model.get("status") == "FROZEN"
+    weekly_path_configured = bool(str(league_cfg.get("weekly_model_path") or "").strip())
+    weekly_missing = not weekly_ready and (weekly_path_configured or not league_cfg)
+    waiting_status = "WAITING_FOR_WEEKLY_MODEL" if weekly_missing else "WAITING_FOR_GENESIS"
 
     if not source_payload:
         payload = _waiting_payload(
             league_cfg,
-            status="WAITING_FOR_WEEKLY_MODEL",
-            detail="The prospective league has not started yet.",
+            status=waiting_status,
+            detail=(
+                "Frozen Weekly challenger is ready; waiting for the first complete EOD "
+                "to create clean prospective league genesis."
+                if weekly_ready
+                else "Frozen Weekly challenger is missing; bootstrap must complete before league genesis."
+            ),
         )
     elif league_cfg and str(source_payload.get("league_id") or "") != expected_league_id:
         previous_id = str(source_payload.get("league_id") or "unknown")
         payload = _waiting_payload(
             league_cfg,
-            status="WAITING_FOR_GENESIS",
+            status=waiting_status,
             detail=(
-                f"Current runtime evidence belongs to previous league {previous_id}; "
-                f"waiting for first complete EOD of {expected_league_id}."
+                (
+                    f"Current runtime evidence belongs to previous league {previous_id}; "
+                    f"frozen Weekly challenger is ready and the system is waiting for the first "
+                    f"complete EOD of {expected_league_id}."
+                )
+                if weekly_ready
+                else (
+                    f"Current runtime evidence belongs to previous league {previous_id}; "
+                    "the frozen Weekly challenger for the current league is missing."
+                )
             ),
         )
     else:
@@ -176,6 +219,7 @@ def publish_league_payload(
     rows = _rank_rows(payload.get("rows", []))
     payload["rows"] = rows
     payload["summary"] = _competition_summary(rows)
+    payload["weekly_model"] = weekly_model
     payload["evidence_type"] = "prospective_shadow_paper"
     payload["published_at"] = datetime.now(timezone.utc).isoformat()
     payload["automatic_promotion"] = False
@@ -189,15 +233,15 @@ def publish_observation_payload(
     output_path: Path,
     league_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    source = (
-        data_dir
-        / "metrics"
-        / "strategy_league"
-        / "experiment_observation.json"
-    )
+    source = data_dir / "metrics" / "strategy_league" / "experiment_observation.json"
     payload = _load_object(source)
     league_cfg = _load_object(league_config_path)
     expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+    weekly_model = _weekly_model_summary(data_dir, league_cfg)
+    weekly_ready = weekly_model.get("status") == "FROZEN"
+    weekly_path_configured = bool(str(league_cfg.get("weekly_model_path") or "").strip())
+    weekly_missing = not weekly_ready and (weekly_path_configured or not league_cfg)
+    waiting_status = "WAITING_FOR_WEEKLY_MODEL" if weekly_missing else "WAITING_FOR_GENESIS"
     stale_epoch = bool(
         payload
         and league_cfg
@@ -207,12 +251,12 @@ def publish_observation_payload(
         payload = {
             "schema_version": 1,
             "league_id": expected_league_id,
-            "status": "WAITING_FOR_GENESIS",
+            "status": waiting_status,
             "start_session": None,
             "last_session": None,
             "sessions": 0,
             "strategy_league": {
-                "status": "WAITING_FOR_GENESIS",
+                "status": waiting_status,
                 "rows": [],
                 "automatic_promotion": False,
                 "live_execution_enabled": False,
@@ -220,11 +264,7 @@ def publish_observation_payload(
             "models": {
                 "scope": "predictions created on or after Strategy League genesis",
                 "horizons": [],
-                "weekly_opportunity_challenger": {
-                    "status": "WAITING",
-                    "version": None,
-                    "validation_metrics": {},
-                },
+                "weekly_opportunity_challenger": weekly_model,
             },
             "evidence": {
                 "prediction_count_since_genesis": 0,
@@ -236,13 +276,16 @@ def publish_observation_payload(
                 "automatic_promotion": False,
             },
         }
+    else:
+        models = payload.setdefault("models", {})
+        if isinstance(models, dict):
+            models.setdefault("weekly_opportunity_challenger", weekly_model)
     payload.setdefault("safety", {})
     payload["safety"]["operational_paper_gateway_used"] = False
     payload["safety"]["live_execution_enabled"] = False
     payload["safety"]["automatic_promotion"] = False
     _write_object(output_path, payload)
     return payload
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(

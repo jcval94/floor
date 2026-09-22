@@ -58,12 +58,32 @@ def test_bootstrap_requires_explicit_confirmed_genesis_request() -> None:
     assert 'pip install -e ".[modeling]"' in workflow
 
 
-def test_pages_publish_only_after_real_eod_evidence() -> None:
+def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
     workflow = _text(".github/workflows/pages.yml")
 
-    assert 'workflows: ["eod"]' in workflow
-    assert "eod-audit-${upstream_run_id}" in workflow
-    assert "eod_completed_without_audit" in workflow
+    for upstream in (
+        "eod",
+        "retrain_execute",
+        "retrain_assessment",
+        "strategy_league_bootstrap",
+        "monitoring",
+        "capital_challenger_tournament",
+        "walk_forward_oos",
+    ):
+        assert upstream in workflow
+
+    for evidence in (
+        "eod-audit-",
+        "retrain-execute-",
+        "retrain-assessment-",
+        "strategy-league-weekly-model-",
+        "monitoring-health-",
+        "capital-tournament-",
+        "walk-forward-oos-",
+    ):
+        assert evidence in workflow
+
+    assert "completed_without_publishable_evidence" in workflow
     assert "needs.gate.outputs.publish == 'true'" in workflow
     assert "actions: read" in workflow
     assert "experiment_observation.json" in workflow
