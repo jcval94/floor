@@ -257,3 +257,13 @@ def test_retrain_execute_requires_explicit_human_authorization() -> None:
     assert 'control["execution"] = "COMPLETED"' in workflow
     assert "make init-db-schemas" in workflow
     assert "make init-dbs" not in workflow
+
+
+def test_retrain_assessment_avoids_full_persistence_hydration() -> None:
+    workflow = _text(WORKFLOWS / "retrain_assessment.yml")
+    assert "make init-db-schemas" in workflow
+    assert "make init-dbs" not in workflow
+    assert "data/persistence/app.sqlite" not in workflow
+    assert "Install modeling dependencies" in workflow
+    assert "--universe config/universe.yaml" in workflow
+    assert "--benchmark SPY" in workflow

@@ -95,6 +95,43 @@ def _timing_score(metrics: dict) -> float:
     )
 
 
+def _minimum_quality_gate(task: str, metrics: dict) -> dict:
+    """Return a hard safety gate separate from relative champion scoring.
+
+    Relative score improvement is not enough to promote a model that still
+    fails a simple external baseline or an essential calibration contract.
+    The gate applies before any replacement of an existing m3 champion.
+    """
+
+    if task == "timing":
+        uniform_log_loss = float(metrics.get("uniform_log_loss", math.log(13)))
+        quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
+        skill = float(metrics.get("log_loss_skill", -999.0))
+        top3 = float(metrics.get("quality_top3_accuracy", 0.0))
+        checks = {
+            "positive_log_loss_skill": skill > 0.0,
+            "beats_uniform_log_loss": quality_log_loss < uniform_log_loss,
+            "top3_beats_uniform_expectation": top3 > (3.0 / 13.0),
+        }
+    elif task == "value":
+        checks = {
+            "pinball_delta_reasonable": float(metrics.get("pinball_loss_delta", 999.0)) <= 0.20,
+            "mae_delta_reasonable": float(metrics.get("mae_delta", 999.0)) <= 0.35,
+            "breach_rate_error_reasonable": float(metrics.get("breach_rate_error", 999.0)) <= 0.15,
+            "calibration_error_reasonable": float(metrics.get("quality_calibration_error", 999.0)) <= 0.20,
+            "temporal_stability_nontrivial": float(metrics.get("quality_temporal_stability", 0.0)) >= 0.15,
+        }
+    else:
+        return {"passed": True, "checks": {}, "reason": "not_applicable"}
+
+    failed = sorted(name for name, passed in checks.items() if not passed)
+    return {
+        "passed": not failed,
+        "checks": checks,
+        "reason": "minimum_quality_ok" if not failed else "failed:" + ",".join(failed),
+    }
+
+
 def _horizon_score(metrics: dict) -> float:
     return (
         float(metrics.get("mae_proxy", 999.0))
@@ -168,6 +205,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     existing = _load_json(champion_path)
     new_score = _task_score(task, payload["metrics"])
+    quality_gate = _minimum_quality_gate(task, payload["metrics"])
     old_score: float | None = None
 
     decision = "promote_first"
@@ -178,7 +216,24 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     if existing is not None:
         previous_champion_version = existing.get("version")
-        if _incompatible_champion_schema(task, existing):
+        if task in {"value", "timing"} and not quality_gate["passed"]:
+            old_score = (
+                None
+                if _incompatible_champion_schema(task, existing)
+                else _task_score(task, existing["metrics"])
+            )
+            decision = "challenger_only"
+            reason = (
+                "New artifact failed the minimum m3 quality gate and cannot replace "
+                f"the existing champion: {quality_gate['reason']}."
+            )
+            logger.warning(
+                "[champion-selection] task=%s blocked_by_minimum_quality reason=%s new_score=%.6f",
+                task,
+                quality_gate["reason"],
+                new_score,
+            )
+        elif _incompatible_champion_schema(task, existing):
             decision = "promote"
             reason = (
                 "Existing champion uses an incompatible/deprecated statistical quality schema; "
@@ -223,6 +278,7 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
         "new_score": new_score,
         "existing_score": old_score,
         "objective": "minimize_scale_free_out_of_time_error",
+        "minimum_quality_gate": quality_gate,
     }
     try:
         if decision == "promote":

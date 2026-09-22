@@ -48,6 +48,22 @@ class ParityChampionModelSet(ChampionModelSet):
                 threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
         if not 0.0 <= threshold <= 1.0:
             threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
+
+        # A calibrated softmax is not useful timing evidence if it does not
+        # beat the uniform 13-class baseline out of time. In that case, make
+        # the serving contract explicitly abstain instead of turning argmax
+        # into a fabricated week. The m3 value floor remains available.
+        if isinstance(metrics, dict):
+            try:
+                skill = float(metrics.get("log_loss_skill"))
+                quality_log_loss = float(metrics.get("quality_log_loss"))
+                uniform_log_loss = float(metrics.get("uniform_log_loss"))
+            except (TypeError, ValueError):
+                pass
+            else:
+                if skill <= 0.0 or quality_log_loss >= uniform_log_loss:
+                    return 1.0
+
         return threshold
 
     def _predict_classic_horizon(
