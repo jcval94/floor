@@ -100,7 +100,12 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         run: |
           set -euo pipefail
-          MODEL=data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+          MODEL=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))["weekly_model_path"])
+          PY
+          )
           test -s "$MODEL" || {
             echo "::error::Frozen Weekly challenger is missing. EOD refuses to retrain or replace a frozen experiment artifact."
             exit 1
@@ -165,7 +170,7 @@ jobs:
 
       - name: Build experiment observation snapshot
         if: steps.lock_guard.outputs.run == 'true'
-        run: PYTHONPATH=src python -m league.experiment_observation --data-dir data
+        run: PYTHONPATH=src python -m league.experiment_observation --data-dir data --league-config config/strategy_league.json
 
       - name: Mark run
         if: steps.lock_guard.outputs.run == 'true'
@@ -196,7 +201,7 @@ jobs:
             data/metrics/strategy_league/status.json
             data/metrics/strategy_league/experiment_observation.json
             data/metrics/strategy_league/experiment_observation_history.jsonl
-            data/metrics/strategy_league/models/weekly_opportunity_challenger.json
+            data/metrics/strategy_league/models/**/*.json
             data/metrics/strategy_league/runs/*/history.jsonl
           if-no-files-found: warn
           retention-days: 90
