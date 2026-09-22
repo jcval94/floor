@@ -351,6 +351,10 @@ def test_retrain_assessment_recomputes_when_monitoring_contract_changes() -> Non
         "src/floor/training/run_retrain_assessment.py",
         "src/floor/training/governance.py",
         "src/monitoring/drift_detection.py",
+        "src/monitoring/run_retrain_assessment.py",
+        "src/models/dataset_summary.py",
+        "src/models/evaluate.py",
+        "src/models/inference.py",
         "src/features/**",
         "data/training/models/*.json",
     ):
