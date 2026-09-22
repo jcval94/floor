@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from collections import Counter
 from datetime import date, datetime
+from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -76,6 +79,58 @@ def _batch_id(as_of: datetime, event_type: EventType) -> str:
     return f"{as_of.astimezone(ET).date().isoformat()}:{event_type}"
 
 
+def _input_snapshot_id(market_rows: list[dict], forecasts: list[dict]) -> str:
+    """Identify the exact model input state independently of checkpoint time.
+
+    Floor currently serves daily-bar features. Multiple intraday checkpoints can
+    therefore see identical inputs. The fingerprint deliberately excludes
+    checkpoint/event timestamps and includes model versions so only genuinely
+    new market/model state can create new evidence.
+    """
+
+    model_versions = sorted(
+        {
+            str(row.get("model_version") or "unknown")
+            for row in forecasts
+        }
+    )
+    normalized_rows = [
+        {
+            "symbol": str(row.get("symbol") or "").strip().upper(),
+            "inputs": _model_input_snapshot(row, None),
+        }
+        for row in sorted(
+            market_rows,
+            key=lambda item: str(item.get("symbol") or "").strip().upper(),
+        )
+    ]
+    raw = json.dumps(
+        {
+            "model_versions": model_versions,
+            "rows": normalized_rows,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _input_snapshot_marker(data_dir: Path, snapshot_id: str) -> Path:
+    return data_dir / "snapshots" / "input_snapshots" / f"{snapshot_id}.json"
+
+
+def _write_input_snapshot_marker(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
 def run_intraday_cycle(
     event_type: EventType,
     symbols: list[str],
@@ -83,7 +138,7 @@ def run_intraday_cycle(
     *,
     as_of: datetime | None = None,
     market_session: date | None = None,
-) -> None:
+) -> dict[str, object]:
     """Canonical range-forecast cycle. No external override or directional orders."""
 
     market_rows = _latest_feature_rows(cfg, symbols, max_market_session=market_session)
@@ -130,6 +185,26 @@ def run_intraday_cycle(
     blocked = list(generated.get("blocked_list", []))
     _validate_forecast_batch(forecasts, blocked, symbols)
 
+    input_snapshot_id = _input_snapshot_id(market_rows, forecasts)
+    marker_path = _input_snapshot_marker(cfg.data_dir, input_snapshot_id)
+    if marker_path.exists():
+        reconciliation = reconcile_predictions(cfg.data_dir)
+        logger.info(
+            "[canonical-intraday] no new market/model input; suppressing duplicate evidence "
+            "event=%s batch_id=%s input_snapshot_id=%s reconciliation=%s",
+            event_type,
+            batch_id,
+            input_snapshot_id,
+            reconciliation,
+        )
+        return {
+            "status": "NO_NEW_INPUT",
+            "batch_id": batch_id,
+            "input_snapshot_id": input_snapshot_id,
+            "forecasts": len(forecasts),
+            "reconciliation": reconciliation,
+        }
+
     for row in forecasts:
         symbol = str(row["symbol"]).upper()
         logger.info(
@@ -172,11 +247,36 @@ def run_intraday_cycle(
                     batch_id=batch_id,
                 )
 
+    _write_input_snapshot_marker(
+        marker_path,
+        {
+            "schema_version": 1,
+            "input_snapshot_id": input_snapshot_id,
+            "first_batch_id": batch_id,
+            "first_event": event_type,
+            "first_as_of": as_of.isoformat(),
+            "market_session": market_session.isoformat() if market_session else None,
+            "symbols": sorted({str(row.get("symbol") or "").upper() for row in forecasts}),
+            "model_versions": sorted(
+                {str(row.get("model_version") or "unknown") for row in forecasts}
+            ),
+        },
+    )
+
     reconciliation = reconcile_predictions(cfg.data_dir)
     logger.info(
-        "[canonical-intraday] complete event=%s batch_id=%s forecasts=%s reconciliation=%s",
+        "[canonical-intraday] complete event=%s batch_id=%s input_snapshot_id=%s "
+        "forecasts=%s reconciliation=%s",
         event_type,
         batch_id,
+        input_snapshot_id,
         len(forecasts),
         reconciliation,
     )
+    return {
+        "status": "WRITTEN",
+        "batch_id": batch_id,
+        "input_snapshot_id": input_snapshot_id,
+        "forecasts": len(forecasts),
+        "reconciliation": reconciliation,
+    }

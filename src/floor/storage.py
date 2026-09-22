@@ -7,6 +7,11 @@ from typing import Any
 from floor.persistence_db import persist_payload
 from floor.schemas import record_to_dict
 
+_IDEMPOTENCY_CACHE: dict[
+    Path,
+    tuple[tuple[int, int] | None, set[tuple[str, str, str]]],
+] = {}
+
 
 def _find_data_root(path: Path) -> Path | None:
     parts = list(path.parts)
@@ -39,21 +44,61 @@ def _idempotency_key(payload: dict[str, Any]) -> tuple[str, str, str] | None:
     return batch_id, symbol, horizon
 
 
-def _jsonl_contains_key(path: Path, key: tuple[str, str, str]) -> bool:
+def _path_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return stat.st_size, stat.st_mtime_ns
+
+
+def _load_idempotency_keys(path: Path) -> set[tuple[str, str, str]]:
+    keys: set[tuple[str, str, str]] = set()
     if not path.exists():
-        return False
-    # Stream rather than materializing an ever-growing ledger. Corrupt JSON is
-    # intentionally fail-closed: silently skipping a damaged durable row would
-    # make a duplicate look safe to append.
+        return keys
+    # Corrupt JSON is intentionally fail-closed: silently skipping a damaged
+    # durable row would make a duplicate look safe to append.
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
             if not line:
                 continue
             row = json.loads(line)
-            if isinstance(row, dict) and _idempotency_key(row) == key:
-                return True
-    return False
+            if not isinstance(row, dict):
+                continue
+            key = _idempotency_key(row)
+            if key is not None:
+                keys.add(key)
+    return keys
+
+
+def _jsonl_contains_key(path: Path, key: tuple[str, str, str]) -> bool:
+    """Check durable idempotency in O(1) after one ledger scan per process.
+
+    The cache is invalidated whenever size or mtime changes unexpectedly, so an
+    external writer cannot make this process trust stale membership state.
+    """
+
+    cache_path = path.resolve()
+    signature = _path_signature(path)
+    cached = _IDEMPOTENCY_CACHE.get(cache_path)
+    if cached is None or cached[0] != signature:
+        cached = (signature, _load_idempotency_keys(path))
+        _IDEMPOTENCY_CACHE[cache_path] = cached
+    return key in cached[1]
+
+
+def _remember_jsonl_key(path: Path, key: tuple[str, str, str] | None) -> None:
+    if key is None:
+        return
+    cache_path = path.resolve()
+    signature = _path_signature(path)
+    cached = _IDEMPOTENCY_CACHE.get(cache_path)
+    if cached is None:
+        _IDEMPOTENCY_CACHE[cache_path] = (signature, {key})
+        return
+    cached[1].add(key)
+    _IDEMPOTENCY_CACHE[cache_path] = (signature, cached[1])
 
 
 def append_jsonl(path: Path, record: object, *, batch_id: str = "") -> bool:
@@ -89,6 +134,7 @@ def append_jsonl(path: Path, record: object, *, batch_id: str = "") -> bool:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(serialized)
         handle.flush()
+    _remember_jsonl_key(path, key)
 
     if data_root is not None:
         stream = path.parent.name
