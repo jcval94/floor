@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -147,7 +148,7 @@ def main() -> int:
             print(json.dumps(result, sort_keys=True))
         return 0
     except RuntimeError as exc:
-        print(f"runtime_state_cas_error={exc}")
+        print(f"runtime_state_cas_error={exc}", file=sys.stderr)
         return 1
 
 
