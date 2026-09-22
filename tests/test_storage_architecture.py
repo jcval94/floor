@@ -62,11 +62,12 @@ def test_authoritative_runtime_writers_are_main_only() -> None:
 def test_intraday_and_eod_revalidate_after_writer_lock() -> None:
     intraday = _text(WORKFLOWS / "intraday_engine.yml")
     eod = _text(WORKFLOWS / "eod.yml")
-    assert "Revalidate checkpoint under writer lock" in intraday
+    assert "Revalidate immutable checkpoint context under writer lock" in intraday
+    assert "validate-context" in intraday
     assert "steps.lock_guard.outputs.run == 'true'" in intraday
     assert "cancel-in-progress: false" in intraday
-    assert "Revalidate close" in eod
-    assert "writer lock" in eod
+    assert "Revalidate immutable close context under writer lock" in eod
+    assert "validate-context" in eod
     assert "steps.lock_guard.outputs.run == 'true'" in eod
 
 
