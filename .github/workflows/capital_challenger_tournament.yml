@@ -18,8 +18,7 @@ on:
       - capital_tournament_request.json
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   tournament:
@@ -150,16 +149,6 @@ jobs:
           assert attribution["member"] == "capital_allocation_challenger"
           print(json.dumps({"summary": report["summary"], "attribution": attribution.get("summary")}, indent=2))
           PY
-
-      - name: Publish retrospective report to rolling runtime state
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/runtime_state.sh publish
-
-      - name: Trigger audited Pages rebuild
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run pages.yml --ref main
 
       - name: Upload tournament evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

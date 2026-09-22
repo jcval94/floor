@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: test run-cycle review-training build-site lint retrain-models init-dbs yahoo-ingest build-training-from-db
+.PHONY: test run-cycle review-training build-site lint retrain-models init-db-schemas hydrate-db init-dbs yahoo-ingest build-training-from-db
 
 test:
 	PYTHONPATH=src $(PYTHON) -m pytest
@@ -27,6 +27,12 @@ build-training-from-db:
 	PYTHONPATH=src $(PYTHON) -m features.build_training_from_db --db data/market/market_data.sqlite --output data/training/yahoo_market_rows.jsonl
 	PYTHONPATH=src $(PYTHON) -m features.run_features --input data/training/yahoo_market_rows.jsonl --output data/training/modelable_dataset.json
 
-init-dbs:
+init-db-schemas:
 	PYTHONPATH=src $(PYTHON) -c "from pathlib import Path; from storage.market_db import init_market_db; from floor.persistence_db import init_persistence_db; init_market_db(Path('data/market/market_data.sqlite')); init_persistence_db(Path('data/persistence/app.sqlite'))"
+
+hydrate-db:
 	PYTHONPATH=src $(PYTHON) -m floor.persistence_hydration --data-dir data
+
+# Backwards-compatible full repair target. Critical market workflows use
+# init-db-schemas and hydrate only when the SQLite cache is actually absent.
+init-dbs: init-db-schemas hydrate-db
