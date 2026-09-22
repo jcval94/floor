@@ -2,7 +2,12 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod"]
+    workflows:
+      - "eod"
+      - "retrain_assessment"
+      - "retrain_execute"
+      - "strategy_league_bootstrap"
+      - "capital_challenger_tournament"
     types: [completed]
     branches: [main]
   push:
@@ -17,6 +22,7 @@ on:
       - 'src/utils/pages_security.py'
       - 'src/league/publish_site.py'
       - 'src/league/experiment_observation.py'
+      - 'data/training/models/**'
       - 'config/universe.yaml'
       - 'config/strategy_league.json'
       - 'config/strategy_league_epochs.json'
@@ -38,7 +44,7 @@ jobs:
       publish: ${{ steps.decision.outputs.publish }}
       reason: ${{ steps.decision.outputs.reason }}
     steps:
-      - name: Require real EOD evidence before workflow-run publication
+      - name: Require authoritative evidence before workflow-run publication
         id: decision
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,16 +63,52 @@ jobs:
             && [ "${{ github.event.workflow_run.conclusion }}" = "success" ] \
             && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
             upstream_run_id="${{ github.event.workflow_run.id }}"
-            expected_artifact="eod-audit-${upstream_run_id}"
-            count=$(gh api \
-              -H "Accept: application/vnd.github+json" \
-              "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100" \
-              --jq "[.artifacts[] | select(.name == \"${expected_artifact}\" and .expired == false)] | length")
+            upstream_workflow="${{ github.event.workflow_run.name }}"
+            artifact_mode=exact
+            case "$upstream_workflow" in
+              eod)
+                expected_artifact="eod-audit-${upstream_run_id}"
+                ;;
+              retrain_assessment)
+                expected_artifact="retrain-assessment-${upstream_run_id}"
+                ;;
+              retrain_execute)
+                expected_artifact="retrain-execute-${upstream_run_id}"
+                ;;
+              strategy_league_bootstrap)
+                expected_artifact="strategy-league-weekly-model-"
+                artifact_mode=prefix
+                ;;
+              capital_challenger_tournament)
+                expected_artifact="capital-tournament-"
+                artifact_mode=prefix
+                ;;
+              *)
+                expected_artifact=""
+                ;;
+            esac
+
+            if [ -n "$expected_artifact" ]; then
+              if [ "$artifact_mode" = "prefix" ]; then
+                count=$(gh api \
+                  -H "Accept: application/vnd.github+json" \
+                  "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100" \
+                  --jq "[.artifacts[] | select((.name | startswith(\"${expected_artifact}\")) and .expired == false)] | length")
+              else
+                count=$(gh api \
+                  -H "Accept: application/vnd.github+json" \
+                  "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100" \
+                  --jq "[.artifacts[] | select(.name == \"${expected_artifact}\" and .expired == false)] | length")
+              fi
+            else
+              count=0
+            fi
+
             if [ "${count:-0}" -gt 0 ]; then
               publish=true
-              reason=eod_audit_present
+              reason="${upstream_workflow}_evidence_present"
             else
-              reason=eod_completed_without_audit
+              reason="${upstream_workflow}_completed_without_publication_evidence"
             fi
           fi
 
