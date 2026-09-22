@@ -38,3 +38,15 @@ def test_governance_separates_recommendation_authorization_and_execution(
     assert payload["models"]["value"]["retrain_authorization"] == "BLOCKED_BY_GOVERNANCE"
     assert payload["models"]["value"]["retrain_execution"] == "NOT_RUN"
     assert payload["models"]["timing"]["retrain_authorization"] == "NOT_REQUIRED"
+
+def test_retrain_execute_request_can_only_approve_governed_recommendations() -> None:
+    workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")
+
+    assert "push:" in workflow
+    assert "retrain_execute_request.json" in workflow
+    assert 'if event_name == "push":' in workflow
+    assert "force = False" in workflow
+    assert 'request.get("approve_recommended") is True' in workflow
+    assert 'payload.get("tasks_for_auto_retrain_requested", [])' in workflow
+    assert "audited_request_approval_of_recommendation" in workflow
+
