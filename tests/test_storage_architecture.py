@@ -148,3 +148,59 @@ def test_runtime_state_is_release_backed_checksum_verified_and_authoritative() -
     assert "data/persistence" in script
     assert "data/predictions" in script
     assert "data/training/reviews.jsonl" in script
+
+
+def test_research_workflows_never_publish_authoritative_runtime_state() -> None:
+    for filename in (
+        "walk_forward_oos.yml",
+        "capital_challenger_tournament.yml",
+        "retrospective_replay.yml",
+        "robust_range_v3.yml",
+    ):
+        workflow = _text(WORKFLOWS / filename)
+        assert "runtime_state.sh publish" not in workflow
+        assert "gh workflow run pages.yml" not in workflow
+
+
+def test_every_authoritative_runtime_publish_restores_first() -> None:
+    marker = "runtime_state.sh publish"
+    for path in WORKFLOWS.glob("*.yml"):
+        workflow = _text(path)
+        if marker not in workflow:
+            continue
+        assert "runtime_state.sh restore" in workflow, path.name
+        assert workflow.index("runtime_state.sh restore") < workflow.index(marker), path.name
+
+
+def test_critical_market_workflows_skip_full_ledger_hydration_when_cache_exists() -> None:
+    makefile = _text(ROOT / "Makefile")
+    assert "init-db-schemas:" in makefile
+    assert "hydrate-db:" in makefile
+    for filename in ("intraday_engine.yml", "eod.yml"):
+        workflow = _text(WORKFLOWS / filename)
+        assert "make init-db-schemas" in workflow
+        assert "make init-dbs" not in workflow
+        assert "full ledger replay skipped" in workflow
+
+
+def test_critical_runtime_installs_explicit_dependencies() -> None:
+    for filename in ("intraday_engine.yml", "eod.yml", "monitoring.yml"):
+        workflow = _text(WORKFLOWS / filename)
+        assert 'python-version: "3.12"' in workflow
+        assert 'pip install -e . "numpy>=2.0,<3"' in workflow
+
+
+def test_eod_refuses_to_retrain_missing_frozen_weekly_model() -> None:
+    workflow = _text(WORKFLOWS / "eod.yml")
+    assert "Validate frozen Weekly challenger" in workflow
+    assert "weekly_model_sha256" in workflow
+    assert "bootstrap_weekly_model" not in workflow
+    assert "performing one-time 2y bootstrap refresh" not in workflow
+
+
+def test_intraday_repairs_stale_market_data_before_retrying_inference() -> None:
+    workflow = _text(WORKFLOWS / "intraday_engine.yml")
+    assert "utils.market_data_guard" in workflow
+    assert "--max-stale-sessions 0" in workflow
+    assert "--range 5d" in workflow
+    assert "refreshing recent daily bars once" in workflow
