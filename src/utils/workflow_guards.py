@@ -84,55 +84,27 @@ def _intraday_decision(
         out["reason"] = "no_checkpoint_due"
         return out
 
-    eligible = [
-        (event, timestamp)
-        for event, timestamp in due
-        if now - timestamp <= tolerance and not _marker_exists(data_dir, "intraday", day, event)
-    ]
-    if eligible:
-        event, timestamp = max(eligible, key=lambda item: item[1])
-        lateness = max(0, int((now - timestamp).total_seconds() // 60))
-        out.update(
-            {
-                "run": "true",
-                "reason": "checkpoint_due",
-                "event": event,
-                "checkpoint_at": timestamp.isoformat(),
-                "lateness_minutes": str(lateness),
-                "required_market_session": _required_session("intraday", timestamp),
-            }
-        )
-        return out
-
-    unmarked_due = [
-        (event, timestamp)
-        for event, timestamp in due
-        if not _marker_exists(data_dir, "intraday", day, event)
-    ]
-    if unmarked_due:
-        event, timestamp = max(unmarked_due, key=lambda item: item[1])
-        lateness = max(0, int((now - timestamp).total_seconds() // 60))
-        out.update(
-            {
-                "reason": "checkpoint_missed",
-                "event": event,
-                "checkpoint_at": timestamp.isoformat(),
-                "lateness_minutes": str(lateness),
-                "required_market_session": _required_session("intraday", timestamp),
-            }
-        )
-        return out
-
+    # Point-in-time checkpoints are not reconstructable after a later
+    # checkpoint has become due. Always reason about the most recent due
+    # checkpoint only; never fall back to an older unmarked checkpoint.
     event, timestamp = max(due, key=lambda item: item[1])
-    out.update(
-        {
-            "reason": "already_ran",
-            "event": event,
-            "checkpoint_at": timestamp.isoformat(),
-            "lateness_minutes": str(max(0, int((now - timestamp).total_seconds() // 60))),
-            "required_market_session": _required_session("intraday", timestamp),
-        }
-    )
+    lateness = max(0, int((now - timestamp).total_seconds() // 60))
+    base = {
+        "event": event,
+        "checkpoint_at": timestamp.isoformat(),
+        "lateness_minutes": str(lateness),
+        "required_market_session": _required_session("intraday", timestamp),
+    }
+
+    if _marker_exists(data_dir, "intraday", day, event):
+        out.update({"reason": "already_ran", **base})
+        return out
+
+    if now - timestamp <= tolerance:
+        out.update({"run": "true", "reason": "checkpoint_due", **base})
+        return out
+
+    out.update({"reason": "checkpoint_missed", **base})
     return out
 
 
@@ -300,6 +272,29 @@ def validate_accepted_context(
         )
     if kind == "eod" and event != "CLOSE":
         raise RuntimeError("EOD accepted context must use CLOSE")
+
+    if kind == "intraday":
+        later_completed = [
+            (name, timestamp)
+            for name, timestamp in checkpoint_times(info).items()
+            if timestamp > checkpoint
+            and _marker_exists(data_dir, "intraday", session_day, name)
+        ]
+        if later_completed:
+            latest_name, latest_timestamp = max(
+                later_completed, key=lambda item: item[1]
+            )
+            return {
+                "run": "false",
+                "reason": "superseded_checkpoint",
+                "event": event,
+                "session_day": session_day,
+                "checkpoint_at": checkpoint.isoformat(),
+                "lateness_minutes": "",
+                "required_market_session": _required_session(kind, checkpoint),
+                "superseded_by": latest_name,
+                "superseded_by_at": latest_timestamp.isoformat(),
+            }
 
     exists = _marker_exists(data_dir, kind, session_day, event)
     return {
