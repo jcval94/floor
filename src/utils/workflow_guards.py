@@ -167,6 +167,14 @@ def _eod_decision(
         out["reason"] = "not_close_due"
         return out
 
+    # Daily bars are only considered complete 20 minutes after official close.
+    # Keep the accepted checkpoint timestamp at the official close, but do not
+    # launch EOD work before today's daily bar is legally available.
+    data_ready_at = close_at + timedelta(minutes=20)
+    if now < data_ready_at:
+        out["reason"] = "close_data_not_ready"
+        return out
+
     lateness = max(0, int((now - close_at).total_seconds() // 60))
     out["lateness_minutes"] = str(lateness)
     if now - close_at > timedelta(minutes=max(0, tolerance_minutes)):
