@@ -2,8 +2,10 @@ name: eod
 
 on:
   schedule:
-    # Cheap 15-minute close polling uses only the checkpoint marker release.
-    - cron: "*/15 20-23 * * 1-5"
+    # Avoid top-of-hour scheduler congestion while retaining four close backstops/hour.
+    - cron: "7,22,37,52 20-23 * * 1-5"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
