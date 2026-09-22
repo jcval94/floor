@@ -209,22 +209,36 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
     shared_data = summary.get("shared_data", {}) if isinstance(summary.get("shared_data"), dict) else {}
     target = summary.get("target", {}) if isinstance(summary.get("target"), dict) else {}
     schema = summary.get("schema", {}) if isinstance(summary.get("schema"), dict) else {}
+    has_review = bool(review_model)
+    has_artifact = bool(artifact)
+    monitoring_metrics = performance.get("current_metrics", {})
+    if not isinstance(monitoring_metrics, dict):
+        monitoring_metrics = {}
+    validation_metrics = artifact.get("metrics", {})
+    if not isinstance(validation_metrics, dict):
+        validation_metrics = {}
 
     return {
         "model_key": model_key,
         "model_name": review_model.get("model_name", artifact.get("model_name", "unknown")),
         "current_version": review_model.get("current_version", artifact.get("version", "unknown")),
-        "status": review_model.get("status", "UNKNOWN"),
-        "drift_level": review_model.get("drift_level", "GREEN"),
-        "recommendation": review_model.get("recommendation", review_model.get("action", "SKIP_RETRAIN")),
+        "status": review_model.get("status", "UNREVIEWED" if has_artifact else "UNKNOWN"),
+        "drift_level": review_model.get("drift_level", "UNKNOWN" if not has_review else "GREEN"),
+        "recommendation": review_model.get(
+            "recommendation",
+            review_model.get("action", "REVIEW_PENDING" if has_artifact else "PENDING"),
+        ),
         "auto_retrain": bool(review_model.get("auto_retrain", False)),
         "as_of": review_model.get("as_of"),
         "reason": review_model.get("reason", ""),
         "metrics": {
-            "current": performance.get("current_metrics", {}),
+            "current": monitoring_metrics,
             "baseline": performance.get("baseline_metrics", {}),
             "deltas": performance.get("deltas", {}),
         },
+        "monitoring_metrics": monitoring_metrics,
+        "validation_metrics": validation_metrics,
+        "validation_source": "champion_artifact" if validation_metrics else None,
         "drift_components": {
             "shared_data": {"state": shared_data.get("state"), "score": shared_data.get("score")},
             "target": {"state": target.get("state"), "score": target.get("score")},
@@ -234,6 +248,8 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
         "artifact": {
             "model_type": artifact.get("model_type"),
             "trained_at": artifact.get("trained_at") or artifact.get("as_of"),
+            "train_rows": artifact.get("train_rows"),
+            "test_rows": artifact.get("test_rows"),
             "dataset_summary": artifact.get("dataset_summary", {}),
             "params": artifact.get("params", {}),
         },
@@ -245,26 +261,39 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
     timing_version = str(timing_detail.get("current_version", "unknown"))
     value_metrics = value_detail.get("metrics", {}).get("current", {}) if isinstance(value_detail.get("metrics"), dict) else {}
     timing_metrics = timing_detail.get("metrics", {}).get("current", {}) if isinstance(timing_detail.get("metrics"), dict) else {}
+    monitoring_metrics = {
+        "pinball_loss_m3": value_metrics.get("pinball_loss"),
+        "mae_realized_floor_m3": value_metrics.get("mae_realized_floor"),
+        "top1_accuracy_m3": timing_metrics.get("top1_accuracy"),
+        "top3_accuracy_m3": timing_metrics.get("top3_accuracy"),
+    }
+    monitoring_metrics = {key: value for key, value in monitoring_metrics.items() if value is not None}
+    value_validation = value_detail.get("validation_metrics", {})
+    timing_validation = timing_detail.get("validation_metrics", {})
+    validation_metrics = {
+        "value": value_validation if isinstance(value_validation, dict) else {},
+        "timing": timing_validation if isinstance(timing_validation, dict) else {},
+    }
+    value_status = str(value_detail.get("status") or "UNKNOWN")
+    timing_status = str(timing_detail.get("status") or "UNKNOWN")
+    combined_status = value_status if value_status == timing_status else (
+        timing_status if value_status == "UNKNOWN" else value_status
+    )
+
     return {
         "model_key": "m3",
         "model_name": "m3_value_linear + m3_timing_multiclass",
         "current_version": f"value:{value_version}|timing:{timing_version}",
-        "status": value_detail.get("status", "UNKNOWN"),
-        "drift_level": value_detail.get("drift_level", "GREEN"),
-        "recommendation": value_detail.get("recommendation", "SKIP_RETRAIN"),
+        "status": combined_status,
+        "drift_level": value_detail.get("drift_level", timing_detail.get("drift_level", "UNKNOWN")),
+        "recommendation": value_detail.get("recommendation", timing_detail.get("recommendation", "PENDING")),
         "auto_retrain": bool(value_detail.get("auto_retrain", False) or timing_detail.get("auto_retrain", False)),
         "as_of": value_detail.get("as_of") or timing_detail.get("as_of"),
         "reason": value_detail.get("reason") or timing_detail.get("reason") or "",
-        "metrics": {
-            "current": {
-                "pinball_loss_m3": value_metrics.get("pinball_loss"),
-                "mae_realized_floor_m3": value_metrics.get("mae_realized_floor"),
-                "top1_accuracy_m3": timing_metrics.get("top1_accuracy"),
-                "top3_accuracy_m3": timing_metrics.get("top3_accuracy"),
-            },
-            "baseline": {},
-            "deltas": {},
-        },
+        "metrics": {"current": monitoring_metrics, "baseline": {}, "deltas": {}},
+        "monitoring_metrics": monitoring_metrics,
+        "validation_metrics": validation_metrics,
+        "validation_source": "champion_artifact" if any(validation_metrics.values()) else None,
         "drift_components": {
             "shared_data": {"state": None, "score": None},
             "target": {"state": None, "score": None},
@@ -281,7 +310,6 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
             },
         },
     }
-
 
 def _champion_versions_from_artifacts(artifacts: dict[str, dict]) -> dict[str, dict]:
     champion_versions: dict[str, dict] = {}
@@ -741,9 +769,17 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
 
     suite_status = review_summary.get("suite_status", "UNKNOWN")
     suite_recommendation = review_summary.get("suite_recommendation", "PENDING")
+    has_review_evidence = any(
+        isinstance(review_models.get(task), dict) and bool(review_models.get(task))
+        for task in ("d1", "w1", "q1", "value", "timing")
+    )
+    has_artifact_evidence = any(bool(artifacts.get(task)) for task in artifacts)
     if review_summary_stale:
         suite_status = "STALE_REVIEW"
         suite_recommendation = "REBUILD_SITE_DATA"
+    elif suite_status == "UNKNOWN" and has_artifact_evidence and not has_review_evidence:
+        suite_status = "UNREVIEWED"
+        suite_recommendation = "REVIEW_PENDING"
 
     models = {
         "champion": champion,

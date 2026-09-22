@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod"]
+    workflows: ["eod", "retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos"]
     types: [completed]
     branches: [main]
   push:
@@ -11,6 +11,7 @@ on:
       - '.github/workflows/pages.yml'
       - 'scripts/runtime_state.sh'
       - 'scripts/monitoring_state.sh'
+      - 'scripts/research_state.sh'
       - 'site/**'
       - 'src/utils/pages_build.py'
       - 'src/utils/pages_publish.py'
@@ -20,6 +21,7 @@ on:
       - 'config/universe.yaml'
       - 'config/strategy_league.json'
       - 'config/strategy_league_epochs.json'
+      - 'data/training/models/**'
   workflow_dispatch:
 
 permissions:
@@ -57,16 +59,48 @@ jobs:
             && [ "${{ github.event.workflow_run.conclusion }}" = "success" ] \
             && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
             upstream_run_id="${{ github.event.workflow_run.id }}"
-            expected_artifact="eod-audit-${upstream_run_id}"
-            count=$(gh api \
+            upstream_name="${{ github.event.workflow_run.name }}"
+            artifacts=$(gh api \
               -H "Accept: application/vnd.github+json" \
-              "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100" \
-              --jq "[.artifacts[] | select(.name == \"${expected_artifact}\" and .expired == false)] | length")
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100")
+
+            count=0
+            case "$upstream_name" in
+              eod)
+                expected="eod-audit-${upstream_run_id}"
+                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              retrain_execute)
+                expected="retrain-execute-${upstream_run_id}"
+                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              retrain_assessment)
+                expected="retrain-assessment-${upstream_run_id}"
+                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              monitoring)
+                expected="monitoring-health-${upstream_run_id}"
+                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              strategy_league_bootstrap)
+                suffix="-${upstream_run_id}"
+                count=$(jq --arg prefix "strategy-league-weekly-model-" --arg suffix "$suffix" '[.artifacts[] | select((.name | startswith($prefix)) and (.name | endswith($suffix)) and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              capital_challenger_tournament)
+                suffix="-${upstream_run_id}"
+                count=$(jq --arg prefix "capital-tournament-" --arg suffix "$suffix" '[.artifacts[] | select((.name | startswith($prefix)) and (.name | endswith($suffix)) and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              walk_forward_oos)
+                suffix="-${upstream_run_id}"
+                count=$(jq --arg prefix "walk-forward-oos-" --arg suffix "$suffix" '[.artifacts[] | select((.name | startswith($prefix)) and (.name | endswith($suffix)) and .expired == false)] | length' <<<"$artifacts")
+                ;;
+            esac
+
             if [ "${count:-0}" -gt 0 ]; then
               publish=true
-              reason=eod_audit_present
+              reason="${upstream_name}_evidence_present"
             else
-              reason=eod_completed_without_audit
+              reason="${upstream_name}_completed_without_publishable_evidence"
             fi
           fi
 
@@ -112,6 +146,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Overlay durable research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/research_state.sh restore
 
       - name: Overlay latest isolated monitoring state
         env:

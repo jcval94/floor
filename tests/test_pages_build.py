@@ -417,3 +417,43 @@ def test_build_pages_data_marks_review_summary_stale_when_versions_diverge(tmp_p
     assert models["suite_recommendation"] == "REBUILD_SITE_DATA"
     assert models["sync_status"]["review_summary_stale"] is True
     assert models["sync_status"]["latest_model_artifact_at"] == "2026-03-19T12:00:00+00:00"
+
+
+def test_build_pages_data_exposes_champion_validation_metrics_without_review(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training" / "models").mkdir(parents=True)
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}), encoding="utf-8"
+    )
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps({"models": {}, "suite_status": "UNKNOWN"}), encoding="utf-8"
+    )
+    (data_dir / "training" / "models" / "d1_champion.json").write_text(
+        json.dumps({
+            "model_name": "robust_range_v3_d1",
+            "version": "d1-v1",
+            "train_rows": 100,
+            "test_rows": 25,
+            "metrics": {"mae_floor": 1.25, "test_interval_coverage": 0.61},
+        }),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    detail = models["details"]["d1"]
+    assert detail["status"] == "UNREVIEWED"
+    assert detail["recommendation"] == "REVIEW_PENDING"
+    assert detail["monitoring_metrics"] == {}
+    assert detail["validation_metrics"]["mae_floor"] == 1.25
+    assert detail["validation_metrics"]["test_interval_coverage"] == 0.61
+    assert detail["validation_source"] == "champion_artifact"
+    assert detail["artifact"]["train_rows"] == 100
+    assert detail["artifact"]["test_rows"] == 25
+    assert models["suite_status"] == "UNREVIEWED"
+    assert models["suite_recommendation"] == "REVIEW_PENDING"

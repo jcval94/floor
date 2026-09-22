@@ -212,3 +212,58 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert ".league-series-0" in styles
     assert ".league-series-6" in styles
     assert ".league-challenger-row" in styles
+
+
+def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    weekly = data_dir / "metrics" / "strategy_league" / "models" / "league-v7" / "weekly.json"
+    weekly.parent.mkdir(parents=True)
+    weekly.write_text(
+        json.dumps({
+            "model_name": "weekly_opportunity_ridge",
+            "version": "weekly-v1",
+            "metrics": {"spearman_rank_correlation": 0.22},
+        }),
+        encoding="utf-8",
+    )
+    league_config = tmp_path / "strategy_league.json"
+    league_config.write_text(
+        json.dumps({
+            "league_id": "strategy_league_v7_clean_genesis_10k",
+            "initial_nav_usd": 10000,
+            "weekly_model_path": "data/metrics/strategy_league/models/league-v7/weekly.json",
+            "members": [{"id": "weekly_opportunity_ridge"}],
+        }),
+        encoding="utf-8",
+    )
+
+    league_out = tmp_path / "site" / "data" / "strategy_league.json"
+    observation_out = tmp_path / "site" / "data" / "experiment_observation.json"
+    league_payload = publish_league_payload(data_dir, league_out, league_config)
+    observation = publish_observation_payload(data_dir, observation_out, league_config)
+
+    assert league_payload["status"] == "WAITING_FOR_GENESIS"
+    assert league_payload["weekly_model"]["status"] == "FROZEN"
+    assert league_payload["weekly_model"]["version"] == "weekly-v1"
+    assert observation["status"] == "WAITING_FOR_GENESIS"
+    weekly_observation = observation["models"]["weekly_opportunity_challenger"]
+    assert weekly_observation["status"] == "FROZEN"
+    assert weekly_observation["validation_metrics"]["spearman_rank_correlation"] == 0.22
+
+
+def test_waiting_league_reports_missing_weekly_model_truthfully(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    league_config = tmp_path / "strategy_league.json"
+    league_config.write_text(
+        json.dumps({
+            "league_id": "strategy_league_v7_clean_genesis_10k",
+            "weekly_model_path": "data/metrics/strategy_league/models/missing.json",
+        }),
+        encoding="utf-8",
+    )
+    output = tmp_path / "site" / "data" / "strategy_league.json"
+
+    payload = publish_league_payload(data_dir, output, league_config)
+
+    assert payload["status"] == "WAITING_FOR_WEEKLY_MODEL"
+    assert payload["weekly_model"]["status"] == "MISSING"
