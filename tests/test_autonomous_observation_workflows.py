@@ -5,23 +5,22 @@ def _text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def test_scheduled_workflows_are_low_frequency_but_delay_tolerant() -> None:
+def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     eod = _text(".github/workflows/eod.yml")
     intraday = _text(".github/workflows/intraday_engine.yml")
     monitoring = _text(".github/workflows/monitoring.yml")
 
-    assert 'cron: "*/15 ' not in eod
-    assert 'cron: "*/30 ' not in monitoring
-    assert 'cron: "15,30,45 ' not in intraday
+    assert 'cron: "*/15 13-22 * * 1-5"' in intraday
+    assert "--tolerance-minutes 180" in intraday
+    assert "checkpoint_state.sh restore" in intraday
+    assert "validate-context" in intraday
+    assert "--checkpoint-at" in intraday
+    assert "--required-market-session" in intraday
 
-    assert 'cron: "40 13-22 * * 1-5"' in intraday
-    assert 'cron: "10 20,21 * * 1-5"' in intraday
-    assert "--tolerance-minutes 90" in intraday
-    assert "checkpoint_missed" in intraday
-
-    assert 'cron: "15 20-23 * * 1-5"' in eod
+    assert 'cron: "*/15 20-23 * * 1-5"' in eod
     assert "--tolerance-minutes 360" in eod
-    assert "close_window_missed" in eod
+    assert "checkpoint_state.sh restore" in eod
+    assert "validate-context" in eod
 
     assert 'cron: "55 13-22 * * 1-5"' in monitoring
 

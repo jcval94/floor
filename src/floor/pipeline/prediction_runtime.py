@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -148,13 +148,34 @@ def _signal_from_prediction(
     )
 
 
-def _latest_feature_rows(cfg: RuntimeConfig, symbols: list[str]) -> list[dict]:
+def _latest_feature_rows(
+    cfg: RuntimeConfig,
+    symbols: list[str],
+    max_market_session: date | None = None,
+) -> list[dict]:
     symbol_set = {symbol.upper() for symbol in symbols}
     raw_rows = build_rows_from_db(
         db_path=cfg.data_dir / "market" / "market_data.sqlite",
         universe_path=cfg.root_dir / "config" / "universe.yaml",
     )
-    selected = [row for row in raw_rows if str(row.get("symbol", "")).upper() in symbol_set]
+
+    def allowed(row: dict) -> bool:
+        if str(row.get("symbol", "")).upper() not in symbol_set:
+            return False
+        if max_market_session is None:
+            return True
+        raw_ts = row.get("timestamp")
+        if not isinstance(raw_ts, str) or not raw_ts:
+            return False
+        try:
+            parsed = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=ET)
+        return parsed.astimezone(ET).date() <= max_market_session
+
+    selected = [row for row in raw_rows if allowed(row)]
     featured = build_features(selected)
     latest_by_symbol: dict[str, dict] = {}
     for row in featured:

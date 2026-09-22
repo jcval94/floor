@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -80,10 +80,13 @@ def run_intraday_cycle(
     event_type: EventType,
     symbols: list[str],
     cfg: RuntimeConfig,
+    *,
+    as_of: datetime | None = None,
+    market_session: date | None = None,
 ) -> None:
     """Canonical range-forecast cycle. No external override or directional orders."""
 
-    market_rows = _latest_feature_rows(cfg, symbols)
+    market_rows = _latest_feature_rows(cfg, symbols, max_market_session=market_session)
     if len(market_rows) != len(symbols):
         observed = {
             str(row.get("symbol") or "").strip().upper() for row in market_rows
@@ -95,7 +98,10 @@ def run_intraday_cycle(
         )
     _validate_feature_rows(market_rows)
 
-    as_of = datetime.now(tz=ET)
+    as_of = as_of or datetime.now(tz=ET)
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=ET)
+    as_of = as_of.astimezone(ET)
     batch_id = _batch_id(as_of, event_type)
     logger.info(
         "[canonical-intraday] start event=%s batch_id=%s symbols=%s "

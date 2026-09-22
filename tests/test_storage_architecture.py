@@ -37,8 +37,11 @@ def test_operational_workflows_do_not_commit_generated_state_to_git() -> None:
     ):
         workflow = _text(WORKFLOWS / filename)
         assert "runtime_state.sh restore" in workflow
-        if filename != "ingest.yml":
+        if filename not in {"ingest.yml", "monitoring.yml"}:
             assert "runtime_state.sh publish" in workflow
+        if filename == "monitoring.yml":
+            assert "monitoring_state.sh publish" in workflow
+            assert "runtime_state.sh publish" not in workflow
         assert "git add data/" not in workflow
         assert "git add \\\n            data/" not in workflow
 
@@ -74,12 +77,16 @@ def test_ingest_uses_before_after_decision_fingerprint_not_git_head() -> None:
     assert "git diff --quiet -- data/predictions" not in workflow
 
 
-def test_monitoring_does_not_republish_stale_snapshot_after_failure() -> None:
+def test_monitoring_isolated_from_authoritative_runtime_writer() -> None:
     workflow = _text(WORKFLOWS / "monitoring.yml")
     assert "rm -f data/metrics/public_metrics.json" in workflow
     assert "snapshot_valid" in workflow
     assert "steps.health.outputs.snapshot_valid == 'true'" in workflow
     assert "steps.session.outputs.run == 'true'" in workflow
+    assert "floor-monitoring-state-writer" in workflow
+    assert "floor-runtime-state-writer" not in workflow
+    assert "monitoring_state.sh publish" in workflow
+    assert "runtime_state.sh publish" not in workflow
 
 
 def test_retrain_execute_commits_only_lightweight_model_registry() -> None:
@@ -204,3 +211,25 @@ def test_intraday_repairs_stale_market_data_before_retrying_inference() -> None:
     assert "--max-stale-sessions 0" in workflow
     assert "--range 5d" in workflow
     assert "refreshing recent daily bars once" in workflow
+
+
+def test_lightweight_state_scripts_are_syntactically_valid() -> None:
+    for script in ("checkpoint_state.sh", "monitoring_state.sh"):
+        subprocess.run(["bash", "-n", str(ROOT / "scripts" / script)], check=True)
+
+
+def test_checkpoint_gates_do_not_download_full_runtime_state() -> None:
+    intraday = _text(WORKFLOWS / "intraday_engine.yml")
+    eod = _text(WORKFLOWS / "eod.yml")
+    assert "Restore lightweight checkpoint state" in intraday
+    assert "Restore lightweight checkpoint state" in eod
+    assert "checkpoint_state.sh restore" in intraday
+    assert "checkpoint_state.sh restore" in eod
+    assert "validate-context" in intraday
+    assert "validate-context" in eod
+
+
+def test_pages_overlay_isolated_monitoring_state() -> None:
+    workflow = _text(WORKFLOWS / "pages.yml")
+    assert "monitoring_state.sh restore" in workflow
+    assert "monitoring_state_source" in workflow

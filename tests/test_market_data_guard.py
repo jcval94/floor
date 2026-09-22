@@ -80,3 +80,27 @@ def test_future_timestamp_blocks_inference(tmp_path: Path) -> None:
 def test_missing_db_blocks_inference(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="DB missing"):
         validate_market_data_freshness(tmp_path / "missing.sqlite", ["AAPL"])
+
+
+def test_explicit_required_session_ignores_newer_bar_and_requires_checkpoint_history(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 21, 22, 0, tzinfo=timezone.utc)
+    db = tmp_path / "market.sqlite"
+    _seed_db(
+        db,
+        [
+            ("AAPL", "2026-08-20T13:30:00+00:00"),
+            ("AAPL", "2026-08-21T13:30:00+00:00"),
+            ("SPY", "2026-08-20T13:30:00+00:00"),
+            ("SPY", "2026-08-21T13:30:00+00:00"),
+        ],
+    )
+    result = validate_market_data_freshness(
+        db,
+        ["AAPL", "SPY"],
+        now=now,
+        max_stale_sessions=0,
+        required_session=datetime(2026, 8, 20, tzinfo=timezone.utc).date(),
+    )
+    assert result["status"] == "OK"
+    assert result["required_latest_session"] == "2026-08-20"
+    assert result["required_session_source"] == "explicit_checkpoint"
