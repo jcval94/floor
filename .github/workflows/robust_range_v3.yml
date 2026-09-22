@@ -72,6 +72,29 @@ jobs:
             --validation-days 75 \
             --test-days 76
 
+      - name: Determine whether strict promotion dominance is required
+        id: promotion_gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "require_dominance=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "${BASE_REF}"
+          changed="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          printf '%s\n' "$changed"
+          require=false
+          while IFS= read -r path; do
+            case "$path" in
+              src/features/*|src/models/robust_range_v3.py|src/models/evaluate_range_v3.py|src/models/train_classic_horizons.py|src/models/classic_horizon_predictor.py|tests/test_robust_range_v3.py|tests/test_train_classic_horizons.py|tests/test_classic_champion_gate.py)
+                require=true
+                ;;
+            esac
+          done <<< "$changed"
+          echo "require_dominance=$require" >> "$GITHUB_OUTPUT"
+
       - name: Train conservative robust challenger
         run: |
           set -euo pipefail
@@ -96,14 +119,21 @@ jobs:
             --tasks d1,w1,q1 \
             --version "robust-range-v3-${GITHUB_RUN_ID}"
 
-      - name: Require validation and sealed-test dominance
+      - name: Audit validation and sealed-test dominance
         run: |
-          PYTHONPATH=src python -m models.evaluate_range_v3 \
-            --dataset data/training/modelable_dataset.json \
-            --baseline-dir artifacts/baseline \
-            --candidate-dir artifacts/candidate \
-            --output artifacts/audit/robust_range_v3_audit.json \
-            --require-dominance
+          set -euo pipefail
+          args=(
+            --dataset data/training/modelable_dataset.json
+            --baseline-dir artifacts/baseline
+            --candidate-dir artifacts/candidate
+            --output artifacts/audit/robust_range_v3_audit.json
+          )
+          if [ "${{ steps.promotion_gate.outputs.require_dominance }}" = "true" ]; then
+            args+=(--require-dominance)
+          else
+            echo "Strict promotion dominance is informational for this PR because robust-range training/features did not change."
+          fi
+          PYTHONPATH=src python -m models.evaluate_range_v3 "${args[@]}"
 
       - name: Verify train-serve and temporal contracts
         run: |
