@@ -50,3 +50,10 @@ def test_retrain_execute_request_can_only_approve_governed_recommendations() -> 
     assert 'payload.get("tasks_for_auto_retrain_requested", [])' in workflow
     assert "audited_request_approval_of_recommendation" in workflow
 
+def test_retrain_execute_reserves_full_m3_validation_and_test_windows() -> None:
+    workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")
+
+    assert "--validation-days 140" in workflow
+    assert "--test-days 141" in workflow
+    assert "M3 labels consume 65 future sessions" in workflow
+
