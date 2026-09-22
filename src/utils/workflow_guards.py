@@ -232,6 +232,11 @@ def resolve_event_context(
         raise RuntimeError(
             f"Cannot resolve event={event!r} for session_day={info.session_day.isoformat()}"
         )
+    if checkpoint_at > current:
+        raise RuntimeError(
+            "Cannot force a future market checkpoint: "
+            f"event={event} checkpoint_at={checkpoint_at.isoformat()} now={current.isoformat()}"
+        )
     return {
         "run": "true",
         "reason": reason,
