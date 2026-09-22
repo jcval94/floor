@@ -494,7 +494,7 @@ def _normalize_monitoring_payloads(
         else:
             operational_status = "UNKNOWN"
 
-    operational_health = {
+    operational_health: dict[str, Any] = {
         "status": operational_status,
         "reported_status": reported_status,
         "generated_at": metrics.get("generated_at"),
