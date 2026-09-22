@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from models.temporal_cv import purged_expanding_folds
 from models.train_timing_models import train_floor_week_m3_timing_model
+from models.select_champion import _minimum_quality_gate
 from models.train_value_models import train_floor_m3_value_model
 from models.train_weekly_opportunity import (
     predict_weekly_opportunity,
@@ -101,3 +102,32 @@ def test_weekly_opportunity_challenger_is_risk_adjusted_and_not_canonical() -> N
     low = dict(rows[110])
     high = dict(rows[140])
     assert predict_weekly_opportunity(high, artifact.params) > predict_weekly_opportunity(low, artifact.params)
+
+
+def test_timing_minimum_quality_gate_rejects_worse_than_uniform_model() -> None:
+    gate = _minimum_quality_gate(
+        "timing",
+        {
+            "uniform_log_loss": 2.5649493575,
+            "quality_log_loss": 2.60,
+            "log_loss_skill": -0.01,
+            "quality_top3_accuracy": 0.30,
+        },
+    )
+    assert gate["passed"] is False
+    assert gate["checks"]["beats_uniform_log_loss"] is False
+    assert gate["checks"]["positive_log_loss_skill"] is False
+
+
+def test_value_minimum_quality_gate_accepts_calibrated_candidate() -> None:
+    gate = _minimum_quality_gate(
+        "value",
+        {
+            "pinball_loss_delta": 0.05,
+            "mae_delta": 0.10,
+            "breach_rate_error": 0.08,
+            "quality_calibration_error": 0.10,
+            "quality_temporal_stability": 0.40,
+        },
+    )
+    assert gate["passed"] is True
