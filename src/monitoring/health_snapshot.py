@@ -104,6 +104,18 @@ def _dashboard_checks(data_dir: Path, now_utc: datetime) -> list[dict[str, str]]
     return checks
 
 
+def _current_m3_champion_versions(data_dir: Path) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for task in ("value", "timing"):
+        payload = _read_json(data_dir / "training" / "models" / f"{task}_champion.json")
+        if payload is None:
+            continue
+        version = str(payload.get("version") or "").strip()
+        if version:
+            versions[task] = version
+    return versions
+
+
 def _m3_capability_check(data_dir: Path) -> dict[str, str]:
     payload = _read_json(data_dir / "reports" / "dashboard.json")
     if payload is None:
@@ -135,6 +147,36 @@ def _m3_capability_check(data_dir: Path) -> dict[str, str]:
         )
 
     total = len(m3_rows)
+    current_versions = _current_m3_champion_versions(data_dir)
+    observed_versions = {
+        str(row.get("model_version") or "").strip()
+        for row in m3_rows
+        if str(row.get("model_version") or "").strip()
+    }
+    if current_versions and observed_versions:
+        expected_parts = [
+            f"{task}:{version}"
+            for task, version in current_versions.items()
+        ]
+        stale_rows = [
+            row
+            for row in m3_rows
+            if not all(
+                part in str(row.get("model_version") or "")
+                for part in expected_parts
+            )
+        ]
+        if stale_rows:
+            current = ",".join(
+                f"{task}={version}" for task, version in current_versions.items()
+            )
+            return _check(
+                "m3_capability",
+                "DEGRADED",
+                "m3 capability pending champion refresh "
+                f"stale_batch_rows={len(stale_rows)}/{total} current_{current}",
+            )
+
     blocked = sum(
         1
         for row in m3_rows

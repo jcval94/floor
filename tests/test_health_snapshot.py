@@ -15,6 +15,7 @@ def _write_dashboard(
     as_of: datetime,
     *,
     m3_status: str = "ok",
+    model_version: str | None = None,
 ) -> None:
     path = data_dir / "reports" / "dashboard.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +34,7 @@ def _write_dashboard(
                 "event_type": "OPEN",
                 "horizon": "m3",
                 "m3_status": m3_status,
+                "model_version": model_version,
                 "m3_block_reason": (
                     "timing confidence below threshold"
                     if m3_status == "timing_abstained"
@@ -56,6 +58,12 @@ def _write_review(data_dir: Path, status: str = "OK", recommendation: str = "KEE
         ),
         encoding="utf-8",
     )
+
+
+def _write_champion(data_dir: Path, task: str, version: str) -> None:
+    path = data_dir / "training" / "models" / f"{task}_champion.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": version}), encoding="utf-8")
 
 
 def _write_marker(data_dir: Path, day: str, event: str) -> None:
@@ -175,3 +183,47 @@ def test_m3_timing_abstention_degrades_operational_health(tmp_path: Path) -> Non
     )
     assert capability["status"] == "DEGRADED"
     assert "timing_abstained=1/1" in capability["detail"]
+
+def test_stale_m3_batch_is_reported_as_pending_champion_refresh(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    _write_dashboard(
+        tmp_path,
+        now,
+        m3_status="timing_abstained",
+        model_version="value:old-value|timing:old-timing",
+    )
+    _write_champion(tmp_path, "value", "new-value")
+    _write_champion(tmp_path, "timing", "new-timing")
+    _write_review(tmp_path)
+
+    payload = build_health_snapshot(tmp_path, now=now)
+    capability = next(
+        item for item in payload["series"] if item["name"] == "m3_capability"
+    )
+
+    assert capability["status"] == "DEGRADED"
+    assert "pending champion refresh" in capability["detail"]
+    assert "timing capability degraded" not in capability["detail"]
+
+
+def test_current_m3_batch_still_reports_real_timing_abstention(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    version = "value:v2|timing:t2"
+    _write_dashboard(
+        tmp_path,
+        now,
+        m3_status="timing_abstained",
+        model_version=version,
+    )
+    _write_champion(tmp_path, "value", "v2")
+    _write_champion(tmp_path, "timing", "t2")
+    _write_review(tmp_path)
+
+    payload = build_health_snapshot(tmp_path, now=now)
+    capability = next(
+        item for item in payload["series"] if item["name"] == "m3_capability"
+    )
+
+    assert capability["status"] == "DEGRADED"
+    assert "timing_abstained=1/1" in capability["detail"]
+

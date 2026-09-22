@@ -67,3 +67,14 @@ def test_retrain_execute_m3_split_cli_is_contiguous() -> None:
     )
     assert expected in workflow
 
+def test_retrain_execute_refreshes_review_before_runtime_publish() -> None:
+    workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")
+
+    assert "Refresh post-retrain review against current champions" in workflow
+    assert "PYTHONPATH=src python -m floor.main review-training" in workflow
+    assert "PYTHONPATH=src python -m floor.training.governance" in workflow
+    assert workflow.index("Refresh post-retrain review against current champions") < workflow.index(
+        "Publish rolling runtime state outside Git"
+    )
+    assert 'control["execution"] = "COMPLETED"' in workflow or '"execution": "COMPLETED"' in workflow
+
