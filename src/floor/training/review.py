@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -11,7 +12,7 @@ from models.dataset_summary import summarize_modelable_rows
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
 from monitoring.drift_detection import js_divergence
 from monitoring.run_retrain_assessment import load_simple_yaml
-from models.evaluate import timing_metrics, value_metrics
+from models.evaluate import pinball_loss, timing_metrics, value_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -189,11 +190,30 @@ def _schema_drift(
 def _value_target_drift(reference_summary: dict, current_summary: dict, cfg: dict) -> dict:
     ref_stats = reference_summary.get("numeric_stats", {})
     cur_stats = current_summary.get("numeric_stats", {})
-    scores = {}
-    for column in ["floor_m3", "realized_floor_m3"]:
-        ref = ref_stats.get(column, {})
-        cur = cur_stats.get(column, {})
-        scores[column] = _relative_shift(ref.get("mean"), cur.get("mean"), ref.get("std"))
+    scores: dict[str, float] = {}
+
+    # The value model is trained in relative drawdown space. Monitoring the
+    # absolute floor price would confuse market-level appreciation with target
+    # drift, so prefer the exact training target when both summaries expose it.
+    if ref_stats.get("floor_delta_m3") and cur_stats.get("floor_delta_m3"):
+        ref = ref_stats.get("floor_delta_m3", {})
+        cur = cur_stats.get("floor_delta_m3", {})
+        scores["floor_delta_m3"] = _relative_shift(
+            ref.get("mean"),
+            cur.get("mean"),
+            ref.get("std"),
+        )
+    else:
+        # Legacy artifacts may predate floor_delta_m3 in dataset summaries.
+        for column in ["floor_m3", "realized_floor_m3"]:
+            ref = ref_stats.get(column, {})
+            cur = cur_stats.get(column, {})
+            scores[column] = _relative_shift(
+                ref.get("mean"),
+                cur.get("mean"),
+                ref.get("std"),
+            )
+
     score = max(scores.values()) if scores else 0.0
     state = _score_state(
         score,
@@ -216,7 +236,12 @@ def _timing_target_drift(reference_summary: dict, current_summary: dict, cfg: di
 
 
 def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
-    eval_rows = [row for row in rows if row.get("floor_m3") is not None]
+    eval_rows = [
+        row
+        for row in rows
+        if row.get("floor_m3") is not None
+        and float(row.get("close") or 0.0) > 0.0
+    ]
     if not eval_rows:
         return {
             "state": "YELLOW",
@@ -228,21 +253,81 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
 
     y_true = [float(row["floor_m3"]) for row in eval_rows]
     y_pred = [predict_value_floor_m3(row, artifact) for row in eval_rows]
-    confidences = [0.5 + min(0.45, abs(float(row.get("ai_conviction_long") or 0.0) * 0.4)) for row in eval_rows]
+    confidences = [
+        0.5 + min(0.45, abs(float(row.get("ai_conviction_long") or 0.0) * 0.4))
+        for row in eval_rows
+    ]
     current_metrics = value_metrics(y_true, y_pred, confidences)
     baseline_metrics = artifact.get("metrics", {})
+    params = artifact.get("params", {}) if isinstance(artifact.get("params"), dict) else {}
+    delta_quantile = float(params.get("target_delta_quantile", 0.8))
 
-    baseline_pinball = float(baseline_metrics.get("pinball_loss", 0.0))
-    current_pinball = float(current_metrics.get("pinball_loss", 0.0))
+    y_true_delta: list[float] = []
+    y_pred_delta: list[float] = []
+    for row, predicted_floor in zip(eval_rows, y_pred):
+        close = float(row["close"])
+        target_raw = row.get("floor_delta_m3")
+        target_delta = (
+            float(target_raw)
+            if target_raw not in (None, "")
+            else (close - float(row["floor_m3"])) / close
+        )
+        predicted_delta = (close - float(predicted_floor)) / close
+        y_true_delta.append(max(0.0, min(0.95, target_delta)))
+        y_pred_delta.append(max(0.0, min(0.95, predicted_delta)))
+
+    current_pinball_delta = pinball_loss(
+        y_true_delta,
+        y_pred_delta,
+        alpha=delta_quantile,
+    )
+    current_mae_delta = (
+        sum(abs(t - p) for t, p in zip(y_true_delta, y_pred_delta))
+        / len(y_true_delta)
+    )
+    current_metrics["pinball_loss_delta"] = current_pinball_delta
+    current_metrics["mae_delta"] = current_mae_delta
+
+    baseline_pinball_delta = float(
+        baseline_metrics.get("pinball_loss_delta", current_pinball_delta)
+    )
+    baseline_mae_delta = float(
+        baseline_metrics.get("mae_delta", current_mae_delta)
+    )
+    price_pinball_relative_increase = _relative_increase(
+        float(baseline_metrics.get("pinball_loss", 0.0)),
+        float(current_metrics.get("pinball_loss", 0.0)),
+    )
+    pinball_delta_relative_increase = _relative_increase(
+        baseline_pinball_delta,
+        current_pinball_delta,
+    )
     deltas = {
-        "pinball_loss_relative_increase": _relative_increase(
-            baseline_pinball,
-            current_pinball,
+        # Backward-compatible key now uses the scale-free training target.
+        "pinball_loss_relative_increase": pinball_delta_relative_increase,
+        "pinball_loss_delta_relative_increase": pinball_delta_relative_increase,
+        "pinball_loss_delta_absolute_increase": max(
+            current_pinball_delta - baseline_pinball_delta,
+            0.0,
         ),
-        "pinball_loss_absolute_increase": max(current_pinball - baseline_pinball, 0.0),
-        "breach_rate": abs(float(current_metrics.get("breach_rate", 0.0)) - float(baseline_metrics.get("breach_rate", 0.0))),
-        "calibration_error": abs(float(current_metrics.get("calibration_error", 0.0)) - float(baseline_metrics.get("calibration_error", 0.0))),
-        "temporal_stability_drop": max(float(baseline_metrics.get("temporal_stability", 0.0)) - float(current_metrics.get("temporal_stability", 0.0)), 0.0),
+        "mae_delta_relative_increase": _relative_increase(
+            baseline_mae_delta,
+            current_mae_delta,
+        ),
+        "price_pinball_loss_relative_increase": price_pinball_relative_increase,
+        "breach_rate": abs(
+            float(current_metrics.get("breach_rate", 0.0))
+            - float(baseline_metrics.get("breach_rate", 0.0))
+        ),
+        "calibration_error": abs(
+            float(current_metrics.get("calibration_error", 0.0))
+            - float(baseline_metrics.get("calibration_error", 0.0))
+        ),
+        "temporal_stability_drop": max(
+            float(baseline_metrics.get("temporal_stability", 0.0))
+            - float(current_metrics.get("temporal_stability", 0.0)),
+            0.0,
+        ),
     }
 
     warn = float(cfg["performance_thresholds"]["pinball_loss_warn"])
@@ -251,32 +336,33 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     calibration_fail = float(cfg["thresholds"]["coverage_calibration_fail"])
     state = "GREEN"
     if (
-        deltas["pinball_loss_relative_increase"] >= fail
+        pinball_delta_relative_increase >= fail
         or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_fail"])
         or deltas["calibration_error"] >= calibration_fail
     ):
         state = "RED"
     elif (
-        deltas["pinball_loss_relative_increase"] >= warn
+        pinball_delta_relative_increase >= warn
         or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_warn"])
         or deltas["calibration_error"] >= calibration_warn
         or deltas["temporal_stability_drop"] >= warn
     ):
         state = "YELLOW"
 
+    score = max(
+        pinball_delta_relative_increase,
+        deltas["breach_rate"],
+        deltas["calibration_error"],
+        deltas["temporal_stability_drop"],
+    )
     return {
         "state": state,
-        "score": max(
-            deltas["pinball_loss_relative_increase"],
-            deltas["breach_rate"],
-            deltas["calibration_error"],
-            deltas["temporal_stability_drop"],
-        ),
+        "score": score,
         "current_metrics": current_metrics,
         "baseline_metrics": baseline_metrics,
         "deltas": deltas,
+        "metric_space": "relative_floor_delta",
     }
-
 
 def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     eval_rows = [row for row in rows if row.get("floor_week_m3") is not None]
@@ -294,17 +380,70 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     current_metrics = timing_metrics(y_true, probs)
     baseline_metrics = artifact.get("metrics", {})
 
+    uniform_log_loss = math.log(13)
+    baseline_skill = float(
+        baseline_metrics.get(
+            "log_loss_skill",
+            1.0
+            - float(baseline_metrics.get("quality_log_loss", uniform_log_loss))
+            / uniform_log_loss,
+        )
+    )
+    baseline_top3 = float(
+        baseline_metrics.get(
+            "quality_top3_accuracy",
+            baseline_metrics.get("top3_accuracy", 0.0),
+        )
+    )
+    baseline_unique_raw = baseline_metrics.get("quality_top1_unique_classes")
+    baseline_dominant_raw = baseline_metrics.get("quality_top1_dominant_share")
+    baseline_quality_reasons: list[str] = []
+    if baseline_skill <= 0.0:
+        baseline_quality_reasons.append("non_positive_log_loss_skill")
+    if baseline_top3 <= (3.0 / 13.0):
+        baseline_quality_reasons.append("top3_not_above_uniform")
+    if baseline_unique_raw is not None and int(baseline_unique_raw) < 2:
+        baseline_quality_reasons.append("top1_single_class")
+    if baseline_dominant_raw is not None and float(baseline_dominant_raw) >= 0.95:
+        baseline_quality_reasons.append("top1_collapsed")
+
+    current_unique = int(current_metrics.get("top1_unique_classes", 0))
+    current_dominant = float(current_metrics.get("top1_dominant_share", 1.0))
+    current_quality_reasons: list[str] = []
+    if current_unique < 2:
+        current_quality_reasons.append("top1_single_class")
+    if current_dominant >= 0.95:
+        current_quality_reasons.append("top1_collapsed")
+    current_log_loss = float(current_metrics.get("log_loss", uniform_log_loss))
+    current_skill = 1.0 - (current_log_loss / uniform_log_loss)
+    if current_skill <= 0.0:
+        current_quality_reasons.append("non_positive_log_loss_skill")
+
     deltas = {
-        "top1_accuracy_drop": max(float(baseline_metrics.get("top1_accuracy", 0.0)) - float(current_metrics.get("top1_accuracy", 0.0)), 0.0),
-        "top3_accuracy_drop": max(float(baseline_metrics.get("top3_accuracy", 0.0)) - float(current_metrics.get("top3_accuracy", 0.0)), 0.0),
-        "log_loss": float(current_metrics.get("log_loss", 0.0)) - float(baseline_metrics.get("log_loss", 0.0)),
-        "brier_score": float(current_metrics.get("brier_score", 0.0)) - float(baseline_metrics.get("brier_score", 0.0)),
-        "expected_week_distance": float(current_metrics.get("expected_week_distance", 0.0)) - float(baseline_metrics.get("expected_week_distance", 0.0)),
+        "top1_accuracy_drop": max(
+            float(baseline_metrics.get("top1_accuracy", 0.0))
+            - float(current_metrics.get("top1_accuracy", 0.0)),
+            0.0,
+        ),
+        "top3_accuracy_drop": max(
+            float(baseline_metrics.get("top3_accuracy", 0.0))
+            - float(current_metrics.get("top3_accuracy", 0.0)),
+            0.0,
+        ),
+        "log_loss": current_log_loss - float(baseline_metrics.get("log_loss", 0.0)),
+        "brier_score": float(current_metrics.get("brier_score", 0.0))
+        - float(baseline_metrics.get("brier_score", 0.0)),
+        "expected_week_distance": float(current_metrics.get("expected_week_distance", 0.0))
+        - float(baseline_metrics.get("expected_week_distance", 0.0)),
+        "artifact_quality_gate_failed": 1.0 if baseline_quality_reasons else 0.0,
+        "current_prediction_collapse": 1.0 if current_quality_reasons else 0.0,
     }
 
     state = "GREEN"
     if (
-        deltas["top1_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top1_accuracy_m3_drop_fail"])
+        baseline_quality_reasons
+        or current_quality_reasons
+        or deltas["top1_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top1_accuracy_m3_drop_fail"])
         or deltas["top3_accuracy_drop"] >= float(cfg["m3_performance_thresholds"]["top3_accuracy_m3_drop_fail"])
         or deltas["log_loss"] >= float(cfg["timing_thresholds"]["log_loss_fail"])
         or deltas["brier_score"] >= float(cfg["timing_thresholds"]["brier_fail"])
@@ -326,8 +465,14 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
         "current_metrics": current_metrics,
         "baseline_metrics": baseline_metrics,
         "deltas": deltas,
+        "absolute_quality": {
+            "baseline_fail_reasons": baseline_quality_reasons,
+            "current_fail_reasons": current_quality_reasons,
+            "current_log_loss_skill": current_skill,
+            "current_top1_unique_classes": current_unique,
+            "current_top1_dominant_share": current_dominant,
+        },
     }
-
 
 def _build_record(model_key: str, artifact: dict | None, current_rows: list[dict], current_summary: dict, cfg: dict) -> dict:
     now = datetime.now(tz=ET).isoformat()
