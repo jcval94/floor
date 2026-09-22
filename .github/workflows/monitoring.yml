@@ -2,7 +2,8 @@ name: monitoring
 
 on:
   schedule:
-    - cron: "55 13-22 * * 1-5"
+    # Off-peak minute reduces GitHub Actions schedule delay risk.
+    - cron: "11 14-23 * * 1-5"
   workflow_dispatch:
 
 permissions:

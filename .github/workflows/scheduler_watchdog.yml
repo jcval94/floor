@@ -1,0 +1,62 @@
+name: scheduler_watchdog
+
+on:
+  schedule:
+    # Independent backstop for dropped/delayed scheduled workflow events.
+    - cron: "5 13-23 * * 1-5"
+    - cron: "35 13-23 * * 1-5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/scheduler_watchdog.yml"
+      - ".github/workflows/intraday_engine.yml"
+      - ".github/workflows/eod.yml"
+      - ".github/workflows/monitoring.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: floor-scheduler-watchdog
+  cancel-in-progress: true
+
+jobs:
+  dispatch_backstops:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch checkpoint backstops
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          echo "Dispatching intraday checkpoint guard."
+          gh workflow run intraday_engine.yml --repo "$repo" --ref main
+
+          utc_hour="$(date -u +%H)"
+          if [ "$((10#$utc_hour))" -ge 20 ]; then
+            echo "Dispatching EOD close guard."
+            gh workflow run eod.yml --repo "$repo" --ref main
+          else
+            echo "EOD not yet in UTC close window; skip watchdog dispatch."
+          fi
+
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "35 13-23 * * 1-5" ]; then
+            echo "Dispatching hourly monitoring backstop."
+            gh workflow run monitoring.yml --repo "$repo" --ref main
+          fi
+
+      - name: Summary
+        run: |
+          {
+            echo "## Floor scheduler watchdog"
+            echo "- trigger: ${{ github.event_name }}"
+            echo "- schedule: ${{ github.event.schedule || 'n/a' }}"
+            echo "- intraday: dispatched"
+            echo "- eod: dispatched only inside UTC close window"
+            echo "- monitoring: dispatched on the :35 schedule"
+            echo "- checkpoint/EOD guards remain authoritative and suppress duplicates"
+          } >> "$GITHUB_STEP_SUMMARY"
