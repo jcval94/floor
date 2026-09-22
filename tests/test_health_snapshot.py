@@ -10,7 +10,12 @@ from monitoring.health_snapshot import build_health_snapshot, write_health_snaps
 ET = ZoneInfo("America/New_York")
 
 
-def _write_dashboard(data_dir: Path, as_of: datetime) -> None:
+def _write_dashboard(
+    data_dir: Path,
+    as_of: datetime,
+    *,
+    m3_status: str = "ok",
+) -> None:
     path = data_dir / "reports" / "dashboard.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -21,7 +26,19 @@ def _write_dashboard(data_dir: Path, as_of: datetime) -> None:
                 "as_of": as_of.isoformat(),
                 "event_type": "OPEN",
                 "horizon": "d1",
-            }
+            },
+            {
+                "symbol": "AAPL",
+                "as_of": as_of.isoformat(),
+                "event_type": "OPEN",
+                "horizon": "m3",
+                "m3_status": m3_status,
+                "m3_block_reason": (
+                    "timing confidence below threshold"
+                    if m3_status == "timing_abstained"
+                    else None
+                ),
+            },
         ],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -143,3 +160,18 @@ def test_writer_does_not_churn_timestamp_when_semantics_unchanged(tmp_path: Path
     assert first["status"] == "OK"
     assert second["status"] == "OK"
     assert second["generated_at"] == first["generated_at"]
+
+
+def test_m3_timing_abstention_degrades_operational_health(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    _write_dashboard(tmp_path, now, m3_status="timing_abstained")
+    _write_review(tmp_path)
+
+    payload = build_health_snapshot(tmp_path, now=now)
+
+    assert payload["status"] == "DEGRADED"
+    capability = next(
+        item for item in payload["series"] if item["name"] == "m3_capability"
+    )
+    assert capability["status"] == "DEGRADED"
+    assert "timing_abstained=1/1" in capability["detail"]
