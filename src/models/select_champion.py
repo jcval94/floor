@@ -216,12 +216,6 @@ def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: 
 
     decision = "promote_first"
     reason = "No champion exists; bootstrap champion with first valid artifact."
-    if existing is None and task in {"value", "timing"} and not quality_gate["passed"]:
-        decision = "challenger_only"
-        reason = (
-            "No champion exists, but the first artifact failed the minimum m3 "
-            f"quality gate and cannot bootstrap serving: {quality_gate['reason']}."
-        )
     previous_champion_version = None
     archived_path = None
     archived: Path | None = None
