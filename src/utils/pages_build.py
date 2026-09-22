@@ -209,21 +209,40 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
     shared_data = summary.get("shared_data", {}) if isinstance(summary.get("shared_data"), dict) else {}
     target = summary.get("target", {}) if isinstance(summary.get("target"), dict) else {}
     schema = summary.get("schema", {}) if isinstance(summary.get("schema"), dict) else {}
+    monitoring_metrics = (
+        performance.get("current_metrics", {})
+        if isinstance(performance.get("current_metrics"), dict)
+        else {}
+    )
+    validation_metrics = (
+        artifact.get("metrics", {}) if isinstance(artifact.get("metrics"), dict) else {}
+    )
+    has_artifact = bool(artifact)
 
     return {
         "model_key": model_key,
         "model_name": review_model.get("model_name", artifact.get("model_name", "unknown")),
         "current_version": review_model.get("current_version", artifact.get("version", "unknown")),
-        "status": review_model.get("status", "UNKNOWN"),
-        "drift_level": review_model.get("drift_level", "GREEN"),
-        "recommendation": review_model.get("recommendation", review_model.get("action", "SKIP_RETRAIN")),
+        "status": review_model.get("status") or ("UNREVIEWED" if has_artifact else "UNKNOWN"),
+        "drift_level": review_model.get("drift_level") or "UNKNOWN",
+        "recommendation": (
+            review_model.get("recommendation")
+            or review_model.get("action")
+            or ("PENDING_REVIEW" if has_artifact else "SKIP_RETRAIN")
+        ),
         "auto_retrain": bool(review_model.get("auto_retrain", False)),
         "as_of": review_model.get("as_of"),
         "reason": review_model.get("reason", ""),
         "metrics": {
-            "current": performance.get("current_metrics", {}),
+            "current": monitoring_metrics,
             "baseline": performance.get("baseline_metrics", {}),
             "deltas": performance.get("deltas", {}),
+        },
+        "monitoring_metrics": monitoring_metrics,
+        "validation_metrics": validation_metrics,
+        "metric_sources": {
+            "monitoring": "training/review_summary_latest.json",
+            "validation": f"training/models/{model_key}_champion.json",
         },
         "drift_components": {
             "shared_data": {"state": shared_data.get("state"), "score": shared_data.get("score")},
@@ -243,27 +262,75 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
 def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]) -> dict[str, Any]:
     value_version = str(value_detail.get("current_version", "unknown"))
     timing_version = str(timing_detail.get("current_version", "unknown"))
-    value_metrics = value_detail.get("metrics", {}).get("current", {}) if isinstance(value_detail.get("metrics"), dict) else {}
-    timing_metrics = timing_detail.get("metrics", {}).get("current", {}) if isinstance(timing_detail.get("metrics"), dict) else {}
+    value_monitoring = (
+        value_detail.get("monitoring_metrics", {})
+        if isinstance(value_detail.get("monitoring_metrics"), dict)
+        else {}
+    )
+    timing_monitoring = (
+        timing_detail.get("monitoring_metrics", {})
+        if isinstance(timing_detail.get("monitoring_metrics"), dict)
+        else {}
+    )
+    value_validation = (
+        value_detail.get("validation_metrics", {})
+        if isinstance(value_detail.get("validation_metrics"), dict)
+        else {}
+    )
+    timing_validation = (
+        timing_detail.get("validation_metrics", {})
+        if isinstance(timing_detail.get("validation_metrics"), dict)
+        else {}
+    )
+    monitoring_metrics = {
+        "pinball_loss_m3": value_monitoring.get("pinball_loss"),
+        "mae_realized_floor_m3": value_monitoring.get("mae_realized_floor"),
+        "top1_accuracy_m3": timing_monitoring.get("top1_accuracy"),
+        "top3_accuracy_m3": timing_monitoring.get("top3_accuracy"),
+    }
+    monitoring_metrics = {
+        key: value for key, value in monitoring_metrics.items() if value is not None
+    }
+    validation_metrics = {
+        "pinball_loss_m3": value_validation.get("pinball_loss"),
+        "mae_realized_floor_m3": value_validation.get("mae_realized_floor"),
+        "top1_accuracy_m3": timing_validation.get("top1_accuracy"),
+        "top3_accuracy_m3": timing_validation.get("top3_accuracy"),
+        "log_loss_m3": timing_validation.get("log_loss"),
+        "brier_score_m3": timing_validation.get("brier_score"),
+    }
+    validation_metrics = {
+        key: value for key, value in validation_metrics.items() if value is not None
+    }
+    value_status = str(value_detail.get("status") or "UNKNOWN")
+    timing_status = str(timing_detail.get("status") or "UNKNOWN")
+    status = (
+        "UNREVIEWED"
+        if "UNREVIEWED" in {value_status, timing_status}
+        and {value_status, timing_status} <= {"UNREVIEWED", "UNKNOWN"}
+        else value_status
+    )
+
     return {
         "model_key": "m3",
         "model_name": "m3_value_linear + m3_timing_multiclass",
         "current_version": f"value:{value_version}|timing:{timing_version}",
-        "status": value_detail.get("status", "UNKNOWN"),
-        "drift_level": value_detail.get("drift_level", "GREEN"),
-        "recommendation": value_detail.get("recommendation", "SKIP_RETRAIN"),
+        "status": status,
+        "drift_level": value_detail.get("drift_level") or timing_detail.get("drift_level") or "UNKNOWN",
+        "recommendation": value_detail.get("recommendation") or timing_detail.get("recommendation") or "PENDING_REVIEW",
         "auto_retrain": bool(value_detail.get("auto_retrain", False) or timing_detail.get("auto_retrain", False)),
         "as_of": value_detail.get("as_of") or timing_detail.get("as_of"),
         "reason": value_detail.get("reason") or timing_detail.get("reason") or "",
         "metrics": {
-            "current": {
-                "pinball_loss_m3": value_metrics.get("pinball_loss"),
-                "mae_realized_floor_m3": value_metrics.get("mae_realized_floor"),
-                "top1_accuracy_m3": timing_metrics.get("top1_accuracy"),
-                "top3_accuracy_m3": timing_metrics.get("top3_accuracy"),
-            },
+            "current": monitoring_metrics,
             "baseline": {},
             "deltas": {},
+        },
+        "monitoring_metrics": monitoring_metrics,
+        "validation_metrics": validation_metrics,
+        "metric_sources": {
+            "monitoring": "training/review_summary_latest.json",
+            "validation": "training/models/value_champion.json + timing_champion.json",
         },
         "drift_components": {
             "shared_data": {"state": None, "score": None},
