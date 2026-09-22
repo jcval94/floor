@@ -31,7 +31,6 @@ def test_operational_workflows_do_not_commit_generated_state_to_git() -> None:
     for filename in (
         "intraday_engine.yml",
         "eod.yml",
-        "monitoring.yml",
         "ingest.yml",
         "retrain_assessment.yml",
     ):
@@ -331,5 +330,10 @@ def test_monitoring_has_runtime_completion_backstop() -> None:
     assert 'workflows: ["intraday_engine", "eod"]' in workflow
     assert "types: [completed]" in workflow
     assert "branches: [main]" in workflow
-    assert "github.event.workflow_run.conclusion == 'success'" in workflow
-    assert "github.event.workflow_run.head_branch == 'main'" in workflow
+    assert "Determine monitoring eligibility" in workflow
+    assert "UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}" in workflow
+    assert "UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}" in workflow
+    assert '[ "$UPSTREAM_CONCLUSION" = "success" ]' in workflow
+    assert '[ "$UPSTREAM_BRANCH" = "main" ]' in workflow
+    assert '[ "$REF_NAME" = "main" ]' in workflow
+    assert "steps.eligibility.outputs.run == 'true'" in workflow
