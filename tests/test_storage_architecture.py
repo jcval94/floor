@@ -276,6 +276,10 @@ def test_robust_range_strict_dominance_is_scoped_to_model_changes() -> None:
     assert "src/models/robust_range_v3.py" in workflow
     assert "src/models/train_classic_horizons.py" in workflow
     assert "src/features/*" in workflow
+    assert "BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert "HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in workflow
+    assert 'git diff --name-only "${BASE_SHA}" "${HEAD_SHA}"' in workflow
+    assert "origin/${BASE_REF}...HEAD" not in workflow
     assert "src/forecasting/parity_models.py" not in workflow.split(
         "case \"$path\" in", 1
     )[1].split("esac", 1)[0]
