@@ -419,3 +419,38 @@ def test_validate_prediction_quality_latest_batch_ignores_historical_failures(tm
             sample_limit=2,
             evaluation_scope="all_rows",
         )
+
+
+def test_validate_prediction_quality_reports_m3_timing_abstention_as_degraded(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    data_dir = tmp_path / "data"
+    for symbol in ("AAPL", "MSFT"):
+        append_jsonl(
+            data_dir / "predictions" / f"{symbol}.jsonl",
+            {
+                "symbol": symbol,
+                "horizon": "m3",
+                "as_of": "2026-01-02T10:00:00+00:00",
+                "action": None,
+                "m3_status": "timing_abstained",
+                "m3_block_reason": "timing confidence below threshold",
+            },
+        )
+
+    out = validate_prediction_quality(
+        data_dir=data_dir,
+        stream="predictions",
+        max_m3_blocked_ratio=0.4,
+        min_action_consistency_ratio=1.0,
+        action_return_tolerance=0.0,
+        sample_limit=2,
+    )
+
+    assert out["m3_blocked_ratio"] == 0.0
+    assert out["m3_timing_abstained"] == 2
+    assert out["m3_timing_abstained_ratio"] == 1.0
+    assert out["m3_capability_status"] == "DEGRADED"
+    captured = capsys.readouterr()
+    assert "::warning::m3 timing capability degraded" in captured.out

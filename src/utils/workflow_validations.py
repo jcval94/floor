@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+M3_TIMING_DEGRADED_RATIO = 0.4
+
 
 def _sqlite_count(db_path: Path, table: str) -> int:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -286,7 +288,24 @@ def validate_prediction_quality(
     m3_rows = [row for row in rows if str(row.get("horizon", "")).strip().lower() == "m3"]
     m3_total = sum(1 for row in m3_rows if str(row.get("m3_status", "")).strip() != "")
     m3_blocked = sum(1 for row in m3_rows if str(row.get("m3_status", "")).lower() == "blocked")
+    m3_timing_abstained = sum(
+        1
+        for row in m3_rows
+        if str(row.get("m3_status", "")).strip().lower() == "timing_abstained"
+    )
     blocked_ratio = (m3_blocked / m3_total) if m3_total else 0.0
+    timing_abstained_ratio = (m3_timing_abstained / m3_total) if m3_total else 0.0
+    m3_capability_status = (
+        "DEGRADED"
+        if timing_abstained_ratio > M3_TIMING_DEGRADED_RATIO
+        else "OK"
+    )
+    if m3_capability_status == "DEGRADED":
+        print(
+            "::warning::m3 timing capability degraded: "
+            f"timing_abstained_ratio={timing_abstained_ratio:.4f} "
+            f"threshold={M3_TIMING_DEGRADED_RATIO:.4f}"
+        )
     if blocked_ratio > max_m3_blocked_ratio:
         _fail_false_value(
             f"ratio m3_status=blocked {blocked_ratio:.4f} supera umbral {max_m3_blocked_ratio:.4f}",
@@ -350,6 +369,9 @@ def validate_prediction_quality(
         "m3_total": m3_total,
         "m3_blocked": m3_blocked,
         "m3_blocked_ratio": round(blocked_ratio, 6),
+        "m3_timing_abstained": m3_timing_abstained,
+        "m3_timing_abstained_ratio": round(timing_abstained_ratio, 6),
+        "m3_capability_status": m3_capability_status,
         "actionable_rows": len(actionable),
         "action_consistency_ratio": round(action_consistency_ratio, 6),
     }
