@@ -337,3 +337,21 @@ def test_monitoring_has_runtime_completion_backstop() -> None:
     assert '[ "$UPSTREAM_BRANCH" = "main" ]' in workflow
     assert '[ "$REF_NAME" = "main" ]' in workflow
     assert "steps.eligibility.outputs.run == 'true'" in workflow
+
+
+def test_retrain_assessment_recomputes_when_monitoring_contract_changes() -> None:
+    workflow = _text(WORKFLOWS / "retrain_assessment.yml")
+
+    assert "push:" in workflow
+    assert "branches: [main]" in workflow
+    for path in (
+        ".github/workflows/retrain_assessment.yml",
+        "config/retraining.yaml",
+        "src/floor/training/review.py",
+        "src/floor/training/run_retrain_assessment.py",
+        "src/floor/training/governance.py",
+        "src/monitoring/drift_detection.py",
+        "src/features/**",
+        "data/training/models/*.json",
+    ):
+        assert f'"{path}"' in workflow
