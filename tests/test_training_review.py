@@ -48,6 +48,8 @@ def _setup_training(tmp_path: Path) -> Path:
             "quality_log_loss": 2.40,
             "uniform_log_loss": 2.56,
             "log_loss_skill": 0.0625,
+            "quality_top1_unique_classes": 4,
+            "quality_top1_dominant_share": 0.50,
         }
     )
     timing_path.write_text(
