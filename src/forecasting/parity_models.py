@@ -11,6 +11,7 @@ from models.classic_horizon_predictor import (
     validate_family_params,
 )
 from models.horizon_timing import predict_horizon_timing
+from models.evaluate import timing_serving_quality_blocked
 from models.inference import predict_timing_week_probabilities, predict_value_floor_m3
 
 DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD = 0.12
@@ -49,32 +50,11 @@ class ParityChampionModelSet(ChampionModelSet):
         if not 0.0 <= threshold <= 1.0:
             threshold = DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD
 
-        # A calibrated softmax is not useful timing evidence if it does not
-        # beat the uniform 13-class baseline out of time. In that case, make
-        # the serving contract explicitly abstain instead of turning argmax
-        # into a fabricated week. The m3 value floor remains available.
-        if isinstance(metrics, dict):
-            skill_raw = metrics.get("log_loss_skill")
-            quality_raw = metrics.get("quality_log_loss")
-            uniform_raw = metrics.get("uniform_log_loss")
-            numeric_types = (int, float, str)
-            if (
-                not isinstance(skill_raw, bool)
-                and not isinstance(quality_raw, bool)
-                and not isinstance(uniform_raw, bool)
-                and isinstance(skill_raw, numeric_types)
-                and isinstance(quality_raw, numeric_types)
-                and isinstance(uniform_raw, numeric_types)
-            ):
-                try:
-                    skill = float(skill_raw)
-                    quality_log_loss = float(quality_raw)
-                    uniform_log_loss = float(uniform_raw)
-                except ValueError:
-                    pass
-                else:
-                    if skill <= 0.0 or quality_log_loss >= uniform_log_loss:
-                        return 1.0
+        # Use the same frozen OOS quality contract as retraining review.
+        # If the champion does not beat the uniform baseline, serving abstains
+        # instead of turning an unskilled argmax into a fabricated week.
+        if isinstance(metrics, dict) and timing_serving_quality_blocked(metrics):
+            return 1.0
 
         return threshold
 

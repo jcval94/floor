@@ -38,6 +38,22 @@ def _setup_training(tmp_path: Path) -> Path:
     dataset_path = training_dir / "modelable_dataset.json"
     dataset_path.write_text(json.dumps({"rows": _rows()}, ensure_ascii=False), encoding="utf-8")
     run_training(dataset_path, training_dir, version="v1", tasks="value,timing")
+
+    # This fixture represents a healthy serving champion. Individual tests can
+    # override these frozen OOS quality metrics to exercise fail-closed review.
+    timing_path = training_dir / "models" / "timing_champion.json"
+    timing_payload = json.loads(timing_path.read_text(encoding="utf-8"))
+    timing_payload["metrics"].update(
+        {
+            "quality_log_loss": 2.40,
+            "uniform_log_loss": 2.56,
+            "log_loss_skill": 0.0625,
+        }
+    )
+    timing_path.write_text(
+        json.dumps(timing_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return data_dir
 
 
@@ -138,3 +154,33 @@ def test_unused_config_feature_shift_does_not_trigger_model_drift(tmp_path: Path
 
     for model in summary["models"].values():
         assert "ai_consensus_score" not in model["summary"]["shared_data"]["features"]
+
+def test_timing_serving_quality_block_forces_retrain_now(tmp_path: Path) -> None:
+    data_dir = _setup_training(tmp_path)
+    timing_path = data_dir / "training" / "models" / "timing_champion.json"
+    timing_payload = json.loads(timing_path.read_text(encoding="utf-8"))
+    timing_payload["metrics"].update(
+        {
+            "quality_log_loss": 2.60,
+            "uniform_log_loss": 2.56,
+            "log_loss_skill": -0.01,
+        }
+    )
+    timing_path.write_text(
+        json.dumps(timing_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    timing = summary["models"]["timing"]
+    assert timing["summary"]["performance"]["state"] == "RED"
+    assert timing["summary"]["performance"]["deltas"]["serving_quality_blocked"] == 1.0
+    assert timing["recommendation"] == "RETRAIN_NOW"
+    assert "timing" in summary["tasks_for_auto_retrain"]
+
