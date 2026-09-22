@@ -5,7 +5,7 @@ import json
 import math
 import sqlite3
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -18,7 +18,7 @@ from utils.market_data_guard import validate_market_data_freshness
 from utils.pages_build import build_pages_data
 
 ET = ZoneInfo("America/New_York")
-AUDIT_SCHEMA_VERSION = 2
+AUDIT_SCHEMA_VERSION = 3
 AUDIT_SCRIPT_TAG = '<script type="module" src="assets/audit.js"></script>'
 DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD = 0.12
 EXPECTED_SITE_JSON = (
@@ -468,9 +468,45 @@ def _freshness(
     }
 
 
-def _normalize_monitoring_payloads(site_data_dir: Path) -> dict[str, Any]:
-    now = datetime.now(timezone.utc)
-    details: dict[str, Any] = {}
+def _normalize_monitoring_payloads(
+    site_data_dir: Path,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    now = now.astimezone(timezone.utc)
+
+    metrics = _mapping(_load_json(site_data_dir / "metrics.json", {}))
+    metrics_generated = _parse_dt(metrics.get("generated_at"))
+    reported_status = str(metrics.get("status") or "UNKNOWN").upper()
+    if metrics_generated is None:
+        operational_status = "UNKNOWN"
+        age_hours = None
+    else:
+        age = max(timedelta(0), now - metrics_generated)
+        age_hours = round(age.total_seconds() / 3600.0, 2)
+        if age > timedelta(hours=96):
+            operational_status = "STALE"
+        elif reported_status in {"OK", "DEGRADED", "CRITICAL"}:
+            operational_status = reported_status
+        else:
+            operational_status = "UNKNOWN"
+
+    operational_health: dict[str, Any] = {
+        "status": operational_status,
+        "reported_status": reported_status,
+        "generated_at": metrics.get("generated_at"),
+        "age_hours": age_hours,
+        "alerts": (
+            metrics.get("alerts")
+            if isinstance(metrics.get("alerts"), list)
+            else []
+        ),
+    }
+
+    diagnostic_sources: dict[str, Any] = {}
 
     drift_path = site_data_dir / "drift.json"
     drift = _mapping(_load_json(drift_path, {}))
@@ -486,14 +522,14 @@ def _normalize_monitoring_payloads(site_data_dir: Path) -> dict[str, Any]:
                 "source_date": drift_source,
             }
         )
-        details["drift"] = {
+        diagnostic_sources["drift"] = {
             "status": "UNKNOWN",
             "source_date": drift_source,
             "age_days": None,
         }
     else:
         age_days = max(0.0, (now - drift_dt).total_seconds() / 86400.0)
-        details["drift"] = {
+        diagnostic_sources["drift"] = {
             "status": "STALE" if age_days > 30 else "OK",
             "source_date": drift_source,
             "age_days": round(age_days, 2),
@@ -516,23 +552,60 @@ def _normalize_monitoring_payloads(site_data_dir: Path) -> dict[str, Any]:
         summary = _mapping(incident.get("summary"))
         summary["symptom"] = "No incident report available"
         incident["summary"] = summary
-        details["incidents"] = {
+        diagnostic_sources["incidents"] = {
             "status": "UNKNOWN",
             "source_date": incident_source,
             "age_days": None,
         }
     else:
         age_days = max(0.0, (now - incident_dt).total_seconds() / 86400.0)
-        details["incidents"] = {
+        diagnostic_sources["incidents"] = {
             "status": "STALE" if age_days > 30 else "OK",
             "source_date": incident_source,
             "age_days": round(age_days, 2),
         }
     _write_json(incident_path, incident)
 
-    degraded = any(item.get("status") != "OK" for item in details.values())
-    return {"status": "DEGRADED" if degraded else "OK", "sources": details}
+    diagnostics_degraded = any(
+        item.get("status") != "OK" for item in diagnostic_sources.values()
+    )
+    if operational_status == "CRITICAL":
+        status = "CRITICAL"
+    elif operational_status != "OK" or diagnostics_degraded:
+        status = "DEGRADED"
+    else:
+        status = "OK"
 
+    return {
+        "status": status,
+        "operational_health": operational_health,
+        "diagnostic_reports": {
+            "status": "DEGRADED" if diagnostics_degraded else "OK",
+            "sources": diagnostic_sources,
+        },
+    }
+
+
+def _monitoring_warning_codes(monitoring_audit: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    operational = _mapping(monitoring_audit.get("operational_health"))
+    operational_status = str(operational.get("status") or "UNKNOWN").upper()
+    if operational_status == "CRITICAL":
+        warnings.append("operational_health_critical")
+    elif operational_status == "DEGRADED":
+        warnings.append("operational_health_degraded")
+    elif operational_status in {"UNKNOWN", "STALE"}:
+        warnings.append("operational_health_missing_or_stale")
+
+    diagnostics = _mapping(monitoring_audit.get("diagnostic_reports"))
+    sources = _mapping(diagnostics.get("sources"))
+    drift = _mapping(sources.get("drift"))
+    incidents = _mapping(sources.get("incidents"))
+    if str(drift.get("status") or "UNKNOWN").upper() != "OK":
+        warnings.append("drift_report_stale_or_missing")
+    if str(incidents.get("status") or "UNKNOWN").upper() != "OK":
+        warnings.append("incident_report_stale_or_missing")
+    return warnings
 
 def _q1_range_rank(rows: list[dict]) -> list[dict[str, Any]]:
     """Descriptive q1 range ranking; this is explicitly not an alpha score."""
@@ -695,9 +768,7 @@ def publish_pages_data(
     if not bool(schema_audit.get("valid")):
         blockers.append("site_payload_schema_invalid")
 
-    warnings: list[str] = []
-    if monitoring_audit.get("status") != "OK":
-        warnings.append("monitoring_report_missing_or_stale")
+    warnings = _monitoring_warning_codes(monitoring_audit)
 
     publishable = not blockers
     forecasts_path = site_data_dir / "forecasts.json"
