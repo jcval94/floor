@@ -1,5 +1,5 @@
 {
   "requested_at": "2026-09-22",
-  "reason": "p2_refresh_after_value_promotion_and_m3_validation_window_fix",
-  "iteration": "p2-health-truth-v2"
+  "reason": "p2_refresh_after_close_checkpoint_and_m3_validation_fix",
+  "iteration": "p2-health-truth-v3"
 }
