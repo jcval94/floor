@@ -180,11 +180,14 @@ def publish_league_payload(
     expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
     weekly_model = _weekly_model_summary(data_dir, league_cfg)
     weekly_ready = weekly_model.get("status") == "FROZEN"
+    weekly_path_configured = bool(str(league_cfg.get("weekly_model_path") or "").strip())
+    weekly_missing = not weekly_ready and (weekly_path_configured or not league_cfg)
+    waiting_status = "WAITING_FOR_WEEKLY_MODEL" if weekly_missing else "WAITING_FOR_GENESIS"
 
     if not source_payload:
         payload = _waiting_payload(
             league_cfg,
-            status="WAITING_FOR_GENESIS" if weekly_ready else "WAITING_FOR_WEEKLY_MODEL",
+            status=waiting_status,
             detail=(
                 "Frozen Weekly challenger is ready; waiting for the first complete EOD "
                 "to create clean prospective league genesis."
@@ -196,7 +199,7 @@ def publish_league_payload(
         previous_id = str(source_payload.get("league_id") or "unknown")
         payload = _waiting_payload(
             league_cfg,
-            status="WAITING_FOR_GENESIS" if weekly_ready else "WAITING_FOR_WEEKLY_MODEL",
+            status=waiting_status,
             detail=(
                 (
                     f"Current runtime evidence belongs to previous league {previous_id}; "
@@ -236,13 +239,15 @@ def publish_observation_payload(
     expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
     weekly_model = _weekly_model_summary(data_dir, league_cfg)
     weekly_ready = weekly_model.get("status") == "FROZEN"
+    weekly_path_configured = bool(str(league_cfg.get("weekly_model_path") or "").strip())
+    weekly_missing = not weekly_ready and (weekly_path_configured or not league_cfg)
+    waiting_status = "WAITING_FOR_WEEKLY_MODEL" if weekly_missing else "WAITING_FOR_GENESIS"
     stale_epoch = bool(
         payload
         and league_cfg
         and str(payload.get("league_id") or "") != expected_league_id
     )
     if not payload or stale_epoch:
-        waiting_status = "WAITING_FOR_GENESIS" if weekly_ready else "WAITING_FOR_WEEKLY_MODEL"
         payload = {
             "schema_version": 1,
             "league_id": expected_league_id,
