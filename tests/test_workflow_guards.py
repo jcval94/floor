@@ -232,3 +232,27 @@ def test_resolve_context_freezes_nominal_checkpoint() -> None:
     )
     assert result["checkpoint_at"] == "2026-03-12T11:30:00-04:00"
     assert result["required_market_session"] == "2026-03-11"
+
+
+def test_eod_waits_for_daily_bar_completion_window(tmp_path: Path) -> None:
+    too_early = workflow_guards.should_run(
+        kind="eod",
+        tolerance_minutes=360,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 16, 5, tzinfo=ET),
+    )
+    assert too_early["run"] == "false"
+    assert too_early["reason"] == "close_data_not_ready"
+    assert too_early["checkpoint_at"] == "2026-03-12T16:00:00-04:00"
+
+    ready = workflow_guards.should_run(
+        kind="eod",
+        tolerance_minutes=360,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 16, 25, tzinfo=ET),
+    )
+    assert ready["run"] == "true"
+    assert ready["reason"] == "close_due"
+    assert ready["required_market_session"] == "2026-03-12"
