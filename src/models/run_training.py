@@ -220,7 +220,8 @@ def run_training(
     selected_tasks = _normalize_m3_tasks(tasks)
     if not selected_tasks:
         raise ValueError("No m3 tasks requested; use value, timing, or m3")
-    _validate_m3_validation_window(validation)
+    if training_mode == "retrain":
+        _validate_m3_validation_window(validation)
 
     models_dir = output_dir / "models"
     models_file_dir = output_dir / "models_file"
