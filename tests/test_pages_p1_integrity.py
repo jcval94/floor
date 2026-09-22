@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,3 +62,10 @@ def test_model_ui_falls_back_to_labeled_champion_validation_metrics() -> None:
     assert "Monitoring actual" in app
     assert "Validación del champion" in app
     assert "detail?.validation_metrics" in app
+
+
+def test_research_state_script_has_valid_bash_syntax() -> None:
+    subprocess.run(
+        ["bash", "-n", str(ROOT / "scripts" / "research_state.sh")],
+        check=True,
+    )
