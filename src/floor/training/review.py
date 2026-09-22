@@ -83,7 +83,8 @@ def _read_artifact(path: Path) -> dict | None:
 
 
 def _artifact_input_columns(model_key: str, artifact: dict, cfg: dict) -> list[str]:
-    params = artifact.get("params") if isinstance(artifact.get("params"), dict) else {}
+    raw_params = artifact.get("params")
+    params: dict = raw_params if isinstance(raw_params, dict) else {}
     explicit = params.get("input_columns")
     if isinstance(explicit, list) and explicit:
         return sorted({str(item).strip() for item in explicit if str(item).strip()})
