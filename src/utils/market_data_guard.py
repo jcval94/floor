@@ -52,6 +52,7 @@ def validate_market_data_freshness(
     max_age_days: int = 7,
     max_stale_sessions: int | None = None,
     now: datetime | None = None,
+    required_session: date | None = None,
 ) -> dict[str, object]:
     """Fail closed on missing/future/stale market data.
 
@@ -77,18 +78,22 @@ def validate_market_data_freshness(
         now = now.replace(tzinfo=timezone.utc)
     now_utc = now.astimezone(timezone.utc)
     now_et = now.astimezone(ET)
-    required_session = _latest_completed_session(now_utc)
+    required = required_session or _latest_completed_session(now_utc)
 
     placeholders = ",".join("?" for _ in requested)
+    cutoff_clause = " AND date(ts_utc) <= ?" if required_session is not None else ""
     query = f"""
         SELECT symbol, MAX(ts_utc)
         FROM daily_bars
-        WHERE symbol IN ({placeholders})
+        WHERE symbol IN ({placeholders}){cutoff_clause}
         GROUP BY symbol
     """
+    params: list[object] = list(requested)
+    if required_session is not None:
+        params.append(required.isoformat())
     try:
         with sqlite3.connect(db_path) as conn:
-            rows = conn.execute(query, requested).fetchall()
+            rows = conn.execute(query, params).fetchall()
     except sqlite3.Error as exc:
         raise RuntimeError(f"Market freshness validation failed reading {db_path}: {exc}") from exc
 
@@ -120,14 +125,14 @@ def validate_market_data_freshness(
                     {"symbol": symbol, "timestamp": raw, "date": local_day.isoformat()}
                 )
                 continue
-            missed = _missed_market_sessions(local_day, required_session)
+            missed = _missed_market_sessions(local_day, required)
             if missed > max_stale_sessions:
                 stale.append(
                     {
                         "symbol": symbol,
                         "timestamp": raw,
                         "stale_sessions": missed,
-                        "required_session": required_session.isoformat(),
+                        "required_session": required.isoformat(),
                     }
                 )
         else:
@@ -167,7 +172,8 @@ def validate_market_data_freshness(
         "symbols_present": len(latest_by_symbol),
         "max_age_days": max_age_days,
         "max_stale_sessions": max_stale_sessions,
-        "required_latest_session": required_session.isoformat(),
+        "required_latest_session": required.isoformat(),
+        "required_session_source": "explicit_checkpoint" if required_session is not None else "wall_clock",
         "missing": missing,
         "malformed": malformed,
         "future": future,
@@ -187,6 +193,7 @@ def main() -> int:
     parser.add_argument("--symbols", required=True, help="Comma-separated symbols")
     parser.add_argument("--max-age-days", type=int, default=7)
     parser.add_argument("--max-stale-sessions", type=int, default=None)
+    parser.add_argument("--required-session", default=None)
     args = parser.parse_args()
     symbols = [item.strip().upper() for item in args.symbols.split(",") if item.strip()]
     try:
@@ -195,6 +202,7 @@ def main() -> int:
             symbols,
             max_age_days=args.max_age_days,
             max_stale_sessions=args.max_stale_sessions,
+            required_session=date.fromisoformat(args.required_session) if args.required_session else None,
         )
     except RuntimeError as exc:
         print(json.dumps({"status": "CRITICAL", "error": str(exc)}, ensure_ascii=False))

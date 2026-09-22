@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from floor.calendar import nearest_event_type
 from floor.config import RuntimeConfig
@@ -15,6 +17,7 @@ from utils.model_artifact_guard import validate_registry
 from utils.prediction_batch_guard import validate_latest_prediction_batch
 
 logger = logging.getLogger(__name__)
+ET = ZoneInfo("America/New_York")
 
 
 def main() -> None:
@@ -25,6 +28,8 @@ def main() -> None:
     run_cycle = sub.add_parser("run-cycle")
     run_cycle.add_argument("--event", default=None)
     run_cycle.add_argument("--symbols", default=None)
+    run_cycle.add_argument("--checkpoint-at", default=None)
+    run_cycle.add_argument("--required-market-session", default=None)
 
     sub.add_parser("review-training")
     sub.add_parser("reconcile-predictions")
@@ -53,15 +58,35 @@ def main() -> None:
                 artifact_preflight.get("model_version"),
             )
 
+            checkpoint_at = None
+            if args.checkpoint_at:
+                checkpoint_at = datetime.fromisoformat(args.checkpoint_at.replace("Z", "+00:00"))
+                if checkpoint_at.tzinfo is None:
+                    checkpoint_at = checkpoint_at.replace(tzinfo=ET)
+                checkpoint_at = checkpoint_at.astimezone(ET)
+            required_market_session = (
+                date.fromisoformat(args.required_market_session)
+                if args.required_market_session
+                else None
+            )
+
             freshness_symbols = sorted(set(symbols + ["SPY"]))
             freshness = validate_market_data_freshness(
                 cfg.data_dir / "market" / "market_data.sqlite",
                 freshness_symbols,
                 max_stale_sessions=0,
+                now=checkpoint_at,
+                required_session=required_market_session,
             )
             logger.info("[main] market-session freshness OK summary=%s", freshness)
             logger.info("[main] running canonical signal-only cycle event=%s symbols=%s", event, len(symbols))
-            run_intraday_cycle(event_type=event, symbols=symbols, cfg=cfg)
+            run_intraday_cycle(
+                event_type=event,
+                symbols=symbols,
+                cfg=cfg,
+                as_of=checkpoint_at,
+                market_session=required_market_session,
+            )
             batch = validate_latest_prediction_batch(cfg.data_dir, symbols, event_type=event)
             logger.info("[main] prediction batch completeness OK summary=%s", batch)
             build_dashboard_snapshot(

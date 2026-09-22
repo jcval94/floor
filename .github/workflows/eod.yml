@@ -2,9 +2,8 @@ name: eod
 
 on:
   schedule:
-    # Poll hourly after the earliest possible US close. The guard is idempotent,
-    # so these are cheap backstops that tolerate delayed/dropped scheduled runs.
-    - cron: "15 20-23 * * 1-5"
+    # Cheap 15-minute close polling uses only the checkpoint marker release.
+    - cron: "*/15 20-23 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -20,8 +19,10 @@ jobs:
       run: ${{ steps.guard.outputs.run }}
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
+      session_day: ${{ steps.guard.outputs.session_day }}
       checkpoint_at: ${{ steps.guard.outputs.checkpoint_at }}
       lateness_minutes: ${{ steps.guard.outputs.lateness_minutes }}
+      required_market_session: ${{ steps.guard.outputs.required_market_session }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -29,10 +30,10 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
-      - name: Restore rolling runtime state
+      - name: Restore lightweight checkpoint state
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/runtime_state.sh restore
+        run: bash scripts/checkpoint_state.sh restore
       - name: Detect due close
         id: guard
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
@@ -58,9 +59,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
-      - name: Revalidate close under writer lock
+      - name: Revalidate immutable close context under writer lock
         id: lock_guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
+        run: |
+          PYTHONPATH=src python -m utils.workflow_guards validate-context \
+            --kind eod \
+            --event CLOSE \
+            --session-day "${{ needs.gate.outputs.session_day }}" \
+            --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+            --data-dir data
 
       - name: Preflight serving-compatible schema-v2 champions
         if: steps.lock_guard.outputs.run == 'true'
@@ -174,12 +181,30 @@ jobs:
 
       - name: Mark run
         if: steps.lock_guard.outputs.run == 'true'
-        run: PYTHONPATH=src python -m utils.workflow_guards mark --kind eod --event CLOSE --data-dir data
+        run: |
+          PYTHONPATH=src python -m utils.workflow_guards mark \
+            --kind eod \
+            --event CLOSE \
+            --session-day "${{ needs.gate.outputs.session_day }}" \
+            --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+            --data-dir data
       - name: Publish rolling runtime state outside Git
         if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh publish
+      - name: Publish lightweight checkpoint index
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh publish
+
+      - name: Repair lightweight checkpoint index after duplicate suppression
+        if: steps.lock_guard.outputs.run != 'true' && steps.lock_guard.outputs.reason == 'already_ran'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh publish
+
       - name: Upload immutable EOD audit artifact
         if: steps.lock_guard.outputs.run == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -205,19 +230,13 @@ jobs:
             data/metrics/strategy_league/runs/*/history.jsonl
           if-no-files-found: warn
           retention-days: 90
-      - name: Report duplicate/stale EOD suppression
+      - name: Report duplicate EOD suppression
         if: steps.lock_guard.outputs.run != 'true'
         run: |
           echo "EOD suppressed after lock revalidation."
           echo "reason=${{ steps.lock_guard.outputs.reason }}"
           echo "checkpoint_at=${{ steps.lock_guard.outputs.checkpoint_at }}"
-          echo "lateness_minutes=${{ steps.lock_guard.outputs.lateness_minutes }}"
-
-      - name: Fail if close expired while waiting for the writer lock
-        if: steps.lock_guard.outputs.reason == 'close_window_missed'
-        run: |
-          echo "::error::The EOD close window expired before the evidence loop could run."
-          exit 1
+          echo "required_market_session=${{ steps.lock_guard.outputs.required_market_session }}"
 
   eod_info:
     needs: [gate, eod_critical]
@@ -231,7 +250,8 @@ jobs:
           echo "eod run=${{ needs.gate.outputs.run }} reason=${{ needs.gate.outputs.reason }}"
           echo "checkpoint_at=${{ needs.gate.outputs.checkpoint_at }}"
           echo "lateness_minutes=${{ needs.gate.outputs.lateness_minutes }}"
-          echo "polling=hourly-close-backstops"
+          echo "polling=15-minute-lightweight-close-backstops"
+          echo "checkpoint_state=github_release:checkpoint-state-v1"
           echo "git_operational_writes=disabled"
           if [ "${{ needs.gate.outputs.reason }}" = "close_window_missed" ]; then
             echo "::error::EOD did not complete inside the allowed catch-up window."

@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from floor.calendar import is_early_close as calendar_is_early_close
-from floor.calendar import is_market_session
+from floor.calendar import is_market_session, previous_market_session
 
 ET = ZoneInfo("America/New_York")
 
@@ -23,17 +23,19 @@ class SessionInfo:
     market_close: datetime | None
 
 
-def get_session_info(now: datetime | None = None) -> SessionInfo:
-    now = now or datetime.now(tz=ET)
-    day = now.date()
+def session_info_for_day(day: date) -> SessionInfo:
     if not is_market_session(day):
         return SessionInfo(day, False, False, None, None)
-
     market_open = datetime.combine(day, time(9, 30), tzinfo=ET)
     early_close = calendar_is_early_close(day)
     close_t = time(13, 0) if early_close else time(16, 0)
     market_close = datetime.combine(day, close_t, tzinfo=ET)
     return SessionInfo(day, True, early_close, market_open, market_close)
+
+
+def get_session_info(now: datetime | None = None) -> SessionInfo:
+    now = now or datetime.now(tz=ET)
+    return session_info_for_day(now.astimezone(ET).date())
 
 
 def checkpoint_times(info: SessionInfo) -> dict[str, datetime]:
@@ -52,6 +54,21 @@ def checkpoint_times(info: SessionInfo) -> dict[str, datetime]:
         for name, ts in checkpoints.items()
         if info.market_open <= ts <= info.market_close
     }
+
+
+def required_market_session_at(checkpoint_at: datetime) -> date:
+    """Return the newest completed daily bar that is legal for a checkpoint.
+
+    Daily bars are considered complete only 20 minutes after the official close.
+    This makes the required market session a pure function of the accepted
+    checkpoint rather than of wall-clock time later in the workflow.
+    """
+    checkpoint_et = checkpoint_at.astimezone(ET)
+    info = get_session_info(checkpoint_et)
+    if info.is_open_day and info.market_close is not None:
+        if checkpoint_et >= info.market_close + timedelta(minutes=20):
+            return info.session_day
+    return previous_market_session(checkpoint_et.date())
 
 
 def detect_event(now: datetime | None = None, tolerance_minutes: int = 20) -> str | None:

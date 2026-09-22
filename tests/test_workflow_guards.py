@@ -188,3 +188,47 @@ def test_early_close_uses_actual_market_close(tmp_path: Path) -> None:
     assert result["run"] == "true"
     assert result["event"] == "CLOSE"
     assert result["lateness_minutes"] == "40"
+
+
+def test_accepted_context_does_not_advance_while_waiting_for_lock(tmp_path: Path) -> None:
+    accepted = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 10, 20, tzinfo=ET),
+    )
+    assert accepted["event"] == "OPEN"
+    fixed = workflow_guards.validate_accepted_context(
+        kind="intraday",
+        event=accepted["event"],
+        session_day=accepted["session_day"],
+        checkpoint_at=accepted["checkpoint_at"],
+        data_dir=tmp_path,
+    )
+    assert fixed["run"] == "true"
+    assert fixed["event"] == "OPEN"
+    assert fixed["checkpoint_at"] == accepted["checkpoint_at"]
+    assert fixed["required_market_session"] == "2026-03-11"
+
+
+def test_mark_run_uses_accepted_session_day_not_wall_clock(tmp_path: Path) -> None:
+    marker = workflow_guards.mark_run(
+        "intraday",
+        tmp_path,
+        "OPEN",
+        now=datetime(2026, 3, 13, 0, 5, tzinfo=ET),
+        session_day="2026-03-12",
+        checkpoint_at="2026-03-12T09:30:00-04:00",
+    )
+    assert marker.name == "intraday_2026-03-12_OPEN.json"
+
+
+def test_resolve_context_freezes_nominal_checkpoint() -> None:
+    result = workflow_guards.resolve_event_context(
+        "OPEN_PLUS_2H",
+        now=datetime(2026, 3, 12, 15, 0, tzinfo=ET),
+        reason="manual_force",
+    )
+    assert result["checkpoint_at"] == "2026-03-12T11:30:00-04:00"
+    assert result["required_market_session"] == "2026-03-11"
