@@ -25,8 +25,7 @@ on:
       - walk_forward_request.json
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: walk-forward-oos
@@ -76,7 +75,17 @@ jobs:
             --freeze config/frozen/capital_challenger_v1.json
 
       - name: Initialize isolated market DB
-        run: make init-dbs
+        run: |
+          set -euo pipefail
+          rm -rf data/market
+          mkdir -p data/market
+          PYTHONPATH=src python - <<'PY'
+          from pathlib import Path
+          from storage.market_db import init_market_db
+
+          init_market_db(Path("data/market/market_data.sqlite"))
+          print("isolated market DB initialized")
+          PY
 
       - name: Refresh daily market history from Yahoo
         run: |
@@ -156,22 +165,12 @@ jobs:
           }, indent=2))
           PY
 
-      - name: Publish walk-forward report to runtime state
+      - name: Stage walk-forward report for immutable artifact
         run: |
           set -euo pipefail
           out="data/replay/walk_forward_oos_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
           mkdir -p data/reports
           cp "$out/walk_forward_oos.json" data/reports/walk_forward_oos.json
-
-      - name: Publish rolling runtime state
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/runtime_state.sh publish
-
-      - name: Trigger audited Pages rebuild
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run pages.yml --ref main
 
       - name: Upload OOS evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

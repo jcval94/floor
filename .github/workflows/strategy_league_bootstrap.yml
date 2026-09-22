@@ -2,14 +2,11 @@ name: strategy_league_bootstrap
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/strategy_league_bootstrap.yml'
-      - 'config/strategy_league.json'
-      - 'config/strategies.yaml'
-      - 'src/league/bootstrap_weekly_model.py'
-      - 'src/models/train_weekly_opportunity.py'
+    inputs:
+      confirm_league_id:
+        description: "Type the exact league_id to authorize a one-time frozen Weekly bootstrap"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -32,8 +29,25 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install project
-        run: python -m pip install -e .
+      - name: Install modeling dependencies
+        run: python -m pip install -e ".[modeling]"
+
+      - name: Confirm explicit league genesis
+        env:
+          CONFIRM_LEAGUE_ID: ${{ github.event.inputs.confirm_league_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          league_id = str(json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))["league_id"])
+          confirmation = os.environ.get("CONFIRM_LEAGUE_ID", "")
+          if confirmation != league_id:
+              raise SystemExit(f"Bootstrap refused: confirmation must exactly match league_id={league_id!r}")
+          print(f"explicit bootstrap authorized for league_id={league_id}")
+          PY
 
       - name: Restore rolling runtime state
         env:
@@ -50,9 +64,9 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Initialize DBs
+      - name: Initialize DB schemas
         if: steps.challenger.outputs.exists != 'true'
-        run: make init-dbs
+        run: make init-db-schemas
 
       - name: Ensure enough local history for one-time bootstrap
         if: steps.challenger.outputs.exists != 'true'
@@ -122,6 +136,7 @@ jobs:
           {
             echo "## Strategy League bootstrap"
             echo "- Challenger already existed: \`${{ steps.challenger.outputs.exists }}\`"
+            echo "- Trigger: explicit workflow_dispatch with exact league_id confirmation."
             echo "- Heavy training runs only when the frozen challenger is absent."
             echo "- Normal market-data refresh: \`none\`"
             echo "- One-time 2y fallback: only if retained history is insufficient."

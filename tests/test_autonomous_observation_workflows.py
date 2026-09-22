@@ -46,14 +46,14 @@ def test_eod_closes_the_prospective_evidence_loop() -> None:
     assert 'LIVE_TRADING_ENABLED: "true"' not in workflow
 
 
-def test_bootstrap_is_automatic_but_idempotent() -> None:
+def test_bootstrap_requires_explicit_confirmed_dispatch() -> None:
     workflow = _text(".github/workflows/strategy_league_bootstrap.yml")
 
-    assert "push:" in workflow
-    assert "branches: [main]" in workflow
-    assert "Check frozen challenger" in workflow
-    assert "exists=true" in workflow
-    assert "steps.challenger.outputs.exists != 'true'" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "confirm_league_id:" in workflow
+    assert "Confirm explicit league genesis" in workflow
+    assert "push:" not in workflow
+    assert 'pip install -e ".[modeling]"' in workflow
 
 
 def test_pages_publish_only_after_real_eod_evidence() -> None:
