@@ -37,9 +37,7 @@ def run_capital_tournament(
     model_registry_dir: Path = Path("data/training/models"),
     league_config_path: Path = Path("config/strategy_league.json"),
     strategies_config_path: Path = Path("config/strategies.yaml"),
-    weekly_model_path: Path = Path(
-        "data/metrics/strategy_league/models/weekly_opportunity_challenger.json"
-    ),
+    weekly_model_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run a CLOSE-only PIT tournament for fast allocator research.
 
@@ -56,6 +54,13 @@ def run_capital_tournament(
     intraday_by_symbol = group_by_symbol(intraday_rows)
 
     league_cfg = _load_json(league_config_path)
+    if weekly_model_path is None:
+        configured_weekly_model = str(league_cfg.get("weekly_model_path") or "").strip()
+        if not configured_weekly_model:
+            raise ValueError(
+                f"weekly_model_path missing from league config: {league_config_path}"
+            )
+        weekly_model_path = Path(configured_weekly_model)
     strategies_cfg = load_simple_yaml(strategies_config_path)
     weekly_artifact = _load_json(weekly_model_path)
     challenger_cfg = dict(league_cfg.get("capital_allocation_challenger", {}))
@@ -242,10 +247,7 @@ def main() -> None:
     parser.add_argument("--model-registry", default="data/training/models")
     parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument("--strategies-config", default="config/strategies.yaml")
-    parser.add_argument(
-        "--weekly-model",
-        default="data/metrics/strategy_league/models/weekly_opportunity_challenger.json",
-    )
+    parser.add_argument("--weekly-model", default=None)
     args = parser.parse_args()
 
     result = run_capital_tournament(
@@ -256,7 +258,7 @@ def main() -> None:
         model_registry_dir=Path(args.model_registry),
         league_config_path=Path(args.league_config),
         strategies_config_path=Path(args.strategies_config),
-        weekly_model_path=Path(args.weekly_model),
+        weekly_model_path=Path(args.weekly_model) if args.weekly_model else None,
     )
     rows = result["leaderboard"]["rows"]
     print(
