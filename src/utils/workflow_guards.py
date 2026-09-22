@@ -275,15 +275,26 @@ def validate_accepted_context(
         raise RuntimeError("EOD accepted context must use CLOSE")
 
     if kind == "intraday":
-        later_completed = [
+        current = _as_et(None)
+        later_checkpoints = [
             (name, timestamp)
             for name, timestamp in checkpoint_times(info).items()
             if timestamp > checkpoint
-            and _marker_exists(data_dir, "intraday", session_day, name)
         ]
-        if later_completed:
+        later_due = [
+            (name, timestamp)
+            for name, timestamp in later_checkpoints
+            if current.date() == info.session_day and timestamp <= current
+        ]
+        later_completed = [
+            (name, timestamp)
+            for name, timestamp in later_checkpoints
+            if _marker_exists(data_dir, "intraday", session_day, name)
+        ]
+        superseding = later_due + later_completed
+        if superseding:
             latest_name, latest_timestamp = max(
-                later_completed, key=lambda item: item[1]
+                superseding, key=lambda item: item[1]
             )
             return {
                 "run": "false",
@@ -298,9 +309,13 @@ def validate_accepted_context(
             }
 
     exists = _marker_exists(data_dir, kind, session_day, event)
-    if exists and allow_existing_repair:
+    if allow_existing_repair:
         if kind != "intraday":
             raise RuntimeError("Existing-checkpoint repair is supported only for intraday")
+        if not exists:
+            raise RuntimeError(
+                "Existing-checkpoint repair requires a completed checkpoint marker"
+            )
         return {
             "run": "true",
             "reason": "repair_existing_checkpoint",
