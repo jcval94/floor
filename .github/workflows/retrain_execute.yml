@@ -175,11 +175,11 @@ jobs:
           PYTHONPATH=src python -m features.build_training_from_db \
             --db data/market/market_data.sqlite \
             --output data/training/yahoo_market_rows.jsonl
+          # M3 labels consume 65 future sessions. Reserve 65 purge sessions
+          # plus 75/76 usable OOT sessions for validation/test.
           PYTHONPATH=src python -m features.run_features \
             --input data/training/yahoo_market_rows.jsonl \
             --output "$DATASET_PATH" \
-            # M3 labels consume 65 future sessions. Reserve 65 purge sessions
-            # plus 75/76 usable OOT sessions for validation/test.
             --validation-days 140 \
             --test-days 141
 
