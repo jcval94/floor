@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: floor-runtime-state-writer
-      cancel-in-progress: false
+      group: floor-monitoring-state-writer
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -65,11 +65,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Publish rolling monitoring state outside Git
+      - name: Publish isolated monitoring state
         if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/runtime_state.sh publish
+        run: bash scripts/monitoring_state.sh publish
 
       - name: Upload immutable monitoring snapshot
         if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
@@ -101,4 +101,6 @@ jobs:
           echo "monitoring result=${{ needs.monitor_critical.result }}"
           echo "polling=hourly-market-window"
           echo "sqlite_hydration=disabled"
+          echo "authoritative_runtime_writes=disabled"
+          echo "monitoring_state=github_release:monitoring-state-v1"
           echo "git_operational_writes=disabled"

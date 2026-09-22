@@ -10,6 +10,7 @@ on:
     paths:
       - '.github/workflows/pages.yml'
       - 'scripts/runtime_state.sh'
+      - 'scripts/monitoring_state.sh'
       - 'site/**'
       - 'src/utils/pages_build.py'
       - 'src/utils/pages_publish.py'
@@ -109,6 +110,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Overlay latest isolated monitoring state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/monitoring_state.sh restore
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -261,6 +267,7 @@ jobs:
               'generated_at': datetime.now(timezone.utc).isoformat(),
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'runtime_state_source': 'github_release:runtime-state-v1',
+              'monitoring_state_source': 'github_release:monitoring-state-v1',
               'files': entries,
           }
           (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
