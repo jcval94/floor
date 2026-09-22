@@ -205,6 +205,8 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
+          RUNTIME_STATE_CHECKPOINT_EVENT: CLOSE
         run: bash scripts/runtime_state.sh publish
       - name: Publish lightweight checkpoint index
         if: steps.lock_guard.outputs.run == 'true'

@@ -211,6 +211,26 @@ publish_state() {
   read -r parent_generation next_generation parent_sha < "$parent_result"
   echo "runtime_state_parent_generation=$parent_generation next_generation=$next_generation parent_sha256=$parent_sha"
 
+  local frontier_at frontier_event
+  local frontier_result="$TMP/runtime-state-frontier.tsv"
+  local -a frontier_args=(resolve-frontier --format tsv)
+  if [[ -s "$TMP/current/$ASSET.metadata.json" ]]; then
+    frontier_args+=(--metadata "$TMP/current/$ASSET.metadata.json")
+  fi
+  if [[ -n "${RUNTIME_STATE_CHECKPOINT_AT:-}" ]]; then
+    frontier_args+=(
+      --marker-dir data/snapshots/workflow_runs
+      --checkpoint-at "$RUNTIME_STATE_CHECKPOINT_AT"
+      --event "${RUNTIME_STATE_CHECKPOINT_EVENT:-}"
+    )
+  fi
+  if ! PYTHONPATH=src python -m utils.runtime_state_cas "${frontier_args[@]}" > "$frontier_result"; then
+    echo "::error::Runtime-state checkpoint frontier validation failed." >&2
+    exit 1
+  fi
+  read -r frontier_at frontier_event < "$frontier_result"
+  echo "runtime_state_checkpoint_frontier=$frontier_at event=$frontier_event"
+
   # Compact semantically before packaging. Resolved old predictions age out,
   # but unresolved predictions are retained regardless of age so a 65-session
   # m3 forecast can still reconcile after data gaps or workflow outages.
@@ -246,7 +266,7 @@ publish_state() {
     sha256sum "$ASSET" > "$ASSET.sha256"
   )
 
-  python - "$TMP/$ASSET.metadata.json" "$TMP/$ASSET.sha256" "$asset_bytes" "$next_generation" "$parent_sha" <<'PY'
+  python - "$TMP/$ASSET.metadata.json" "$TMP/$ASSET.sha256" "$asset_bytes" "$next_generation" "$parent_sha" "$frontier_at" "$frontier_event" <<'PY'
 import json
 import os
 import sys
@@ -258,10 +278,12 @@ checksum = Path(sys.argv[2]).read_text(encoding="utf-8").split()[0]
 asset_bytes = int(sys.argv[3])
 generation = int(sys.argv[4])
 parent_sha = None if sys.argv[5] == "-" else sys.argv[5]
+frontier_at = None if sys.argv[6] == "-" else sys.argv[6]
+frontier_event = None if sys.argv[7] == "-" else sys.argv[7]
 out.write_text(
     json.dumps(
         {
-            "schema_version": 3,
+            "schema_version": 4,
             "generation": generation,
             "parent_sha256": parent_sha,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -273,6 +295,10 @@ out.write_text(
             "asset_bytes": asset_bytes,
             "max_asset_mb": int(os.getenv("RUNTIME_STATE_MAX_MB", "500")),
             "retention_report": "data/metrics/runtime_retention_latest.json",
+            "checkpoint_frontier": {
+                "checkpoint_at": frontier_at,
+                "event": frontier_event,
+            },
             "sha256": checksum,
         },
         indent=2,
