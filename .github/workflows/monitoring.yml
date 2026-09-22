@@ -114,7 +114,7 @@ jobs:
         run: bash scripts/monitoring_state.sh publish
 
       - name: Upload immutable monitoring snapshot
-        if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: monitoring-health-${{ github.run_id }}
