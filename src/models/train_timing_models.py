@@ -378,6 +378,8 @@ def train_floor_week_m3_timing_model(
             "quality_brier_score": float(quality_metrics.get("brier_score", 0.0)),
             "quality_expected_week_distance": float(quality_metrics.get("expected_week_distance", 0.0)),
             "quality_calibration_error": float(quality_metrics.get("calibration_error", 0.0)),
+            "quality_top1_unique_classes": int(quality_metrics.get("top1_unique_classes", 0)),
+            "quality_top1_dominant_share": float(quality_metrics.get("top1_dominant_share", 1.0)),
             "uniform_log_loss": uniform_log_loss,
             "log_loss_skill": 1.0 - (float(quality_metrics.get("log_loss", uniform_log_loss)) / uniform_log_loss),
             "mean_max_probability": sum(confidences) / len(confidences) if confidences else 0.0,
