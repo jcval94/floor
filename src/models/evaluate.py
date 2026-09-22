@@ -100,6 +100,36 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
     }
 
 
+def timing_serving_quality_blocked(metrics: dict) -> bool:
+    """Return whether frozen OOS timing evidence is too weak to serve weeks.
+
+    Serving abstains completely when the champion does not beat the uniform
+    13-class baseline out of time. Training review must use the same contract
+    so an unusable timing champion cannot be classified as merely WARN.
+    """
+
+    skill_raw = metrics.get("log_loss_skill")
+    quality_raw = metrics.get("quality_log_loss")
+    uniform_raw = metrics.get("uniform_log_loss")
+    numeric_types = (int, float, str)
+    if (
+        isinstance(skill_raw, bool)
+        or isinstance(quality_raw, bool)
+        or isinstance(uniform_raw, bool)
+        or not isinstance(skill_raw, numeric_types)
+        or not isinstance(quality_raw, numeric_types)
+        or not isinstance(uniform_raw, numeric_types)
+    ):
+        return False
+    try:
+        skill = float(skill_raw)
+        quality_log_loss = float(quality_raw)
+        uniform_log_loss = float(uniform_raw)
+    except (TypeError, ValueError):
+        return False
+    return skill <= 0.0 or quality_log_loss >= uniform_log_loss
+
+
 def top3_weeks(probs: list[float]) -> list[dict]:
     top = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)[:3]
     return [{"week": i + 1, "probability": probs[i]} for i in top]
