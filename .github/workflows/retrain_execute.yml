@@ -1,6 +1,10 @@
 name: retrain_execute
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'retrain_execute_request.json'
   workflow_dispatch:
     inputs:
       force:
@@ -51,6 +55,7 @@ jobs:
       - name: Decide retrain gate
         id: gate
         env:
+          EVENT_NAME: ${{ github.event_name }}
           FORCE: ${{ github.event.inputs.force }}
           APPROVE_RECOMMENDED: ${{ github.event.inputs.approve_recommended }}
           INPUT_TASKS: ${{ github.event.inputs.tasks }}
@@ -61,6 +66,7 @@ jobs:
           import os
           from pathlib import Path
 
+          event_name = os.environ.get("EVENT_NAME", "")
           force = os.environ.get("FORCE", "false").lower() == "true"
           approve_recommended = (
               os.environ.get("APPROVE_RECOMMENDED", "false").lower() == "true"
@@ -74,6 +80,22 @@ jobs:
               os.environ.get("INPUT_DATASET_PATH", "").strip()
               or "data/training/modelable_dataset.json"
           )
+
+          # A committed request is an auditable manual approval surface for
+          # environments that cannot invoke workflow_dispatch. It can only
+          # approve the governed recommendation: push requests cannot force
+          # arbitrary tasks, versions, or datasets.
+          if event_name == "push":
+              request_path = Path("retrain_execute_request.json")
+              request = (
+                  json.loads(request_path.read_text(encoding="utf-8"))
+                  if request_path.exists()
+                  else {}
+              )
+              force = False
+              approve_recommended = request.get("approve_recommended") is True
+              requested = []
+              dataset_path = "data/training/modelable_dataset.json"
           summary_path = Path("data/training/review_summary_latest.json")
           tasks = []
           reason = "manual_approval_required"
@@ -90,7 +112,11 @@ jobs:
                   if str(x).strip()
               ]
               reason = (
-                  "manual_approval_of_recommendation"
+                  (
+                      "audited_request_approval_of_recommendation"
+                      if event_name == "push"
+                      else "manual_approval_of_recommendation"
+                  )
                   if tasks
                   else "no_recommended_tasks"
               )
