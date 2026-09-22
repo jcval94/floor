@@ -21,6 +21,7 @@ ET = ZoneInfo("America/New_York")
 AUDIT_SCHEMA_VERSION = 2
 AUDIT_SCRIPT_TAG = '<script type="module" src="assets/audit.js"></script>'
 DEFAULT_M3_TIMING_ABSTENTION_THRESHOLD = 0.12
+MONITORING_HEALTH_MAX_AGE_HOURS = 24.0
 EXPECTED_SITE_JSON = (
     "dashboard.json",
     "drift.json",
@@ -472,6 +473,27 @@ def _normalize_monitoring_payloads(site_data_dir: Path) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     details: dict[str, Any] = {}
 
+    metrics_path = site_data_dir / "metrics.json"
+    metrics = _mapping(_load_json(metrics_path, {}))
+    health_source = metrics.get("generated_at")
+    health_dt = _parse_dt(health_source)
+    health_status = str(metrics.get("status") or "UNKNOWN").strip().upper()
+    if health_dt is None:
+        details["health"] = {
+            "status": "UNKNOWN",
+            "health_status": health_status,
+            "source_date": health_source,
+            "age_hours": None,
+        }
+    else:
+        age_hours = max(0.0, (now - health_dt).total_seconds() / 3600.0)
+        details["health"] = {
+            "status": "STALE" if age_hours > MONITORING_HEALTH_MAX_AGE_HOURS else "OK",
+            "health_status": health_status,
+            "source_date": health_source,
+            "age_hours": round(age_hours, 2),
+        }
+
     drift_path = site_data_dir / "drift.json"
     drift = _mapping(_load_json(drift_path, {}))
     drift_source = drift.get("source_date")
@@ -530,8 +552,35 @@ def _normalize_monitoring_payloads(site_data_dir: Path) -> dict[str, Any]:
         }
     _write_json(incident_path, incident)
 
-    degraded = any(item.get("status") != "OK" for item in details.values())
-    return {"status": "DEGRADED" if degraded else "OK", "sources": details}
+    source_degraded = any(item.get("status") != "OK" for item in details.values())
+    if health_status == "CRITICAL":
+        status = "CRITICAL"
+    elif health_status not in {"OK", ""} or source_degraded:
+        status = "DEGRADED"
+    else:
+        status = "OK"
+    return {"status": status, "sources": details}
+
+
+def _monitoring_warnings(monitoring_audit: dict[str, Any]) -> list[str]:
+    sources = _mapping(monitoring_audit.get("sources"))
+    warnings: list[str] = []
+
+    health = _mapping(sources.get("health"))
+    if health.get("status") != "OK":
+        warnings.append("monitoring_health_missing_or_stale")
+    if str(health.get("health_status") or "").upper() in {"DEGRADED", "CRITICAL"}:
+        warnings.append("monitoring_health_degraded")
+
+    drift = _mapping(sources.get("drift"))
+    if drift.get("status") != "OK":
+        warnings.append("drift_report_missing_or_stale")
+
+    incidents = _mapping(sources.get("incidents"))
+    if incidents.get("status") != "OK":
+        warnings.append("incident_report_missing_or_stale")
+
+    return warnings
 
 
 def _q1_range_rank(rows: list[dict]) -> list[dict[str, Any]]:
@@ -695,9 +744,7 @@ def publish_pages_data(
     if not bool(schema_audit.get("valid")):
         blockers.append("site_payload_schema_invalid")
 
-    warnings: list[str] = []
-    if monitoring_audit.get("status") != "OK":
-        warnings.append("monitoring_report_missing_or_stale")
+    warnings = _monitoring_warnings(monitoring_audit)
 
     publishable = not blockers
     forecasts_path = site_data_dir / "forecasts.json"
