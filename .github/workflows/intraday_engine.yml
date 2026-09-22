@@ -2,9 +2,11 @@ name: intraday_engine
 
 on:
   schedule:
-    # Lightweight 15-minute polling tolerates dropped/delayed GitHub schedules.
+    # Avoid top-of-hour scheduler congestion while retaining four polls/hour.
     # The gate restores only checkpoint markers, not the ~120 MB runtime state.
-    - cron: "*/15 13-22 * * 1-5"
+    - cron: "7,22,37,52 13-22 * * 1-5"
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       force_run:
