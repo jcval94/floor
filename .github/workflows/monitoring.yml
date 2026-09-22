@@ -15,37 +15,70 @@ permissions:
 
 jobs:
   monitor_critical:
-    if: >
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name != 'workflow_run' && github.ref_name == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
       group: floor-monitoring-state-writer
       cancel-in-progress: true
     steps:
+      - name: Determine monitoring eligibility
+        id: eligibility
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          run=false
+          reason=unsupported_context
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            if [ "$UPSTREAM_CONCLUSION" = "success" ] && [ "$UPSTREAM_BRANCH" = "main" ]; then
+              run=true
+              reason=successful_runtime_workflow
+            else
+              reason="upstream_${UPSTREAM_CONCLUSION:-unknown}_branch_${UPSTREAM_BRANCH:-unknown}"
+            fi
+          elif [ "$REF_NAME" = "main" ]; then
+            run=true
+            reason="${EVENT_NAME}_main"
+          else
+            reason="${EVENT_NAME}_non_main"
+          fi
+          {
+            echo "run=$run"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+          echo "monitoring eligibility run=$run reason=$reason"
+
       - name: Checkout
+        if: steps.eligibility.outputs.run == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Python
+        if: steps.eligibility.outputs.run == 'true'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
       - name: Install runtime dependencies
+        if: steps.eligibility.outputs.run == 'true'
         run: python -m pip install -e . "numpy>=2.0,<3"
 
       - name: Detect market session
+        if: steps.eligibility.outputs.run == 'true'
         id: session
         run: PYTHONPATH=src python -m utils.workflow_guards check --kind always_open_day --tolerance-minutes 0 --data-dir data
 
+      - name: Skip ineligible monitoring event
+        if: steps.eligibility.outputs.run != 'true'
+        run: echo "Monitoring skipped because eligibility reason=${{ steps.eligibility.outputs.reason }}"
+
       - name: Skip closed market day
-        if: steps.session.outputs.run != 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run != 'true'
         run: echo "Monitoring skipped because today is not a US market session."
 
       - name: Restore rolling runtime state
-        if: steps.session.outputs.run == 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
@@ -54,7 +87,7 @@ jobs:
       # Do not hydrate SQLite here: it is unnecessary, expensive and holds the
       # shared runtime-state writer lock long enough to delay market checkpoints.
       - name: Generate operational health snapshot
-        if: steps.session.outputs.run == 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true'
         id: health
         run: |
           set +e
@@ -75,13 +108,13 @@ jobs:
           exit 0
 
       - name: Publish isolated monitoring state
-        if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/monitoring_state.sh publish
 
       - name: Upload immutable monitoring snapshot
-        if: steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true' && steps.health.outputs.snapshot_valid == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: monitoring-health-${{ github.run_id }}
@@ -90,7 +123,7 @@ jobs:
           retention-days: 30
 
       - name: Fail workflow on invalid or critical health
-        if: steps.session.outputs.run == 'true' && (steps.health.outputs.rc != '0' || steps.health.outputs.snapshot_valid != 'true')
+        if: steps.eligibility.outputs.run == 'true' && steps.session.outputs.run == 'true' && (steps.health.outputs.rc != '0' || steps.health.outputs.snapshot_valid != 'true')
         run: |
           echo "::error::Operational health snapshot is invalid or CRITICAL."
           if [ -f data/metrics/public_metrics.json ]; then
@@ -108,6 +141,7 @@ jobs:
       - name: Summary
         run: |
           echo "monitoring result=${{ needs.monitor_critical.result }}"
+          echo "eligibility=step-gated"
           echo "polling=hourly-market-window"
           echo "sqlite_hydration=disabled"
           echo "authoritative_runtime_writes=disabled"
