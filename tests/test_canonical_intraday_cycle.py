@@ -160,3 +160,42 @@ def test_canonical_cycle_uses_accepted_checkpoint_as_batch_time(
     ]
     assert predictions
     assert all(getattr(record, "as_of") == checkpoint for record in predictions)
+
+
+def test_canonical_cycle_suppresses_repeated_market_model_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    written_paths, _written_records = _patch_minimal_cycle(monkeypatch)
+    cfg = RuntimeConfig(root_dir=tmp_path, data_dir=tmp_path / "data")
+    tz = ZoneInfo("America/New_York")
+
+    first = canonical.run_intraday_cycle(
+        "OPEN",
+        ["AAPL"],
+        cfg,
+        as_of=datetime(2026, 9, 22, 9, 30, tzinfo=tz),
+    )
+    first_write_count = len(written_paths)
+
+    second = canonical.run_intraday_cycle(
+        "OPEN_PLUS_2H",
+        ["AAPL"],
+        cfg,
+        as_of=datetime(2026, 9, 22, 11, 30, tzinfo=tz),
+    )
+
+    assert first["status"] == "WRITTEN"
+    assert second["status"] == "NO_NEW_INPUT"
+    assert second["input_snapshot_id"] == first["input_snapshot_id"]
+    assert len(written_paths) == first_write_count
+    marker = (
+        cfg.data_dir
+        / "snapshots"
+        / "input_snapshots"
+        / f"{first['input_snapshot_id']}.json"
+    )
+    assert marker.exists()

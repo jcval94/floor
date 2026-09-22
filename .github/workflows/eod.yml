@@ -171,6 +171,14 @@ jobs:
           }, indent=2))
           PY
 
+      - name: Generate canonical close forecast from refreshed daily bar
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m floor.main run-cycle \
+            --event CLOSE \
+            --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+            --required-market-session "${{ needs.gate.outputs.required_market_session }}"
+
       - name: Reconcile matured predictions against realized bars
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main reconcile-predictions

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from floor import storage as storage_module
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.persistence_db import persist_payload, stream_count
 from floor.storage import append_jsonl
@@ -160,3 +161,48 @@ def test_append_jsonl_prediction_count_matches_sqlite_rows(tmp_path: Path) -> No
     line_count = len([line for line in pred_path.read_text(encoding="utf-8").splitlines() if line.strip()])
     db_path = tmp_path / "data" / "persistence" / "app.sqlite"
     assert stream_count(db_path, "predictions") == line_count == 2
+
+
+def test_append_jsonl_scans_each_existing_ledger_only_once_per_process(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pred_path = tmp_path / "data" / "predictions" / "AAPL.jsonl"
+    pred_path.parent.mkdir(parents=True, exist_ok=True)
+    pred_path.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-01-01:OPEN",
+                "symbol": "AAPL",
+                "horizon": "d1",
+                "as_of": "2026-01-01T09:30:00-05:00",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    storage_module._IDEMPOTENCY_CACHE.clear()
+    calls = 0
+    original = storage_module._load_idempotency_keys
+
+    def counted(path: Path):
+        nonlocal calls
+        calls += 1
+        return original(path)
+
+    monkeypatch.setattr(storage_module, "_load_idempotency_keys", counted)
+
+    base = {
+        "symbol": "AAPL",
+        "as_of": "2026-01-02T09:30:00-05:00",
+        "event_type": "OPEN",
+        "floor_value": 100.0,
+        "ceiling_value": 110.0,
+        "model_version": "v1",
+    }
+    assert append_jsonl(pred_path, {**base, "horizon": "d1"}, batch_id="2026-01-02:OPEN")
+    assert append_jsonl(pred_path, {**base, "horizon": "w1"}, batch_id="2026-01-02:OPEN")
+    assert not append_jsonl(pred_path, {**base, "horizon": "w1"}, batch_id="2026-01-02:OPEN")
+
+    assert calls == 1
