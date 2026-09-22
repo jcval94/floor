@@ -225,18 +225,15 @@ def build_experiment_observation(
     leaderboard = _load_json(league_root / "leaderboard.json")
     league_cfg = _load_json(league_config_path) if league_config_path is not None else {}
 
-    configured_epoch = league_config_path is not None and bool(league_cfg)
-    expected_league_id = (
-        str(league_cfg.get("league_id") or "")
-        if configured_epoch
-        else str(leaderboard.get("league_id") or "")
-    )
-
-    if configured_epoch:
+    if league_config_path is not None and league_cfg:
+        configured_epoch = True
+        expected_league_id = str(league_cfg.get("league_id") or "")
         configured_model = Path(str(league_cfg.get("weekly_model_path") or ""))
         if configured_model and not configured_model.is_absolute():
             configured_model = league_config_path.parent.parent / configured_model
     else:
+        configured_epoch = False
+        expected_league_id = str(leaderboard.get("league_id") or "")
         configured_model = (
             data_dir
             / "metrics"
