@@ -27,3 +27,19 @@ def test_all_local_html_links_resolve_after_query_and_fragment_stripping() -> No
             assert (html.parent / local_path).exists(), (
                 f"broken local asset reference {html}: {match}"
             )
+
+def test_pages_publication_lock_only_wraps_real_publish_job() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(
+        encoding="utf-8"
+    )
+
+    workflow_header = workflow.split("\njobs:\n", 1)[0]
+    assert "concurrency:" not in workflow_header
+
+    build_job = workflow.split("\n  build:\n", 1)[1]
+    assert "group: pages-eod-publish" in build_job
+    assert "cancel-in-progress: false" in build_job
+    assert "id: deployment" in build_job
+    assert "uses: actions/deploy-pages@v4" in build_job
+    assert "\n  deploy:\n" not in workflow
+
