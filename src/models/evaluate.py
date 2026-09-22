@@ -89,6 +89,12 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
     top1 = [max(range(13), key=lambda i: pr[i]) + 1 for pr in probs]
     conf = [max(pr) for pr in probs]
     outcomes = [1 if p == t else 0 for p, t in zip(top1, y_true)]
+    unique_classes = len(set(top1))
+    dominant_share = (
+        max(top1.count(label) for label in set(top1)) / len(top1)
+        if top1
+        else 1.0
+    )
     return {
         "top1_accuracy": topk_accuracy(y_true, probs, k=1),
         "top3_accuracy": topk_accuracy(y_true, probs, k=3),
@@ -97,6 +103,8 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
         "expected_week_distance": expected_week_distance(y_true, probs),
         "confusion_matrix": confusion_matrix(y_true, top1, n_classes=13),
         "calibration_error": expected_calibration_error(conf, outcomes),
+        "top1_unique_classes": unique_classes,
+        "top1_dominant_share": dominant_share,
     }
 
 
@@ -127,7 +135,24 @@ def timing_serving_quality_blocked(metrics: dict) -> bool:
         uniform_log_loss = float(uniform_raw)
     except (TypeError, ValueError):
         return False
-    return skill <= 0.0 or quality_log_loss >= uniform_log_loss
+    if skill <= 0.0 or quality_log_loss >= uniform_log_loss:
+        return True
+
+    unique_raw = metrics.get("quality_top1_unique_classes")
+    dominant_raw = metrics.get("quality_top1_dominant_share")
+    if unique_raw is not None:
+        try:
+            if int(unique_raw) < 2:
+                return True
+        except (TypeError, ValueError):
+            pass
+    if dominant_raw is not None:
+        try:
+            if float(dominant_raw) >= 0.95:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
 
 
 def top3_weeks(probs: list[float]) -> list[dict]:
