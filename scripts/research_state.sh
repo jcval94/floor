@@ -59,9 +59,9 @@ restore_state() {
     if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --pattern "$ASSET.sha256" --dir "$TMP" >/dev/null 2>&1 \
       && (cd "$TMP" && sha256sum -c "$ASSET.sha256" >/dev/null 2>&1) \
       && validate_archive "$TMP/$ASSET"; then
-      for path in "${FILES[@]}"; do
-        rm -f "$path"
-      done
+      while IFS= read -r path; do
+        [[ -n "$path" ]] && rm -f "$path"
+      done < <(tar -tzf "$TMP/$ASSET")
       tar -xzf "$TMP/$ASSET"
       echo "Restored durable research state from release tag=$TAG"
       return 0
