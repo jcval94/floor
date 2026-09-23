@@ -11,7 +11,7 @@ from models.dataset_summary import summarize_modelable_rows
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
 from monitoring.drift_detection import js_divergence
 from monitoring.run_retrain_assessment import load_simple_yaml
-from models.evaluate import timing_metrics, timing_serving_quality_blocked, value_metrics
+from models.evaluate import pinball_loss, timing_metrics, timing_serving_quality_blocked, value_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,12 @@ def _timing_target_drift(reference_summary: dict, current_summary: dict, cfg: di
 
 
 def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
-    eval_rows = [row for row in rows if row.get("floor_m3") is not None]
+    eval_rows = [
+        row
+        for row in rows
+        if row.get("floor_m3") is not None
+        and row.get("split_eligible_m3", True) is not False
+    ]
     if not eval_rows:
         return {
             "state": "YELLOW",
@@ -234,21 +239,124 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
 
     baseline_pinball = float(baseline_metrics.get("pinball_loss", 0.0))
     current_pinball = float(current_metrics.get("pinball_loss", 0.0))
-    deltas = {
-        "pinball_loss_relative_increase": _relative_increase(
-            baseline_pinball,
-            current_pinball,
-        ),
-        "pinball_loss_absolute_increase": max(current_pinball - baseline_pinball, 0.0),
+    legacy_relative_increase = _relative_increase(
+        baseline_pinball,
+        current_pinball,
+    )
+    common_deltas = {
         "breach_rate": abs(float(current_metrics.get("breach_rate", 0.0)) - float(baseline_metrics.get("breach_rate", 0.0))),
         "calibration_error": abs(float(current_metrics.get("calibration_error", 0.0)) - float(baseline_metrics.get("calibration_error", 0.0))),
         "temporal_stability_drop": max(float(baseline_metrics.get("temporal_stability", 0.0)) - float(current_metrics.get("temporal_stability", 0.0)), 0.0),
     }
 
-    warn = float(cfg["performance_thresholds"]["pinball_loss_warn"])
-    fail = float(cfg["performance_thresholds"]["pinball_loss_fail"])
+    params = artifact.get("params") if isinstance(artifact.get("params"), dict) else {}
+    has_scale_free_contract = (
+        params.get("target_space") == "relative_floor_delta"
+        and baseline_metrics.get("pinball_loss_delta") is not None
+    )
+
     calibration_warn = float(cfg["thresholds"]["coverage_calibration_warn"])
     calibration_fail = float(cfg["thresholds"]["coverage_calibration_fail"])
+
+    if has_scale_free_contract:
+        true_delta: list[float] = []
+        predicted_delta: list[float] = []
+        for row, predicted_floor in zip(eval_rows, y_pred):
+            close = float(row.get("close") or 0.0)
+            if close <= 0:
+                continue
+            direct = row.get("floor_delta_m3")
+            if direct not in (None, ""):
+                target_delta = float(direct)
+            else:
+                target_delta = (close - float(row["floor_m3"])) / close
+            true_delta.append(max(0.0, min(0.95, target_delta)))
+            predicted_delta.append(
+                max(0.0, min(0.95, (close - float(predicted_floor)) / close))
+            )
+
+        if not true_delta:
+            return {
+                "state": "YELLOW",
+                "score": 0.0,
+                "current_metrics": current_metrics,
+                "baseline_metrics": baseline_metrics,
+                "deltas": {"insufficient_scale_free_rows": 1.0},
+            }
+
+        quantile = float(params.get("target_delta_quantile", 0.8))
+        current_pinball_delta = pinball_loss(
+            true_delta,
+            predicted_delta,
+            alpha=quantile,
+        )
+        current_mae_delta = sum(
+            abs(actual - predicted)
+            for actual, predicted in zip(true_delta, predicted_delta)
+        ) / len(true_delta)
+        baseline_pinball_delta = float(baseline_metrics["pinball_loss_delta"])
+        baseline_mae_delta = float(baseline_metrics.get("mae_delta", 0.0))
+        current_metrics["pinball_loss_delta"] = current_pinball_delta
+        current_metrics["mae_delta"] = current_mae_delta
+        current_metrics["evaluation_rows"] = len(true_delta)
+
+        deltas = {
+            "pinball_loss_delta": current_pinball_delta,
+            "pinball_loss_delta_increase": max(
+                current_pinball_delta - baseline_pinball_delta,
+                0.0,
+            ),
+            "mae_delta_increase": max(
+                current_mae_delta - baseline_mae_delta,
+                0.0,
+            ),
+            **common_deltas,
+        }
+        warn = float(
+            cfg["m3_performance_thresholds"]["pinball_loss_m3_warn"]
+        )
+        fail = float(
+            cfg["m3_performance_thresholds"]["pinball_loss_m3_fail"]
+        )
+        state = "GREEN"
+        if (
+            current_pinball_delta >= fail
+            or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_fail"])
+            or deltas["calibration_error"] >= calibration_fail
+        ):
+            state = "RED"
+        elif (
+            current_pinball_delta >= warn
+            or deltas["breach_rate"] >= float(cfg["performance_thresholds"]["breach_rate_warn"])
+            or deltas["calibration_error"] >= calibration_warn
+            or deltas["temporal_stability_drop"] >= warn
+        ):
+            state = "YELLOW"
+
+        return {
+            "state": state,
+            "score": max(
+                current_pinball_delta,
+                deltas["breach_rate"],
+                deltas["calibration_error"],
+                deltas["temporal_stability_drop"],
+            ),
+            "current_metrics": current_metrics,
+            "baseline_metrics": baseline_metrics,
+            "deltas": deltas,
+            "diagnostics": {
+                "metric_contract": "relative_floor_delta",
+                "legacy_pinball_loss_relative_increase": legacy_relative_increase,
+            },
+        }
+
+    deltas = {
+        "pinball_loss_relative_increase": legacy_relative_increase,
+        "pinball_loss_absolute_increase": max(current_pinball - baseline_pinball, 0.0),
+        **common_deltas,
+    }
+    warn = float(cfg["performance_thresholds"]["pinball_loss_warn"])
+    fail = float(cfg["performance_thresholds"]["pinball_loss_fail"])
     state = "GREEN"
     if (
         deltas["pinball_loss_relative_increase"] >= fail
@@ -275,6 +383,7 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
         "current_metrics": current_metrics,
         "baseline_metrics": baseline_metrics,
         "deltas": deltas,
+        "diagnostics": {"metric_contract": "legacy_absolute_floor"},
     }
 
 
