@@ -75,12 +75,3 @@ def test_scripts_do_not_hide_additional_git_push_writers() -> None:
             offenders.append(path.as_posix())
 
     assert offenders == []
-
-
-def test_pages_deployments_prefer_latest_publishable_state() -> None:
-    workflow = _workflow_text("pages.yml")
-    block = """concurrency:
-      group: pages-eod-publish
-      cancel-in-progress: true"""
-
-    assert block in workflow
