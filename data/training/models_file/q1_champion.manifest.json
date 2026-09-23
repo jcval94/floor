@@ -1,9 +1,0 @@
-{
-  "task": "q1",
-  "format": "pkl",
-  "file_name": "q1_champion.pkl",
-  "sha256": "e0dccf08222f8bc637de6798a24ee2baa1779a5dbde17a7d374cb1b192baef71",
-  "model_name": "boosted_stumps_q1",
-  "model_version": "cutoff-20260821-schema2",
-  "created_at": "2026-09-06T02:22:55.633953+00:00"
-}
