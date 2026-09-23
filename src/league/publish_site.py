@@ -51,8 +51,14 @@ def _rank_rows(raw_rows: Any) -> list[dict[str, Any]]:
         return []
     rows = [dict(row) for row in raw_rows if isinstance(row, dict)]
     rows.sort(key=_return_sort_key, reverse=True)
+    previous_return: float | None = None
+    previous_rank = 0
     for index, row in enumerate(rows, start=1):
-        row["rank"] = index
+        current_return = _return_of(row)
+        if index == 1 or current_return is None or previous_return is None or abs(current_return - previous_return) > 1e-12:
+            previous_rank = index
+        row["rank"] = previous_rank
+        previous_return = current_return
         strategy_id = str(row.get("strategy") or "")
         row["member_type"] = (
             "benchmark" if strategy_id in BENCHMARK_IDS else "strategy"
@@ -77,7 +83,7 @@ def _delta(left: float | None, right: float | None) -> float | None:
     return left - right
 
 
-def _competition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _competition_summary(rows: list[dict[str, Any]], sessions: int, min_sessions: int) -> dict[str, Any]:
     strategy_rows = [row for row in rows if row.get("member_type") == "strategy"]
     base_rows = [
         row
@@ -85,15 +91,19 @@ def _competition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if str(row.get("strategy")) != CHALLENGER_ID
     ]
 
-    overall_leader = rows[0] if rows else None
-    strategy_leader = strategy_rows[0] if strategy_rows else None
+    overall_leader = rows[0] if len(rows) > 1 and _return_of(rows[0]) != _return_of(rows[1]) and sessions >= min_sessions else None
+    strategy_leader = strategy_rows[0] if len(strategy_rows) > 1 and _return_of(strategy_rows[0]) != _return_of(strategy_rows[1]) and sessions >= min_sessions else None
     challenger = _row_by_id(rows, CHALLENGER_ID)
     spy = _row_by_id(rows, "benchmark_spy")
     best_base = base_rows[0] if base_rows else None
 
     challenger_return = _return_of(challenger)
     return {
+        "leader_status": "PROVISIONAL" if overall_leader else "INSUFFICIENT_EVIDENCE",
+        "min_sessions_for_leader": min_sessions,
+        "sessions": sessions,
         "overall_leader": overall_leader.get("strategy") if overall_leader else None,
+        "overall_leader_return": _return_of(overall_leader),
         "strategy_leader": strategy_leader.get("strategy") if strategy_leader else None,
         "strategy_leader_return": _return_of(strategy_leader),
         "challenger_rank": challenger.get("rank") if challenger else None,
@@ -137,12 +147,19 @@ def _weekly_model_summary(data_dir: Path, league_cfg: dict[str, Any]) -> dict[st
     model_path = _configured_data_path(data_dir, league_cfg.get("weekly_model_path"))
     payload = _load_object(model_path)
     metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
+    correlation = _number(metrics.get("spearman_rank_correlation"))
+    lift = _number(metrics.get("top_quintile_return_lift"))
+    validation_warning = bool(payload) and (
+        (correlation is not None and correlation <= 0)
+        or (lift is not None and lift <= 0)
+    )
     return {
         "status": "FROZEN" if payload else "MISSING",
         "model_name": payload.get("model_name") if payload else None,
         "version": payload.get("version") if payload else None,
         "trained_at": (payload.get("trained_at") or payload.get("as_of")) if payload else None,
         "validation_metrics": metrics,
+        "validation_warning": validation_warning,
     }
 
 
@@ -218,7 +235,8 @@ def publish_league_payload(
 
     rows = _rank_rows(payload.get("rows", []))
     payload["rows"] = rows
-    payload["summary"] = _competition_summary(rows)
+    min_sessions = max(2, int(league_cfg.get("weekly_review_frequency_sessions", 5)))
+    payload["summary"] = _competition_summary(rows, int(payload.get("sessions") or 0), min_sessions)
     payload["weekly_model"] = weekly_model
     payload["evidence_type"] = "prospective_shadow_paper"
     payload["published_at"] = datetime.now(timezone.utc).isoformat()

@@ -269,7 +269,7 @@ def test_mirror_site_tree_copies_html_and_data(tmp_path: Path) -> None:
     assert (target / "assets" / "app.js").read_text(encoding="utf-8") == 'console.log("ok")'
 
 
-def test_build_pages_data_includes_latest_intraday_and_latest_close(tmp_path: Path) -> None:
+def test_build_pages_data_does_not_treat_training_rows_as_intraday_prices(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     site_data = tmp_path / "site" / "data"
     (data_dir / "reports").mkdir(parents=True)
@@ -339,10 +339,18 @@ def test_build_pages_data_includes_latest_intraday_and_latest_close(tmp_path: Pa
     assert latest_close["AAPL"]["as_of"] == "2026-03-18T20:00:00+00:00"
     assert latest_close["MSFT"]["close"] == 402.1
 
-    latest_intraday = forecasts["latest_intraday"]
-    assert latest_intraday["AAPL"]["price"] == 213.6
-    assert latest_intraday["AAPL"]["as_of"] == "2026-03-18T20:00:00+00:00"
-    assert latest_intraday["MSFT"]["price"] == 401.8
+    assert "latest_intraday" not in forecasts
+    assert forecasts["source_metadata"]["intraday_prices"]["status"] == "NOT_COLLECTED"
+    assert "latest_intraday" not in forecasts.get("data_health", {}).get("sources", {})
+
+
+def test_retrain_now_overrides_calendar_countdown() -> None:
+    from utils.pages_build import _compute_retraining_schedule
+
+    schedule = _compute_retraining_schedule("2026-09-23T00:00:00+00:00", 14, "RETRAIN_NOW")
+    assert schedule["action_required_now"] is True
+    assert schedule["human_eta"] == "reentrenamiento requerido ahora"
+    assert schedule["next_review_at"] == "2026-10-07T00:00:00+00:00"
 
 
 def test_build_pages_data_uses_artifact_suite_when_review_summary_missing(tmp_path: Path) -> None:
@@ -538,4 +546,3 @@ def test_retrain_assessment_has_auditable_push_refresh_trigger() -> None:
 
     assert "push:" in workflow
     assert "retrain_assessment_request.json" in workflow
-

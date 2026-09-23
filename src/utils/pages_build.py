@@ -35,7 +35,6 @@ SENSITIVE_KEYS = {
 }
 
 LFS_POINTER_HEADER = "version https://git-lfs.github.com/spec/v1"
-LOW_INTRADAY_COVERAGE_THRESHOLD = 0.8
 
 
 def _sanitize(obj: Any) -> Any:
@@ -268,8 +267,9 @@ def _compute_coverage(total_symbols: int, observed_symbols: int) -> float:
     return observed_symbols / float(total_symbols)
 
 
-def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict[str, Any]:
+def _compute_retraining_schedule(last_review_at: Any, cadence_days: int, recommendation: str = "") -> dict[str, Any]:
     cadence_days = max(int(cadence_days), 1)
+    action_required_now = str(recommendation).upper() == "RETRAIN_NOW"
     last_dt = _parse_iso_datetime(last_review_at)
     if last_dt is None:
         return {
@@ -277,8 +277,9 @@ def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict
             "last_review_at": None,
             "next_review_at": None,
             "seconds_until_due": None,
-            "human_eta": "sin fecha de última revisión",
+            "human_eta": "reentrenamiento requerido ahora" if action_required_now else "sin fecha de última revisión",
             "is_overdue": None,
+            "action_required_now": action_required_now,
         }
 
     now = datetime.now(tz=timezone.utc)
@@ -289,7 +290,7 @@ def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict
     days = abs_seconds // 86400
     hours = (abs_seconds % 86400) // 3600
     prefix = "vencido hace" if is_overdue else "faltan"
-    human_eta = f"{prefix} {days}d {hours}h"
+    human_eta = "reentrenamiento requerido ahora" if action_required_now else f"{prefix} {days}d {hours}h"
 
     return {
         "cadence_days": cadence_days,
@@ -298,6 +299,7 @@ def _compute_retraining_schedule(last_review_at: Any, cadence_days: int) -> dict
         "seconds_until_due": seconds_until_due,
         "human_eta": human_eta,
         "is_overdue": is_overdue,
+        "action_required_now": action_required_now,
     }
 
 
@@ -562,72 +564,6 @@ def _latest_market_values(db_path: Path, symbols: list[str]) -> dict[str, dict[s
     }
 
 
-def _latest_intraday_values(
-    rows_path: Path,
-    symbols: list[str],
-    latest_close: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, dict[str, Any]]:
-    if not rows_path.exists() or not symbols:
-        return {}
-    allowed = {s.upper() for s in symbols}
-    close_refs = latest_close or {}
-    preferred: dict[str, tuple[str, int, dict[str, Any]]] = {}
-    fallback: dict[str, tuple[str, int, dict[str, Any]]] = {}
-    for idx, row in enumerate(_read_jsonl(rows_path)):
-        symbol = str(row.get("symbol", "")).upper()
-        if symbol not in allowed:
-            continue
-        ts = str(row.get("timestamp") or row.get("as_of") or "")
-        close = row.get("close")
-        if not ts:
-            continue
-        if close is None:
-            continue
-        try:
-            close_value = float(str(close))
-        except (TypeError, ValueError):
-            continue
-        payload = {
-            "as_of": ts,
-            "price": close_value,
-            "source": "training/yahoo_market_rows.jsonl",
-        }
-        prev_fallback = fallback.get(symbol)
-        if prev_fallback is None or (ts, idx) >= (prev_fallback[0], prev_fallback[1]):
-            fallback[symbol] = (
-                ts,
-                idx,
-                payload,
-            )
-
-        close_ref = close_refs.get(symbol) or {}
-        close_ts = str(close_ref.get("as_of") or "")
-        close_value_ref = close_ref.get("close")
-        try:
-            close_value_numeric = float(str(close_value_ref))
-        except (TypeError, ValueError):
-            close_value_numeric = None
-        is_same_as_close = (
-            close_ts
-            and ts == close_ts
-            and close_value_numeric is not None
-            and abs(close_value - close_value_numeric) < 1e-9
-        )
-        if is_same_as_close:
-            continue
-
-        prev_preferred = preferred.get(symbol)
-        if prev_preferred is None or (ts, idx) >= (prev_preferred[0], prev_preferred[1]):
-            preferred[symbol] = (
-                ts,
-                idx,
-                payload,
-            )
-
-    selected = preferred if preferred else fallback
-    return {symbol: payload for symbol, (_, __, payload) in selected.items()}
-
-
 def _latest_close_from_rows(rows_path: Path, symbols: list[str]) -> dict[str, dict[str, Any]]:
     if not rows_path.exists() or not symbols:
         return {}
@@ -703,34 +639,22 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             market_db_path,
             market_rows_path,
         )
-    latest_intraday = _latest_intraday_values(market_rows_path, symbols, latest_close=latest_close)
-
     symbol_count = len(symbols)
     close_count = len(latest_close)
-    intraday_count = len(latest_intraday)
     close_coverage = _compute_coverage(symbol_count, close_count)
-    intraday_coverage = _compute_coverage(symbol_count, intraday_count)
     close_max_ts = _max_source_timestamp(latest_close)
-    intraday_max_ts = _max_source_timestamp(latest_intraday)
 
     logging.info(
-        "Forecast source stats | universe=%s latest_close=%s (coverage=%.2f%%, max_ts=%s) latest_intraday=%s (coverage=%.2f%%, max_ts=%s)",
+        "Forecast source stats | universe=%s latest_close=%s (coverage=%.2f%%, max_ts=%s)",
         symbol_count,
         close_count,
         close_coverage * 100.0,
         close_max_ts,
-        intraday_count,
-        intraday_coverage * 100.0,
-        intraday_max_ts,
     )
 
     alerts: list[str] = []
     if close_coverage == 0.0:
         alerts.append("latest_close coverage is 0%")
-    if intraday_coverage < LOW_INTRADAY_COVERAGE_THRESHOLD:
-        alerts.append(
-            f"latest_intraday coverage below threshold ({intraday_coverage * 100.0:.2f}% < {LOW_INTRADAY_COVERAGE_THRESHOLD * 100.0:.0f}%)"
-        )
 
     latest_predictions_raw = dashboard_payload.get("latest_predictions", [])
     latest_predictions = latest_predictions_raw if isinstance(latest_predictions_raw, list) else []
@@ -744,7 +668,6 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "as_of": latest_predictions[0].get("as_of") if latest_predictions else None,
         "contract": dashboard_payload.get("prediction_contract", MULTI_HORIZON_PREDICTION_CONTRACT),
         "rows": latest_predictions,
-        "latest_intraday": latest_intraday,
         "latest_close": latest_close,
         "source_metadata": {
             "latest_close": {
@@ -752,10 +675,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
                 "mode": latest_close_mode,
                 "as_of": close_max_ts,
             },
-            "latest_intraday": {
-                "source": "training/yahoo_market_rows.jsonl",
-                "as_of": intraday_max_ts,
-            },
+            "intraday_prices": {"status": "NOT_COLLECTED", "source": None},
         },
         "top_opportunities": opportunities[:10],
     }
@@ -763,19 +683,11 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         forecasts["data_health"] = {
             "status": "DEGRADED",
             "alerts": alerts,
-            "thresholds": {
-                "intraday_min_coverage_pct": LOW_INTRADAY_COVERAGE_THRESHOLD * 100.0,
-            },
             "sources": {
                 "latest_close": {
                     "symbols": close_count,
                     "coverage_pct": round(close_coverage * 100.0, 2),
                     "max_timestamp": close_max_ts,
-                },
-                "latest_intraday": {
-                    "symbols": intraday_count,
-                    "coverage_pct": round(intraday_coverage * 100.0, 2),
-                    "max_timestamp": intraday_max_ts,
                 },
             },
         }
@@ -921,7 +833,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             "review_summary_stale": review_summary_stale,
             "latest_model_artifact_at": _latest_model_artifact_timestamp(artifacts),
         },
-        "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days),
+        "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days, str(suite_recommendation)),
         "details": model_details,
     }
     (site_data_dir / "models.json").write_text(json.dumps(_sanitize(models), indent=2), encoding="utf-8")
