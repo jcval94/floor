@@ -1,5 +1,5 @@
 {
   "requested_at": "2026-09-22",
-  "reason": "p2_post_retrain_fresh_review",
-  "iteration": "p2-health-truth-v4"
+  "reason": "refresh_governance_after_balanced_timing_trainer_merge",
+  "iteration": "p2-balanced-timing-postmerge-20260922"
 }
