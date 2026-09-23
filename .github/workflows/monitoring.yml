@@ -17,6 +17,9 @@ jobs:
   monitor_critical:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
     concurrency:
       group: floor-monitoring-state-writer
       cancel-in-progress: true
@@ -24,18 +27,54 @@ jobs:
       - name: Determine monitoring eligibility
         id: eligibility
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
           run=false
           reason=unsupported_context
+
           if [ "$EVENT_NAME" = "workflow_run" ]; then
             if [ "$UPSTREAM_CONCLUSION" = "success" ] && [ "$UPSTREAM_BRANCH" = "main" ]; then
-              run=true
-              reason=successful_runtime_workflow
+              artifacts=""
+              for attempt in 1 2 3; do
+                if artifacts=$(gh api                   -H "Accept: application/vnd.github+json"                   "repos/${GITHUB_REPOSITORY}/actions/runs/${UPSTREAM_RUN_ID}/artifacts?per_page=100"); then
+                  break
+                fi
+                artifacts=""
+                sleep $((attempt * 2))
+              done
+
+              if [ -z "$artifacts" ]; then
+                reason="upstream_artifact_lookup_failed"
+              else
+                count=0
+                case "$UPSTREAM_NAME" in
+                  intraday_engine)
+                    prefix="intraday-audit-${UPSTREAM_RUN_ID}-"
+                    count=$(jq --arg prefix "$prefix"                       '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | length'                       <<<"$artifacts")
+                    ;;
+                  eod)
+                    expected="eod-audit-${UPSTREAM_RUN_ID}"
+                    count=$(jq --arg expected "$expected"                       '[.artifacts[] | select(.name == $expected and .expired == false)] | length'                       <<<"$artifacts")
+                    ;;
+                  *)
+                    reason="unsupported_upstream_${UPSTREAM_NAME}"
+                    ;;
+                esac
+
+                if [ "${count:-0}" -gt 0 ]; then
+                  run=true
+                  reason="${UPSTREAM_NAME}_runtime_evidence_present"
+                elif [ "$reason" = "unsupported_context" ]; then
+                  reason="${UPSTREAM_NAME}_completed_without_runtime_evidence"
+                fi
+              fi
             else
               reason="upstream_${UPSTREAM_CONCLUSION:-unknown}_branch_${UPSTREAM_BRANCH:-unknown}"
             fi
