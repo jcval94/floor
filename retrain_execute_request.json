@@ -1,7 +1,7 @@
 {
   "requested_at": "2026-09-22",
-  "reason": "p2_retry_corrected_window_retrain_after_shell_fix",
+  "reason": "p2_governed_retrain_balanced_timing_candidate",
   "approve_recommended": true,
-  "assessment_run_id": 35784804847,
-  "iteration": "p2-model-health-v3"
+  "assessment_run_id": 35803850505,
+  "iteration": "p2-balanced-timing-v2"
 }
