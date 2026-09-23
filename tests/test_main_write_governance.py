@@ -38,6 +38,8 @@ def test_retrain_execute_git_writer_remains_governed() -> None:
     assert "if: github.ref_name == 'main'" in workflow
     assert "retrain_execute_request.json" in workflow
     assert "approve_recommended" in workflow
+    assert "PUBLISH_CHAMPIONS_TO_MAIN" in workflow
+    assert "manual_confirmation_required" in workflow
     assert "git add -f data/training/models/*.json" in workflow
     assert "git push" in workflow
 
@@ -49,6 +51,8 @@ def test_manual_training_git_write_is_opt_in_only() -> None:
     assert "commit_champions:" in workflow
     assert 'default: "false"' in workflow
     assert "if: inputs.commit_champions == 'true'" in workflow
+    assert "PUBLISH_CHAMPIONS_TO_MAIN" in workflow
+    assert 'CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}' in workflow
     assert "git push" in workflow
 
 
