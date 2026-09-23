@@ -26,6 +26,11 @@ class TrainingConfig(TypedDict):
     epochs: int
 
 
+class BalancedTrainingConfig(TypedDict):
+    c: float
+    class_balance_power: float
+
+
 @dataclass
 class TimingModelArtifact:
     model_name: str
@@ -153,6 +158,7 @@ def _fit_multinomial(
                 gradient = grad_w[k][j] + l2 * weights[k][j]
                 weights[k][j] -= learning_rate * gradient
 
+
     return {
         "schema_version": 2,
         "model_type": "multinomial_logistic",
@@ -166,6 +172,84 @@ def _fit_multinomial(
         "learning_rate": learning_rate,
         "l2": l2,
         "epochs": epochs,
+        "temperature": 1.0,
+        "train_rows": len(eligible),
+    }
+
+
+def _fit_balanced_multinomial(
+    rows: list[dict],
+    *,
+    c: float = 3.0,
+    class_balance_power: float = 0.25,
+    max_iter: int = 1000,
+) -> dict:
+    """Fit a class-balanced multinomial while keeping runtime inference pure Python.
+
+    The production artifact remains a simple weights/bias JSON contract. Scikit-learn
+    is used only during modeling to solve the multinomial optimization robustly.
+    A soft inverse-frequency weight reduces the extreme class-1 prior without
+    flattening the probability distribution into a fully balanced classifier.
+    """
+
+    eligible = _eligible_rows(rows)
+    if not eligible:
+        raise ValueError("No eligible m3 timing rows")
+
+    try:
+        import numpy as np
+        from sklearn.linear_model import LogisticRegression
+    except ImportError as exc:  # pragma: no cover - modeling extra is installed in training jobs
+        raise RuntimeError(
+            "Balanced timing retraining requires the floor[modeling] dependencies"
+        ) from exc
+
+    means, scales = _fit_scaler(eligible)
+    x = np.asarray(
+        [_scaled_vector(row, means, scales) for row in eligible],
+        dtype=float,
+    )
+    y = np.asarray([int(row["floor_week_m3"]) for row in eligible], dtype=int)
+
+    counts = {label: int((y == label).sum()) for label in range(1, N_CLASSES + 1)}
+    if any(count <= 0 for count in counts.values()):
+        missing = [label for label, count in counts.items() if count <= 0]
+        raise ValueError(f"m3 timing retraining is missing classes: {missing}")
+
+    sample_weight = np.asarray(
+        [counts[int(target)] ** (-class_balance_power) for target in y],
+        dtype=float,
+    )
+    sample_weight /= max(float(sample_weight.mean()), 1e-12)
+
+    model = LogisticRegression(
+        C=c,
+        solver="lbfgs",
+        max_iter=max_iter,
+    )
+    model.fit(x, y, sample_weight=sample_weight)
+    classes = [int(value) for value in model.classes_.tolist()]
+    expected_classes = list(range(1, N_CLASSES + 1))
+    if classes != expected_classes:
+        raise ValueError(
+            f"m3 timing class contract mismatch: {classes} != {expected_classes}"
+        )
+
+    return {
+        "schema_version": 2,
+        "model_type": "multinomial_logistic",
+        "objective": "class_weighted_multinomial_cross_entropy",
+        "training_backend": "sklearn_logistic_regression",
+        "class_count": N_CLASSES,
+        "feature_names": list(FEATURE_NAMES),
+        "feature_means": {name: means[i] for i, name in enumerate(FEATURE_NAMES)},
+        "feature_scales": {name: scales[i] for i, name in enumerate(FEATURE_NAMES)},
+        "weights": model.coef_.tolist(),
+        "bias": model.intercept_.tolist(),
+        "c": c,
+        "class_balance_power": class_balance_power,
+        "max_iter": max_iter,
+        "class_counts": {str(label): count for label, count in counts.items()},
         "temperature": 1.0,
         "train_rows": len(eligible),
     }
@@ -266,40 +350,82 @@ def _fit_from_config(rows: list[dict], config: TrainingConfig) -> dict:
     )
 
 
-def _select_hyperparameters_with_cv(train_rows: list[dict], folds: int = 3) -> tuple[dict, dict]:
+def _fit_balanced_from_config(
+    rows: list[dict],
+    config: BalancedTrainingConfig,
+) -> dict:
+    return _fit_balanced_multinomial(
+        rows,
+        c=config["c"],
+        class_balance_power=config["class_balance_power"],
+    )
+
+
+def _select_hyperparameters_with_cv(
+    train_rows: list[dict],
+    folds: int = 3,
+) -> tuple[dict, dict]:
     folds_data = _expanding_time_folds(train_rows, folds=folds)
-    default: TrainingConfig = {"learning_rate": 0.05, "l2": 0.01, "epochs": 140}
+    default: BalancedTrainingConfig = {"c": 3.0, "class_balance_power": 0.25}
     if not folds_data:
-        params = _fit_from_config(train_rows, default)
+        params = _fit_balanced_from_config(train_rows, default)
         return params, {
             "cv_enabled": False,
             "reason": "insufficient_purged_temporal_folds",
             "folds": 0,
             "grid_size": 0,
+            "best_config": default,
         }
 
-    grid: list[TrainingConfig] = [
-        {"learning_rate": 0.08, "l2": 0.005, "epochs": 120},
-        {"learning_rate": 0.05, "l2": 0.01, "epochs": 140},
-        {"learning_rate": 0.03, "l2": 0.03, "epochs": 180},
+    grid: list[BalancedTrainingConfig] = [
+        {"c": 3.0, "class_balance_power": 0.15},
+        {"c": 3.0, "class_balance_power": 0.25},
+        {"c": 3.0, "class_balance_power": 0.35},
     ]
     best = grid[0]
     best_score = float("inf")
+    best_log_loss = float("inf")
+    best_safe_folds = 0
     for config in grid:
-        scores = []
+        scores: list[float] = []
+        log_losses: list[float] = []
+        safe_folds = 0
         for fold_train, fold_valid in folds_data:
-            params = _fit_from_config(fold_train, config)
-            scores.append(_cross_entropy(fold_valid, params))
+            params = _fit_balanced_from_config(fold_train, config)
+            eligible_valid = _eligible_rows(fold_valid)
+            probabilities = [
+                predict_week_probabilities(row, params, apply_calibration=False)
+                for row in eligible_valid
+            ]
+            y_true = [int(row["floor_week_m3"]) for row in eligible_valid]
+            fold_metrics = timing_metrics(y_true, probabilities)
+            fold_log_loss = float(fold_metrics.get("log_loss", float("inf")))
+            unique_classes = int(fold_metrics.get("top1_unique_classes", 0))
+            dominant_share = float(fold_metrics.get("top1_dominant_share", 1.0))
+            collapsed = (
+                len(eligible_valid) >= 30
+                and (unique_classes < 2 or dominant_share >= 0.95)
+            )
+            log_losses.append(fold_log_loss)
+            scores.append(fold_log_loss + (1.0 if collapsed else 0.0))
+            safe_folds += int(not collapsed)
+
         score = sum(scores) / len(scores)
+        mean_log_loss = sum(log_losses) / len(log_losses)
         if score < best_score:
             best_score = score
+            best_log_loss = mean_log_loss
+            best_safe_folds = safe_folds
             best = config
-    params = _fit_from_config(train_rows, best)
+
+    params = _fit_balanced_from_config(train_rows, best)
     return params, {
         "cv_enabled": True,
         "folds": len(folds_data),
         "grid_size": len(grid),
-        "best_cv_log_loss": round(best_score, 8),
+        "best_cv_objective": round(best_score, 8),
+        "best_cv_log_loss": round(best_log_loss, 8),
+        "collapse_safe_folds": best_safe_folds,
         "best_config": best,
     }
 
@@ -346,11 +472,19 @@ def train_floor_week_m3_timing_model(
     params["calibration_method"] = "chronological_holdout_temperature"
     params["calibrator_reliability"] = {}
     params["tuning_summary"] = tuning_summary
-    params["hyperparameter_grid"] = {
-        "learning_rate": [0.08, 0.05, 0.03],
-        "l2": [0.005, 0.01, 0.03],
-        "epochs": [120, 140, 180],
-    }
+    params["hyperparameter_grid"] = (
+        {
+            "c": [3.0],
+            "class_balance_power": [0.15, 0.25, 0.35],
+            "max_iter": [1000],
+        }
+        if training_mode == "retrain"
+        else {
+            "learning_rate": [0.08, 0.05, 0.03],
+            "l2": [0.005, 0.01, 0.03],
+            "epochs": [120, 140, 180],
+        }
+    )
 
     evaluation_rows = _eligible_rows(evaluation_rows)
     if not evaluation_rows:
