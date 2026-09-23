@@ -5,11 +5,6 @@ import math
 from statistics import mean, pstdev
 
 
-# Longest explicit rolling lookback in the current canonical feature contract.
-# Serving keeps additional warm-up rows and validates parity against full history.
-MAX_FEATURE_LOOKBACK_ROWS = 252
-
-
 def _to_datetime(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -79,7 +74,6 @@ def build_features(rows: list[dict]) -> list[dict]:
         rets: list[float] = []
         bench_rets: list[float] = []
         tr_values: list[float] = []
-        normalized_ranges: list[float] = []
         day_closes: list[float] = []
         day_bench_closes: list[float] = []
         day_ranges: list[float] = []
@@ -124,8 +118,6 @@ def build_features(rows: list[dict]) -> list[dict]:
             lows.append(low)
             volumes.append(volume)
             bench_closes.append(bench_close)
-            if close != 0:
-                normalized_ranges.append((high - low) / close)
 
             row["ret_lag_1"] = ret_1
             row["ret_lag_2"] = None if idx < 2 else close / closes[-3] - 1.0
@@ -227,17 +219,12 @@ def build_features(rows: list[dict]) -> list[dict]:
             max_close20 = max(_rolling(closes, idx, 20))
             row["recent_drawdown_20"] = None if max_close20 == 0 else close / max_close20 - 1.0
 
-            row["intraday_range_5"] = (
-                _safe_mean(
-                    _rolling(
-                        normalized_ranges,
-                        len(normalized_ranges) - 1,
-                        5,
-                    )
-                )
-                if normalized_ranges
-                else None
-            )
+            valid_ranges = [
+                (high_price - low_price) / close_price
+                for high_price, low_price, close_price in zip(highs, lows, closes)
+                if close_price != 0
+            ]
+            row["intraday_range_5"] = _safe_mean(_rolling(valid_ranges, len(valid_ranges) - 1, 5)) if valid_ranges else None
             row["range_width_5"] = None if close == 0 else (max(_rolling(highs, idx, 5)) - min(_rolling(lows, idx, 5))) / close
             row["range_width_20"] = None if close == 0 else (max(_rolling(highs, idx, 20)) - min(_rolling(lows, idx, 20))) / close
             row["range_width_60"] = None if close == 0 else (max(_rolling(highs, idx, 60)) - min(_rolling(lows, idx, 60))) / close
