@@ -104,12 +104,11 @@ function selectForecast(rows, horizon) {
 }
 
 function referencePrice(data, symbol, row) {
-  const intraday = Number(data?.latest_intraday?.[symbol]?.price);
-  if (Number.isFinite(intraday)) return { value: intraday, source: 'Intraday' };
-  const close = Number(data?.latest_close?.[symbol]?.close);
-  if (Number.isFinite(close)) return { value: close, source: 'Último close' };
-  const floor = Number(row?.floor_value);
-  const ceiling = Number(row?.ceiling_value);
+  const closeRaw = data?.latest_close?.[symbol]?.close;
+  const close = closeRaw == null ? NaN : Number(closeRaw);
+  if (Number.isFinite(close) && close > 0) return { value: close, source: 'Último cierre diario' };
+  const floor = row?.floor_value == null ? NaN : Number(row.floor_value);
+  const ceiling = row?.ceiling_value == null ? NaN : Number(row.ceiling_value);
   if (Number.isFinite(floor) && Number.isFinite(ceiling)) {
     return { value: (floor + ceiling) / 2, source: 'Punto medio del rango' };
   }

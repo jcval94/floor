@@ -22,6 +22,7 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
             {
                 "league_id": "strategy_league_v7_clean_genesis_10k",
                 "status": "RUNNING",
+                "sessions": 8,
                 "initial_nav_usd": 10000.0,
                 "rows": [
                     {
@@ -67,6 +68,7 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     ]
     assert [row["rank"] for row in payload["rows"]] == [1, 2, 3, 4, 5]
     assert payload["summary"]["strategy_leader"] == "capital_allocation_challenger"
+    assert payload["summary"]["leader_status"] == "PROVISIONAL"
     assert payload["summary"]["challenger_rank"] == 1
     assert payload["summary"]["best_base_strategy"] == "mean_reversion_floor_w1"
     assert payload["summary"]["challenger_vs_spy"] == pytest.approx(0.004)
@@ -75,6 +77,39 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     assert payload["automatic_promotion"] is False
     assert payload["live_execution_enabled"] is False
     assert output.exists()
+
+
+def test_league_with_one_session_and_all_tied_has_no_leader(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    source = data_dir / "metrics" / "strategy_league" / "leaderboard.json"
+    source.parent.mkdir(parents=True)
+    source.write_text(json.dumps({
+        "status": "RUNNING", "sessions": 1,
+        "rows": [{"strategy": name, "return": 0.0, "trades": 0} for name in
+                 ("weekly_opportunity_ridge", "capital_allocation_challenger", "benchmark_spy")],
+    }), encoding="utf-8")
+
+    payload = publish_league_payload(data_dir, tmp_path / "site" / "data" / "strategy_league.json")
+
+    assert payload["summary"]["leader_status"] == "INSUFFICIENT_EVIDENCE"
+    assert payload["summary"]["strategy_leader"] is None
+    assert payload["summary"]["overall_leader"] is None
+    assert {row["rank"] for row in payload["rows"]} == {1}
+
+
+def test_frozen_weekly_model_reports_weak_validation(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    weekly = data_dir / "metrics" / "strategy_league" / "models" / "weak.json"
+    weekly.parent.mkdir(parents=True)
+    weekly.write_text(json.dumps({"metrics": {
+        "spearman_rank_correlation": -0.087,
+        "top_quintile_return_lift": -0.0056,
+    }}), encoding="utf-8")
+    cfg = tmp_path / "league.json"
+    cfg.write_text(json.dumps({"weekly_model_path": "data/metrics/strategy_league/models/weak.json"}), encoding="utf-8")
+    result = publish_league_payload(data_dir, tmp_path / "site" / "data" / "league.json", cfg)
+    assert result["weekly_model"]["status"] == "FROZEN"
+    assert result["weekly_model"]["validation_warning"] is True
 
 
 def test_publish_league_payload_rejects_stale_runtime_state(

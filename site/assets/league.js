@@ -93,10 +93,11 @@ function fallbackSummary(rows) {
   const spyReturn = Number(spy?.return);
   const bestBaseReturn = Number(bestBase?.return);
   return {
-    overall_leader: sorted[0]?.strategy || null,
-    overall_leader_return: Number(sorted[0]?.return),
-    strategy_leader: strategies[0]?.strategy || null,
-    strategy_leader_return: Number(strategies[0]?.return),
+    leader_status: 'INSUFFICIENT_EVIDENCE',
+    overall_leader: null,
+    overall_leader_return: null,
+    strategy_leader: null,
+    strategy_leader_return: null,
     challenger_rank: challenger?.rank || (challenger ? sorted.indexOf(challenger) + 1 : null),
     challenger_return: challengerReturn,
     challenger_vs_spy: Number.isFinite(challengerReturn) && Number.isFinite(spyReturn) ? challengerReturn - spyReturn : null,
@@ -128,16 +129,16 @@ function summaryCards(data, rows) {
 
   const cards = [
     {
-      label: 'Líder estrategia',
-      value: labelFor(leaderId),
-      detail: `${pct(summary.strategy_leader_return)} retorno acumulado`,
+      label: 'Líder provisional',
+      value: leaderId ? labelFor(leaderId) : 'Sin evidencia suficiente',
+      detail: leaderId ? `${pct(summary.strategy_leader_return)} retorno acumulado` : `Mínimo ${summary.min_sessions_for_leader || 5} sesiones y un retorno distinto`,
       tone: leaderId === 'capital_allocation_challenger' ? 'ok' : '',
     },
     {
       label: 'Challenger · posición',
       value: challengerRank ? `#${challengerRank}` : '—',
       detail: `${pct(challengerReturn)} retorno`,
-      tone: challengerRank === 1 ? 'ok' : '',
+      tone: challengerRank === 1 && leaderId === 'capital_allocation_challenger' ? 'ok' : '',
     },
     {
       label: 'Challenger vs SPY',
@@ -314,9 +315,10 @@ async function renderLeague() {
   const note = document.getElementById('leagueNote');
   if (note) {
     const published = data.published_at ? ` Publicado ${new Date(data.published_at).toLocaleString('es-MX')}.` : '';
+    const modelWarning = data.weekly_model?.validation_warning ? ' El modelo semanal congelado mostró validación débil; sus resultados siguen en evaluación.' : '';
     note.textContent = data.status === 'RUNNING'
-      ? `Capital inicial: ${money(data.initial_nav_usd)} por cartera. Datos prospectivos shadow-paper; cada EOD actualiza la liga y Pages automáticamente.${published}`
-      : `Shadow-paper únicamente. El historial empieza cuando todas las carteras pueden arrancar en igualdad de condiciones.${published}`;
+      ? `Capital inicial: ${money(data.initial_nav_usd)} por cartera. Datos prospectivos shadow-paper; cada EOD actualiza la liga y Pages automáticamente. ${data.summary?.leader_status === 'INSUFFICIENT_EVIDENCE' ? 'Todavía no hay líder: faltan sesiones o hay un empate.' : 'Líder provisional; la promoción exige controles adicionales.'}${modelWarning}${published}`
+      : `Shadow-paper únicamente. El historial empieza cuando todas las carteras pueden arrancar en igualdad de condiciones.${modelWarning}${published}`;
   }
 }
 

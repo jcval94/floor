@@ -305,6 +305,30 @@ def model_suite_compatibility(data_dir: Path) -> dict[str, Any]:
     }
 
 
+def prediction_model_alignment(
+    prediction_version: object, model_audit: dict[str, Any]
+) -> dict[str, Any]:
+    """Identify batches produced before a champion promotion without discarding history."""
+    tasks = _mapping(model_audit.get("tasks"))
+    names = ("d1", "w1", "q1", "value", "timing")
+    current = {
+        name: str(_mapping(tasks.get(name)).get("version") or "").strip()
+        for name in names
+    }
+    batch_version = str(prediction_version or "").strip()
+    if not batch_version or any(not version for version in current.values()):
+        status = "UNKNOWN"
+    else:
+        expected = "|".join(f"{name}:{current[name]}" for name in names)
+        status = "CURRENT" if batch_version == expected else "PREVIOUS_CHAMPION"
+    return {
+        "status": status,
+        "batch_model_version": batch_version or None,
+        "current_champion_versions": current,
+        "matches_current_champions": status == "CURRENT",
+    }
+
+
 def _valid_timing(value: object, horizon: str) -> bool:
     if horizon == "d1":
         return value in (None, "") or str(value) in ALLOWED_CLASSES["d1"]
@@ -753,6 +777,7 @@ def publish_pages_data(
             "as_of": batch_audit.get("as_of"),
         }
     )
+    alignment = prediction_model_alignment(contract_audit.get("model_version"), model_audit)
     freshness_audit = _freshness(data_dir, symbols, batch_audit.get("as_of"))
     schema_audit = _site_schema_audit(site_data_dir, symbols)
 
@@ -769,6 +794,8 @@ def publish_pages_data(
         blockers.append("site_payload_schema_invalid")
 
     warnings = _monitoring_warning_codes(monitoring_audit)
+    if alignment["status"] == "PREVIOUS_CHAMPION" and not blockers:
+        warnings.append("prediction_batch_from_previous_champion")
 
     publishable = not blockers
     forecasts_path = site_data_dir / "forecasts.json"
@@ -826,6 +853,7 @@ def publish_pages_data(
         "prediction_history_source": history_source,
         "batch": batch_audit,
         "prediction_contract": contract_audit,
+        "prediction_model_alignment": alignment,
         "models": model_audit,
         "freshness": freshness_audit,
         "monitoring": monitoring_audit,
@@ -839,6 +867,7 @@ def publish_pages_data(
         "status": audit["status"],
         "publishable_forecasts": publishable,
         "batch_as_of": batch_audit.get("as_of"),
+        "prediction_model_alignment": alignment["status"],
         "source_commit": source_commit or None,
         "blockers": blockers,
         "warnings": warnings,

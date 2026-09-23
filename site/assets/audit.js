@@ -17,7 +17,15 @@ async function loadAudit() {
 }
 
 function textList(items) {
-  return Array.isArray(items) && items.length ? items.join(' · ') : 'Sin detalle adicional';
+  const labels = {
+    prediction_batch_from_previous_champion: 'El lote de pronósticos procede del campeón anterior; espera la próxima inferencia',
+    operational_health_degraded: 'Monitoreo de modelos degradado',
+    operational_health_critical: 'Monitoreo de modelos crítico',
+    operational_health_missing_or_stale: 'Monitoreo no disponible o desactualizado',
+    drift_report_stale_or_missing: 'Reporte de drift pendiente o desactualizado',
+    incident_report_stale_or_missing: 'Reporte de incidentes pendiente o desactualizado',
+  };
+  return Array.isArray(items) && items.length ? items.map((item) => labels[item] || item).join(' · ') : 'Sin detalle adicional';
 }
 
 function tone(status) {
@@ -65,7 +73,7 @@ function renderBanner(audit) {
   const detail = document.createElement('span');
   detail.className = 'trust-detail';
   if (!audit.publishable_forecasts) detail.textContent = 'Los valores accionables fueron ocultados por controles de integridad.';
-  else if (Array.isArray(audit.warnings) && audit.warnings.length) detail.textContent = textList(audit.warnings.slice(0, 2));
+  else if (Array.isArray(audit.warnings) && audit.warnings.length) detail.textContent = textList(audit.warnings);
   else detail.textContent = 'Contrato de publicación validado.';
   banner.appendChild(detail);
 
