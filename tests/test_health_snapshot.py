@@ -143,6 +143,48 @@ def test_missing_elapsed_checkpoints_are_critical_after_hard_deadline(tmp_path: 
     assert "OPEN" in checkpoint["detail"]
 
 
+def test_missed_checkpoint_degrades_after_later_checkpoint_recovers_runtime(
+    tmp_path: Path,
+) -> None:
+    # Mirrors the 2026-09-23 incident: OPEN was irrecoverably missed after a
+    # delayed scheduler, but OPEN_PLUS_4H later completed successfully.
+    now_et = datetime(2026, 8, 21, 13, 52, tzinfo=ET)
+    _write_dashboard(tmp_path, now_et)
+    _write_review(tmp_path)
+    _write_marker(tmp_path, "2026-08-21", "OPEN_PLUS_4H")
+
+    payload = build_health_snapshot(tmp_path, now=now_et)
+
+    assert payload["status"] == "DEGRADED"
+    checkpoint = next(
+        item
+        for item in payload["series"]
+        if item["name"] == "checkpoint_completeness"
+    )
+    assert checkpoint["status"] == "DEGRADED"
+    assert "OPEN->OPEN_PLUS_4H" in checkpoint["detail"]
+    assert "superseded" in checkpoint["detail"]
+
+
+def test_later_unrecovered_checkpoint_still_becomes_critical(tmp_path: Path) -> None:
+    now_et = datetime(2026, 8, 21, 17, 30, tzinfo=ET)
+    _write_dashboard(tmp_path, now_et)
+    _write_review(tmp_path)
+    _write_marker(tmp_path, "2026-08-21", "OPEN_PLUS_2H")
+
+    payload = build_health_snapshot(tmp_path, now=now_et)
+
+    assert payload["status"] == "CRITICAL"
+    checkpoint = next(
+        item
+        for item in payload["series"]
+        if item["name"] == "checkpoint_completeness"
+    )
+    assert checkpoint["status"] == "CRITICAL"
+    assert "OPEN_PLUS_4H" in checkpoint["detail"]
+    assert "OPEN->OPEN_PLUS_2H" in checkpoint["detail"]
+
+
 def test_complete_elapsed_checkpoints_can_be_healthy(tmp_path: Path) -> None:
     now_et = datetime(2026, 8, 21, 17, 30, tzinfo=ET)
     _write_dashboard(tmp_path, now_et)
