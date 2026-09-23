@@ -27,6 +27,10 @@ on:
         description: "Comma-separated tasks"
         required: false
         default: "d1,w1,q1,value,timing"
+      confirm_publish:
+        description: "Type PUBLISH_CHAMPIONS_TO_MAIN to authorize a manual champion publish"
+        required: false
+        default: ""
 permissions:
   contents: write
 
@@ -60,6 +64,7 @@ jobs:
           APPROVE_RECOMMENDED: ${{ github.event.inputs.approve_recommended }}
           INPUT_TASKS: ${{ github.event.inputs.tasks }}
           INPUT_DATASET_PATH: ${{ github.event.inputs.dataset_path }}
+          CONFIRM_PUBLISH: ${{ github.event.inputs.confirm_publish }}
         run: |
           python - <<'PY'
           import json
@@ -70,6 +75,12 @@ jobs:
           force = os.environ.get("FORCE", "false").lower() == "true"
           approve_recommended = (
               os.environ.get("APPROVE_RECOMMENDED", "false").lower() == "true"
+          )
+          confirmation = os.environ.get("CONFIRM_PUBLISH", "")
+          manual_confirmation_missing = (
+              event_name != "push"
+              and (force or approve_recommended)
+              and confirmation != "PUBLISH_CHAMPIONS_TO_MAIN"
           )
           requested = [
               x.strip()
@@ -98,8 +109,15 @@ jobs:
               dataset_path = "data/training/modelable_dataset.json"
           summary_path = Path("data/training/review_summary_latest.json")
           tasks = []
-          reason = "manual_approval_required"
+          reason = (
+              "manual_confirmation_required"
+              if manual_confirmation_missing
+              else "manual_approval_required"
+          )
           authorization = "NOT_AUTHORIZED"
+          if manual_confirmation_missing:
+              force = False
+              approve_recommended = False
           if force:
               tasks = requested
               reason = "manual_force"
