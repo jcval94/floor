@@ -23,6 +23,9 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     assert "validate-context" in eod
 
     assert 'cron: "11 14-23 * * 1-5"' in monitoring
+    assert "intraday-audit-" in monitoring
+    assert "eod-audit-" in monitoring
+    assert "completed_without_runtime_evidence" in monitoring
 
 
 def test_monitoring_does_not_hydrate_sqlite_or_run_on_market_holidays() -> None:
