@@ -78,14 +78,24 @@ def test_m3_value_uses_quantile_loss_and_scale_free_quality_metrics() -> None:
     assert artifact.metrics["validation_rows"] > 0
 
 
-def test_m3_timing_uses_ordinal_objective_and_out_of_time_temperature() -> None:
+def test_m3_timing_retrain_uses_balanced_multinomial_and_out_of_time_temperature() -> None:
     rows = _dated_rows(120)
-    artifact = train_floor_week_m3_timing_model(rows[:80], rows[80:], "m3_timing_ordinal", "v3", training_mode="retrain")
-    assert artifact.params["objective"] == "ordinal_neighbor_smoothed_cross_entropy"
+    artifact = train_floor_week_m3_timing_model(
+        rows[:80],
+        rows[80:],
+        "m3_timing_balanced",
+        "v3",
+        training_mode="retrain",
+    )
+    assert artifact.params["objective"] == "class_weighted_multinomial_cross_entropy"
+    assert artifact.params["training_backend"] == "sklearn_logistic_regression"
+    assert float(artifact.params["class_balance_power"]) in {0.15, 0.25, 0.35}
     assert artifact.params["calibration_method"] == "chronological_holdout_temperature"
     assert 0.25 <= float(artifact.params["temperature"]) <= 4.0
     assert "log_loss_skill" in artifact.metrics
     assert "abstention_rate" in artifact.metrics
+    assert "quality_top1_unique_classes" in artifact.metrics
+    assert "quality_top1_dominant_share" in artifact.metrics
     assert artifact.metrics["calibration_rows"] > 0
     assert artifact.metrics["validation_rows"] > 0
 
