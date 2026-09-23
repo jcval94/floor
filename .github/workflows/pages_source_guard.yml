@@ -1,0 +1,38 @@
+name: pages-source-guard
+
+on:
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: pages-source-guard
+  cancel-in-progress: true
+
+jobs:
+  recover-authoritative-pages:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-deploy authoritative site after legacy Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "legacy_event=${GITHUB_EVENT_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; then
+            echo "legacy_run_id=${{ github.event.workflow_run.id }}"
+            echo "legacy_run_url=${{ github.event.workflow_run.html_url }}"
+          fi
+
+          gh workflow run pages.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main
+
+          echo "authoritative Pages deployment dispatched from site/"
