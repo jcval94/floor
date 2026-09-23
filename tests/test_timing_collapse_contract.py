@@ -6,6 +6,10 @@ from pathlib import Path
 
 from models.evaluate import timing_metrics, timing_serving_quality_blocked
 from models.select_champion import select_and_persist_champion
+from models.train_timing_models import (
+    _fit_balanced_multinomial,
+    predict_week_probabilities,
+)
 
 
 def _valid_metrics() -> dict:
@@ -106,3 +110,48 @@ def test_valid_timing_challenger_can_replace_legacy_quality_schema(tmp_path: Pat
     assert result["decision"] == "promote"
     champion = json.loads((registry / "timing_champion.json").read_text(encoding="utf-8"))
     assert champion["version"] == "good-v2"
+
+def _separable_timing_rows() -> list[dict]:
+    rows: list[dict] = []
+    for label in range(1, 14):
+        centered = (label - 7) / 6.0
+        for rep in range(12):
+            rows.append(
+                {
+                    "split_eligible_m3": True,
+                    "floor_week_m3": label,
+                    "close": 100.0,
+                    "atr_14": 1.0 + 0.15 * label + 0.001 * rep,
+                    "trend_context_m3": centered,
+                    "drawdown_13w": -0.01 * label,
+                    "dist_to_low_3m": 0.02 * label,
+                    "momentum_20": centered * 0.10,
+                }
+            )
+    return rows
+
+
+def test_balanced_timing_backend_preserves_runtime_contract() -> None:
+    rows = _separable_timing_rows()
+    params = _fit_balanced_multinomial(
+        rows,
+        c=3.0,
+        class_balance_power=0.25,
+    )
+
+    assert params["model_type"] == "multinomial_logistic"
+    assert params["training_backend"] == "sklearn_logistic_regression"
+    assert params["objective"] == "class_weighted_multinomial_cross_entropy"
+    assert params["class_balance_power"] == 0.25
+    assert len(params["weights"]) == 13
+    assert all(len(row) == 5 for row in params["weights"])
+    assert len(params["bias"]) == 13
+
+    probabilities = [predict_week_probabilities(row, params) for row in rows]
+    metrics = timing_metrics(
+        [int(row["floor_week_m3"]) for row in rows],
+        probabilities,
+    )
+    assert metrics["top1_unique_classes"] >= 2
+    assert metrics["top1_dominant_share"] < 0.95
+
