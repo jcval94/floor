@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 from floor.universe import parse_universe_yaml
-from storage.market_db import load_daily_bars, load_recent_daily_bars
+from storage.market_db import load_daily_bars
 
 logger = logging.getLogger(__name__)
 
@@ -15,46 +15,15 @@ def _session_date(timestamp: str) -> str:
     return datetime.fromisoformat(timestamp).date().isoformat()
 
 
-def build_rows_from_db(
-    db_path: Path,
-    universe_path: Path,
-    benchmark_symbol: str = "SPY",
-    *,
-    requested_symbols: list[str] | None = None,
-    max_rows_per_symbol: int | None = None,
-    max_session: date | None = None,
-) -> list[dict]:
+def build_rows_from_db(db_path: Path, universe_path: Path, benchmark_symbol: str = "SPY") -> list[dict]:
     logger.info("[etl:training-rows] loading universe path=%s", universe_path)
-    configured_symbols = parse_universe_yaml(universe_path)
-    if requested_symbols is None:
-        symbols = configured_symbols
-    else:
-        requested = {symbol.upper() for symbol in requested_symbols}
-        symbols = [
-            symbol
-            for symbol in configured_symbols
-            if symbol.upper() in requested
-        ]
+    symbols = parse_universe_yaml(universe_path)
     benchmark_symbol = benchmark_symbol.upper()
     all_symbols = sorted(set(symbols + [benchmark_symbol]))
-    logger.info(
-        "[etl:training-rows] reading bars from db=%s symbols=%s bounded_rows=%s max_session=%s",
-        db_path,
-        len(all_symbols),
-        max_rows_per_symbol,
-        max_session,
-    )
+    logger.info("[etl:training-rows] reading bars from db=%s symbols=%s", db_path, len(all_symbols))
 
     try:
-        if max_rows_per_symbol is None:
-            bars = load_daily_bars(db_path, all_symbols)
-        else:
-            bars = load_recent_daily_bars(
-                db_path,
-                all_symbols,
-                limit_per_symbol=max_rows_per_symbol,
-                max_session=max_session,
-            )
+        bars = load_daily_bars(db_path, all_symbols)
     except Exception as exc:
         logger.exception("[etl:training-rows] failed reading market db=%s error=%s", db_path, exc)
         raise
