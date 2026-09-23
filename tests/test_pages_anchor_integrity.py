@@ -43,3 +43,17 @@ def test_pages_publication_lock_only_wraps_real_publish_job() -> None:
     assert "uses: actions/deploy-pages@v4" in build_job
     assert "\n  deploy:\n" not in workflow
 
+
+
+def test_pages_ancestry_check_does_not_fetch_heavy_git_history() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fetch-depth: 1" in workflow
+    assert "fetch-depth: 2" not in workflow
+    assert "git fetch origin main --depth=50" not in workflow
+    assert "repos/${GITHUB_REPOSITORY}/compare/${UPSTREAM_HEAD_SHA}...${publication_head}" in workflow
+    assert "merge_base_commit.sha" in workflow
+    assert 'status" != "ahead"' in workflow
+    assert 'status" != "identical"' in workflow
