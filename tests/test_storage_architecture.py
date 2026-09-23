@@ -336,6 +336,14 @@ def test_monitoring_has_runtime_completion_backstop() -> None:
     assert '[ "$UPSTREAM_CONCLUSION" = "success" ]' in workflow
     assert '[ "$UPSTREAM_BRANCH" = "main" ]' in workflow
     assert '[ "$REF_NAME" = "main" ]' in workflow
+    assert "actions: read" in workflow
+    assert "UPSTREAM_NAME: ${{ github.event.workflow_run.name }}" in workflow
+    assert "UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}" in workflow
+    assert "/artifacts?per_page=100" in workflow
+    assert "intraday-audit-" in workflow
+    assert "eod-audit-" in workflow
+    assert "completed_without_runtime_evidence" in workflow
+    assert workflow.index("Determine monitoring eligibility") < workflow.index("Checkout")
     assert "steps.eligibility.outputs.run == 'true'" in workflow
 
 
