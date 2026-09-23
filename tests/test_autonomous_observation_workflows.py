@@ -89,3 +89,10 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
     assert "experiment_observation.json" in workflow
     assert "node --check site/assets/experiment.js" in workflow
     assert "operational_paper_gateway_used" in workflow
+
+def test_retrain_assessment_invalidates_on_model_code_changes() -> None:
+    workflow = _text(".github/workflows/retrain_assessment.yml")
+
+    assert "- 'src/models/**'" in workflow
+    assert "retrain_assessment_request.json" in workflow
+
