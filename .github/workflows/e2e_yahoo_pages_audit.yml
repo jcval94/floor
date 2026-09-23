@@ -120,10 +120,71 @@ jobs:
           print(json.dumps(payload))
           PY
 
+      - name: Resolve deterministic E2E market anchor
+        id: market_anchor
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import sqlite3
+          from datetime import datetime, time
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          from floor.universe import parse_universe_yaml
+
+          db = Path("data/market/market_data.sqlite")
+          symbols = {str(symbol).upper() for symbol in parse_universe_yaml(Path("config/universe.yaml"))}
+          symbols.add("SPY")
+          expected = len(symbols)
+
+          with sqlite3.connect(db) as conn:
+              rows = conn.execute(
+                  """
+                  SELECT substr(ts_utc, 1, 10) AS session, COUNT(DISTINCT symbol)
+                  FROM daily_bars
+                  GROUP BY session
+                  HAVING COUNT(DISTINCT symbol) >= ?
+                  ORDER BY session DESC
+                  LIMIT 1
+                  """,
+                  (expected,),
+              ).fetchall()
+
+          if not rows:
+              raise SystemExit("No common market session found for the E2E universe")
+
+          session = str(rows[0][0])
+          day = datetime.fromisoformat(session).date()
+          checkpoint = datetime.combine(
+              day,
+              time(hour=16, minute=10),
+              tzinfo=ZoneInfo("America/New_York"),
+          ).isoformat()
+          payload = {
+              "session": session,
+              "checkpoint_at": checkpoint,
+              "symbols": expected,
+              "source": "latest_common_ingested_session",
+          }
+          Path("artifacts/e2e/market_anchor.json").write_text(
+              json.dumps(payload, indent=2),
+              encoding="utf-8",
+          )
+          with Path(__import__("os").environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"session={session}\n")
+              fh.write(f"checkpoint_at={checkpoint}\n")
+          print(json.dumps(payload, indent=2))
+          PY
+
       - name: Run canonical CLOSE forecast cycle on fresh Yahoo state
         run: |
           set -euo pipefail
-          PYTHONPATH=src python -m floor.main run-cycle --event CLOSE | tee artifacts/e2e/canonical_cycle.txt
+          PYTHONPATH=src python -m floor.main run-cycle \
+            --event CLOSE \
+            --checkpoint-at "${{ steps.market_anchor.outputs.checkpoint_at }}" \
+            --required-market-session "${{ steps.market_anchor.outputs.session }}" \
+            | tee artifacts/e2e/canonical_cycle.txt
 
       - name: Audit generated prediction batch
         run: |
