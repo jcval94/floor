@@ -127,27 +127,6 @@ jobs:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || 'main' }}
           fetch-depth: 2
 
-      - name: Enforce GitHub Pages source as GitHub Actions
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          printf '%s\n' '{"build_type":"workflow"}' > /tmp/pages-config.json
-          gh api --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            "repos/${GITHUB_REPOSITORY}/pages" \
-            --input /tmp/pages-config.json
-
-          build_type="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "repos/${GITHUB_REPOSITORY}/pages" \
-            --jq '.build_type')"
-          echo "pages_build_type=$build_type"
-          if [ "$build_type" != "workflow" ]; then
-            echo "::error::GitHub Pages source drifted away from GitHub Actions (build_type=$build_type)."
-            exit 1
-          fi
-
       - name: Verify workflow_run checkout includes upstream starting commit
         if: github.event_name == 'workflow_run'
         env:
