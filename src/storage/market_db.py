@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 
@@ -98,6 +98,60 @@ def upsert_daily_bars(db_path: Path, bars: list[DailyBar], raw_payload: dict | N
             ],
         )
         return cur.rowcount
+
+
+def load_recent_daily_bars(
+    db_path: Path,
+    symbols: list[str],
+    *,
+    limit_per_symbol: int,
+    max_session: date | None = None,
+) -> list[dict]:
+    """Load only the latest bounded history needed for point-in-time serving."""
+
+    normalized = sorted({symbol.upper() for symbol in symbols if symbol})
+    if not db_path.exists() or not normalized or limit_per_symbol <= 0:
+        return []
+
+    placeholders = ",".join("?" for _ in normalized)
+    max_day = max_session.isoformat() if max_session is not None else None
+    query = f"""
+        WITH ranked AS (
+            SELECT
+                symbol, ts_utc, open, high, low, close, volume,
+                ROW_NUMBER() OVER (
+                    PARTITION BY symbol
+                    ORDER BY ts_utc DESC
+                ) AS row_num
+            FROM daily_bars
+            WHERE symbol IN ({placeholders})
+              AND (? IS NULL OR substr(ts_utc, 1, 10) <= ?)
+        )
+        SELECT symbol, ts_utc, open, high, low, close, volume
+        FROM ranked
+        WHERE row_num <= ?
+        ORDER BY ts_utc ASC, symbol ASC
+    """
+    params: list[object] = [
+        *normalized,
+        max_day,
+        max_day,
+        int(limit_per_symbol),
+    ]
+    with _connect(db_path) as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [
+        {
+            "symbol": row[0],
+            "timestamp": row[1],
+            "open": float(row[2]),
+            "high": float(row[3]),
+            "low": float(row[4]),
+            "close": float(row[5]),
+            "volume": float(row[6]),
+        }
+        for row in rows
+    ]
 
 
 def load_daily_bars(db_path: Path, symbols: list[str]) -> list[dict]:
