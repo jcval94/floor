@@ -6,7 +6,11 @@ from pathlib import Path
 from features.build_training_from_db import build_rows_from_db
 from features.feature_builder import build_features
 from floor.config import RuntimeConfig
-from floor.pipeline.prediction_runtime import _latest_feature_rows
+from floor.pipeline.prediction_runtime import (
+    CANONICAL_MAX_FEATURE_LOOKBACK_ROWS,
+    SERVING_FEATURE_HISTORY_ROWS,
+    _latest_feature_rows,
+)
 from storage.market_db import (
     DailyBar,
     init_market_db,
@@ -200,3 +204,9 @@ def test_bounded_serving_features_match_full_history_latest_row(tmp_path: Path) 
     bounded = _latest_feature_rows(cfg, ["AAPL"])
     assert len(bounded) == 1
     assert bounded[0] == full_latest
+
+
+def test_serving_history_has_explicit_warmup_margin() -> None:
+    assert CANONICAL_MAX_FEATURE_LOOKBACK_ROWS == 252
+    assert SERVING_FEATURE_HISTORY_ROWS == 300
+    assert SERVING_FEATURE_HISTORY_ROWS > CANONICAL_MAX_FEATURE_LOOKBACK_ROWS
