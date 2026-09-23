@@ -353,9 +353,7 @@ def test_retrain_assessment_invalidates_on_evidence_contract_changes() -> None:
         "src/floor/training/governance.py",
         "src/monitoring/drift_detection.py",
         "src/monitoring/run_retrain_assessment.py",
-        "src/models/dataset_summary.py",
-        "src/models/evaluate.py",
-        "src/models/inference.py",
+        "src/models/**",
         "src/features/**",
         "data/training/models/*.json",
     ):
