@@ -99,7 +99,7 @@ def _competition_summary(rows: list[dict[str, Any]], sessions: int, min_sessions
 
     challenger_return = _return_of(challenger)
     return {
-        "leader_status": "PROVISIONAL" if overall_leader else "INSUFFICIENT_EVIDENCE",
+        "leader_status": "PROVISIONAL" if strategy_leader or overall_leader else "INSUFFICIENT_EVIDENCE",
         "min_sessions_for_leader": min_sessions,
         "sessions": sessions,
         "overall_leader": overall_leader.get("strategy") if overall_leader else None,
