@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: pages-eod-publish
-      cancel-in-progress: false
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
