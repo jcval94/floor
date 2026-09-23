@@ -125,7 +125,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || 'main' }}
-          fetch-depth: 2
+          fetch-depth: 1
 
       - name: Verify workflow_run checkout includes upstream starting commit
         if: github.event_name == 'workflow_run'
