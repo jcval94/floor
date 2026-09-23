@@ -1,9 +1,7 @@
 name: pages-source-guard
 
 on:
-  workflow_run:
-    workflows: ["pages build and deployment"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -17,18 +15,60 @@ concurrency:
 
 jobs:
   recover-authoritative-pages:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Re-deploy authoritative site after legacy Pages
+      - name: Wait for legacy Pages and dispatch authoritative site
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo "legacy_event=${GITHUB_EVENT_NAME}"
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; then
-            echo "legacy_run_id=${{ github.event.workflow_run.id }}"
-            echo "legacy_run_url=${{ github.event.workflow_run.html_url }}"
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main
+            echo "authoritative Pages deployment dispatched manually"
+            exit 0
+          fi
+
+          target_sha="${GITHUB_SHA}"
+          echo "target_sha=$target_sha"
+
+          legacy_seen=false
+          for attempt in $(seq 1 120); do
+            runs="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${target_sha}&per_page=100")"
+
+            legacy="$(jq -c '
+              [.workflow_runs[]
+               | select(.path == "dynamic/pages/pages-build-deployment")]
+              | sort_by(.created_at)
+              | last // empty
+            ' <<<"$runs")"
+
+            if [ -z "$legacy" ]; then
+              if [ "$attempt" -ge 4 ]; then
+                echo "No legacy Pages run appeared for this SHA; deploying authoritative site directly."
+                break
+              fi
+              sleep 5
+              continue
+            fi
+
+            legacy_seen=true
+            status="$(jq -r '.status' <<<"$legacy")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$legacy")"
+            legacy_id="$(jq -r '.id' <<<"$legacy")"
+            echo "legacy_run_id=$legacy_id status=$status conclusion=$conclusion"
+
+            if [ "$status" = "completed" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "$legacy_seen" = true ]; then
+            echo "Legacy Pages is finished; authoritative deployment now takes precedence."
           fi
 
           gh workflow run pages.yml \
