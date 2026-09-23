@@ -184,3 +184,73 @@ def test_timing_serving_quality_block_forces_retrain_now(tmp_path: Path) -> None
     assert timing["recommendation"] == "RETRAIN_NOW"
     assert "timing" in summary["tasks_for_auto_retrain"]
 
+
+
+def test_value_review_uses_scale_free_pinball_for_schema_v2_champion(
+    tmp_path: Path,
+) -> None:
+    data_dir = _setup_training(tmp_path)
+    dataset_path = data_dir / "training" / "modelable_dataset.json"
+    payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+
+    # Preserve the relative floor problem while moving the whole validation
+    # price level 10x higher. Raw-dollar pinball must not become a retrain-now
+    # signal for a model whose target contract is relative_floor_delta.
+    for row in payload["rows"]:
+        if row.get("split") != "validation":
+            continue
+        for field in ("close", "atr_14", "floor_m3", "realized_floor_m3"):
+            row[field] = float(row[field]) * 10.0
+
+    dataset_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    performance = summary["models"]["value"]["summary"]["performance"]
+    assert performance["diagnostics"]["metric_contract"] == "relative_floor_delta"
+    assert (
+        performance["current_metrics"]["pinball_loss"]
+        > performance["baseline_metrics"]["pinball_loss"] * 5.0
+    )
+    assert performance["state"] != "RED"
+    assert "pinball_loss_delta" in performance["current_metrics"]
+
+
+def test_m3_review_excludes_split_ineligible_rows_from_performance(
+    tmp_path: Path,
+) -> None:
+    data_dir = _setup_training(tmp_path)
+    dataset_path = data_dir / "training" / "modelable_dataset.json"
+    payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+
+    validation_rows = [
+        row for row in payload["rows"] if row.get("split") == "validation"
+    ]
+    assert validation_rows
+    validation_rows[0]["split_eligible_m3"] = False
+    expected = len(validation_rows) - 1
+
+    dataset_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    summary = run_training_review(
+        data_dir=data_dir,
+        output_path=data_dir / "training" / "reviews.jsonl",
+        summary_path=data_dir / "training" / "review_summary_latest.json",
+        config_path=Path("config/retraining.yaml"),
+    )
+
+    value_metrics = summary["models"]["value"]["summary"]["performance"]["current_metrics"]
+    timing_metrics = summary["models"]["timing"]["summary"]["performance"]["current_metrics"]
+    assert value_metrics["evaluation_rows"] == expected
+    assert timing_metrics["evaluation_rows"] == expected
