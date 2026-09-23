@@ -7,7 +7,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from features.build_training_from_db import build_rows_from_db
-from features.feature_builder import build_features
+from features.feature_builder import MAX_FEATURE_LOOKBACK_ROWS, build_features
 from floor.config import RuntimeConfig
 from floor.schemas import PredictionRecord, SignalRecord
 
@@ -26,6 +26,13 @@ MODEL_INPUT_FIELDS = (
     "momentum_10", "momentum_20", "relative_volume_20", "dist_to_low_20",
     "dist_to_high_20", "trend_context_m3",
 )
+
+# Keep a margin over the longest canonical rolling feature so the latest
+# production row is identical to a full-history build while avoiding years of
+# unnecessary recomputation on every checkpoint.
+SERVING_FEATURE_HISTORY_ROWS = 300
+if SERVING_FEATURE_HISTORY_ROWS < MAX_FEATURE_LOOKBACK_ROWS:
+    raise RuntimeError("Serving feature history is shorter than the canonical feature lookback")
 
 
 def _looks_like_lfs_pointer(path: Path) -> bool:
@@ -157,33 +164,37 @@ def _latest_feature_rows(
     raw_rows = build_rows_from_db(
         db_path=cfg.data_dir / "market" / "market_data.sqlite",
         universe_path=cfg.root_dir / "config" / "universe.yaml",
+        requested_symbols=symbols,
+        max_rows_per_symbol=SERVING_FEATURE_HISTORY_ROWS,
+        max_session=max_market_session,
     )
-
-    def allowed(row: dict) -> bool:
-        if str(row.get("symbol", "")).upper() not in symbol_set:
-            return False
-        if max_market_session is None:
-            return True
-        raw_ts = row.get("timestamp")
-        if not isinstance(raw_ts, str) or not raw_ts:
-            return False
-        try:
-            parsed = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
-        except ValueError:
-            return False
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=ET)
-        return parsed.astimezone(ET).date() <= max_market_session
-
-    selected = [row for row in raw_rows if allowed(row)]
+    selected = [
+        row
+        for row in raw_rows
+        if str(row.get("symbol", "")).upper() in symbol_set
+    ]
+    logger.info(
+        "[predictions] bounded feature history rows=%s symbols=%s max_rows_per_symbol=%s max_market_session=%s",
+        len(selected),
+        len(symbol_set),
+        SERVING_FEATURE_HISTORY_ROWS,
+        max_market_session,
+    )
     featured = build_features(selected)
     latest_by_symbol: dict[str, dict] = {}
     for row in featured:
         latest_by_symbol[str(row["symbol"]).upper()] = row
     missing = [symbol for symbol in symbols if symbol.upper() not in latest_by_symbol]
     if missing:
-        logger.warning("[predictions] missing latest feature rows symbols=%s", ",".join(missing[:20]))
-    return [latest_by_symbol[symbol.upper()] for symbol in symbols if symbol.upper() in latest_by_symbol]
+        logger.warning(
+            "[predictions] missing latest feature rows symbols=%s",
+            ",".join(missing[:20]),
+        )
+    return [
+        latest_by_symbol[symbol.upper()]
+        for symbol in symbols
+        if symbol.upper() in latest_by_symbol
+    ]
 
 
 def _validate_feature_rows(feature_rows: list[dict]) -> None:
