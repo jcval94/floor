@@ -388,7 +388,12 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
 
 
 def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
-    eval_rows = [row for row in rows if row.get("floor_week_m3") is not None]
+    eval_rows = [
+        row
+        for row in rows
+        if row.get("floor_week_m3") is not None
+        and row.get("split_eligible_m3", True) is not False
+    ]
     if not eval_rows:
         return {
             "state": "YELLOW",
@@ -401,6 +406,7 @@ def _timing_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
     y_true = [int(row["floor_week_m3"]) for row in eval_rows]
     probs = [predict_timing_week_probabilities(row, artifact) for row in eval_rows]
     current_metrics = timing_metrics(y_true, probs)
+    current_metrics["evaluation_rows"] = len(eval_rows)
     baseline_metrics = artifact.get("metrics", {})
 
     deltas = {
