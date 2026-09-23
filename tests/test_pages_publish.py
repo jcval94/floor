@@ -274,7 +274,9 @@ def test_generated_pages_json_is_not_versioned_source_of_truth() -> None:
 def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
     assert "github.event.workflow_run.head_branch" in workflow
-    assert "git reset --hard origin/main" in workflow
+    assert 'publication_head="$(git rev-parse HEAD)"' in workflow
+    assert "merge_base_commit.sha" in workflow
+    assert "UPSTREAM_HEAD_SHA" in workflow
     assert "utils.pages_publish" in workflow
     assert "utils.pages_security" in workflow
     assert "workflow_run.head_sha || github.sha" not in workflow
