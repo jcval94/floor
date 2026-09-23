@@ -89,6 +89,12 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
     top1 = [max(range(13), key=lambda i: pr[i]) + 1 for pr in probs]
     conf = [max(pr) for pr in probs]
     outcomes = [1 if p == t else 0 for p, t in zip(top1, y_true)]
+    unique_classes = len(set(top1))
+    dominant_share = (
+        max(top1.count(label) for label in set(top1)) / len(top1)
+        if top1
+        else 1.0
+    )
     return {
         "top1_accuracy": topk_accuracy(y_true, probs, k=1),
         "top3_accuracy": topk_accuracy(y_true, probs, k=3),
@@ -97,7 +103,44 @@ def timing_metrics(y_true: list[int], probs: list[list[float]]) -> dict:
         "expected_week_distance": expected_week_distance(y_true, probs),
         "confusion_matrix": confusion_matrix(y_true, top1, n_classes=13),
         "calibration_error": expected_calibration_error(conf, outcomes),
+        "top1_unique_classes": unique_classes,
+        "top1_dominant_share": dominant_share,
     }
+
+
+def _timing_top1_collapse(metrics: dict) -> tuple[int | None, float | None, int]:
+    unique_raw = metrics.get("quality_top1_unique_classes")
+    dominant_raw = metrics.get("quality_top1_dominant_share")
+    if unique_raw is not None and dominant_raw is not None:
+        try:
+            return int(unique_raw), float(dominant_raw), int(metrics.get("validation_rows", 0) or 0)
+        except (TypeError, ValueError):
+            pass
+
+    matrix = metrics.get("confusion_matrix")
+    if not isinstance(matrix, dict):
+        return None, None, 0
+
+    predicted: dict[str, int] = {}
+    total = 0
+    for row in matrix.values():
+        if not isinstance(row, dict):
+            continue
+        for label, raw_count in row.items():
+            try:
+                count = int(raw_count)
+            except (TypeError, ValueError):
+                continue
+            if count <= 0:
+                continue
+            key = str(label)
+            predicted[key] = predicted.get(key, 0) + count
+            total += count
+    if total <= 0:
+        return None, None, 0
+    unique = sum(1 for count in predicted.values() if count > 0)
+    dominant = max(predicted.values()) / total
+    return unique, dominant, total
 
 
 def timing_serving_quality_blocked(metrics: dict) -> bool:
@@ -112,7 +155,8 @@ def timing_serving_quality_blocked(metrics: dict) -> bool:
     quality_raw = metrics.get("quality_log_loss")
     uniform_raw = metrics.get("uniform_log_loss")
     numeric_types = (int, float, str)
-    if (
+    log_loss_blocked = False
+    if not (
         isinstance(skill_raw, bool)
         or isinstance(quality_raw, bool)
         or isinstance(uniform_raw, bool)
@@ -120,14 +164,22 @@ def timing_serving_quality_blocked(metrics: dict) -> bool:
         or not isinstance(quality_raw, numeric_types)
         or not isinstance(uniform_raw, numeric_types)
     ):
-        return False
-    try:
-        skill = float(skill_raw)
-        quality_log_loss = float(quality_raw)
-        uniform_log_loss = float(uniform_raw)
-    except (TypeError, ValueError):
-        return False
-    return skill <= 0.0 or quality_log_loss >= uniform_log_loss
+        try:
+            skill = float(skill_raw)
+            quality_log_loss = float(quality_raw)
+            uniform_log_loss = float(uniform_raw)
+            log_loss_blocked = skill <= 0.0 or quality_log_loss >= uniform_log_loss
+        except (TypeError, ValueError):
+            log_loss_blocked = False
+
+    unique_classes, dominant_share, evidence_rows = _timing_top1_collapse(metrics)
+    collapse_blocked = (
+        evidence_rows >= 30
+        and unique_classes is not None
+        and dominant_share is not None
+        and (unique_classes < 2 or dominant_share >= 0.95)
+    )
+    return log_loss_blocked or collapse_blocked
 
 
 def top3_weeks(probs: list[float]) -> list[dict]:
