@@ -11,6 +11,7 @@ from utils.pages_publish import (
     _monitoring_warning_codes,
     _normalize_monitoring_payloads,
     model_suite_compatibility,
+    prediction_model_alignment,
     select_latest_global_batch,
     validate_prediction_contract,
     validate_published_site,
@@ -107,6 +108,19 @@ def test_mixed_model_versions_are_rejected() -> None:
 
     assert result["valid"] is False
     assert any("mixed_or_missing_model_versions" in item for item in result["errors"])
+
+
+def test_prediction_model_alignment_detects_promotions_without_invalidating_batch() -> None:
+    versions = {name: {"version": "v2"} for name in ("d1", "w1", "q1", "value", "timing")}
+    model_audit = {"tasks": versions}
+    current = "d1:v2|w1:v2|q1:v2|value:v2|timing:v2"
+    old = "d1:v2|w1:v2|q1:v2|value:v2|timing:v1"
+
+    assert prediction_model_alignment(current, model_audit)["status"] == "CURRENT"
+    result = prediction_model_alignment(old, model_audit)
+    assert result["status"] == "PREVIOUS_CHAMPION"
+    assert result["batch_model_version"] == old
+    assert result["current_champion_versions"]["timing"] == "v2"
 
 
 def _write_json(path: Path, payload: object) -> None:
