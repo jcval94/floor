@@ -197,7 +197,7 @@ def test_complete_elapsed_checkpoints_can_be_healthy(tmp_path: Path) -> None:
     assert payload["status"] == "OK"
 
 
-def test_writer_does_not_churn_timestamp_when_semantics_unchanged(tmp_path: Path) -> None:
+def test_writer_refreshes_evaluation_time_but_preserves_state_change_time(tmp_path: Path) -> None:
     first_now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
     second_now = datetime(2026, 8, 22, 12, 30, tzinfo=timezone.utc)
     _write_dashboard(tmp_path, first_now)
@@ -209,7 +209,9 @@ def test_writer_does_not_churn_timestamp_when_semantics_unchanged(tmp_path: Path
 
     assert first["status"] == "OK"
     assert second["status"] == "OK"
-    assert second["generated_at"] == first["generated_at"]
+    assert second["generated_at"] != first["generated_at"]
+    assert second["generated_at"] == second_now.isoformat()
+    assert second["state_changed_at"] == first["state_changed_at"]
 
 
 def test_m3_timing_abstention_degrades_operational_health(tmp_path: Path) -> None:
