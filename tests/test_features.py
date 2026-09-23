@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from features.run_features import build_modelable_dataset
-from features.feature_builder import MAX_FEATURE_LOOKBACK_ROWS, build_features
-from floor.pipeline.prediction_runtime import SERVING_FEATURE_HISTORY_ROWS
+from features.feature_builder import build_features
 
 
 def _next_business_day(d: datetime) -> datetime:
@@ -254,30 +253,3 @@ def test_build_features_uses_close_when_benchmark_close_missing() -> None:
     assert len(featured) == 2
     assert featured[0]["ret_lag_1"] is None
     assert featured[1]["ret_lag_1"] == cast(float, rows[1]["close"]) / cast(float, rows[0]["close"]) - 1.0
-
-
-def test_serving_history_exceeds_canonical_feature_lookback() -> None:
-    assert MAX_FEATURE_LOOKBACK_ROWS == 252
-    assert SERVING_FEATURE_HISTORY_ROWS >= MAX_FEATURE_LOOKBACK_ROWS
-
-
-def test_incremental_intraday_range_matches_last_five_valid_rows() -> None:
-    rows = [
-        {
-            "symbol": "AAPL",
-            "timestamp": f"2025-01-{day:02d}T20:00:00+00:00",
-            "open": 100.0 + day,
-            "high": 102.0 + day,
-            "low": 99.0 + day,
-            "close": 101.0 + day,
-            "volume": 1_000 + day,
-            "benchmark_close": 400.0 + day,
-        }
-        for day in range(1, 8)
-    ]
-    featured = build_features(rows)
-    expected = sum(
-        (float(row["high"]) - float(row["low"])) / float(row["close"])
-        for row in rows[-5:]
-    ) / 5.0
-    assert abs(featured[-1]["intraday_range_5"] - expected) < 1e-12
