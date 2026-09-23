@@ -276,6 +276,11 @@ def _checkpoint_check(data_dir: Path, now_et: datetime) -> dict[str, str]:
     day = info.session_day.isoformat()
     marker_dir = data_dir / "snapshots" / "workflow_runs"
 
+    completed = [
+        (event, timestamp)
+        for event, timestamp in checkpoints.items()
+        if (marker_dir / f"intraday_{day}_{event}.json").exists()
+    ]
     missing: list[tuple[str, datetime]] = []
     for event, timestamp in checkpoints.items():
         if now_et < timestamp + _CHECKPOINT_GRACE:
@@ -288,22 +293,55 @@ def _checkpoint_check(data_dir: Path, now_et: datetime) -> dict[str, str]:
             return _check("checkpoint_completeness", "OK", "all checkpoints past their grace window are marked complete")
         return _check("checkpoint_completeness", "OK", "no checkpoint is due yet")
 
+    recovered: list[tuple[str, str]] = []
+    unresolved: list[tuple[str, datetime]] = []
+    for event, timestamp in missing:
+        superseding = [
+            (completed_event, completed_at)
+            for completed_event, completed_at in completed
+            if completed_at > timestamp
+        ]
+        if superseding:
+            recovered_by, _ = max(superseding, key=lambda item: item[1])
+            recovered.append((event, recovered_by))
+        else:
+            unresolved.append((event, timestamp))
+
     critical = [
         event
-        for event, timestamp in missing
+        for event, timestamp in unresolved
         if now_et >= timestamp + _CHECKPOINT_CRITICAL_AFTER
     ]
-    status = "CRITICAL" if critical else "DEGRADED"
-    missing_names = ",".join(event for event, _ in missing)
     if critical:
-        return _check(
-            "checkpoint_completeness",
-            status,
-            f"missing checkpoints beyond hard deadline: {missing_names}",
+        detail = f"missing checkpoints beyond hard deadline: {','.join(critical)}"
+        if recovered:
+            recovered_names = ",".join(
+                f"{event}->{recovered_by}" for event, recovered_by in recovered
+            )
+            detail += f"; earlier gaps superseded: {recovered_names}"
+        return _check("checkpoint_completeness", "CRITICAL", detail)
+
+    if recovered:
+        recovered_names = ",".join(
+            f"{event}->{recovered_by}" for event, recovered_by in recovered
         )
+        if unresolved:
+            unresolved_names = ",".join(event for event, _ in unresolved)
+            detail = (
+                "checkpoint gaps after scheduler delay: "
+                f"superseded={recovered_names} pending={unresolved_names}"
+            )
+        else:
+            detail = (
+                "missed checkpoints superseded by later completed checkpoint: "
+                f"{recovered_names}"
+            )
+        return _check("checkpoint_completeness", "DEGRADED", detail)
+
+    missing_names = ",".join(event for event, _ in unresolved)
     return _check(
         "checkpoint_completeness",
-        status,
+        "DEGRADED",
         f"missing checkpoints beyond scheduler grace: {missing_names}",
     )
 
