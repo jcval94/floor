@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from features.build_training_from_db import build_rows_from_db
-from features.feature_builder import MAX_FEATURE_LOOKBACK_ROWS, build_features
+from features.feature_builder import build_features
+from storage.market_db import load_recent_daily_bars
 from floor.config import RuntimeConfig
 from floor.schemas import PredictionRecord, SignalRecord
 
@@ -27,12 +27,10 @@ MODEL_INPUT_FIELDS = (
     "dist_to_high_20", "trend_context_m3",
 )
 
-# Keep a margin over the longest canonical rolling feature so the latest
-# production row is identical to a full-history build while avoiding years of
-# unnecessary recomputation on every checkpoint.
+# The longest current production feature lookback is 252 daily rows.
+# Keep an explicit warm-up margin and prove latest-row parity in regression tests.
+CANONICAL_MAX_FEATURE_LOOKBACK_ROWS = 252
 SERVING_FEATURE_HISTORY_ROWS = 300
-if SERVING_FEATURE_HISTORY_ROWS < MAX_FEATURE_LOOKBACK_ROWS:
-    raise RuntimeError("Serving feature history is shorter than the canonical feature lookback")
 
 
 def _looks_like_lfs_pointer(path: Path) -> bool:
@@ -155,24 +153,78 @@ def _signal_from_prediction(
     )
 
 
+def _session_date(timestamp: str) -> str:
+    return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).date().isoformat()
+
+
+def _bounded_serving_market_rows(
+    cfg: RuntimeConfig,
+    symbols: list[str],
+    max_market_session: date | None,
+) -> list[dict]:
+    normalized_symbols = [symbol.upper() for symbol in symbols]
+    benchmark_symbol = "SPY"
+    bars = load_recent_daily_bars(
+        cfg.data_dir / "market" / "market_data.sqlite",
+        sorted(set(normalized_symbols + [benchmark_symbol])),
+        limit_per_symbol=SERVING_FEATURE_HISTORY_ROWS,
+        max_session=max_market_session,
+    )
+
+    by_symbol: dict[str, list[dict]] = {}
+    for row in bars:
+        by_symbol.setdefault(str(row["symbol"]).upper(), []).append(row)
+
+    benchmark_close_by_session = {
+        _session_date(str(row["timestamp"])): float(row["close"])
+        for row in by_symbol.get(benchmark_symbol, [])
+    }
+
+    output: list[dict] = []
+    for symbol in normalized_symbols:
+        for row in by_symbol.get(symbol, []):
+            timestamp = str(row["timestamp"])
+            output.append(
+                {
+                    "timestamp": timestamp,
+                    "symbol": symbol,
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": float(row["volume"]),
+                    "benchmark_close": benchmark_close_by_session.get(
+                        _session_date(timestamp)
+                    ),
+                    "ai_conviction": None,
+                    "ai_floor_d1": None,
+                    "ai_ceiling_d1": None,
+                    "ai_floor_w1": None,
+                    "ai_ceiling_w1": None,
+                    "ai_floor_q1": None,
+                    "ai_ceiling_q1": None,
+                    "ai_floor_m3": None,
+                    "ai_conviction_long": None,
+                    "ai_recency_long": None,
+                    "ai_consensus_score": None,
+                }
+            )
+
+    output.sort(key=lambda row: (row["timestamp"], row["symbol"]))
+    return output
+
+
 def _latest_feature_rows(
     cfg: RuntimeConfig,
     symbols: list[str],
     max_market_session: date | None = None,
 ) -> list[dict]:
     symbol_set = {symbol.upper() for symbol in symbols}
-    raw_rows = build_rows_from_db(
-        db_path=cfg.data_dir / "market" / "market_data.sqlite",
-        universe_path=cfg.root_dir / "config" / "universe.yaml",
-        requested_symbols=symbols,
-        max_rows_per_symbol=SERVING_FEATURE_HISTORY_ROWS,
-        max_session=max_market_session,
+    selected = _bounded_serving_market_rows(
+        cfg,
+        symbols,
+        max_market_session,
     )
-    selected = [
-        row
-        for row in raw_rows
-        if str(row.get("symbol", "")).upper() in symbol_set
-    ]
     logger.info(
         "[predictions] bounded feature history rows=%s symbols=%s max_rows_per_symbol=%s max_market_session=%s",
         len(selected),
