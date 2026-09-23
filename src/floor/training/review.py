@@ -249,7 +249,8 @@ def _value_performance(artifact: dict, rows: list[dict], cfg: dict) -> dict:
         "temporal_stability_drop": max(float(baseline_metrics.get("temporal_stability", 0.0)) - float(current_metrics.get("temporal_stability", 0.0)), 0.0),
     }
 
-    params = artifact.get("params") if isinstance(artifact.get("params"), dict) else {}
+    raw_params = artifact.get("params")
+    params: dict = raw_params if isinstance(raw_params, dict) else {}
     has_scale_free_contract = (
         params.get("target_space") == "relative_floor_delta"
         and baseline_metrics.get("pinball_loss_delta") is not None
