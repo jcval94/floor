@@ -130,17 +130,27 @@ jobs:
       - name: Verify workflow_run checkout includes upstream starting commit
         if: github.event_name == 'workflow_run'
         env:
+          GH_TOKEN: ${{ github.token }}
           UPSTREAM_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          git fetch origin main --depth=50
-          git reset --hard origin/main
-          git merge-base --is-ancestor "$UPSTREAM_HEAD_SHA" HEAD || {
+          publication_head="$(git rev-parse HEAD)"
+          comparison="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/compare/${UPSTREAM_HEAD_SHA}...${publication_head}")"
+          status="$(jq -r '.status' <<<"$comparison")"
+          merge_base="$(jq -r '.merge_base_commit.sha' <<<"$comparison")"
+
+          if [ "$merge_base" != "$UPSTREAM_HEAD_SHA" ] \
+            || { [ "$status" != "ahead" ] && [ "$status" != "identical" ]; }; then
             echo "::error::Current main does not contain the upstream workflow starting commit."
+            echo "status=$status merge_base=$merge_base upstream=$UPSTREAM_HEAD_SHA publication_head=$publication_head"
             exit 1
-          }
+          fi
+
           echo "upstream_start=$UPSTREAM_HEAD_SHA"
-          echo "publication_head=$(git rev-parse HEAD)"
+          echo "publication_head=$publication_head"
+          echo "ancestry_status=$status"
 
       - name: Restore authoritative rolling runtime state
         env:
