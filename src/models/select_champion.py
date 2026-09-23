@@ -108,10 +108,14 @@ def _minimum_quality_gate(task: str, metrics: dict) -> dict:
         quality_log_loss = float(metrics.get("quality_log_loss", 999.0))
         skill = float(metrics.get("log_loss_skill", -999.0))
         top3 = float(metrics.get("quality_top3_accuracy", 0.0))
+        unique_classes = int(metrics.get("quality_top1_unique_classes", 0))
+        dominant_share = float(metrics.get("quality_top1_dominant_share", 1.0))
         checks = {
             "positive_log_loss_skill": skill > 0.0,
             "beats_uniform_log_loss": quality_log_loss < uniform_log_loss,
             "top3_beats_uniform_expectation": top3 > (3.0 / 13.0),
+            "top1_uses_multiple_classes": unique_classes >= 2,
+            "top1_not_collapsed": dominant_share < 0.95,
         }
     elif task == "value":
         checks = {
@@ -187,6 +191,8 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
                     "quality_brier_score",
                     "quality_expected_week_distance",
                     "quality_calibration_error",
+                    "quality_top1_unique_classes",
+                    "quality_top1_dominant_share",
                     "log_loss_skill",
                     "abstention_rate",
                 )
