@@ -27,6 +27,32 @@ def test_generated_runtime_paths_are_ignored_but_model_json_is_allowed() -> None
     assert "*.sqlite" in ignore
 
 
+def test_git_tracks_only_lightweight_data_contract() -> None:
+    result = subprocess.run(
+        ["git", "ls-files", "data"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    tracked = [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip()
+    ]
+    forbidden = [
+        path
+        for path in tracked
+        if path != "data/.gitkeep"
+        and not (
+            path.startswith("data/training/models/")
+            and path.endswith(".json")
+        )
+    ]
+
+    assert forbidden == []
+
+
 def test_operational_workflows_do_not_commit_generated_state_to_git() -> None:
     for filename in (
         "intraday_engine.yml",
