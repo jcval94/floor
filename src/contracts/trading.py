@@ -7,9 +7,10 @@ from typing import Any
 from contracts.config_io import load_simple_yaml
 
 
-DEFAULT_COSTS_PATH = Path("config/costs.yaml")
-DEFAULT_RISK_PATH = Path("config/risk.yaml")
-DEFAULT_STRATEGIES_PATH = Path("config/strategies.yaml")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_COSTS_PATH = REPO_ROOT / "config" / "costs.yaml"
+DEFAULT_RISK_PATH = REPO_ROOT / "config" / "risk.yaml"
+DEFAULT_STRATEGIES_PATH = REPO_ROOT / "config" / "strategies.yaml"
 
 
 def _float(value: Any, default: float = 0.0) -> float:
