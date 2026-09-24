@@ -431,8 +431,13 @@ def run_league_eod(
     next_targets: dict[str, dict[str, dict]] = {}
     if snapshot.get("status") == "OK":
         weekly_frequency = max(
-            1,
-            int(league_cfg.get("weekly_review_frequency_sessions", 5)),
+            weekly_max_holding_sessions,
+            int(
+                league_cfg.get(
+                    "weekly_review_frequency_sessions",
+                    weekly_max_holding_sessions,
+                )
+            ),
         )
         mean_frequency = mean_max_holding_sessions
         cross_frequency = cross_max_holding_sessions
