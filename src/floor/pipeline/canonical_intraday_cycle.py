@@ -20,6 +20,7 @@ from floor.pipeline.prediction_runtime import (
     _validate_prediction_payload,
     build_prediction_record,
 )
+from floor.persistence_db import PersistenceWriter
 from floor.schemas import SignalRecord
 from floor.storage import append_jsonl
 from forecasting.run_forecast import run_forecast_pipeline
@@ -202,47 +203,52 @@ def run_intraday_cycle(
             "reconciliation": {"status": "DEFERRED_TO_EOD"},
         }
 
-    for row in forecasts:
-        symbol = str(row["symbol"]).upper()
-        logger.info(
-            "[canonical-intraday][model-io] OUTPUT symbol=%s values=%s",
-            symbol,
-            _model_output_snapshot(row),
-        )
-        for horizon, payload in _prediction_payloads(row, event_type):
-            _validate_prediction_payload(symbol, horizon, payload)
-            prediction = build_prediction_record(
-                symbol=symbol,
-                as_of=as_of,
-                horizon=horizon,
-                payload=payload,
-                model_version=str(row.get("model_version", "unknown")),
+    # The entire forecast batch shares one schema initialization, connection
+    # and transaction. The input marker is emitted only after this commits.
+    with PersistenceWriter(cfg.data_dir / "persistence" / "app.sqlite") as writer:
+        for row in forecasts:
+            symbol = str(row["symbol"]).upper()
+            logger.info(
+                "[canonical-intraday][model-io] OUTPUT symbol=%s values=%s",
+                symbol,
+                _model_output_snapshot(row),
             )
-            append_jsonl(
-                cfg.data_dir / "predictions" / f"{symbol}.jsonl",
-                prediction,
-                batch_id=batch_id,
-            )
-
-            if payload.get("emit_signal", True):
-                # Range models do not estimate directional alpha. Persist an
-                # explicit HOLD readiness record rather than manufacturing BUY/SELL.
-                signal = SignalRecord(
+            for horizon, payload in _prediction_payloads(row, event_type):
+                _validate_prediction_payload(symbol, horizon, payload)
+                prediction = build_prediction_record(
                     symbol=symbol,
                     as_of=as_of,
                     horizon=horizon,
-                    action="HOLD",
-                    confidence=round(float(prediction.confidence_score or 0.0), 4),
-                    rationale=(
-                        "Directional alpha unavailable; HOLD emitted. "
-                        "Confidence describes validation interval coverage only."
-                    ),
+                    payload=payload,
+                    model_version=str(row.get("model_version", "unknown")),
                 )
                 append_jsonl(
-                    cfg.data_dir / "signals" / f"{symbol}.jsonl",
-                    signal,
+                    cfg.data_dir / "predictions" / f"{symbol}.jsonl",
+                    prediction,
                     batch_id=batch_id,
+                    writer=writer,
                 )
+
+                if payload.get("emit_signal", True):
+                    # Range models do not estimate directional alpha. Persist an
+                    # explicit HOLD readiness record rather than manufacturing BUY/SELL.
+                    signal = SignalRecord(
+                        symbol=symbol,
+                        as_of=as_of,
+                        horizon=horizon,
+                        action="HOLD",
+                        confidence=round(float(prediction.confidence_score or 0.0), 4),
+                        rationale=(
+                            "Directional alpha unavailable; HOLD emitted. "
+                            "Confidence describes validation interval coverage only."
+                        ),
+                    )
+                    append_jsonl(
+                        cfg.data_dir / "signals" / f"{symbol}.jsonl",
+                        signal,
+                        batch_id=batch_id,
+                    writer=writer,
+                    )
 
     _write_input_snapshot_marker(
         marker_path,

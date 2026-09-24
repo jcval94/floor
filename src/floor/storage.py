@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from floor.persistence_db import persist_payload
+from floor.persistence_db import PersistenceWriter, persist_payload
 from floor.schemas import record_to_dict
 
 _IDEMPOTENCY_CACHE: dict[
@@ -101,7 +101,13 @@ def _remember_jsonl_key(path: Path, key: tuple[str, str, str] | None) -> None:
     _IDEMPOTENCY_CACHE[cache_path] = (signature, cached[1])
 
 
-def append_jsonl(path: Path, record: object, *, batch_id: str = "") -> bool:
+def append_jsonl(
+    path: Path,
+    record: object,
+    *,
+    batch_id: str = "",
+    writer: PersistenceWriter | None = None,
+) -> bool:
     """Append one durable payload and mirror it to reconstructable SQLite.
 
     Predictions/signals carrying a batch id are idempotent by
@@ -127,7 +133,17 @@ def append_jsonl(path: Path, record: object, *, batch_id: str = "") -> bool:
         if data_root is not None:
             stream = path.parent.name
             db_path = data_root / "persistence" / "app.sqlite"
+            if writer is None:
+                if writer is None:
             persist_payload(db_path=db_path, stream=stream, payload=payload)
+        else:
+            if writer.db_path != db_path.resolve():
+                raise ValueError("SQLite batch writer does not match JSONL data root")
+            writer.persist(stream, payload)
+            else:
+                if writer.db_path != db_path.resolve():
+                    raise ValueError("SQLite batch writer does not match JSONL data root")
+                writer.persist(stream, payload)
         return False
 
     serialized = json.dumps(payload, ensure_ascii=False) + "\n"
