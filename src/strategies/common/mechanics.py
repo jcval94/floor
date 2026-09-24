@@ -84,6 +84,25 @@ def alpha_hurdle(
     )
 
 
+def alpha_hurdle_from_net(
+    net_alpha_pct: float,
+    cfg: dict,
+    strategy_cfg: dict,
+) -> tuple[bool, dict[str, float]]:
+    """Apply the normal hurdle to a model that already predicts net alpha.
+
+    We add the deterministic round-trip cost back once to reconstruct the
+    equivalent gross alpha, then reuse alpha_hurdle. This prevents double
+    subtraction when a model target was trained net of costs.
+    """
+
+    net = max(0.0, to_float(net_alpha_pct))
+    gross_equivalent = net + round_trip_cost_pct(cfg)
+    passed, alpha = alpha_hurdle(gross_equivalent, cfg, strategy_cfg)
+    alpha["model_net_alpha_pct"] = net
+    return passed, alpha
+
+
 def payoff_room_clears_cost(
     payoff_room_pct: float,
     cfg: dict,
