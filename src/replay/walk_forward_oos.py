@@ -9,7 +9,14 @@ from typing import Any
 
 from floor.universe import parse_universe_yaml
 from forecasting.run_forecast import run_forecast_pipeline
-from league.engine import advance_league, initialize_league, sha256_file, write_leaderboard
+from contracts.trading import shadow_execution_contract
+from league.engine import (
+    advance_league,
+    initialize_league,
+    sha256_file,
+    transition_research_model_epoch,
+    write_leaderboard,
+)
 from league.freeze import verify_challenger_freeze
 from league.market_features import _feature_row
 from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
@@ -174,22 +181,28 @@ def _model_contract(
 def _run_fold_tournament(
     *,
     sessions: list[date],
+    experiment_sessions: list[date],
     daily_by_symbol: dict[str, list[dict[str, Any]]],
-    output_dir: Path,
+    run_dir: Path,
     universe_path: Path,
     model_registry_dir: Path,
     weekly_model_path: Path,
     league_config_path: Path,
     strategies_config_path: Path,
-) -> dict[str, Any]:
+    state: dict[str, Any] | None,
+    fold_index: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     symbols = parse_universe_yaml(universe_path)
     league_cfg = _load_json(league_config_path)
     strategies_cfg = load_simple_yaml(strategies_config_path)
+    # Walk-forward must gate signals with the same friction contract used by
+    # the execution engine. No optimistic 58-bps-vs-61-bps split is allowed.
+    strategies_cfg["costs"] = shadow_execution_contract()
     weekly_artifact = _load_json(weekly_model_path)
     runtime_cfg, challenger_cfg, holdings = _runtime_league_config(
         league_cfg,
         strategies_cfg,
-        sessions,
+        experiment_sessions,
     )
     weekly_holding, mean_holding, cross_holding, _ = holdings
     frozen_contract = _model_contract(
@@ -198,12 +211,45 @@ def _run_fold_tournament(
         weekly_model_path=weekly_model_path,
         model_registry_dir=model_registry_dir,
     )
-    run_dir = output_dir / "league"
-    state: dict[str, Any] | None = None
+
+    if state is not None and state.get("frozen_contract") != frozen_contract:
+        state = transition_research_model_epoch(
+            run_dir,
+            state,
+            frozen_contract,
+            next_fold_start=sessions[0].isoformat(),
+            fold_index=fold_index,
+        )
+
+    initial_nav = float(runtime_cfg.get("initial_nav_usd", 10000.0))
+    start_snapshot: dict[str, dict[str, float]] = {}
+    if state is None:
+        for spec in runtime_cfg.get("members", []):
+            member_id = str(spec.get("id") or "")
+            if member_id:
+                start_snapshot[member_id] = {
+                    "nav": initial_nav,
+                    "trades": 0.0,
+                    "costs": 0.0,
+                }
+    else:
+        for member_id, member in state.get("members", {}).items():
+            points = member.get("daily_nav", [])
+            nav = (
+                float(points[-1]["nav"])
+                if points
+                else initial_nav
+            )
+            start_snapshot[str(member_id)] = {
+                "nav": nav,
+                "trades": float(member.get("trade_count", 0)),
+                "costs": float(member.get("costs_paid", 0.0)),
+            }
+
     audits: list[dict[str, Any]] = []
     spy_rows = daily_by_symbol["SPY"]
     weekly_frequency = max(
-        1,
+        weekly_holding,
         int(runtime_cfg.get("weekly_review_frequency_sessions", weekly_holding)),
     )
     challenger_frequency = max(
@@ -259,10 +305,17 @@ def _run_fold_tournament(
             )
             forecast = forecasts.get(symbol)
             if feature is None or forecast is None:
-                raise RuntimeError(f"walk-forward incomplete league row {session} {symbol}")
+                raise RuntimeError(
+                    f"walk-forward incomplete league row {session} {symbol}"
+                )
             feature_rows.append(_enrich_league_row(feature, forecast))
 
         count = int(state.get("session_count", 0)) if state is not None else 0
+        current_positions_by_strategy = {
+            member_id: set(member.get("positions", {}))
+            for member_id, member in (state or {}).get("members", {}).items()
+            if isinstance(member, dict)
+        }
         next_targets = _strategy_targets(
             feature_rows,
             strategies_cfg,
@@ -272,6 +325,7 @@ def _run_fold_tournament(
             include_cross_horizon=state is None or count % cross_holding == 0,
             include_challenger=state is None or count % challenger_frequency == 0,
             challenger_cfg=challenger_cfg,
+            current_positions_by_strategy=current_positions_by_strategy,
         )
         if state is None:
             state = initialize_league(
@@ -295,71 +349,92 @@ def _run_fold_tournament(
     if state is None:
         raise RuntimeError("walk-forward fold produced no league state")
     leaderboard = write_leaderboard(run_dir, state, runtime_cfg)
-    return {
-        "start_session": sessions[0].isoformat(),
-        "end_session": sessions[-1].isoformat(),
-        "sessions": len(sessions),
-        "future_market_data_used": any(
-            bool(item.get("future_data_used")) for item in audits
-        ),
-        "model_contract": frozen_contract,
-        "leaderboard": leaderboard,
-    }
+
+    fold_rows: list[dict[str, Any]] = []
+    for row in leaderboard["rows"]:
+        member_id = str(row["strategy"])
+        before = start_snapshot.get(
+            member_id,
+            {"nav": initial_nav, "trades": 0.0, "costs": 0.0},
+        )
+        start_nav = float(before["nav"])
+        end_nav = float(row["nav"])
+        fold_rows.append(
+            {
+                **row,
+                "start_nav": start_nav,
+                "return": (
+                    end_nav / start_nav - 1.0
+                    if start_nav > 0
+                    else 0.0
+                ),
+                "cumulative_return": float(row["return"]),
+                "trades": int(row.get("trades", 0) - int(before["trades"])),
+                "costs_paid": float(row.get("costs_paid", 0.0))
+                - float(before["costs"]),
+            }
+        )
+
+    return (
+        {
+            "start_session": sessions[0].isoformat(),
+            "end_session": sessions[-1].isoformat(),
+            "sessions": len(sessions),
+            "future_market_data_used": any(
+                bool(item.get("future_data_used")) for item in audits
+            ),
+            "model_contract": frozen_contract,
+            "leaderboard": leaderboard,
+            "fold_rows": fold_rows,
+            "portfolio_continuity": True,
+        },
+        state,
+    )
 
 
-def _aggregate_folds(
+def _aggregate_continuous_folds(
     folds: list[dict[str, Any]],
     initial_nav: float,
 ) -> list[dict[str, Any]]:
-    strategy_ids = sorted(
-        {
-            str(row["strategy"])
-            for fold in folds
-            for row in fold["tournament"]["leaderboard"]["rows"]
-        }
-    )
+    if not folds:
+        return []
+    final_rows = folds[-1]["tournament"]["leaderboard"]["rows"]
     output: list[dict[str, Any]] = []
-    for strategy in strategy_ids:
-        current_nav = initial_nav
-        curve: list[dict[str, Any]] = []
-        trades = 0
-        normalized_costs = 0.0
-        positive_folds = 0
+    for final in final_rows:
+        strategy = str(final["strategy"])
         fold_returns: list[float] = []
+        positive_folds = 0
         for fold in folds:
             row = next(
                 item
-                for item in fold["tournament"]["leaderboard"]["rows"]
+                for item in fold["tournament"]["fold_rows"]
                 if item["strategy"] == strategy
             )
-            start_nav = current_nav
-            fold_initial = float(fold["tournament"]["leaderboard"]["initial_nav_usd"])
-            for point in row.get("equity_curve", []):
-                scaled = start_nav * (float(point["nav"]) / fold_initial)
-                normalized = {"session": point["session"], "nav": scaled}
-                if curve and curve[-1]["session"] == point["session"]:
-                    curve[-1] = normalized
-                else:
-                    curve.append(normalized)
             fold_return = float(row["return"])
             fold_returns.append(fold_return)
             positive_folds += int(fold_return > 0)
-            current_nav = start_nav * (1.0 + fold_return)
-            trades += int(row.get("trades", 0))
-            normalized_costs += float(row.get("costs_paid", 0.0))
+
+        costs = float(final.get("costs_paid", 0.0))
         output.append(
             {
                 "strategy": strategy,
-                "nav": current_nav,
-                "return": current_nav / initial_nav - 1.0,
-                "sharpe": _sharpe(curve),
-                "max_drawdown": _max_drawdown(curve),
-                "trades": trades,
-                "costs_paid_per_10k_fold_sum": normalized_costs,
+                "nav": float(final["nav"]),
+                "return": float(final["return"]),
+                "sharpe": final.get("sharpe"),
+                "max_drawdown": float(final.get("max_drawdown", 0.0)),
+                "trades": int(final.get("trades", 0)),
+                # New truthful field. Keep the old name temporarily for Pages
+                # compatibility, but it now points to the same continuous
+                # account cost rather than a sum of seven reset portfolios.
+                "costs_paid_continuous": costs,
+                "costs_paid_per_10k_fold_sum": costs,
+                "suppressed_rebalances": int(
+                    final.get("suppressed_rebalances", 0)
+                ),
                 "positive_folds": positive_folds,
                 "folds": len(folds),
                 "mean_fold_return": _mean(fold_returns),
-                "equity_curve": curve,
+                "equity_curve": list(final.get("equity_curve", [])),
             }
         )
     output.sort(key=lambda row: float(row["return"]), reverse=True)
@@ -376,13 +451,16 @@ def _build_fold(
     *,
     index: int,
     fold: list[date],
+    experiment_sessions: list[date],
     full_payload: dict[str, Any],
     output_dir: Path,
+    shared_run_dir: Path,
     daily_by_symbol: dict[str, list[dict[str, Any]]],
     universe_path: Path,
     league_config_path: Path,
     strategies_config_path: Path,
-) -> dict[str, Any]:
+    state: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     fold_start = fold[0]
     fold_end = fold[-1]
     fold_dir = output_dir / "folds" / f"{index:02d}_{fold_start}_{fold_end}"
@@ -402,15 +480,18 @@ def _build_fold(
         fold_dir / "training",
         version=f"walk-forward-{fold_start:%Y%m%d}",
     )
-    tournament = _run_fold_tournament(
+    tournament, state = _run_fold_tournament(
         sessions=fold,
+        experiment_sessions=experiment_sessions,
         daily_by_symbol=daily_by_symbol,
-        output_dir=fold_dir,
+        run_dir=shared_run_dir,
         universe_path=universe_path,
         model_registry_dir=Path(trained["models_dir"]),
         weekly_model_path=Path(trained["weekly_path"]),
         league_config_path=league_config_path,
         strategies_config_path=strategies_config_path,
+        state=state,
+        fold_index=index,
     )
     if tournament["future_market_data_used"] is not False:
         raise RuntimeError("walk-forward fold reported future market data")
@@ -423,7 +504,7 @@ def _build_fold(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    return result
+    return result, state
 
 
 def run_walk_forward_oos(
@@ -437,7 +518,7 @@ def run_walk_forward_oos(
     universe_path: Path = Path("config/universe.yaml"),
     league_config_path: Path = Path("config/strategy_league.json"),
     strategies_config_path: Path = Path("config/strategies.yaml"),
-    freeze_path: Path = Path("config/frozen/capital_challenger_v1_v7.json"),
+    freeze_path: Path = Path("config/frozen/capital_challenger_v1_v8.json"),
 ) -> dict[str, Any]:
     freeze = verify_challenger_freeze(league_config_path, freeze_path)
     full_payload = json.loads(dataset_path.read_text(encoding="utf-8"))
@@ -453,22 +534,29 @@ def run_walk_forward_oos(
     sessions = _session_dates(daily_by_symbol, start, end)
     chunks = _fold_sessions(sessions, fold_sessions)
     output_dir.mkdir(parents=True, exist_ok=True)
-    fold_results = [
-        _build_fold(
+    shared_run_dir = output_dir / "league"
+    state: dict[str, Any] | None = None
+    fold_results: list[dict[str, Any]] = []
+    for index, fold in enumerate(chunks, start=1):
+        fold_result, state = _build_fold(
             index=index,
             fold=fold,
+            experiment_sessions=sessions,
             full_payload=full_payload,
             output_dir=output_dir,
+            shared_run_dir=shared_run_dir,
             daily_by_symbol=daily_by_symbol,
             universe_path=universe_path,
             league_config_path=league_config_path,
             strategies_config_path=strategies_config_path,
+            state=state,
         )
-        for index, fold in enumerate(chunks, start=1)
-    ]
+        fold_results.append(fold_result)
 
+    if state is None:
+        raise RuntimeError("walk-forward produced no continuous portfolio state")
     initial_nav = float(_load_json(league_config_path).get("initial_nav_usd", 10000.0))
-    rows = _aggregate_folds(fold_results, initial_nav)
+    rows = _aggregate_continuous_folds(fold_results, initial_nav)
     challenger = next(
         (
             row
@@ -478,7 +566,7 @@ def run_walk_forward_oos(
         None,
     )
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "MODEL_OOS_OK",
         "evidence_type": "historical_walk_forward_model_oos_fixed_strategy",
         "prospective_evidence": False,
@@ -486,6 +574,9 @@ def run_walk_forward_oos(
         "strategy_configuration_selected_retrospectively": True,
         "future_market_data_used": False,
         "model_training_future_data_used": False,
+        "portfolio_continuity_across_folds": True,
+        "fold_liquidations": False,
+        "model_epoch_transitions": len(state.get("model_epoch_transitions", [])),
         "freeze": freeze,
         "start_session": sessions[0].isoformat(),
         "end_session": sessions[-1].isoformat(),
@@ -500,8 +591,13 @@ def run_walk_forward_oos(
             "scoring_rule": (
                 "models are trained once before each fold and remain frozen inside that fold"
             ),
+            "portfolio_continuity": (
+                "one continuous cash/positions ledger spans every fold; model retraining "
+                "never liquidates or resets the account"
+            ),
             "execution_rule": (
-                "CLOSE signal, next-open execution, same Strategy League costs/stops/holding rules"
+                "CLOSE signal, next-open execution, exact Strategy League costs, "
+                "turnover deadbands, stops and holding rules"
             ),
             "market_point_in_time": (
                 "completed daily bar is used only at that historical session CLOSE"
@@ -520,7 +616,8 @@ def run_walk_forward_oos(
                 "start_session": fold_result["tournament"]["start_session"],
                 "end_session": fold_result["tournament"]["end_session"],
                 "sessions": fold_result["tournament"]["sessions"],
-                "rows": fold_result["tournament"]["leaderboard"]["rows"],
+                "rows": fold_result["tournament"]["fold_rows"],
+                "portfolio_continuity": True,
             }
             for fold_result in fold_results
         ],
@@ -547,7 +644,7 @@ def main() -> None:
     parser.add_argument("--universe", default="config/universe.yaml")
     parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument("--strategies-config", default="config/strategies.yaml")
-    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v7.json")
+    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v8.json")
     args = parser.parse_args()
     result = run_walk_forward_oos(
         dataset_path=Path(args.dataset),
