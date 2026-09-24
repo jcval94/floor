@@ -102,6 +102,69 @@ def review_secrets_and_permissions() -> list[str]:
     return warnings
 
 
+def validate_authoritative_workflow_ownership() -> list[str]:
+    """Prevent a second writer from silently becoming authoritative."""
+
+    errors: list[str] = []
+    workflows = ROOT / ".github" / "workflows"
+
+    manual_training = (workflows / "manual_train_all_models.yml").read_text(
+        encoding="utf-8"
+    )
+    if "git push" in manual_training or "git commit -m" in manual_training:
+        errors.append(
+            "manual_train_all_models must not publish the production model registry; "
+            "retrain_execute is the single promotion authority"
+        )
+    if "contents: write" in manual_training:
+        errors.append(
+            "manual_train_all_models must remain read-only to repository contents"
+        )
+    if "--validation-days 140" not in manual_training or "--test-days 141" not in manual_training:
+        errors.append(
+            "manual training must use the governed M3-safe evaluation window (140/141)"
+        )
+
+    retrain = (workflows / "retrain_execute.yml").read_text(encoding="utf-8")
+    if "group: floor-runtime-state-writer" not in retrain:
+        errors.append("retrain_execute must publish under floor-runtime-state-writer")
+    if 'git commit -m "chore: publish retrained champion registry"' not in retrain:
+        errors.append("retrain_execute must remain the explicit model-registry publisher")
+
+    monitoring = (workflows / "monitoring.yml").read_text(encoding="utf-8")
+    if "Determine monitoring eligibility before writer lock" not in monitoring:
+        errors.append("monitoring eligibility must be resolved before the writer lock")
+    if "group: floor-monitoring-state-writer" not in monitoring:
+        errors.append("monitoring writer lock is missing")
+    if "cancel-in-progress: false" not in monitoring:
+        errors.append("monitoring must not cancel an eligible snapshot already in flight")
+
+    for name in (
+        "runtime_state.sh",
+        "checkpoint_state.sh",
+        "monitoring_state.sh",
+        "research_state.sh",
+    ):
+        state_script = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+        if "source scripts/release_state_assets.sh" not in state_script:
+            errors.append(f"{name} must use versioned Release state helpers")
+        if "state_publish_set" not in state_script:
+            errors.append(f"{name} must publish immutable run-scoped Release assets")
+
+    for name in ("manual_compact_git_history.yml", "compact_history_once.yml"):
+        workflow = (workflows / name).read_text(encoding="utf-8")
+        if "--force-with-lease=" not in workflow:
+            errors.append(f"{name} must protect destructive ref updates with exact leases")
+        if "push --atomic --force --prune" in workflow:
+            errors.append(f"{name} must not use unleased wildcard force/prune pushes")
+
+    one_shot = (workflows / "compact_history_once.yml").read_text(encoding="utf-8")
+    if "branches: [main]" in one_shot and 'paths:' in one_shot.split("permissions:", 1)[0]:
+        errors.append("compact_history_once must never self-trigger from a push")
+
+    return errors
+
+
 def run_smoke() -> int:
     return _run([sys.executable, "-m", "floor.main", "--help"])
 
@@ -119,6 +182,7 @@ def main() -> int:
     config_errors = validate_configs()
     schema_errors = validate_dataset_schemas()
     secret_warnings = review_secrets_and_permissions()
+    ownership_errors = validate_authoritative_workflow_ownership()
 
     if config_errors:
         failed = True
@@ -135,6 +199,14 @@ def main() -> int:
             print(" -", err)
     else:
         print("[OK] dataset schema validation")
+
+    if ownership_errors:
+        failed = True
+        print("[FAIL] authoritative workflow ownership")
+        for err in ownership_errors:
+            print(" -", err)
+    else:
+        print("[OK] authoritative workflow ownership")
 
     if secret_warnings:
         print("[WARN] secrets/permissions review")
