@@ -239,6 +239,12 @@ def _champion_suite_contract(repo_root: Path) -> dict[str, str]:
         hashes[f"{task}_champion_sha256"] = sha256_file(path)
     return {
         "model_suite_contract_version": "v2",
+        "model_contracts_sha256": sha256_file(
+            repo_root / "config" / "model_contracts.json"
+        ),
+        "strategy_contracts_sha256": sha256_file(
+            repo_root / "config" / "strategy_contracts.json"
+        ),
         **hashes,
     }
 
@@ -330,6 +336,9 @@ def run_league_eod(
             )
             spec["league_evidence_can_promote_canonical_variant"] = bool(
                 contract.get("league_evidence_can_promote_canonical_variant", False)
+            )
+            spec["canonical_variant"] = str(
+                contract.get("canonical_variant") or "unspecified"
             )
         runtime_members.append(spec)
 
