@@ -219,15 +219,19 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     script = (ROOT / "site" / "assets" / "league.js").read_text(encoding="utf-8")
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
+    research = (ROOT / "site" / "assets" / "research.js").read_text(encoding="utf-8")
 
     assert 'id="strategy-live"' in page
     assert 'id="liveSummary"' in page
     assert 'id="liveCompetitionChart"' in page
+    assert 'id="liveChartMetrics"' in page
     assert 'id="liveTable"' in page
     assert "actualización ~15 min" in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
     assert 'id="leagueCompetitionChart"' in page
+    assert 'id="leagueChartMetrics"' in page
+    assert 'id="leagueWindow"' in page
     assert 'id="leagueTable"' in page
     assert "EOD → Strategy League → runtime state → Pages" in page
     assert 'href="assets/league.css"' in page
@@ -247,11 +251,19 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "setInterval(renderLive, 60_000)" in script
 
     assert "export function multiLineSvg" in charts
+    assert "export function filterPointsByWindow" in charts
+    assert "'20d': 20" in charts
     assert "seriesIndex % 7" in charts
+    assert "chart-threshold" in charts
     assert ".league-summary-grid" in styles
     assert ".league-series-0" in styles
     assert ".league-series-6" in styles
     assert ".league-challenger-row" in styles
+    assert ".chart-kpi-strip" in styles
+    assert ".chart-window-select" in styles
+    assert 'id="oosWindow"' in page
+    assert 'id="oosChartMetrics"' in page
+    assert "F${fold.fold}" in research
 
 def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
