@@ -8,8 +8,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # PR updates may supersede older attempts, but main-push runs are keyed by
+  # immutable SHA so a delayed ancestor push can never cancel CI for HEAD.
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
