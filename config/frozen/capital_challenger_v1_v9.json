@@ -5,7 +5,7 @@
   "purpose": "Re-freeze Capital Allocation Challenger for Strategy League v9 because Weekly target semantics and Mean Reversion signal semantics changed. Cross-Horizon remains observable as a standalone diagnostic member but is quarantined from capital allocation after weak OOS evidence. Prospective evidence must not be stitched with v8.",
   "frozen_at": "2026-09-24",
   "source_league_id": "strategy_league_v9_net_target_reversal_10k",
-  "challenger_config_sha256": "b2c9f0e99f1baba193b01dfca6a13826bb4fae7b2e5d8e560b76a64065e47769",
+  "challenger_config_sha256": "a23605b5806d9e21ded04ec98cd4143ce2daade249d470f4080ed324ca689d04",
   "challenger_config": {
     "review_frequency_sessions": 10,
     "max_holding_sessions": 10,
