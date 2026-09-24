@@ -42,7 +42,7 @@ def versioned_groups(
         run_id, suffix = match.groups()
         if suffix not in allowed_suffixes:
             continue
-        payload_name = f"{base}.run-{run_id}"
+        payload_name = f"{base}.run-{run_id}-a{attempt}"
         grouped.setdefault(payload_name, {})[suffix] = asset
 
     out: list[AssetGroup] = []
