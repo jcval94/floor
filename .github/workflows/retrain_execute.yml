@@ -273,6 +273,14 @@ jobs:
           done
           sqlite3 data/persistence/app.sqlite "PRAGMA quick_check;" | grep -qx ok
 
+      - name: Audit classic risk geometry contract
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m models.risk_geometry_report \
+            --registry data/training/models \
+            --output data/training/metrics/risk_geometry_report_latest.json \
+            --require-complete
+
       - name: Commit lightweight model registry only
         if: steps.gate.outputs.run == 'true'
         run: |
