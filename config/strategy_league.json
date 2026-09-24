@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v8_net_alpha_10k",
+  "league_id": "strategy_league_v9_net_target_reversal_10k",
   "enabled": true,
   "mode": "shadow_paper",
   "initial_nav_usd": 10000,
@@ -52,7 +52,7 @@
       "required": true
     }
   ],
-  "weekly_model_path": "data/metrics/strategy_league/models/strategy_league_v8_net_alpha_10k/weekly_opportunity_challenger.json",
+  "weekly_model_path": "data/metrics/strategy_league/models/strategy_league_v9_net_target_reversal_10k/weekly_opportunity_challenger.json",
   "capital_allocation_challenger": {
     "review_frequency_sessions": 10,
     "max_holding_sessions": 10,
@@ -66,10 +66,10 @@
     "quality_floor": 0.55,
     "consensus_bonus": 0.15,
     "source_weights": {
-      "weekly_opportunity_ridge": 1.0,
-      "breakout_protected_by_floor": 1.0,
+      "weekly_opportunity_ridge": 1,
+      "breakout_protected_by_floor": 1,
       "mean_reversion_floor_w1": 0.9,
-      "cross_horizon_asymmetry": 0.95
+      "cross_horizon_asymmetry": 0
     }
   },
   "promotion_review": {
