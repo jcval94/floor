@@ -518,7 +518,7 @@ def run_walk_forward_oos(
     universe_path: Path = Path("config/universe.yaml"),
     league_config_path: Path = Path("config/strategy_league.json"),
     strategies_config_path: Path = Path("config/strategies.yaml"),
-    freeze_path: Path = Path("config/frozen/capital_challenger_v1_v8.json"),
+    freeze_path: Path = Path("config/frozen/capital_challenger_v1_v9.json"),
 ) -> dict[str, Any]:
     freeze = verify_challenger_freeze(league_config_path, freeze_path)
     full_payload = json.loads(dataset_path.read_text(encoding="utf-8"))
@@ -644,7 +644,7 @@ def main() -> None:
     parser.add_argument("--universe", default="config/universe.yaml")
     parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument("--strategies-config", default="config/strategies.yaml")
-    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v8.json")
+    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v9.json")
     args = parser.parse_args()
     result = run_walk_forward_oos(
         dataset_path=Path(args.dataset),
