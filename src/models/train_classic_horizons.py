@@ -683,7 +683,9 @@ def train_horizon_competition(
                 floor_delta=_clamp(_quantile(floor_predictions, 0.5)),
                 ceiling_delta=_clamp(_quantile(ceiling_predictions, 0.5)),
                 train_rows=len(train),
-                test_rows=len(evaluation),
+                # Backward-compatible field: historically this represents
+                # all usable validation rows, not only the post-calibration half.
+                test_rows=len(calibration) + len(evaluation),
                 metrics=candidate_metrics,
                 params={
                     "schema_version": 2,
