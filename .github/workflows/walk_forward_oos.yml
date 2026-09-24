@@ -154,14 +154,21 @@ jobs:
           assert payload['model_training_future_data_used'] is False
           assert payload['prospective_evidence'] is False
           assert payload['strategy_configuration_selected_retrospectively'] is True
+          assert payload['portfolio_continuity_across_folds'] is True
+          assert payload['fold_liquidations'] is False
+          assert payload['model_epoch_transitions'] == payload['folds'] - 1
           rows = payload['rows']
           assert len(rows) == 7, len(rows)
           assert any(row['strategy'] == 'capital_allocation_challenger' for row in rows)
+          spy = next(row for row in rows if row['strategy'] == 'benchmark_spy')
+          assert spy['trades'] == 1, spy
+          assert all('costs_paid_continuous' in row for row in rows)
           assert payload['folds'] >= 2
           for fold in payload['fold_reports']:
               cutoff = fold['training_cutoff']
               assert cutoff['training_observation_before_fold'] is True
               assert cutoff['training_target_maturity_before_fold'] is True
+              assert fold['portfolio_continuity'] is True
           print(json.dumps({
               'status': payload['status'],
               'sessions': payload['sessions'],
