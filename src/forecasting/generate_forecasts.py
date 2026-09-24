@@ -162,6 +162,10 @@ def generate_forecasts(
             "model_version": model.version,
             "floor_d1": d1.floor,
             "ceiling_d1": d1.ceiling,
+            "risk_floor_d1": d1.risk_floor,
+            "risk_ceiling_d1": d1.risk_ceiling,
+            "risk_geometry_available_d1": d1.risk_geometry_available,
+            "risk_target_marginal_coverage_d1": d1.risk_target_marginal_coverage,
             "floor_time_bucket_d1": d1.floor_time,
             "ceiling_time_bucket_d1": d1.ceiling_time,
             "breach_prob_d1": d1.breach_prob,
@@ -170,6 +174,10 @@ def generate_forecasts(
             "expected_range_d1": d1.expected_range,
             "floor_w1": w1.floor,
             "ceiling_w1": w1.ceiling,
+            "risk_floor_w1": w1.risk_floor,
+            "risk_ceiling_w1": w1.risk_ceiling,
+            "risk_geometry_available_w1": w1.risk_geometry_available,
+            "risk_target_marginal_coverage_w1": w1.risk_target_marginal_coverage,
             "floor_day_w1": int(w1.floor_time),
             "ceiling_day_w1": int(w1.ceiling_time),
             "breach_prob_w1": w1.breach_prob,
@@ -178,6 +186,10 @@ def generate_forecasts(
             "expected_range_w1": w1.expected_range,
             "floor_q1": q1.floor,
             "ceiling_q1": q1.ceiling,
+            "risk_floor_q1": q1.risk_floor,
+            "risk_ceiling_q1": q1.risk_ceiling,
+            "risk_geometry_available_q1": q1.risk_geometry_available,
+            "risk_target_marginal_coverage_q1": q1.risk_target_marginal_coverage,
             "floor_day_q1": int(q1.floor_time),
             "ceiling_day_q1": int(q1.ceiling_time),
             "breach_prob_q1": q1.breach_prob,
@@ -186,7 +198,18 @@ def generate_forecasts(
             "expected_range_q1": q1.expected_range,
             "confidence_score": round(model_conf, 4),
             "model_confidence_score": round(model_conf, 4),
-            "confidence_semantics": "mean_validation_interval_non_breach_rate",
+            "confidence_semantics": "mean_validation_central_interval_non_breach_rate",
+            "range_geometry_semantics": {
+                "central": "typical conditional floor/ceiling; not directional alpha",
+                "risk": (
+                    "validation residual-quantile risk boundary"
+                    if any(
+                        forecast.risk_geometry_available
+                        for forecast in (d1, w1, q1)
+                    )
+                    else "unavailable on legacy champion; central fallback is explicitly uncalibrated"
+                ),
+            },
             "directional_signal_available": False,
             "directional_expected_return_available": False,
             "ai_present": ai_present,
