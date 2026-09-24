@@ -181,7 +181,7 @@ jobs:
 
       # Reconciliation has one owner: EOD. The canonical forecast cycle deliberately
       # does not reconcile, preventing duplicate historical scans at close.
-      - name: Reconcile matured predictions once after close forecast
+      - name: Reconcile matured predictions against realized bars
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main reconcile-predictions
 

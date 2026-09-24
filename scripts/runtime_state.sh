@@ -277,11 +277,13 @@ publish_state() {
   # Retention horizons are measured in months/years. Avoid rescanning the
   # full runtime state on every intraday publish; missing/stale reports still
   # fail toward running the compaction pass.
-  retention_args=(--data-dir data --if-due-seconds "$RETENTION_INTERVAL_SECONDS")
   if [[ "$FORCE_RETENTION" == "true" ]]; then
-    retention_args+=(--force)
+    PYTHONPATH=src python -m floor.runtime_retention --data-dir data \
+      --if-due-seconds "$RETENTION_INTERVAL_SECONDS" --force
+  else
+    PYTHONPATH=src python -m floor.runtime_retention --data-dir data \
+      --if-due-seconds "$RETENTION_INTERVAL_SECONDS"
   fi
-  PYTHONPATH=src python -m floor.runtime_retention "${retention_args[@]}"
   collect_paths
 
   local candidate
