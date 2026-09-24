@@ -8,10 +8,10 @@ from league.freeze import verify_challenger_freeze
 def test_current_challenger_matches_frozen_v1() -> None:
     result = verify_challenger_freeze(
         Path("config/strategy_league.json"),
-        Path("config/frozen/capital_challenger_v1_v8.json"),
+        Path("config/frozen/capital_challenger_v1_v9.json"),
     )
     assert result["status"] == "FROZEN_OK"
-    assert result["freeze_id"] == "capital_challenger_v1_refrozen_20260924_v8"
+    assert result["freeze_id"] == "capital_challenger_v1_refrozen_20260924_v9"
 
 
 def test_freeze_rejects_parameter_mutation(tmp_path: Path) -> None:
@@ -20,4 +20,4 @@ def test_freeze_rejects_parameter_mutation(tmp_path: Path) -> None:
     path = tmp_path / "league.json"
     path.write_text(mutated, encoding="utf-8")
     with pytest.raises(RuntimeError, match="parameters changed after freeze"):
-        verify_challenger_freeze(path, Path("config/frozen/capital_challenger_v1_v8.json"))
+        verify_challenger_freeze(path, Path("config/frozen/capital_challenger_v1_v9.json"))
