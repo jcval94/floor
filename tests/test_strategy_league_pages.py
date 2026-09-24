@@ -206,12 +206,20 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
     assert int(config["weekly_review_frequency_sessions"]) == 10
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
+    assert float(config["promotion_review"]["max_gross_turnover"]) == pytest.approx(12.0)
     assert float(config["initial_nav_usd"]) == 10000.0
     assert float(
         config["capital_allocation_challenger"]["source_weights"][
             "cross_horizon_asymmetry"
         ]
     ) == 0.0
+    cross_member = next(
+        member
+        for member in config["members"]
+        if member["id"] == "cross_horizon_asymmetry"
+    )
+    assert cross_member["evidence_role"] == "diagnostic_only"
+    assert cross_member["promotion_eligible"] is False
     assert {
         "weekly_opportunity_ridge",
         "breakout_protected_by_floor",
@@ -254,6 +262,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "multiLineSvg" in script
     assert "challenger_vs_best_base" in script
     assert "costs_paid" in script
+    assert "row.turnover" in script
+    assert "cost_drag_bps_nav" in script
+    assert "Turnover alto" in script
+    assert "diagnostic_only" in script
     assert "promotion_review_eligible" in script
     assert "data/strategy_live.json" in script
     assert "intraday_curve" in script
