@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from backtest.run_backtest import compare_champion_challenger, run_portfolio_backtest, run_strategy_backtest
 
 
@@ -16,6 +18,7 @@ def _market_data() -> list[dict]:
 
 def _config() -> dict:
     return {
+        "cost_profile": "custom",
         "costs": {
             "commission_bps": 2.0,
             "slippage_bps": 1.0,
@@ -113,3 +116,75 @@ def test_champion_challenger_comparison() -> None:
     assert "delta_equity" in cmp_result
     assert cmp_result["champion"]["equity_curve"]
     assert cmp_result["challenger"]["equity_curve"]
+
+
+def test_generic_backtest_requires_explicit_opt_in_for_noncanonical_costs() -> None:
+    config = _config()
+    config.pop("cost_profile")
+
+    with pytest.raises(ValueError, match="non-canonical costs require"):
+        run_strategy_backtest(
+            _market_data(),
+            "s1",
+            {
+                "2026-01-01": {"AAA": 0.5},
+                "2026-01-02": {"AAA": 0.5},
+                "2026-01-03": {"AAA": 0.0},
+            },
+            config,
+        )
+
+
+def test_canonical_backtest_contract_is_61_bps_and_evidence_eligible() -> None:
+    config = _config()
+    config["cost_profile"] = "canonical"
+    config["costs"] = {
+        "commission_bps": 26.0,
+        "slippage_bps": 3.0,
+        "sell_fee_bps": 3.0,
+        "min_commission": 0.0,
+    }
+
+    result = run_strategy_backtest(
+        _market_data(),
+        "s1",
+        {
+            "2026-01-01": {"AAA": 0.5},
+            "2026-01-02": {"AAA": 0.5},
+            "2026-01-03": {"AAA": 0.0},
+        },
+        config,
+    )
+
+    assert result["cost_contract"]["profile"] == "canonical"
+    assert result["cost_contract"]["round_trip_cost_bps"] == pytest.approx(61.0)
+    assert result["cost_contract"]["canonical_evidence_eligible"] is True
+
+
+def test_backtest_auxiliary_pnl_is_net_of_costs_and_reconciles_to_equity() -> None:
+    result = run_strategy_backtest(
+        _market_data(),
+        "s1",
+        {
+            "2026-01-01": {"AAA": 0.5},
+            "2026-01-02": {"AAA": 0.5},
+            "2026-01-03": {"AAA": 0.0},
+        },
+        _config(),
+    )
+
+    summary = result["metrics"]["summary"]
+    final_pnl = result["equity_curve"][-1]["equity"] - _config()["portfolio"]["initial_cash"]
+
+    assert result["total_costs"] > 0
+    assert result["realized_pnl"] < result["gross_realized_pnl"]
+    assert result["pnl_reconciliation_error"] == pytest.approx(0.0, abs=1e-8)
+    assert summary["pnl_reconciliation_error"] == pytest.approx(0.0, abs=1e-8)
+    assert sum(result["ticker_pnl"].values()) == pytest.approx(final_pnl, abs=1e-8)
+    assert sum(result["strategy_cost_allocation"].values()) == pytest.approx(
+        result["total_costs"],
+        abs=1e-8,
+    )
+    assert summary["contribution_by_strategy"]["s1"] < (
+        summary["contribution_by_strategy_gross"]["s1"]
+    )
