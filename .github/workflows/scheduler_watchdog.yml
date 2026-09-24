@@ -2,13 +2,14 @@ name: scheduler_watchdog
 
 on:
   schedule:
-    # One hourly backstop is enough because intraday/eod already poll at :07/:22/:37/:52.
+    # One hourly backstop is enough because primary market workflows already poll every ~15 minutes.
     - cron: "35 13-23 * * 1-5"
   push:
     branches: [main]
     paths:
       - ".github/workflows/scheduler_watchdog.yml"
       - ".github/workflows/intraday_engine.yml"
+      - ".github/workflows/strategy_live.yml"
       - ".github/workflows/eod.yml"
       - ".github/workflows/monitoring.yml"
   workflow_dispatch:
@@ -74,6 +75,10 @@ jobs:
           # creating duplicate gate-only runs.
           dispatch_if_stale intraday_engine.yml 1200 intraday
 
+          # Strategy League intraday monitor has the same cadence. Its own
+          # market-hours gate makes a watchdog dispatch safe outside the session.
+          dispatch_if_stale strategy_live.yml 1200 strategy_live
+
           utc_hour="$(date -u +%H)"
           if [ "$((10#$utc_hour))" -ge 20 ]; then
             dispatch_if_stale eod.yml 1200 eod
@@ -96,6 +101,7 @@ jobs:
             echo "- trigger: ${{ github.event_name }}"
             echo "- schedule: ${{ github.event.schedule || 'n/a' }}"
             echo "- intraday: ${{ steps.dispatch.outputs.intraday }}"
+            echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"
             echo "- monitoring: ${{ steps.dispatch.outputs.monitoring }}"
             echo "- policy: dispatch only when no recent/active run exists"
