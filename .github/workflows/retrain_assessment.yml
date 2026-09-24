@@ -26,7 +26,7 @@ jobs:
   assess_critical:
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     concurrency:
       group: floor-runtime-state-writer
       cancel-in-progress: false
@@ -81,6 +81,120 @@ jobs:
           set -euo pipefail
           PYTHONPATH=src python -m floor.training.governance \
             --summary data/training/review_summary_latest.json
+
+      - name: Plan isolated advisory challenger validation
+        id: advisory_retrain
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("data/training/review_summary_latest.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          recommendation = str(payload.get("suite_recommendation") or "SKIP_RETRAIN")
+          tasks = [
+              str(task).strip()
+              for task in payload.get("tasks_for_retrain_recommended", [])
+              if str(task).strip()
+          ]
+          run = recommendation in {"RETRAIN_SOON", "RETRAIN_NOW"} and bool(tasks)
+          control = payload.setdefault("retraining_control", {})
+          control["advisory_challenger"] = {
+              "requested": run,
+              "tasks": tasks,
+              "execution": "PLANNED" if run else "NOT_REQUIRED",
+              "promotion_authorized": False,
+              "registry": "isolated_ephemeral",
+          }
+          path.write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"run={'true' if run else 'false'}\n")
+              fh.write(f"tasks={','.join(tasks)}\n")
+          PY
+
+      - name: Build leakage-safe advisory challenger dataset
+        if: steps.advisory_retrain.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m features.run_features \
+            --input data/training/yahoo_market_rows.jsonl \
+            --output data/training/advisory_modelable_dataset.json \
+            --validation-days 140 \
+            --test-days 141
+          test -s data/training/advisory_modelable_dataset.json
+
+      - name: Train and validate challengers in isolated registry
+        if: steps.advisory_retrain.outputs.run == 'true'
+        env:
+          ADVISORY_TASKS: ${{ steps.advisory_retrain.outputs.tasks }}
+        run: |
+          set -euo pipefail
+          ADVISORY_DIR="data/training/advisory_challenger_run"
+          rm -rf "$ADVISORY_DIR"
+          mkdir -p "$ADVISORY_DIR/models"
+          cp data/training/models/*_champion.json "$ADVISORY_DIR/models/"
+          VERSION_TAG="advisory-$(date -u +%Y%m%dT%H%M%SZ)"
+          FLOOR_DATA_DIR="$PWD/data" GITHUB_EVENT_NAME=advisory_preview \
+            bash scripts/retrain_models.sh \
+              data/training/advisory_modelable_dataset.json \
+              "$ADVISORY_DIR" \
+              "$VERSION_TAG" \
+              "$ADVISORY_TASKS" \
+              retrain
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = Path("data/training/review_summary_latest.json")
+          payload = json.loads(summary_path.read_text(encoding="utf-8"))
+          root = Path("data/training/advisory_challenger_run/models")
+          tasks = [x for x in os.environ["ADVISORY_TASKS"].split(",") if x]
+          decisions = {}
+          for task in tasks:
+              candidates = sorted(
+                  root.glob(f"{task}_challenger_*.json"),
+                  key=lambda path: path.stat().st_mtime,
+              )
+              if not candidates:
+                  decisions[task] = {
+                      "decision": "MISSING_CANDIDATE",
+                      "candidate_path": None,
+                  }
+                  continue
+              candidate = json.loads(candidates[-1].read_text(encoding="utf-8"))
+              selection = candidate.get("selection") or {}
+              decisions[task] = {
+                  "decision": selection.get("decision", "UNKNOWN"),
+                  "reason": selection.get("reason", ""),
+                  "candidate_version": candidate.get("version"),
+                  "candidate_path": str(candidates[-1]),
+              }
+
+          advisory = payload.setdefault("retraining_control", {}).setdefault(
+              "advisory_challenger",
+              {},
+          )
+          advisory.update(
+              {
+                  "execution": "COMPLETED",
+                  "candidate_decisions": decisions,
+                  "promotion_authorized": False,
+                  "authoritative_registry_changed": False,
+              }
+          )
+          summary_path.write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Publish assessment state outside Git
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,6 +207,8 @@ jobs:
             data/training/reviews.jsonl
             data/training/review_summary_latest.json
             data/training/modelable_dataset.json
+            data/training/advisory_modelable_dataset.json
+            data/training/advisory_challenger_run
             data/training/yahoo_market_rows.jsonl
             data/market/market_data.sqlite
           if-no-files-found: error

@@ -838,9 +838,10 @@ def publish_pages_data(
     if not bool(schema_audit.get("valid")):
         blockers.append("site_payload_schema_invalid")
 
-    warnings = _monitoring_warning_codes(monitoring_audit)
+    operational_warnings = _monitoring_warning_codes(monitoring_audit)
+    publication_warnings: list[str] = []
     if alignment["status"] == "PREVIOUS_CHAMPION" and not blockers:
-        warnings.append("prediction_batch_from_previous_champion")
+        publication_warnings.append("prediction_batch_from_previous_champion")
 
     publishable = not blockers
     forecasts_path = site_data_dir / "forecasts.json"
@@ -858,7 +859,13 @@ def publish_pages_data(
         forecasts["top_opportunities"] = opportunities
         forecasts["publishable"] = True
         dashboard["latest_predictions"] = batch
-        dashboard["system_health"] = "OK" if not warnings else "DEGRADED"
+        operational = _mapping(monitoring_audit.get("operational_health"))
+        operational_status = str(operational.get("status") or "UNKNOWN").upper()
+        dashboard["system_health"] = (
+            operational_status
+            if operational_status in {"OK", "DEGRADED", "CRITICAL"}
+            else "UNKNOWN"
+        )
         _write_json(opportunities_path, opportunities)
     else:
         prior_rows = forecasts.get("rows", [])
@@ -873,12 +880,14 @@ def publish_pages_data(
         dashboard["system_health"] = "BLOCKED"
         _write_json(opportunities_path, [])
 
-    if warnings and publishable:
+    if publication_warnings and publishable:
         data_health = _mapping(forecasts.get("data_health"))
         data_health["status"] = "DEGRADED"
         existing = data_health.get("alerts", [])
         alerts = list(existing) if isinstance(existing, list) else []
-        data_health["alerts"] = sorted(set([*alerts, *warnings]))
+        data_health["alerts"] = sorted(
+            set([*alerts, *publication_warnings])
+        )
         forecasts["data_health"] = data_health
 
     models["publication_model_compatibility"] = model_audit
@@ -892,9 +901,14 @@ def publish_pages_data(
         "source_commit": source_commit or None,
         "safe_to_deploy": True,
         "publishable_forecasts": publishable,
-        "status": "BLOCKED" if blockers else ("DEGRADED" if warnings else "OK"),
+        "status": (
+            "BLOCKED"
+            if blockers
+            else ("DEGRADED" if publication_warnings else "OK")
+        ),
         "blockers": blockers,
-        "warnings": warnings,
+        "warnings": publication_warnings,
+        "operational_warnings": operational_warnings,
         "prediction_history_source": history_source,
         "batch": batch_audit,
         "prediction_contract": contract_audit,
@@ -920,7 +934,8 @@ def publish_pages_data(
             "sources": state_snapshot.get("sources", {}),
         },
         "blockers": blockers,
-        "warnings": warnings,
+        "warnings": publication_warnings,
+        "operational_warnings": operational_warnings,
     }
     dashboard["publication_audit"] = publication_audit
     forecasts["publication_audit"] = publication_audit

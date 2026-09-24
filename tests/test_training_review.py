@@ -68,6 +68,7 @@ def test_run_training_review_writes_summary_and_history(tmp_path: Path) -> None:
     )
 
     assert summary["tasks_for_auto_retrain"] == []
+    assert summary["tasks_for_retrain_recommended"] == []
     assert summary["models"]["value"]["recommendation"] == "SKIP_RETRAIN"
     assert summary["models"]["timing"]["recommendation"] == "SKIP_RETRAIN"
 
@@ -93,6 +94,7 @@ def test_run_training_review_marks_only_value_for_auto_retrain(tmp_path: Path) -
     )
 
     assert summary["tasks_for_auto_retrain"] == ["value"]
+    assert summary["tasks_for_retrain_recommended"] == ["value"]
     assert summary["models"]["value"]["recommendation"] == "RETRAIN_NOW"
     assert summary["models"]["timing"]["recommendation"] == "SKIP_RETRAIN"
 

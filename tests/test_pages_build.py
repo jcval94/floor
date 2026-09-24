@@ -125,6 +125,41 @@ def test_build_pages_data_adds_retraining_countdown_from_summary_date(tmp_path: 
     assert isinstance(schedule["human_eta"], str)
 
 
+def test_build_pages_data_sets_retrain_soon_market_session_deadline(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    (data_dir / "training").mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+    (data_dir / "training" / "review_summary_latest.json").write_text(
+        json.dumps(
+            {
+                "as_of": "2026-09-21T16:00:00+00:00",
+                "suite_status": "WARN",
+                "suite_recommendation": "RETRAIN_SOON",
+                "models": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    schedule = models["retraining_schedule"]
+    assert schedule["retrain_advisory_active"] is True
+    assert schedule["recommended_retrain_window_sessions"] == 3
+    assert schedule["recommended_retrain_by"] == "2026-09-24"
+    assert "3 sesiones" in schedule["human_eta"]
+    assert schedule["action_required_now"] is False
+
+
 def test_build_pages_data_parses_nested_universe_yaml(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     site_data = tmp_path / "site" / "data"

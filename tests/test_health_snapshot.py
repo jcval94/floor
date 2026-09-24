@@ -105,6 +105,24 @@ def test_retrain_alert_degrades_health_instead_of_reporting_ok(tmp_path: Path) -
     assert any(item["name"] == "retraining_review" and item["status"] == "DEGRADED" for item in payload["series"])
 
 
+def test_retrain_soon_is_advisory_not_operational_degradation(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+    _write_dashboard(tmp_path, now)
+    _write_review(tmp_path, status="WARN", recommendation="RETRAIN_SOON")
+
+    payload = build_health_snapshot(tmp_path, now=now)
+
+    assert payload["status"] == "OK"
+    review = next(
+        item for item in payload["series"] if item["name"] == "retraining_review"
+    )
+    assert review["status"] == "OK"
+    assert review["level"] == "ADVISORY"
+    assert "RETRAIN_SOON" in review["detail"]
+    assert payload["alerts"] == []
+    assert payload["advisories"] == [review["detail"]]
+
+
 def test_scheduler_delay_inside_grace_does_not_raise_false_alarm(tmp_path: Path) -> None:
     # OPEN was 60 minutes ago. Lightweight polling plus the immutable context
     # leaves the engine ample time to catch the accepted checkpoint.

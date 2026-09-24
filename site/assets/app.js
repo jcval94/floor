@@ -537,7 +537,13 @@ async function models() {
   const champion = document.getElementById('champion');
   if (champion) champion.textContent = models.champion || 'No disponible';
   const suite = document.getElementById('suiteStatus');
-  if (suite) suite.innerHTML = `${badge(models.suite_status || 'UNKNOWN')} ${badge(models.suite_recommendation || 'PENDING')}`;
+  if (suite) {
+    const schedule = models.retraining_schedule || {};
+    const scheduleText = schedule.human_eta
+      ? `<div class="small" style="margin-top:8px">${escapeHTML(schedule.human_eta)}</div>`
+      : '';
+    suite.innerHTML = `${badge(models.suite_status || 'UNKNOWN')} ${badge(models.suite_recommendation || 'PENDING')}${scheduleText}`;
+  }
   const cards = document.getElementById('modelCards');
   if (cards) cards.innerHTML = modelCards(models) || emptyState('Sin modelos publicables');
   const timeline = document.getElementById('timeline');

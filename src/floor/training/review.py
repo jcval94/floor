@@ -571,7 +571,16 @@ def run_training_review(data_dir: Path, output_path: Path, summary_path: Path, c
     for model_key in MODEL_KEYS:
         append_jsonl(output_path, records[model_key])
 
-    tasks_for_auto_retrain = [model_key for model_key, record in records.items() if record["auto_retrain"]]
+    tasks_for_auto_retrain = [
+        model_key
+        for model_key, record in records.items()
+        if record["auto_retrain"]
+    ]
+    tasks_for_retrain_recommended = [
+        model_key
+        for model_key, record in records.items()
+        if record.get("recommendation") in {"RETRAIN_SOON", "RETRAIN_NOW"}
+    ]
     suite_state = _worst_state([record["drift_level"] for record in records.values()])
     summary = {
         "as_of": datetime.now(tz=ET).isoformat(),
@@ -579,6 +588,7 @@ def run_training_review(data_dir: Path, output_path: Path, summary_path: Path, c
         "suite_recommendation": _recommendation_from_state(suite_state),
         "suite_version": format_champion_version(artifacts.get("value"), artifacts.get("timing")),
         "tasks_for_auto_retrain": tasks_for_auto_retrain,
+        "tasks_for_retrain_recommended": tasks_for_retrain_recommended,
         "models": records,
     }
     summary_path.parent.mkdir(parents=True, exist_ok=True)
