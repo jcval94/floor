@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from contracts.trading import round_trip_cost_bps_from_contract
 from strategies.base import StrategyDecision
 
 
@@ -17,14 +18,7 @@ def platform_fee_bps_per_side(cfg: dict) -> float:
 
 
 def round_trip_cost_bps(cfg: dict) -> float:
-    costs = cfg.get("costs", {})
-    broker = to_float(
-        costs.get("broker_commission_bps"),
-        to_float(costs.get("commission_bps"), 0.0),
-    )
-    slippage = to_float(costs.get("slippage_bps"), 0.0)
-    sell_fee = to_float(costs.get("sell_fee_bps"), 0.0)
-    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg)) + sell_fee
+    return round_trip_cost_bps_from_contract(dict(cfg.get("costs", {})))
 
 
 def round_trip_cost_pct(cfg: dict) -> float:
