@@ -1,0 +1,214 @@
+name: compact_history_once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/compact_history_once.yml"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: floor-runtime-state-writer
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+
+      - name: Safety preflight and preserve model integrity manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          protected_branches=$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[] | select(.protected == true) | .name')
+          [ -z "$protected_branches" ] || {
+            echo "::error::History compaction requires force-push access to every branch."
+            printf '%s\n' "$protected_branches"
+            exit 1
+          }
+
+          open_prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number --jq 'length')
+          [ "$open_prs" = "0" ] || {
+            echo "::error::History compaction requires zero open PRs; found $open_prs."
+            exit 1
+          }
+
+          gh release view runtime-state-v1 --repo "$GITHUB_REPOSITORY" >/dev/null
+
+          LIGHT="$RUNNER_TEMP/lightweight"
+          AUDIT="$RUNNER_TEMP/history-audit"
+          mkdir -p "$LIGHT/data/training/models" "$AUDIT"
+          cp -a data/training/models/*.json "$LIGHT/data/training/models/"
+          : > "$LIGHT/data/.gitkeep"
+
+          (
+            cd "$LIGHT"
+            sha256sum data/training/models/*.json | sort > "$AUDIT/model_registry_before.sha256"
+          )
+
+          for champion in d1 w1 q1 value timing; do
+            test -s "data/training/models/${champion}_champion.json" || {
+              echo "::error::Missing champion before rewrite: ${champion}_champion.json"
+              exit 1
+            }
+          done
+
+          gh api "repos/$GITHUB_REPOSITORY" > "$AUDIT/repo_before.json"
+          git ls-remote --heads --tags origin | sort > "$AUDIT/refs_before.txt"
+          echo "Preflight OK: model registry snapshotted and runtime release exists."
+
+      - name: Install pinned history rewrite tool
+        run: python -m pip install git-filter-repo==2.47.0
+
+      - name: Preserve latest operational state outside Git
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/runtime_state.sh restore
+          bash scripts/runtime_state.sh publish
+
+      - name: Mirror repository and purge generated data history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          AUDIT="$RUNNER_TEMP/history-audit"
+          AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git clone --mirror "$AUTH_URL" "$MIRROR"
+          du -sk "$MIRROR" | tee "$AUDIT/mirror_before_kb.txt"
+          git -C "$MIRROR" count-objects -vH > "$AUDIT/count_objects_before.txt"
+
+          git -C "$MIRROR" filter-repo --force --path data --invert-paths
+          git -C "$MIRROR" remote add origin "$AUTH_URL"
+
+          du -sk "$MIRROR" | tee "$AUDIT/mirror_after_filter_kb.txt"
+          git -C "$MIRROR" count-objects -vH > "$AUDIT/count_objects_after_filter.txt"
+
+      - name: Restore exact current model registry on rewritten main
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          WORK="$RUNNER_TEMP/rewritten-main"
+          LIGHT="$RUNNER_TEMP/lightweight"
+          AUDIT="$RUNNER_TEMP/history-audit"
+
+          git --git-dir="$MIRROR" worktree add "$WORK" main
+          mkdir -p "$WORK/data/training/models"
+          cp -a "$LIGHT/data/.gitkeep" "$WORK/data/.gitkeep"
+          cp -a "$LIGHT/data/training/models/"*.json "$WORK/data/training/models/"
+
+          (
+            cd "$WORK"
+            sha256sum data/training/models/*.json | sort > "$AUDIT/model_registry_after_restore.sha256"
+          )
+          cmp "$AUDIT/model_registry_before.sha256" "$AUDIT/model_registry_after_restore.sha256" || {
+            echo "::error::Model registry changed during history rewrite."
+            exit 1
+          }
+
+          git -C "$WORK" config user.name "github-actions[bot]"
+          git -C "$WORK" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "$WORK" add -f data/.gitkeep data/training/models/*.json
+          if ! git -C "$WORK" diff --cached --quiet; then
+            git -C "$WORK" commit -m "chore: restore byte-identical model registry after history compaction"
+          fi
+
+          git -C "$WORK" rev-parse HEAD > "$AUDIT/rewritten_main_sha.txt"
+          git --git-dir="$MIRROR" worktree remove "$WORK"
+
+      - name: Verify remote refs are unchanged before destructive push
+        run: |
+          set -euo pipefail
+          AUDIT="$RUNNER_TEMP/history-audit"
+          git ls-remote --heads --tags origin | sort > "$AUDIT/refs_pre_push.txt"
+          cmp -s "$AUDIT/refs_before.txt" "$AUDIT/refs_pre_push.txt" || {
+            echo "::error::Remote refs moved while rewrite was being prepared."
+            diff -u "$AUDIT/refs_before.txt" "$AUDIT/refs_pre_push.txt" || true
+            exit 1
+          }
+
+      - name: Atomically replace branch and tag history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          AUDIT="$RUNNER_TEMP/history-audit"
+
+          git -C "$MIRROR" push --dry-run --atomic --force --prune origin             'refs/heads/*:refs/heads/*'             'refs/tags/*:refs/tags/*'
+
+          git -C "$MIRROR" push --atomic --force --prune origin             'refs/heads/*:refs/heads/*'             'refs/tags/*:refs/tags/*'
+
+          gh api "repos/$GITHUB_REPOSITORY" > "$AUDIT/repo_after_push.json"
+
+      - name: Verify rewritten main and model hashes from remote
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          AUDIT="$RUNNER_TEMP/history-audit"
+          VERIFY="$RUNNER_TEMP/verify-main"
+          AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git clone --depth=1 --branch main "$AUTH_URL" "$VERIFY"
+          (
+            cd "$VERIFY"
+            sha256sum data/training/models/*.json | sort > "$AUDIT/model_registry_remote.sha256"
+          )
+          cmp "$AUDIT/model_registry_before.sha256" "$AUDIT/model_registry_remote.sha256" || {
+            echo "::error::Remote model registry differs after rewrite."
+            exit 1
+          }
+
+          test ! -d "$VERIFY/data/predictions"
+          test ! -d "$VERIFY/data/signals"
+          du -sk "$VERIFY" | tee "$AUDIT/shallow_clone_after_kb.txt"
+          echo "Remote main verified: model JSON is byte-identical and generated runtime remains absent."
+
+      - name: Report compaction result
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "history-audit"
+          before = json.loads((root / "repo_before.json").read_text())
+          after = json.loads((root / "repo_after_push.json").read_text())
+          before_kb = int((root / "mirror_before_kb.txt").read_text().split()[0])
+          after_kb = int((root / "mirror_after_filter_kb.txt").read_text().split()[0])
+          reduction = 1.0 - (after_kb / before_kb) if before_kb else 0.0
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("## Git history compaction complete\n")
+              out.write(f"- GitHub reported size before: `{before.get('size')} KB`\n")
+              out.write(f"- Local mirror before: `{before_kb} KB`\n")
+              out.write(f"- Local mirror after filter: `{after_kb} KB`\n")
+              out.write(f"- Reachable-history reduction: `{reduction:.1%}`\n")
+              out.write(f"- GitHub reported size immediately after push: `{after.get('size')} KB`\n")
+              out.write("- Model registry SHA-256: verified byte-identical before/after/remote.\n")
+              out.write("- Runtime state: preserved in runtime-state-v1.\n")
+              out.write("- Old clones must be discarded and re-cloned.\n")
+          PY
+
+      - name: Upload compaction audit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history-compaction-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/history-audit
+          if-no-files-found: error
+          retention-days: 90
