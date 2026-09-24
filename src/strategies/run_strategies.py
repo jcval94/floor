@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from contracts.config_io import load_simple_yaml
+from contracts.strategy_contract import validate_strategy_registry
 from contracts.trading import load_strategy_runtime_config
 from strategies.activation import VALID_MODES, activation_snapshot
 from strategies.base import StrategyDecision
@@ -129,6 +130,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_strategy_runtime_config(Path(args.config))
+    validate_strategy_registry(set(STRATEGY_GENERATORS))
     rows = _load_forecasts(Path(args.forecasts))
     configured_default = str(cfg.get("activation", {}).get("default_mode") or "backtest")
     mode = args.mode or configured_default
