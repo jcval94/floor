@@ -1,7 +1,7 @@
 {
   "horizon": "d1",
   "model_name": "robust_range_v3_d1",
-  "version": "robust-range-v3-20260906",
+  "version": "20260924T192816Z-risk-contract",
   "floor_delta": 0.01518170992136752,
   "ceiling_delta": 0.01602445602005212,
   "train_rows": 55150,
@@ -16,7 +16,11 @@
     "test_floor_coverage": 0.5621621621621622,
     "test_ceiling_coverage": 0.5794594594594594,
     "test_interval_coverage": 0.1981081081081081,
-    "empirical_breach_rate": 0.8018918918918919
+    "empirical_breach_rate": 0.8018918918918919,
+    "risk_target_marginal_coverage": 0.8,
+    "risk_floor_coverage": 0.7748571428571429,
+    "risk_ceiling_coverage": 0.7545714285714286,
+    "risk_interval_coverage": 0.5414285714285715
   },
   "params": {
     "schema_version": 2,
@@ -8720,24 +8724,60 @@
       "test_used_for_selection": false,
       "train_rows_raw": 55150,
       "evaluation_rows_raw": 3700
+    },
+    "risk_geometry": {
+      "schema_version": 1,
+      "method": "validation_residual_quantile",
+      "target_marginal_coverage": 0.8,
+      "floor_delta_addon": 0.007652821424117653,
+      "ceiling_delta_addon": 0.006628351468724619,
+      "calibration_rows": 3400,
+      "semantics": {
+        "central_geometry": "typical conditional floor/ceiling",
+        "risk_geometry": "wider one-sided residual-quantile boundaries",
+        "strategy_stop_source": "risk_geometry",
+        "strategy_target_source": "central_geometry"
+      }
     }
   },
   "selection": {
-    "decision": "promote",
-    "reason": "Candidate strictly improved floor MAE, ceiling MAE, and spread MAE while keeping interval-coverage regression within five percentage points on the same current leakage-safe validation split: existing=(0.012018683501605313, 0.024299822661344207) candidate=(0.011348621357654217, 0.023874820660716466).",
-    "scoring_version": "classic-boundary-pareto-v2",
+    "decision": "promote_contract_migration",
+    "reason": "Candidate did not earn central-model promotion, but the incumbent is pre-contract. Preserve the incumbent central predictor exactly and calibrate risk geometry on leakage-safe validation data so the serving registry can migrate without accepting a central-MAE regression.",
+    "scoring_version": "classic-boundary-pareto-v3",
     "selection_split": "validation",
     "test_used_for_selection": false,
     "candidate_current_validation_score": [
-      0.011348621358,
-      0.023874820661
+      0.010165592885,
+      0.020173835448
     ],
     "existing_current_validation_score": [
-      0.012018683502,
-      0.024299822661
+      0.010146686282,
+      0.02017053808
     ],
-    "candidate_current_validation_rows": 3700,
+    "candidate_current_validation_rows": 6950,
     "max_interval_coverage_regression": 0.05,
-    "candidate_interval_coverage_delta": -0.03972972972972974
+    "candidate_interval_coverage_delta": 0.0012949640287769904
+  },
+  "contract_migration": {
+    "from_version": "robust-range-v3-20260906",
+    "central_model_preserved": true,
+    "central_params_preserved": true,
+    "calibration_rows": 3400,
+    "evaluation_rows": 3500,
+    "test_used_for_selection": false
+  },
+  "model_contract": {
+    "schema_version": 1,
+    "task": "d1",
+    "contract_id": "classic_range_geometry_v1",
+    "horizon": "d1",
+    "semantic_role": "range_geometry",
+    "directional": false,
+    "serving_outputs": {
+      "central_floor": "floor_d1",
+      "central_ceiling": "ceiling_d1",
+      "risk_floor": "risk_floor_d1",
+      "risk_ceiling": "risk_ceiling_d1"
+    }
   }
 }
