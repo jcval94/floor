@@ -50,6 +50,39 @@ def test_declared_classic_model_requires_risk_geometry_but_legacy_remains_readab
     assert "missing new-artifact params field: risk_geometry" in rejected["errors"]
 
 
+
+
+
+def test_declared_classic_model_rejects_malformed_risk_geometry() -> None:
+    artifact = {
+        "model_name": "regime_median_d1",
+        "version": "v2",
+        "params": {
+            "schema_version": 2,
+            "floor": {},
+            "ceiling": {},
+            "timing": {},
+            "confidence_calibration": {},
+            "risk_geometry": {
+                "method": "unknown",
+                "target_marginal_coverage": 1.2,
+                "floor_delta_addon": -0.1,
+                "ceiling_delta_addon": 0.02,
+                "calibration_rows": 0,
+            },
+        },
+        "metrics": {},
+        "model_contract": build_model_contract("d1"),
+    }
+    result = validate_model_artifact_contract("d1", artifact, allow_legacy=True)
+
+    assert result["valid"] is False
+    assert "risk_geometry method must be validation_residual_quantile" in result["errors"]
+    assert "risk_geometry target_marginal_coverage must be in (0.5, 1)" in result["errors"]
+    assert "risk_geometry floor_delta_addon must be non-negative" in result["errors"]
+    assert "risk_geometry calibration_rows must be positive" in result["errors"]
+
+
 def test_strategy_contract_registry_covers_registry_and_all_league_strategies() -> None:
     validate_strategy_registry(set(STRATEGY_GENERATORS))
 
