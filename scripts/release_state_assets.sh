@@ -75,7 +75,7 @@ state_publish_set() {
   done
 
   # No --clobber: a completed generation is immutable.
-  gh release upload "$tag" "${upload[@]}" --repo "$repo"
+  gh release upload "$tag" "${upload[@]}" --repo "$repo" >/dev/null
 
   local release
   release="$(state_release_json "$repo" "$tag")"
@@ -109,7 +109,7 @@ state_prune_versioned_sets() {
   local asset_id
   while IFS= read -r asset_id; do
     [[ -n "$asset_id" ]] || continue
-    gh api --method DELETE "repos/$repo/releases/assets/$asset_id"
+    gh api --method DELETE "repos/$repo/releases/assets/$asset_id" >/dev/null
   done < <(
     printf '%s' "$release" |
       PYTHONPATH=src python -m utils.release_state_assets "${args[@]}"
