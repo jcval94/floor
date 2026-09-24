@@ -326,6 +326,20 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         for spec in league_cfg.get("members", [])
         if isinstance(spec, dict) and str(spec.get("id") or "")
     }
+    frozen_contract = state.get("frozen_contract")
+    model_suite_frozen = (
+        isinstance(frozen_contract, dict)
+        and frozen_contract.get("model_suite_contract_version") == "v2"
+        and all(
+            str(frozen_contract.get(f"{task}_champion_sha256") or "")
+            for task in ("d1", "w1", "q1", "value", "timing")
+        )
+    )
+    evidence_contract = (
+        "v2_model_suite_frozen"
+        if model_suite_frozen
+        else "legacy_v1_model_suite_unfrozen"
+    )
     rows: list[dict[str, Any]] = []
     for member_id, member_metrics in metrics.items():
         ret = float(member_metrics["return"])
@@ -365,12 +379,20 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             ),
             "evaluation_variant": evaluation_variant if is_strategy else "benchmark",
             "evidence_scope": "long_only" if is_strategy else "benchmark",
+            "canonical_variant": (
+                str(semantic_contract.get("canonical_variant") or "unspecified")
+                if is_strategy
+                else "benchmark"
+            ),
+            "evidence_contract": evidence_contract if is_strategy else "benchmark",
+            "canonical_variant_promotion_eligible": False,
             "canonical_bidirectional_promotion_eligible": False,
             "promotion_review_eligible": False,
             "promotion_checks": {},
         }
         if is_strategy:
             checks = {
+                "model_suite_frozen": model_suite_frozen,
                 "min_sessions": int(state.get("session_count", 0))
                 >= int(review_cfg.get("min_sessions", 63)),
                 "min_trades": int(member_metrics["trades"])
@@ -391,13 +413,14 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             }
             row["promotion_checks"] = checks
             row["promotion_review_eligible"] = all(checks.values())
-            # Strategy League currently projects BUY/SELL/HOLD strategies into
-            # long-only portfolios. Passing this review can only validate that
-            # evaluated variant; it can never promote the canonical bidirectional
-            # strategy without separate short-side evidence.
-            row["canonical_bidirectional_promotion_eligible"] = (
+            row["canonical_variant_promotion_eligible"] = (
                 evidence_can_promote_canonical
                 and row["promotion_review_eligible"]
+            )
+            # Backward-compatible explicit field for the directional strategies.
+            row["canonical_bidirectional_promotion_eligible"] = (
+                str(row["canonical_variant"]) == "bidirectional"
+                and bool(row["canonical_variant_promotion_eligible"])
             )
         rows.append(row)
     rows.sort(key=lambda item: float(item.get("return", 0.0)), reverse=True)
@@ -412,6 +435,8 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         "initial_nav_usd": initial_nav,
         "automatic_promotion": False,
         "live_execution_enabled": False,
+        "evidence_contract": evidence_contract,
+        "model_suite_frozen": model_suite_frozen,
         "rows": rows,
         "audit_hash": state.get("last_hash"),
     }
