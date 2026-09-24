@@ -127,23 +127,23 @@ def append_jsonl(
     duplicate = key is not None and _jsonl_contains_key(path, key)
 
     data_root = _find_data_root(path)
-    if duplicate:
-        # A previous attempt may have written the durable ledger and crashed
-        # before SQLite. Repair/confirm the cache even on a duplicate retry.
-        if data_root is not None:
-            stream = path.parent.name
-            db_path = data_root / "persistence" / "app.sqlite"
-            if writer is None:
-                if writer is None:
+
+    def mirror() -> None:
+        if data_root is None:
+            return
+        stream = path.parent.name
+        db_path = data_root / "persistence" / "app.sqlite"
+        if writer is None:
             persist_payload(db_path=db_path, stream=stream, payload=payload)
         else:
             if writer.db_path != db_path.resolve():
                 raise ValueError("SQLite batch writer does not match JSONL data root")
             writer.persist(stream, payload)
-            else:
-                if writer.db_path != db_path.resolve():
-                    raise ValueError("SQLite batch writer does not match JSONL data root")
-                writer.persist(stream, payload)
+
+    if duplicate:
+        # A previous attempt may have appended JSONL before failing its mirror.
+        # Always repair the SQLite cache, including within the batch context.
+        mirror()
         return False
 
     serialized = json.dumps(payload, ensure_ascii=False) + "\n"
@@ -151,9 +151,5 @@ def append_jsonl(
         handle.write(serialized)
         handle.flush()
     _remember_jsonl_key(path, key)
-
-    if data_root is not None:
-        stream = path.parent.name
-        db_path = data_root / "persistence" / "app.sqlite"
-        persist_payload(db_path=db_path, stream=stream, payload=payload)
+    mirror()
     return True
