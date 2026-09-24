@@ -171,3 +171,131 @@
     grid-template-columns: 9px minmax(0, 1fr) auto;
   }
 }
+
+
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chart-toolbar-section {
+  margin: 10px 0 4px;
+}
+
+.chart-toolbar label,
+.chart-toolbar-note {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chart-window-select,
+.chart-window-static {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chart-window-select {
+  cursor: pointer;
+}
+
+.chart-window-static {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chart-kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.chart-kpi-strip.compact {
+  margin-top: 4px;
+}
+
+.chart-kpi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.chart-kpi strong {
+  color: var(--text-strong);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.enhanced-chart .chart-baseline {
+  stroke: var(--text-strong);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 2;
+  opacity: 0.5;
+}
+
+.enhanced-chart .chart-threshold {
+  stroke: var(--negative);
+  stroke-width: 0.7;
+  stroke-dasharray: 2 2;
+  opacity: 0.72;
+}
+
+.enhanced-chart .chart-reference-label,
+.enhanced-chart .chart-marker-label,
+.enhanced-chart .chart-end-label {
+  fill: var(--muted);
+  font-size: 2.6px;
+  font-weight: 700;
+}
+
+.enhanced-chart .chart-marker {
+  stroke: var(--border-strong);
+  stroke-width: 0.45;
+  stroke-dasharray: 1.5 2;
+  opacity: 0.9;
+}
+
+.enhanced-chart .chart-marker-label {
+  fill: var(--text-strong);
+  font-size: 2.35px;
+}
+
+.enhanced-chart .chart-end-point,
+.enhanced-chart .chart-key-point {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 620px) {
+  .chart-toolbar {
+    justify-content: flex-start;
+  }
+
+  .chart-toolbar-section {
+    align-items: flex-start;
+  }
+
+  .chart-kpi {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: space-between;
+  }
+}
