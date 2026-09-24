@@ -109,14 +109,15 @@ class ParityChampionModelSet(ChampionModelSet):
         spread = max(0.01, ceiling - floor)
 
         risk_geometry = params.get("risk_geometry")
-        risk_available = (
-            isinstance(risk_geometry, dict)
-            and risk_geometry.get("method") == "validation_residual_quantile"
-        )
+        risk_available = False
         risk_floor: float | None = None
         risk_ceiling: float | None = None
         risk_target_coverage: float | None = None
-        if risk_available:
+        if (
+            isinstance(risk_geometry, dict)
+            and risk_geometry.get("method") == "validation_residual_quantile"
+        ):
+            risk_available = True
             floor_addon = max(
                 0.0, float(risk_geometry.get("floor_delta_addon") or 0.0)
             )
