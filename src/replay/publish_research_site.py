@@ -23,6 +23,42 @@ def _write(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _continuous_oos_contract(payload: dict[str, Any]) -> bool:
+    return (
+        int(payload.get("schema_version") or 0) >= 2
+        and payload.get("status") == "MODEL_OOS_OK"
+        and payload.get("portfolio_continuity_across_folds") is True
+        and payload.get("fold_liquidations") is False
+    )
+
+
+def _withhold_legacy_oos(payload: dict[str, Any]) -> dict[str, Any]:
+    """Do not publish pre-v2 walk-forward results under the new methodology."""
+
+    return {
+        "schema_version": 2,
+        "status": "WAITING_FOR_CONTINUOUS_RECALCULATION",
+        "evidence_type": "historical_walk_forward_model_oos_fixed_strategy",
+        "historical_model_out_of_sample": True,
+        "prospective_evidence": False,
+        "portfolio_continuity_across_folds": False,
+        "fold_liquidations": True,
+        "rows": [],
+        "fold_reports": [],
+        "legacy_artifact": {
+            "schema_version": payload.get("schema_version"),
+            "start_session": payload.get("start_session"),
+            "end_session": payload.get("end_session"),
+            "sessions": payload.get("sessions"),
+            "folds": payload.get("folds"),
+            "reason": (
+                "pre-v2 walk-forward reset the simulated account between model folds; "
+                "results are withheld until continuous-account recalculation"
+            ),
+        },
+    }
+
+
 def publish_research_payloads(
     *,
     data_dir: Path,
@@ -42,14 +78,18 @@ def publish_research_payloads(
     oos = _load(oos_source)
     if not oos:
         oos = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "WAITING",
             "evidence_type": "historical_walk_forward_model_oos_fixed_strategy",
             "historical_model_out_of_sample": True,
             "prospective_evidence": False,
+            "portfolio_continuity_across_folds": True,
+            "fold_liquidations": False,
             "rows": [],
             "fold_reports": [],
         }
+    elif not _continuous_oos_contract(oos):
+        oos = _withhold_legacy_oos(oos)
     retrospective_attr = _load(retrospective_attr_source)
     if not retrospective_attr:
         retrospective_attr = {

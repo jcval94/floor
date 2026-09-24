@@ -174,7 +174,13 @@ async function renderOOS() {
   const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
   const spy = rows.find((row) => row.strategy === 'benchmark_spy');
   const running = data.status === 'MODEL_OOS_OK';
-  statusRoot.innerHTML = `<div class="trust-strip ${running ? 'ok' : 'warn'}"><div><strong>${escapeHTML(data.status || 'WAITING')}</strong></div><span class="trust-detail">${running ? `${escapeHTML(data.start_session)} → ${escapeHTML(data.end_session)} · ${data.sessions} sesiones · ${data.folds} folds` : 'El walk-forward todavía no ha sido publicado.'}</span></div>`;
+  const recalculating = data.status === 'WAITING_FOR_CONTINUOUS_RECALCULATION';
+  const statusDetail = running
+    ? `${escapeHTML(data.start_session)} → ${escapeHTML(data.end_session)} · ${data.sessions} sesiones · ${data.folds} folds · cartera continua`
+    : recalculating
+      ? 'La evidencia OOS anterior fue retirada porque reiniciaba la cartera entre folds; se espera el recálculo v2 continuo.'
+      : 'El walk-forward todavía no ha sido publicado.';
+  statusRoot.innerHTML = `<div class="trust-strip ${running ? 'ok' : 'warn'}"><div><strong>${escapeHTML(data.status || 'WAITING')}</strong></div><span class="trust-detail">${statusDetail}</span></div>`;
 
   const summary = document.getElementById('oosSummary');
   if (summary) {
@@ -215,7 +221,9 @@ async function renderOOS() {
   const note = document.getElementById('oosNote');
   if (note) note.textContent = running
     ? 'Model-OOS: cada fold entrena únicamente con pasado, pero cash, posiciones y costos continúan en una sola cartera entre folds; cambiar el modelo no liquida ni reinicia la cuenta. La configuración de estrategia fue seleccionada retrospectivamente, así que esto no sustituye la Strategy League prospectiva. El filtro temporal cambia sólo la visualización.'
-    : 'Pendiente de ejecución.';
+    : recalculating
+      ? 'El resultado OOS legacy no se muestra porque incluía liquidaciones/recompras artificiales en cada fold. Sólo volverán a aparecer cifras cuando exista un artifact v2 con cartera continua.'
+      : 'Pendiente de ejecución.';
 }
 
 function sourceTable(data) {
