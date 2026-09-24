@@ -611,7 +611,7 @@ def train_horizon_competition(
 
     floor_col, ceiling_col = HORIZON_TARGETS[horizon]
     train_raw, validation_raw = _split(rows, horizon)
-    calibration_raw, evaluation_raw = purged_chronological_calibration_split(
+    risk_calibration_raw, risk_evaluation_raw = purged_chronological_calibration_split(
         validation_raw,
         target_end_field=f"target_end_date_{horizon}",
     )
@@ -619,20 +619,27 @@ def train_horizon_competition(
         sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
     )
     train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
-    calibration = _prepare_rows(
-        calibration_raw, floor_col, ceiling_col, feature_names
+    selection_evaluation = _prepare_rows(
+        validation_raw, floor_col, ceiling_col, feature_names
     )
-    evaluation = _prepare_rows(
-        evaluation_raw, floor_col, ceiling_col, feature_names
+    risk_calibration = _prepare_rows(
+        risk_calibration_raw, floor_col, ceiling_col, feature_names
+    )
+    risk_evaluation = _prepare_rows(
+        risk_evaluation_raw, floor_col, ceiling_col, feature_names
     )
     if not train:
         raise ValueError(
             f"No leakage-safe training rows with valid labels for horizon={horizon}"
         )
-    if not calibration or not evaluation:
+    if not selection_evaluation:
         raise ValueError(
-            f"No leakage-safe validation calibration/evaluation rows for horizon={horizon}; "
+            f"No leakage-safe validation rows for horizon={horizon}; "
             "champion selection refuses train/test fallback"
+        )
+    if not risk_calibration or not risk_evaluation:
+        raise ValueError(
+            f"No leakage-safe risk calibration/evaluation rows for horizon={horizon}"
         )
 
     timing = fit_horizon_timing(train_raw, horizon)
@@ -654,26 +661,43 @@ def train_horizon_competition(
             spec.model_family, train, "ceiling_delta", training_mode
         )
         calibration_floor_predictions = [
-            floor_fn(item) for item in calibration
+            floor_fn(item) for item in risk_calibration
         ]
         calibration_ceiling_predictions = [
-            ceiling_fn(item) for item in calibration
+            ceiling_fn(item) for item in risk_calibration
         ]
         risk_geometry = _fit_risk_geometry(
-            calibration,
+            risk_calibration,
             calibration_floor_predictions,
             calibration_ceiling_predictions,
         )
-        floor_predictions = [floor_fn(item) for item in evaluation]
-        ceiling_predictions = [ceiling_fn(item) for item in evaluation]
+
+        # Preserve the historical central-model selection contract: all usable
+        # validation rows score central floor/ceiling. Risk calibration is an
+        # independent add-on and must not silently change which central model wins.
+        floor_predictions = [
+            floor_fn(item) for item in selection_evaluation
+        ]
+        ceiling_predictions = [
+            ceiling_fn(item) for item in selection_evaluation
+        ]
         candidate_metrics = _metrics(
-            evaluation, floor_predictions, ceiling_predictions
+            selection_evaluation,
+            floor_predictions,
+            ceiling_predictions,
         )
+
+        risk_floor_predictions = [
+            floor_fn(item) for item in risk_evaluation
+        ]
+        risk_ceiling_predictions = [
+            ceiling_fn(item) for item in risk_evaluation
+        ]
         candidate_metrics.update(
             _risk_geometry_metrics(
-                evaluation,
-                floor_predictions,
-                ceiling_predictions,
+                risk_evaluation,
+                risk_floor_predictions,
+                risk_ceiling_predictions,
                 risk_geometry,
             )
         )
@@ -686,9 +710,7 @@ def train_horizon_competition(
                 floor_delta=_clamp(_quantile(floor_predictions, 0.5)),
                 ceiling_delta=_clamp(_quantile(ceiling_predictions, 0.5)),
                 train_rows=len(train),
-                # Backward-compatible field: historically this represents
-                # all usable validation rows, not only the post-calibration half.
-                test_rows=len(calibration) + len(evaluation),
+                test_rows=len(selection_evaluation),
                 metrics=candidate_metrics,
                 params={
                     "schema_version": 2,
@@ -699,7 +721,7 @@ def train_horizon_competition(
                     "confidence_calibration": {
                         "method": "validation_empirical_interval_breach",
                         "breach_probability": candidate_metrics["empirical_breach_rate"],
-                        "evaluation_rows": len(evaluation),
+                        "evaluation_rows": len(selection_evaluation),
                     },
                     "risk_geometry": risk_geometry,
                     "split_integrity": {
@@ -708,8 +730,8 @@ def train_horizon_competition(
                         "test_used_for_selection": False,
                         "train_rows_raw": len(train_raw),
                         "validation_rows_raw": len(validation_raw),
-                        "calibration_rows_raw": len(calibration_raw),
-                        "evaluation_rows_raw": len(evaluation_raw),
+                        "risk_calibration_rows_raw": len(risk_calibration_raw),
+                        "risk_evaluation_rows_raw": len(risk_evaluation_raw),
                     },
                 },
             )
