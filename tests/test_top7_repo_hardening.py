@@ -130,20 +130,17 @@ def test_health_is_critical_when_newest_universe_batch_is_partial(tmp_path: Path
     assert "incomplete" in batch["detail"]
 
 
-def test_training_workflow_never_commits_heavy_reconstructable_artifacts() -> None:
+def test_manual_training_is_artifact_only_and_never_writes_main() -> None:
     root = Path(__file__).resolve().parents[1]
-    text = (root / ".github" / "workflows" / "manual_train_all_models.yml").read_text(encoding="utf-8")
+    text = (
+        root / ".github" / "workflows" / "manual_train_all_models.yml"
+    ).read_text(encoding="utf-8")
+
     assert "commit_champions:" in text
-    commit_block = text.split("- name: Commit lightweight champions only", 1)[1].split("- name: Upload full training run artifacts", 1)[0]
-    for forbidden in (
-        "data/market",
-        "data/persistence",
-        "modelable_dataset",
-        "yahoo_market_rows",
-        "_champion.pkl",
-        "manual_train_all_models_*.log",
-        "chunk_binary_file",
-    ):
-        assert forbidden not in commit_block
-    assert "data/training/models/value_champion.json" in commit_block
-    assert "data/training/models/timing_champion.json" in commit_block
+    assert "Block manual production champion publication" in text
+    assert "Production champion publication is exclusively owned by retrain_execute.yml" in text
+    assert "git push" not in text
+    assert "git commit -m" not in text
+    assert "contents: write" not in text
+    assert "Upload full training run artifacts" in text
+    assert "data/training" in text
