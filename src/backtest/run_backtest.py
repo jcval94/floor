@@ -4,6 +4,77 @@ from backtest.cost_model import CostModel, CostModelConfig
 from backtest.execution_simulator import ExecutionConfig, ExecutionSimulator
 from backtest.metrics import compute_metrics
 from backtest.portfolio_engine import PortfolioEngine
+from contracts.trading import (
+    round_trip_cost_bps_from_contract,
+    strategy_cost_contract,
+)
+
+
+def _cost_model_fields(raw: dict) -> dict[str, float]:
+    commission = raw.get("commission_bps")
+    if commission is None:
+        commission = float(raw.get("broker_commission_bps", 0.0)) + float(
+            raw.get("platform_fee_bps_per_side", 0.0)
+        )
+    return {
+        "commission_bps": float(commission or 0.0),
+        "slippage_bps": float(raw.get("slippage_bps", 0.0) or 0.0),
+        "sell_fee_bps": float(raw.get("sell_fee_bps", 0.0) or 0.0),
+        "min_commission": float(raw.get("min_commission", 0.0) or 0.0),
+    }
+
+
+def _resolve_backtest_cost_contract(config: dict) -> tuple[dict[str, float], dict]:
+    """Resolve costs fail-closed for evidence-grade backtests.
+
+    Omitted cost_profile means canonical.  A caller that wants alternative
+    frictions must opt in explicitly with cost_profile=custom/stress; those
+    results remain useful research, but are marked ineligible as canonical
+    evidence.
+    """
+
+    canonical_raw = strategy_cost_contract()
+    canonical = _cost_model_fields(canonical_raw)
+    provided_raw = config.get("costs")
+    provided = (
+        _cost_model_fields(dict(provided_raw))
+        if isinstance(provided_raw, dict)
+        else None
+    )
+    profile = str(config.get("cost_profile") or "canonical").lower()
+
+    if profile == "canonical":
+        if provided is not None:
+            for field, expected in canonical.items():
+                if abs(float(provided[field]) - float(expected)) > 1e-12:
+                    raise ValueError(
+                        "Backtest cost contract drift: non-canonical costs require "
+                        "explicit cost_profile='custom' or cost_profile='stress'. "
+                        f"field={field} expected={expected} actual={provided[field]}"
+                    )
+        resolved = canonical
+        evidence_eligible = True
+    elif profile in {"custom", "stress"}:
+        if provided is None:
+            raise ValueError(
+                f"cost_profile={profile!r} requires an explicit config['costs'] mapping"
+            )
+        resolved = provided
+        evidence_eligible = False
+    else:
+        raise ValueError(
+            "Unsupported cost_profile. Use 'canonical', 'custom', or 'stress'."
+        )
+
+    round_trip = round_trip_cost_bps_from_contract(resolved)
+    metadata = {
+        "profile": profile,
+        "canonical": profile == "canonical",
+        "canonical_evidence_eligible": evidence_eligible,
+        "round_trip_cost_bps": round_trip,
+        "costs": dict(resolved),
+    }
+    return resolved, metadata
 
 
 def run_portfolio_backtest(
@@ -11,7 +82,8 @@ def run_portfolio_backtest(
     strategy_targets: dict[str, dict[str, dict[str, float]]],
     config: dict,
 ) -> dict:
-    cost_model = CostModel(CostModelConfig(**config["costs"]))
+    costs, cost_contract = _resolve_backtest_cost_contract(config)
+    cost_model = CostModel(CostModelConfig(**costs))
     simulator = ExecutionSimulator(ExecutionConfig(**config["execution"]))
     engine = PortfolioEngine(
         cost_model=cost_model,
@@ -22,7 +94,11 @@ def run_portfolio_backtest(
         strategy_weights=config["portfolio"].get("strategy_weights", {}),
     )
     result = engine.run(market_data=market_data, strategy_targets=strategy_targets)
-    result["metrics"] = compute_metrics(result, horizons=config.get("horizons", [5, 21, 63]))
+    result["cost_contract"] = cost_contract
+    result["metrics"] = compute_metrics(
+        result,
+        horizons=config.get("horizons", [5, 21, 63]),
+    )
     return result
 
 
@@ -48,9 +124,14 @@ def compare_champion_challenger(
     challenger_total = challenger["equity_curve"][-1]["equity"]
 
     winner = "champion" if champion_total >= challenger_total else "challenger"
+    evidence_eligible = bool(
+        champion["cost_contract"]["canonical_evidence_eligible"]
+        and challenger["cost_contract"]["canonical_evidence_eligible"]
+    )
     return {
         "winner": winner,
         "champion": champion,
         "challenger": challenger,
         "delta_equity": challenger_total - champion_total,
+        "canonical_evidence_eligible": evidence_eligible,
     }
