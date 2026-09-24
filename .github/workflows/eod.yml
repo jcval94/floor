@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   gate:
@@ -235,6 +236,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/checkpoint_state.sh publish
+
+      - name: Publish Pages from the durable EOD snapshot
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main
+          echo "Pages dispatch requested after runtime/checkpoint state publication."
 
       - name: Repair lightweight checkpoint index after duplicate suppression
         if: steps.lock_guard.outputs.run != 'true' && steps.lock_guard.outputs.reason == 'already_ran'
