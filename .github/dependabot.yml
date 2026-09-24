@@ -11,6 +11,10 @@ updates:
     labels:
       - dependencies
     groups:
+      github-actions:
+        patterns:
+          - "*"
+    groups:
       python-runtime:
         dependency-type: production
       python-development:
