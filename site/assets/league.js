@@ -336,7 +336,7 @@ function tableRows(rows) {
       <td>${number(row.sharpe)}</td>
       <td class="negative">${pct(row.max_drawdown)}</td>
       <td>${escapeHTML(String(row.trades ?? '—'))}</td>
-      <td>${number(row.turnover)}×</td>
+      <td>${number(row.turnover_review_window)}× / ${escapeHTML(String(row.turnover_review_window_sessions || 63))}s</td>
       <td>${number(row.cost_drag_bps_nav, 0)} bps</td>
       <td>${money(row.costs_paid, 2)}</td>
       <td>${promotionBadge(row)}</td>

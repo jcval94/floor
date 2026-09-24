@@ -206,7 +206,10 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
     assert int(config["weekly_review_frequency_sessions"]) == 10
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
-    assert float(config["promotion_review"]["max_gross_turnover"]) == pytest.approx(12.0)
+    assert int(config["promotion_review"]["turnover_review_window_sessions"]) == 63
+    assert float(
+        config["promotion_review"]["max_gross_turnover_per_review_window"]
+    ) == pytest.approx(12.0)
     assert float(config["initial_nav_usd"]) == 10000.0
     assert float(
         config["capital_allocation_challenger"]["source_weights"][
@@ -262,7 +265,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "multiLineSvg" in script
     assert "challenger_vs_best_base" in script
     assert "costs_paid" in script
-    assert "row.turnover" in script
+    assert "row.turnover_review_window" in script
     assert "cost_drag_bps_nav" in script
     assert "Turnover alto" in script
     assert "diagnostic_only" in script
