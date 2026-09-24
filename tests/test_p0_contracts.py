@@ -98,6 +98,19 @@ def test_strategy_contract_registry_covers_registry_and_all_league_strategies() 
     validate_league_strategy_members(strategy_members)
 
 
+def test_contract_defaults_are_repo_relative_not_cwd_relative(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    model_contract = build_model_contract("d1")
+    strategy_cfg = load_strategy_runtime_config()
+
+    assert model_contract["contract_id"] == "classic_range_geometry_v1"
+    assert strategy_cfg["contract_meta"]["risk_scope"] == "operational"
+
+
 def test_runtime_strategy_config_uses_authoritative_cost_and_risk_contracts() -> None:
     cfg = load_strategy_runtime_config()
 
