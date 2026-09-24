@@ -10,7 +10,10 @@ from contracts.strategy_contract import (
     validate_league_strategy_members,
     validate_strategy_registry,
 )
-from contracts.trading import validate_shadow_execution_contract
+from contracts.trading import (
+    shadow_execution_contract,
+    validate_shadow_execution_contract,
+)
 from floor.universe import parse_universe_yaml
 from league.capital_challenger import build_capital_challenger_targets
 from league.engine import (
@@ -245,6 +248,9 @@ def _champion_suite_contract(repo_root: Path) -> dict[str, str]:
         "strategy_contracts_sha256": sha256_file(
             repo_root / "config" / "strategy_contracts.json"
         ),
+        "costs_contract_sha256": sha256_file(
+            repo_root / "config" / "costs.yaml"
+        ),
         **hashes,
     }
 
@@ -365,6 +371,10 @@ def run_league_eod(
     league_id = str(league_cfg["league_id"])
     run_dir = root / "runs" / league_id
     state = load_state(run_dir)
+
+    if state is None or _uses_model_suite_contract(state):
+        # v2 epochs use one cost profile for signal gating and execution.
+        strategies_cfg["costs"] = shadow_execution_contract()
 
     if not session:
         return _write_waiting(
