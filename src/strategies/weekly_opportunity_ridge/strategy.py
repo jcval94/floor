@@ -5,6 +5,7 @@ import math
 from strategies.base import StrategyDecision
 from strategies.common import (
     alpha_hurdle,
+    alpha_hurdle_from_net,
     geometry,
     hold_decision,
     liquidity_ok,
@@ -106,16 +107,31 @@ def generate_weekly_opportunity_orders(
         symbol = str(row["symbol"])
         downside_scale = max(0.01, to_float(current_geometry["down"]))
         model_implied_signed_return = model_score * downside_scale
-        long_alpha_ok, long_alpha = alpha_hurdle(
-            max(0.0, model_implied_signed_return),
-            global_cfg,
-            strategy_cfg,
+        score_semantics = str(
+            entry.get("model_score_semantics") or "gross_before_costs"
         )
-        short_alpha_ok, short_alpha = alpha_hurdle(
-            max(0.0, -model_implied_signed_return),
-            global_cfg,
-            strategy_cfg,
-        )
+        if score_semantics == "net_after_round_trip_costs":
+            long_alpha_ok, long_alpha = alpha_hurdle_from_net(
+                max(0.0, model_implied_signed_return),
+                global_cfg,
+                strategy_cfg,
+            )
+            short_alpha_ok, short_alpha = alpha_hurdle_from_net(
+                max(0.0, -model_implied_signed_return),
+                global_cfg,
+                strategy_cfg,
+            )
+        else:
+            long_alpha_ok, long_alpha = alpha_hurdle(
+                max(0.0, model_implied_signed_return),
+                global_cfg,
+                strategy_cfg,
+            )
+            short_alpha_ok, short_alpha = alpha_hurdle(
+                max(0.0, -model_implied_signed_return),
+                global_cfg,
+                strategy_cfg,
+            )
 
         action = "HOLD"
         reward_risk = 0.0
@@ -153,8 +169,9 @@ def generate_weekly_opportunity_orders(
                     row,
                     "q1",
                     (
-                        f"HOLD: weekly score={model_score:.4f}, implied_return="
-                        f"{model_implied_signed_return:.2%} does not clear "
+                        f"HOLD: weekly score={model_score:.4f}, "
+                        f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
+                        f"return={model_implied_signed_return:.2%} does not clear "
                         "cost-aware alpha/payoff gate"
                     ),
                 )
@@ -192,7 +209,8 @@ def generate_weekly_opportunity_orders(
                 horizon="q1",
                 entry_reason=(
                     f"{action}: weekly Ridge score={model_score:.4f}, "
-                    f"model_implied_return={model_implied_signed_return:.2%}, "
+                    f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
+                    f"return={model_implied_signed_return:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
                     f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}"
                     + (" · retained_by_hysteresis" if retention else "")
@@ -200,7 +218,11 @@ def generate_weekly_opportunity_orders(
                 exit_reason="Q1 anchor or ten-session timeout",
                 stop_price=stop,
                 take_profit_price=take_profit,
-                expected_return=model_implied_signed_return,
+                expected_return=(
+                    alpha["gross_alpha_pct"]
+                    if action == "BUY"
+                    else -alpha["gross_alpha_pct"]
+                ),
                 expected_range=max(
                     0.0,
                     current_geometry["ceiling"] - current_geometry["floor"],
@@ -209,7 +231,11 @@ def generate_weekly_opportunity_orders(
                 gross_alpha_pct=alpha["gross_alpha_pct"],
                 net_alpha_pct=alpha["net_alpha_pct"],
                 cost_pct=alpha["cost_pct"],
-                alpha_source="weekly_ridge_score_x_predicted_q1_downside",
+                alpha_source=(
+                    "weekly_ridge_net_score_x_q1_downside"
+                    if score_semantics == "net_after_round_trip_costs"
+                    else "weekly_ridge_score_x_predicted_q1_downside"
+                ),
                 payoff_room_pct=payoff_room,
             )
         )
