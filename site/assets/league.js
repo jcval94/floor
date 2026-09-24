@@ -24,11 +24,13 @@ const SERIES_ORDER = [
 const SERIES_RANK = new Map(SERIES_ORDER.map((strategy, index) => [strategy, index]));
 
 function pct(value) {
+  if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
   return Number.isFinite(numeric) ? fmtPct(numeric * 100) : '—';
 }
 
 function signedPct(value) {
+  if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return '—';
   const rendered = fmtPct(Math.abs(numeric) * 100);
@@ -36,11 +38,13 @@ function signedPct(value) {
 }
 
 function number(value, digits = 2) {
+  if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric.toFixed(digits) : '—';
 }
 
 function money(value, digits = 0) {
+  if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
   return Number.isFinite(numeric)
     ? new Intl.NumberFormat('en-US', {
