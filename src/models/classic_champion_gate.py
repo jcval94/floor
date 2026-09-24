@@ -4,10 +4,14 @@ import argparse
 import json
 import math
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from contracts.model_contract import validate_model_artifact_contract
+from contracts.model_contract import (
+    attach_model_contract,
+    validate_model_artifact_contract,
+)
 from models.classic_horizon_predictor import (
     model_family,
     predict_family_delta,
@@ -18,10 +22,13 @@ from models.train_classic_horizons import (
     FEATURES_BY_FAMILY,
     HORIZON_TARGETS,
     _load_rows,
+    _fit_risk_geometry,
     _metrics,
     _prepare_rows,
+    _risk_geometry_metrics,
     _split,
 )
+from models.temporal_cv import purged_chronological_calibration_split
 
 
 TRUTHFUL_PREFIXES = {
@@ -31,7 +38,7 @@ TRUTHFUL_PREFIXES = {
     "sequence_linear": "sequence_linear_",
     "regularized_linear": "regularized_linear_",
 }
-SCORING_VERSION = "classic-boundary-pareto-v2"
+SCORING_VERSION = "classic-boundary-pareto-v3"
 MAX_INTERVAL_COVERAGE_REGRESSION = 0.05
 
 
@@ -179,6 +186,115 @@ def _evaluate_artifact(
     return _metrics(evaluation, floor_predictions, ceiling_predictions)
 
 
+def _validation_calibration_and_evaluation_rows(
+    dataset_path: Path,
+    horizon: str,
+) -> tuple[list[Any], list[Any]]:
+    rows = _load_rows(dataset_path)
+    _train_raw, validation_raw = _split(rows, horizon)
+    calibration_raw, evaluation_raw = purged_chronological_calibration_split(
+        validation_raw,
+        target_end_field=f"target_end_date_{horizon}",
+    )
+    floor_col, ceiling_col = HORIZON_TARGETS[horizon]
+    feature_names = tuple(
+        sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
+    )
+    calibration = _prepare_rows(
+        calibration_raw, floor_col, ceiling_col, feature_names
+    )
+    evaluation = _prepare_rows(
+        evaluation_raw, floor_col, ceiling_col, feature_names
+    )
+    if not calibration or not evaluation:
+        raise ValueError(
+            "Classic contract migration requires leakage-safe calibration and "
+            f"evaluation rows horizon={horizon}"
+        )
+    return calibration, evaluation
+
+
+def _artifact_boundary_predictions(
+    artifact: dict[str, Any],
+    rows: list[Any],
+) -> tuple[list[float], list[float]]:
+    family = model_family(str(artifact.get("model_name") or ""))
+    params = _mapping(artifact.get("params"))
+    floor_params = _mapping(params.get("floor"))
+    ceiling_params = _mapping(params.get("ceiling"))
+    floor_predictions = [
+        predict_family_delta(family, floor_params, item.features, validate=False)
+        for item in rows
+    ]
+    ceiling_predictions = [
+        predict_family_delta(family, ceiling_params, item.features, validate=False)
+        for item in rows
+    ]
+    return floor_predictions, ceiling_predictions
+
+
+def _migrate_legacy_incumbent_contract(
+    artifact: dict[str, Any],
+    *,
+    dataset_path: Path,
+    horizon: str,
+    version: str,
+) -> dict[str, Any]:
+    """Attach risk geometry to the incumbent without changing its central model.
+
+    This is the safe bridge from a pre-contract champion to the new serving
+    contract. Risk bounds are calibrated specifically against the incumbent's
+    unchanged floor/ceiling parameters on an earlier OOT validation block and
+    evaluated on the later block.
+    """
+
+    calibration, evaluation = _validation_calibration_and_evaluation_rows(
+        dataset_path, horizon
+    )
+    cal_floor, cal_ceiling = _artifact_boundary_predictions(artifact, calibration)
+    risk_geometry = _fit_risk_geometry(
+        calibration,
+        cal_floor,
+        cal_ceiling,
+    )
+    eval_floor, eval_ceiling = _artifact_boundary_predictions(artifact, evaluation)
+    risk_metrics = _risk_geometry_metrics(
+        evaluation,
+        eval_floor,
+        eval_ceiling,
+        risk_geometry,
+    )
+
+    migrated = deepcopy(artifact)
+    previous_version = str(migrated.get("version") or "")
+    migrated["version"] = f"{version}-risk-contract"
+    params = deepcopy(_mapping(migrated.get("params")))
+    params["risk_geometry"] = risk_geometry
+    migrated["params"] = params
+    metrics = deepcopy(_mapping(migrated.get("metrics")))
+    metrics.update(risk_metrics)
+    migrated["metrics"] = metrics
+    migrated["contract_migration"] = {
+        "from_version": previous_version,
+        "central_model_preserved": True,
+        "central_params_preserved": True,
+        "calibration_rows": len(calibration),
+        "evaluation_rows": len(evaluation),
+        "test_used_for_selection": False,
+    }
+    migrated = attach_model_contract(migrated, horizon)
+
+    check = validate_model_artifact_contract(
+        horizon, migrated, allow_legacy=False
+    )
+    if not check["valid"]:
+        raise RuntimeError(
+            "Migrated incumbent failed model contract: "
+            + ",".join(check["errors"])
+        )
+    return migrated
+
+
 def _score(metrics: dict[str, float]) -> tuple[float, float]:
     spread = float(metrics.get("mae_spread_pct", math.inf))
     boundaries = float(metrics.get("mae_floor_pct", math.inf)) + float(
@@ -309,6 +425,16 @@ def gate_one_horizon(
             candidate_metrics, existing_metrics
         )
         coverage_guard_pass = coverage_delta >= -MAX_INTERVAL_COVERAGE_REGRESSION
+        candidate_contract = validate_model_artifact_contract(
+            horizon, candidate, allow_legacy=True
+        )
+        previous_contract = validate_model_artifact_contract(
+            horizon, previous, allow_legacy=True
+        )
+        legacy_contract_migration = (
+            candidate_contract["status"] == "declared_valid"
+            and previous_contract["status"] == "legacy_compatible"
+        )
         if strict_error_dominance and coverage_guard_pass:
             decision = "promote"
             reason = (
@@ -318,6 +444,20 @@ def gate_one_horizon(
                 f"existing={existing_score} candidate={candidate_score}."
             )
             active = candidate
+        elif legacy_contract_migration:
+            decision = "promote_contract_migration"
+            reason = (
+                "Candidate did not earn central-model promotion, but the incumbent "
+                "is pre-contract. Preserve the incumbent central predictor exactly "
+                "and calibrate risk geometry on leakage-safe validation data so the "
+                "serving registry can migrate without accepting a central-MAE regression."
+            )
+            active = _migrate_legacy_incumbent_contract(
+                previous,
+                dataset_path=dataset_path,
+                horizon=horizon,
+                version=version,
+            )
         else:
             decision = "challenger_only"
             reason = (
@@ -352,16 +492,32 @@ def gate_one_horizon(
         assert previous is not None
         _write_json_atomic(candidate_path, previous)
     else:
-        challenger_path = None
         if previous is not None:
             archived_path = registry_dir / (
                 f"{horizon}_champion_archived_{_slug(previous.get('version'))}.json"
             )
             if not archived_path.exists():
                 _write_json_atomic(archived_path, previous)
-        candidate["selection"] = selection
-        _write_json_atomic(candidate_path, candidate)
-        active = candidate
+
+        if decision == "promote_contract_migration":
+            challenger_path = registry_dir / f"{horizon}_challenger_{_slug(version)}.json"
+            challenger_selection = {
+                **selection,
+                "decision": "challenger_only_central_model",
+                "reason": (
+                    "Central challenger did not strictly dominate; incumbent central "
+                    "predictor was preserved while only its semantic/risk contract migrated."
+                ),
+            }
+            candidate["selection"] = challenger_selection
+            _write_json_atomic(challenger_path, candidate)
+            active["selection"] = selection
+            _write_json_atomic(candidate_path, active)
+        else:
+            challenger_path = None
+            candidate["selection"] = selection
+            _write_json_atomic(candidate_path, candidate)
+            active = candidate
 
     _update_competition(
         registry_dir,
