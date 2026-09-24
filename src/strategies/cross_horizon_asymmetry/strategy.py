@@ -139,10 +139,10 @@ def generate_cross_horizon_orders(
 
         q1 = geometries["q1"]
         if action == "BUY":
-            stop = q1["floor"] * (1 - buffer)
+            stop = q1["risk_floor"] * (1 - buffer)
             take_profit = q1["ceiling"]
         else:
-            stop = q1["ceiling"] * (1 + buffer)
+            stop = q1["risk_ceiling"] * (1 + buffer)
             take_profit = q1["floor"]
 
         qty = risk_sized_qty(
