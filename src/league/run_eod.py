@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from contracts.model_contract import validate_model_artifact_contract
 from contracts.strategy_contract import (
     strategy_contract,
     validate_league_strategy_members,
@@ -313,6 +314,16 @@ def run_league_eod(
         )
 
     weekly_artifact = _load_json(model_path)
+    weekly_contract = validate_model_artifact_contract(
+        "weekly_opportunity",
+        weekly_artifact,
+        allow_legacy=True,
+    )
+    if not weekly_contract["valid"]:
+        raise RuntimeError(
+            "Strategy League weekly model contract invalid: "
+            + ",".join(weekly_contract["errors"])
+        )
     strategies_cfg = load_simple_yaml(strategies_config_path)
     strategy_configs = strategies_cfg["strategies"]
     validate_strategy_registry(set(strategy_configs))
