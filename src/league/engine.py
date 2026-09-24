@@ -377,7 +377,12 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             # evaluated variant; it can never promote the canonical bidirectional
             # strategy without separate short-side evidence.
             row["canonical_bidirectional_promotion_eligible"] = (
-                evaluation_variant == "full_action_space"
+                bool(
+                    member_spec.get(
+                        "league_evidence_can_promote_canonical_variant",
+                        False,
+                    )
+                )
                 and row["promotion_review_eligible"]
             )
         rows.append(row)
