@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from contracts.strategy_contract import (
+    strategy_contract,
     validate_league_strategy_members,
     validate_strategy_registry,
 )
@@ -291,8 +292,23 @@ def run_league_eod(
     if challenger_max_holding_sessions <= 0:
         raise RuntimeError("Capital challenger max holding sessions must be positive")
 
+    runtime_members: list[dict[str, Any]] = []
+    for raw_spec in league_cfg.get("members", []):
+        spec = dict(raw_spec)
+        if spec.get("type") == "strategy":
+            contract = strategy_contract(str(spec.get("id") or ""))
+            spec["evaluation_variant"] = str(
+                contract.get("league_evaluation_variant")
+                or "long_only_projection"
+            )
+            spec["league_evidence_can_promote_canonical_variant"] = bool(
+                contract.get("league_evidence_can_promote_canonical_variant", False)
+            )
+        runtime_members.append(spec)
+
     runtime_league_cfg = {
         **league_cfg,
+        "members": runtime_members,
         "strategy_max_holding_sessions": {
             "weekly_opportunity_ridge": weekly_max_holding_sessions,
             "mean_reversion_floor_w1": mean_max_holding_sessions,
