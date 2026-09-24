@@ -29,16 +29,14 @@ No current strategy satisfies these conditions.
 
 ## Current readiness
 
-| Strategy | Research | Paper | Live | Readiness |
-| --- | --- | --- | --- | --- |
-| `ai_only` | enabled | disabled | disabled | blocked on demonstrated directional signal |
-| `model_only` | enabled | disabled | disabled | blocked on demonstrated directional signal |
-| `consensus` | enabled | disabled | disabled | blocked on demonstrated directional signal |
-| `mean_reversion_floor_w1` | enabled | disabled | disabled | blocked on demonstrated directional signal |
-| `breakout_protected_by_floor` | enabled | disabled | disabled | retest required |
-| `weekly_opportunity_ridge` | enabled | disabled | disabled | challenger waiting for out-of-sample evidence |
+| Strategy | Research | Capital allocator | Paper | Live | Readiness |
+| --- | --- | --- | --- | --- | --- |
+| `weekly_opportunity_ridge` | enabled | enabled | disabled | disabled | v9 challenger; target neto de 61 bps, esperando evidencia OOS/prospectiva |
+| `breakout_protected_by_floor` | enabled | enabled | disabled | disabled | challenger waiting for out-of-sample evidence |
+| `mean_reversion_floor_w1` | enabled | enabled | disabled | disabled | v9 challenger; señal 10d-vs-20d, esperando evidencia nueva |
+| `cross_horizon_asymmetry` | enabled | **disabled** | disabled | disabled | diagnostic only; weak OOS, allocator quarantined |
 
-`promotion_eligible` is also false for every strategy. Activation and model promotion are separate decisions.
+`promotion_eligible` continúa en `false` para todas las estrategias. `ai_only`, `model_only` y `consensus` están retiradas del registry activo y no forman parte de esta tabla.
 
 ## Weekly Opportunity serving contract
 
@@ -46,13 +44,14 @@ No current strategy satisfies these conditions.
 
 The cross-sectional rule matches the existing portfolio experiment:
 
-- long-only;
+- la capa de research puede emitir BUY / SELL / HOLD; Strategy League proyecta sólo BUY a su cartera long-only;
 - rank all scored names descending;
-- keep only positive scores;
-- select at most the top 20% of the scored universe;
+- nuevas entradas: top 10% positivo;
+- posiciones existentes: hysteresis hasta top 20% positivo;
+- target del modelo: retorno direccional Q1 **neto del round trip de 61 bps**, ajustado por downside;
 - maximum 20% NAV per selected position;
-- q1 floor and ceiling are risk context, not fabricated directional-return fields;
-- maximum holding horizon is 10 business days.
+- Q1 floor y ceiling son contexto de riesgo/payoff, no retorno esperado;
+- revisión/holding de 10 sesiones para reducir turnover.
 
 The training artifact remains `canonical_serving_enabled = false` until promotion criteria are satisfied.
 
