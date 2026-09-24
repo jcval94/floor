@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from floor.persistence_db import init_persistence_db, persist_payload
+from floor.prediction_identity import stable_prediction_id
 from floor.storage import load_jsonl_rows
 
 
@@ -39,18 +40,49 @@ def _replay_stream(data_dir: Path, stream: str) -> tuple[int, int]:
     return seen, inserted
 
 
+def _replay_reconciliations(data_dir: Path) -> tuple[int, int]:
+    directory = data_dir / "predictions" / "reconciliations"
+    db_path = data_dir / "persistence" / "app.sqlite"
+    seen = 0
+    inserted = 0
+    if not directory.exists():
+        return seen, inserted
+
+    for path in sorted(directory.glob("*.jsonl")):
+        for raw in load_jsonl_rows(path):
+            if not isinstance(raw, dict):
+                continue
+            payload: dict[str, Any] = {str(key): value for key, value in raw.items()}
+            key = str(payload.get("prediction_key") or "").strip()
+            if not key:
+                continue
+            if payload.get("prediction_id") is None:
+                payload["prediction_id"] = stable_prediction_id(key)
+            seen += 1
+            if persist_payload(
+                db_path=db_path,
+                stream="prediction_reconciliation",
+                payload=payload,
+            ):
+                inserted += 1
+    return seen, inserted
+
+
 def hydrate_persistence_from_jsonl(data_dir: Path) -> dict[str, int]:
-    """Replay durable prediction/signal ledgers into the ephemeral SQLite cache."""
+    """Replay durable ledgers into the reconstructable SQLite query/index cache."""
 
     db_path = data_dir / "persistence" / "app.sqlite"
     init_persistence_db(db_path)
     prediction_seen, prediction_inserted = _replay_stream(data_dir, "predictions")
     signal_seen, signal_inserted = _replay_stream(data_dir, "signals")
+    reconciliation_seen, reconciliation_inserted = _replay_reconciliations(data_dir)
     return {
         "prediction_rows_seen": prediction_seen,
         "prediction_rows_inserted": prediction_inserted,
         "signal_rows_seen": signal_seen,
         "signal_rows_inserted": signal_inserted,
+        "reconciliation_rows_seen": reconciliation_seen,
+        "reconciliation_rows_inserted": reconciliation_inserted,
     }
 
 

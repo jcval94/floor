@@ -5,6 +5,8 @@ MODE="${1:-}"
 TAG="${RUNTIME_STATE_TAG:-runtime-state-v1}"
 ASSET="${RUNTIME_STATE_ASSET:-floor-runtime-state.tar.gz}"
 MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"
+RETENTION_INTERVAL_SECONDS="${RUNTIME_STATE_RETENTION_INTERVAL_SECONDS:-86400}"
+FORCE_RETENTION="${RUNTIME_STATE_FORCE_RETENTION:-false}"
 REPO="${GITHUB_REPOSITORY:-}"
 TOKEN_FILE="${RUNTIME_STATE_TOKEN_FILE:-${RUNNER_TEMP:-.}/floor-runtime-state-restore-token.json}"
 
@@ -23,6 +25,14 @@ if ! [[ "$MAX_MB" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 export RUNTIME_STATE_MAX_MB="$MAX_MB"
+if ! [[ "$RETENTION_INTERVAL_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "RUNTIME_STATE_RETENTION_INTERVAL_SECONDS must be a non-negative integer, got: $RETENTION_INTERVAL_SECONDS" >&2
+  exit 2
+fi
+if [[ "$FORCE_RETENTION" != "true" && "$FORCE_RETENTION" != "false" ]]; then
+  echo "RUNTIME_STATE_FORCE_RETENTION must be true or false, got: $FORCE_RETENTION" >&2
+  exit 2
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -264,10 +274,16 @@ publish_state() {
   read -r frontier_at frontier_event < "$frontier_result"
   echo "runtime_state_checkpoint_frontier=$frontier_at event=$frontier_event"
 
-  # Compact semantically before packaging. Resolved old predictions age out,
-  # but unresolved predictions are retained regardless of age so a 65-session
-  # m3 forecast can still reconcile after data gaps or workflow outages.
-  PYTHONPATH=src python -m floor.runtime_retention --data-dir data
+  # Retention horizons are measured in months/years. Avoid rescanning the
+  # full runtime state on every intraday publish; missing/stale reports still
+  # fail toward running the compaction pass.
+  if [[ "$FORCE_RETENTION" == "true" ]]; then
+    PYTHONPATH=src python -m floor.runtime_retention --data-dir data \
+      --if-due-seconds "$RETENTION_INTERVAL_SECONDS" --force
+  else
+    PYTHONPATH=src python -m floor.runtime_retention --data-dir data \
+      --if-due-seconds "$RETENTION_INTERVAL_SECONDS"
+  fi
   collect_paths
 
   local candidate

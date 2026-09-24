@@ -89,7 +89,6 @@ def _patch_minimal_cycle(
         ],
     )
     monkeypatch.setattr(canonical, "_validate_prediction_payload", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(canonical, "reconcile_predictions", lambda _data_dir: {"pending": 0})
 
     def capture(path: Path, record: object, **_kwargs: object) -> bool:
         written_paths.append(str(path))
@@ -107,8 +106,9 @@ def test_canonical_cycle_is_hold_only_and_does_not_write_orders(
     written_paths, written_records = _patch_minimal_cycle(monkeypatch)
     cfg = RuntimeConfig(root_dir=tmp_path, data_dir=tmp_path / "data")
 
-    canonical.run_intraday_cycle("OPEN", ["AAPL"], cfg)
+    result = canonical.run_intraday_cycle("OPEN", ["AAPL"], cfg)
 
+    assert result["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
     assert any("/predictions/" in path for path in written_paths)
     assert any("/signals/" in path for path in written_paths)
     assert all("/orders/" not in path for path in written_paths)
@@ -190,6 +190,8 @@ def test_canonical_cycle_suppresses_repeated_market_model_snapshot(
 
     assert first["status"] == "WRITTEN"
     assert second["status"] == "NO_NEW_INPUT"
+    assert first["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
+    assert second["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
     assert second["input_snapshot_id"] == first["input_snapshot_id"]
     assert len(written_paths) == first_write_count
     marker = (
@@ -199,3 +201,14 @@ def test_canonical_cycle_suppresses_repeated_market_model_snapshot(
         / f"{first['input_snapshot_id']}.json"
     )
     assert marker.exists()
+
+
+def test_eod_is_the_single_reconciliation_owner() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = (repo_root / ".github" / "workflows" / "eod.yml").read_text(
+        encoding="utf-8"
+    )
+    canonical_source = Path(canonical.__file__).read_text(encoding="utf-8")
+
+    assert workflow.count("python -m floor.main reconcile-predictions") == 1
+    assert "reconcile_predictions(" not in canonical_source

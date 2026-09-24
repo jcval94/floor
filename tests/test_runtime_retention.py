@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from floor.prediction_reconciliation import prediction_key
-from floor.runtime_retention import compact_runtime_state
+from floor import runtime_retention as runtime_retention_module
+from floor.runtime_retention import (
+    RuntimeRetentionPolicy,
+    compact_runtime_state,
+    retention_is_due,
+)
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -147,3 +153,58 @@ def test_runtime_retention_fails_closed_on_malformed_jsonl(tmp_path: Path) -> No
             tmp_path / "data",
             now=datetime(2026, 8, 24, tzinfo=timezone.utc),
         )
+
+
+def test_runtime_retention_due_gate_uses_last_successful_compaction(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    report = data / "metrics" / "runtime_retention_latest.json"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    compacted_at = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
+    report.write_text(
+        json.dumps({"compacted_at": compacted_at.isoformat()}),
+        encoding="utf-8",
+    )
+
+    assert not retention_is_due(
+        data,
+        now=compacted_at + timedelta(hours=12),
+        min_interval_seconds=86_400,
+    )
+    assert retention_is_due(
+        data,
+        now=compacted_at + timedelta(days=1, seconds=1),
+        min_interval_seconds=86_400,
+    )
+
+
+def test_noop_app_db_retention_skips_integrity_scan_and_vacuum(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "app.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE predictions(id INTEGER PRIMARY KEY, as_of TEXT)")
+        conn.execute(
+            "INSERT INTO predictions(as_of) VALUES (?)",
+            ("2026-09-23T12:00:00+00:00",),
+        )
+
+    statements: list[str] = []
+    original_connect = sqlite3.connect
+
+    def traced_connect(path: Path):
+        conn = original_connect(path)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(runtime_retention_module.sqlite3, "connect", traced_connect)
+    removed = runtime_retention_module._compact_app_db(
+        db_path,
+        now=datetime(2026, 9, 23, 18, 0, tzinfo=timezone.utc),
+        policy=RuntimeRetentionPolicy(),
+    )
+
+    assert removed["predictions"] == 0
+    normalized = [statement.strip().upper() for statement in statements]
+    assert "VACUUM" not in normalized
+    assert "PRAGMA QUICK_CHECK" not in normalized

@@ -26,6 +26,14 @@ def test_append_jsonl_mirrors_prediction_to_sqlite(tmp_path: Path) -> None:
     db_path = tmp_path / "data" / "persistence" / "app.sqlite"
     assert db_path.exists()
 
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT prediction_key FROM predictions LIMIT 1"
+        ).fetchone()
+    assert row and row[0]
+
 
 def test_dashboard_snapshot_uses_sqlite_latest_predictions(tmp_path: Path) -> None:
     append_jsonl(

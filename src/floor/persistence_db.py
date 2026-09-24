@@ -4,6 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from floor.prediction_identity import prediction_key
+
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,9 +33,43 @@ def _ensure_column(
     table: str,
     column: str,
     definition: str,
-) -> None:
+) -> bool:
     if column not in _columns(conn, table):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        return True
+    return False
+
+
+def _backfill_prediction_keys(conn: sqlite3.Connection) -> int:
+    rows = conn.execute(
+        """
+        SELECT id, payload_json
+        FROM predictions
+        WHERE prediction_key IS NULL OR prediction_key = ''
+        """
+    ).fetchall()
+    if not rows:
+        return 0
+
+    updates: list[tuple[str, int]] = []
+    for row_id, raw_payload in rows:
+        try:
+            payload = json.loads(str(raw_payload))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Malformed prediction payload_json in SQLite row id={row_id}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Prediction payload_json must be an object in SQLite row id={row_id}"
+            )
+        updates.append((prediction_key(payload), int(row_id)))
+
+    conn.executemany(
+        "UPDATE predictions SET prediction_key=? WHERE id=?",
+        updates,
+    )
+    return len(updates)
 
 
 def init_persistence_db(db_path: Path) -> None:
@@ -50,6 +86,7 @@ def init_persistence_db(db_path: Path) -> None:
             CREATE TABLE IF NOT EXISTS predictions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 batch_id TEXT NOT NULL DEFAULT '',
+                prediction_key TEXT,
                 symbol TEXT,
                 as_of TEXT,
                 event_type TEXT,
@@ -181,8 +218,17 @@ def init_persistence_db(db_path: Path) -> None:
 
         # Safe forward-only migrations for locally retained SQLite files.
         _ensure_column(conn, "predictions", "batch_id", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "predictions", "prediction_key", "TEXT")
         _ensure_column(conn, "signals", "batch_id", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "prediction_reconciliations", "prediction_key", "TEXT")
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_predictions_prediction_key
+            ON predictions(prediction_key)
+            """
+        )
+        _backfill_prediction_keys(conn)
 
         conn.execute(
             """
@@ -226,12 +272,13 @@ def persist_payload(db_path: Path, stream: str, payload: dict) -> bool:
             cursor = conn.execute(
                 """
                 INSERT OR IGNORE INTO predictions(
-                    batch_id, symbol, as_of, event_type, horizon,
+                    batch_id, prediction_key, symbol, as_of, event_type, horizon,
                     floor_value, ceiling_value, model_version, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(payload.get("batch_id") or ""),
+                    prediction_key(payload),
                     payload.get("symbol"),
                     payload.get("as_of"),
                     payload.get("event_type"),

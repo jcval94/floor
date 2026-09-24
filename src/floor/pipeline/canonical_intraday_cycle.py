@@ -20,7 +20,6 @@ from floor.pipeline.prediction_runtime import (
     _validate_prediction_payload,
     build_prediction_record,
 )
-from floor.prediction_reconciliation import reconcile_predictions
 from floor.schemas import SignalRecord
 from floor.storage import append_jsonl
 from forecasting.run_forecast import run_forecast_pipeline
@@ -188,21 +187,19 @@ def run_intraday_cycle(
     input_snapshot_id = _input_snapshot_id(market_rows, forecasts)
     marker_path = _input_snapshot_marker(cfg.data_dir, input_snapshot_id)
     if marker_path.exists():
-        reconciliation = reconcile_predictions(cfg.data_dir)
         logger.info(
             "[canonical-intraday] no new market/model input; suppressing duplicate evidence "
-            "event=%s batch_id=%s input_snapshot_id=%s reconciliation=%s",
+            "event=%s batch_id=%s input_snapshot_id=%s reconciliation=deferred_to_eod",
             event_type,
             batch_id,
             input_snapshot_id,
-            reconciliation,
         )
         return {
             "status": "NO_NEW_INPUT",
             "batch_id": batch_id,
             "input_snapshot_id": input_snapshot_id,
             "forecasts": len(forecasts),
-            "reconciliation": reconciliation,
+            "reconciliation": {"status": "DEFERRED_TO_EOD"},
         }
 
     for row in forecasts:
@@ -263,20 +260,18 @@ def run_intraday_cycle(
         },
     )
 
-    reconciliation = reconcile_predictions(cfg.data_dir)
     logger.info(
         "[canonical-intraday] complete event=%s batch_id=%s input_snapshot_id=%s "
-        "forecasts=%s reconciliation=%s",
+        "forecasts=%s reconciliation=deferred_to_eod",
         event_type,
         batch_id,
         input_snapshot_id,
         len(forecasts),
-        reconciliation,
     )
     return {
         "status": "WRITTEN",
         "batch_id": batch_id,
         "input_snapshot_id": input_snapshot_id,
         "forecasts": len(forecasts),
-        "reconciliation": reconciliation,
+        "reconciliation": {"status": "DEFERRED_TO_EOD"},
     }

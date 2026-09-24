@@ -179,6 +179,8 @@ jobs:
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --required-market-session "${{ needs.gate.outputs.required_market_session }}"
 
+      # Reconciliation has one owner: EOD. The canonical forecast cycle deliberately
+      # does not reconcile, preventing duplicate historical scans at close.
       - name: Reconcile matured predictions against realized bars
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main reconcile-predictions
