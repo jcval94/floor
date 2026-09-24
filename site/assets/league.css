@@ -39,14 +39,17 @@
 }
 
 .league-chart {
+  display: block;
   width: 100%;
-  min-height: 330px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 220 / 72;
   overflow: visible;
 }
 
 .league-series {
   fill: none;
-  stroke-width: 2.4;
+  stroke-width: 2;
   vector-effect: non-scaling-stroke;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -162,8 +165,13 @@
     flex-direction: column;
   }
 
+  .league-chart-shell {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
   .league-chart {
-    min-height: 260px;
+    min-width: 620px;
   }
 
   .league-legend-item {
@@ -261,8 +269,33 @@
 .enhanced-chart .chart-marker-label,
 .enhanced-chart .chart-end-label {
   fill: var(--muted);
-  font-size: 2.6px;
+  font-size: 2.2px;
   font-weight: 700;
+}
+
+.league-chart.enhanced-chart .chart-label {
+  font-size: 2px;
+}
+
+.league-chart.enhanced-chart .chart-reference-label {
+  font-size: 1.8px;
+}
+
+.league-chart.enhanced-chart .chart-end-label {
+  fill: var(--text-strong);
+  font-size: 1.9px;
+  font-weight: 750;
+}
+
+.league-chart.enhanced-chart .chart-marker-label {
+  font-size: 1.65px;
+}
+
+.league-chart.enhanced-chart .chart-label-guide {
+  stroke: var(--border-strong);
+  stroke-width: 0.45;
+  stroke-dasharray: 1.2 1.4;
+  opacity: 0.75;
 }
 
 .enhanced-chart .chart-marker {
@@ -274,7 +307,6 @@
 
 .enhanced-chart .chart-marker-label {
   fill: var(--text-strong);
-  font-size: 2.35px;
 }
 
 .enhanced-chart .chart-end-point,
@@ -283,6 +315,51 @@
   stroke: var(--accent);
   stroke-width: 0.8;
   vector-effect: non-scaling-stroke;
+}
+
+
+.chart-warmup {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-height: 180px;
+  margin: 6px 0 10px;
+  padding: 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+}
+
+.chart-warmup-copy {
+  display: grid;
+  gap: 5px;
+  max-width: 680px;
+}
+
+.chart-warmup-copy strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.chart-warmup-copy span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.chart-warmup-progress {
+  width: min(360px, 100%);
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.chart-warmup-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
 }
 
 @media (max-width: 620px) {
