@@ -307,6 +307,24 @@ def _validate_prediction_payload(symbol: str, horizon: str, payload: dict) -> No
         raise RuntimeError(f"Prediction payload invalid symbol={symbol} horizon={horizon}: confidence out of range")
     if expected_range is not None and float(expected_range) < 0:
         raise RuntimeError(f"Prediction payload invalid symbol={symbol} horizon={horizon}: negative expected_range")
+    if bool(payload.get("risk_geometry_available", False)) and horizon in {"d1", "w1", "q1"}:
+        risk_floor = _to_optional_float(payload.get("risk_floor_value"))
+        risk_ceiling = _to_optional_float(payload.get("risk_ceiling_value"))
+        if risk_floor is None or risk_ceiling is None:
+            raise RuntimeError(
+                f"Prediction payload invalid symbol={symbol} horizon={horizon}: "
+                "risk geometry marked available but boundary missing"
+            )
+        if floor_value is not None and risk_floor > float(floor_value) + 1e-9:
+            raise RuntimeError(
+                f"Prediction payload invalid symbol={symbol} horizon={horizon}: "
+                "risk_floor_value must not be above central floor"
+            )
+        if ceiling_value is not None and risk_ceiling < float(ceiling_value) - 1e-9:
+            raise RuntimeError(
+                f"Prediction payload invalid symbol={symbol} horizon={horizon}: "
+                "risk_ceiling_value must not be below central ceiling"
+            )
     _validate_timing_domain(horizon, payload)
 
 
@@ -338,9 +356,23 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Horizon, dict
     ]
     for horizon, floor_key, ceiling_key, floor_time, ceiling_time, horizon_conf in specs:
         time_probability = 0.0 if horizon == "d1" and (not floor_time or not ceiling_time) else horizon_conf
+        risk_available = bool(row.get(f"risk_geometry_available_{horizon}", False))
         payloads.append((horizon, {
             "floor_value": _to_optional_float(row.get(floor_key)),
             "ceiling_value": _to_optional_float(row.get(ceiling_key)),
+            "floor_quantile": None,
+            "ceiling_quantile": None,
+            "risk_floor_value": _to_optional_float(row.get(f"risk_floor_{horizon}")),
+            "risk_ceiling_value": _to_optional_float(row.get(f"risk_ceiling_{horizon}")),
+            "risk_geometry_available": risk_available,
+            "risk_target_marginal_coverage": _to_optional_float(
+                row.get(f"risk_target_marginal_coverage_{horizon}")
+            ),
+            "geometry_semantics": (
+                "central_typical_plus_calibrated_risk"
+                if risk_available
+                else "central_typical_only_legacy"
+            ),
             "floor_time_bucket": floor_time, "ceiling_time_bucket": ceiling_time,
             "floor_time_probability": time_probability, "ceiling_time_probability": time_probability,
             "confidence_score": horizon_conf,
@@ -376,6 +408,15 @@ def build_prediction_record(
         horizon=horizon,
         floor_value=payload["floor_value"],
         ceiling_value=payload["ceiling_value"],
+        floor_quantile=payload.get("floor_quantile"),
+        ceiling_quantile=payload.get("ceiling_quantile"),
+        risk_floor_value=payload.get("risk_floor_value"),
+        risk_ceiling_value=payload.get("risk_ceiling_value"),
+        risk_geometry_available=bool(payload.get("risk_geometry_available", False)),
+        risk_target_marginal_coverage=payload.get("risk_target_marginal_coverage"),
+        geometry_semantics=str(
+            payload.get("geometry_semantics") or "central_typical_boundary"
+        ),
         floor_time_bucket=payload["floor_time_bucket"],
         ceiling_time_bucket=payload["ceiling_time_bucket"],
         floor_time_probability=payload["floor_time_probability"],
