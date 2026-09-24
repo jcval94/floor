@@ -12,13 +12,13 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-  "numpy>=2.0,<3",
-  "pytest>=8.0",
-  "pytest-cov>=5.0",
-  "ruff==0.16.4",
+  "numpy>=2.2.6,<3",
+  "pytest>=9.1.1",
+  "pytest-cov>=7.1.0",
+  "ruff==0.16.8",
   "scikit-learn==1.8.0",
 ]
-modeling = ["numpy>=2.0,<3", "scikit-learn==1.8.0"]
+modeling = ["numpy>=2.2.6,<3", "scikit-learn==1.8.0"]
 
 [project.scripts]
 floor = "floor.main:main"
