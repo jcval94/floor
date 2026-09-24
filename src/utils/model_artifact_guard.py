@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from contracts.model_contract import validate_model_artifact_contract
 from forecasting.parity_models import ParityChampionModelSet
 
 CLASSIC_TASKS = ("d1", "w1", "q1")
@@ -34,7 +35,13 @@ def _schema2_params(payload: dict[str, Any], *, task: str) -> dict[str, Any]:
     return params
 
 
-def validate_champion_payload(payload: dict[str, Any], *, task: str) -> None:
+def validate_champion_payload(payload: dict[str, Any], *, task: str) -> dict[str, Any]:
+    contract = validate_model_artifact_contract(task, payload, allow_legacy=True)
+    if not contract["valid"]:
+        raise RuntimeError(
+            "champion model contract invalid task="
+            f"{task}: {','.join(contract['errors'])}"
+        )
     params = _schema2_params(payload, task=task)
     if not str(payload.get("model_name") or ""):
         raise RuntimeError(f"champion task={task} missing model_name")
@@ -55,21 +62,21 @@ def validate_champion_payload(payload: dict[str, Any], *, task: str) -> None:
         timing = params.get("timing")
         if not isinstance(timing, dict) or int(timing.get("schema_version") or 0) != 2:
             raise RuntimeError(f"champion task={task} missing schema-v2 timing contract")
-        return
+        return contract
 
     if task == "value":
         if params.get("target_space") != "relative_floor_delta":
             raise RuntimeError("m3 value champion must use relative_floor_delta")
         if params.get("loss") != "pinball_quantile":
             raise RuntimeError("m3 value champion must use pinball_quantile")
-        return
+        return contract
 
     if task == "timing":
         if params.get("model_type") != "multinomial_logistic":
             raise RuntimeError("m3 timing champion must use multinomial_logistic")
         if int(params.get("class_count") or 0) != 13:
             raise RuntimeError("m3 timing champion must expose 13 classes")
-        return
+        return contract
 
     raise RuntimeError(f"unknown champion task: {task}")
 
@@ -96,9 +103,10 @@ def _smoke_row() -> dict[str, Any]:
 
 def validate_registry(registry_dir: Path, *, run_smoke: bool = True) -> dict[str, Any]:
     payloads: dict[str, dict[str, Any]] = {}
+    contract_checks: dict[str, dict[str, Any]] = {}
     for task in ALL_TASKS:
         payload = _load(registry_dir / f"{task}_champion.json")
-        validate_champion_payload(payload, task=task)
+        contract_checks[task] = validate_champion_payload(payload, task=task)
         payloads[task] = payload
 
     summary: dict[str, Any] = {
@@ -108,6 +116,8 @@ def validate_registry(registry_dir: Path, *, run_smoke: bool = True) -> dict[str
                 "model_name": payload.get("model_name"),
                 "version": payload.get("version"),
                 "schema_version": payload.get("params", {}).get("schema_version"),
+                "contract_status": contract_checks[task]["status"],
+                "contract_id": contract_checks[task]["contract_id"],
             }
             for task, payload in payloads.items()
         },
