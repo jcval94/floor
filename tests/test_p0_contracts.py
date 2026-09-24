@@ -116,7 +116,7 @@ def test_strategy_geometry_uses_central_targets_and_separate_risk_boundary() -> 
     assert result["risk_floor"] == pytest.approx(90.0)
     assert result["risk_ceiling"] == pytest.approx(115.0)
     assert result["long_rr"] == pytest.approx(1.0)
-    assert result["short_rr"] == pytest.approx(0.5)
+    assert result["short_rr"] == pytest.approx(1.0 / 3.0)
     assert result["geometry_semantics"] == "central_plus_calibrated_risk"
 
 
