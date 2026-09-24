@@ -90,6 +90,7 @@ def test_live_snapshot_marks_official_positions_without_mutating_eod_metrics() -
     assert payload["live_execution_enabled"] is False
 
     assert challenger["nav"] == pytest.approx(10500.0)
+    assert challenger["eod_nav"] == pytest.approx(10000.0)
     assert challenger["return"] == pytest.approx(0.05)
     assert challenger["change_since_eod"] == pytest.approx(0.05)
     assert challenger["vs_spy"] == pytest.approx(0.03)

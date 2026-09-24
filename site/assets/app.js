@@ -16,7 +16,7 @@ import {
   relativeDelta,
   stateTone,
 } from './utils.js';
-import { lineSvg, m3WeekBarsSvg, rangeSvg } from './charts.js';
+import { filterPointsByWindow, lineSvg, m3WeekBarsSvg, rangeSvg } from './charts.js';
 import { initRouter } from './router.js';
 
 const HORIZON_ORDER = ['d1', 'w1', 'q1', 'm3'];
@@ -491,12 +491,79 @@ async function strategies() {
       metricCard('Estado', String(strategy.status || 'UNKNOWN'), result.ok ? 'Reporte cargado' : 'No fue posible cargar strategy.json', result.ok ? 'neutral' : 'warn'),
     ].join('');
   }
+
   const equity = document.getElementById('equityCurve');
   const drawdown = document.getElementById('drawdownCurve');
-  if (equity) equity.innerHTML = lineSvg(curve.map((x) => ({ value: x.equity ?? x.value })), { title: 'Curva de equity' });
-  if (drawdown) drawdown.innerHTML = lineSvg(curve.map((x) => ({ value: x.drawdown })), { title: 'Drawdown' });
+  const windowControl = document.getElementById('strategyHistoryWindow');
+  const windowMetrics = document.getElementById('strategyChartMetrics');
   const hint = document.getElementById('strategyHint');
-  if (hint) hint.textContent = curve.length ? 'Resultados históricos del reporte de estrategia. No representan rendimiento futuro.' : 'Aún no hay una curva de backtest publicable.';
+
+  const chartMoney = (value) => Number.isFinite(Number(value))
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value))
+    : '—';
+  const chartKpi = (label, value) => `<span class="chart-kpi"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></span>`;
+
+  function renderWindow() {
+    const windowKey = String(windowControl?.value || '3m');
+    const filtered = filterPointsByWindow(curve, windowKey);
+    const windowStart = Number(filtered[0]?.equity ?? filtered[0]?.value);
+    const windowEnd = Number(filtered[filtered.length - 1]?.equity ?? filtered[filtered.length - 1]?.value);
+    const windowReturn = Number.isFinite(windowStart) && Number.isFinite(windowEnd) && Math.abs(windowStart) > 1e-9
+      ? (windowEnd / windowStart - 1.0)
+      : null;
+    const windowMaxDrawdown = filtered.reduce(
+      (worst, point) => Math.min(worst, Number(point?.drawdown ?? 0)),
+      0,
+    );
+    const firstSession = filtered[0]?.session || '—';
+    const lastSession = filtered[filtered.length - 1]?.session || '—';
+
+    if (windowMetrics) {
+      windowMetrics.innerHTML = [
+        chartKpi('Periodo', filtered.length ? `${firstSession} → ${lastSession}` : '—'),
+        chartKpi('Retorno', windowReturn == null ? '—' : `${windowReturn >= 0 ? '+' : ''}${fmtPct(windowReturn * 100)}`),
+        chartKpi('NAV final', chartMoney(windowEnd)),
+        chartKpi('Máx. DD', filtered.length ? fmtPct(windowMaxDrawdown * 100) : '—'),
+        chartKpi('Sesiones', String(filtered.length || 0)),
+      ].join('');
+    }
+
+    if (equity) {
+      equity.innerHTML = lineSvg(
+        filtered.map((point) => ({ session: point.session, value: point.equity ?? point.value })),
+        {
+          title: 'Curva de equity',
+          valueFormat: 'money',
+          baseline: Number.isFinite(windowStart) ? windowStart : undefined,
+          baselineLabel: 'Inicio ventana',
+          annotateEnd: true,
+        },
+      );
+    }
+    if (drawdown) {
+      drawdown.innerHTML = lineSvg(
+        filtered.map((point) => ({ session: point.session, value: point.drawdown })),
+        {
+          title: 'Drawdown',
+          valueFormat: 'percent',
+          baseline: 0,
+          baselineLabel: '0%',
+          thresholds: [{ value: -0.15, label: 'Límite revisión −15%' }],
+          annotateExtrema: true,
+          minLabel: filtered.length ? `Máx DD ${fmtPct(windowMaxDrawdown * 100)}` : 'Máx DD —',
+          annotateEnd: false,
+        },
+      );
+    }
+    if (hint) {
+      hint.textContent = filtered.length
+        ? `Ventana visible: ${filtered.length} sesiones. Resultados históricos del reporte de estrategia; no representan rendimiento futuro.`
+        : 'Aún no hay una curva de backtest publicable.';
+    }
+  }
+
+  windowControl?.addEventListener('change', renderWindow);
+  renderWindow();
 }
 
 function flattenNumericMetrics(value, prefix = '') {
