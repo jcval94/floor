@@ -4,42 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
+from contracts.config_io import load_simple_yaml
+from contracts.trading import load_strategy_runtime_config
 from strategies.activation import VALID_MODES, activation_snapshot
 from strategies.base import StrategyDecision
 from strategies.common import platform_fee_bps_per_side, round_trip_cost_bps
 from strategies.portfolio_allocator import allocate_orders
 from strategies.registry import STRATEGY_GENERATORS
-
-
-def _parse_scalar(value: str):
-    raw = value.strip()
-    if raw.lower() in {"true", "false"}:
-        return raw.lower() == "true"
-    try:
-        if "." in raw:
-            return float(raw)
-        return int(raw)
-    except ValueError:
-        return raw.strip('"').strip("'")
-
-
-def load_simple_yaml(path: Path) -> dict:
-    root: dict = {}
-    stack: list[tuple[int, dict]] = [(-1, root)]
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        indent = len(line) - len(line.lstrip(" "))
-        key, _, value = line.strip().partition(":")
-        while stack and indent <= stack[-1][0]:
-            stack.pop()
-        parent = stack[-1][1]
-        if value.strip() == "":
-            parent[key] = {}
-            stack.append((indent, parent[key]))
-        else:
-            parent[key] = _parse_scalar(value)
-    return root
 
 
 def _load_forecasts(path: Path) -> list[dict]:
@@ -157,7 +128,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = load_simple_yaml(Path(args.config))
+    cfg = load_strategy_runtime_config(Path(args.config))
     rows = _load_forecasts(Path(args.forecasts))
     configured_default = str(cfg.get("activation", {}).get("default_mode") or "backtest")
     mode = args.mode or configured_default
