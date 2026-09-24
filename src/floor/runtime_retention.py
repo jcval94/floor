@@ -22,6 +22,30 @@ class RuntimeRetentionPolicy:
     keep_latest_files: int = 5
 
 
+def retention_is_due(
+    data_dir: Path,
+    *,
+    now: datetime | None = None,
+    min_interval_seconds: int = 86_400,
+) -> bool:
+    """Return whether the expensive historical compaction pass should run."""
+
+    if min_interval_seconds <= 0:
+        return True
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    report_path = data_dir / "metrics" / "runtime_retention_latest.json"
+    if not report_path.exists():
+        return True
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    compacted_at = _parse_dt(report.get("compacted_at"))
+    if compacted_at is None:
+        return True
+    return now - compacted_at >= timedelta(seconds=min_interval_seconds)
+
+
 def _parse_dt(value: object) -> datetime | None:
     raw = str(value or "").strip()
     if not raw:
@@ -254,14 +278,16 @@ def _compact_app_db(
                 timestamp_field=field,
                 cutoff=cutoff,
             )
-        conn.commit()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
-        quick = conn.execute("PRAGMA quick_check").fetchall()
-        if not quick or any(str(row[0]).lower() != "ok" for row in quick):
-            raise RuntimeError(
-                f"SQLite quick_check failed after retention: {quick[:10]}"
-            )
-        conn.execute("VACUUM")
+        total_removed = sum(removed.values())
+        if total_removed:
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+            quick = conn.execute("PRAGMA quick_check").fetchall()
+            if not quick or any(str(row[0]).lower() != "ok" for row in quick):
+                raise RuntimeError(
+                    f"SQLite quick_check failed after retention: {quick[:10]}"
+                )
+            conn.execute("VACUUM")
     return removed
 
 
@@ -277,23 +303,21 @@ def _compact_market_db(
     with sqlite3.connect(path) as conn:
         if not _table_exists(conn, "daily_bars"):
             return 0
-        before_row = conn.execute("SELECT COUNT(*) FROM daily_bars").fetchone()
-        before = int(before_row[0]) if before_row else 0
-        conn.execute(
+        cursor = conn.execute(
             "DELETE FROM daily_bars WHERE substr(ts_utc, 1, 10) < ?",
             (cutoff_date,),
         )
-        after_row = conn.execute("SELECT COUNT(*) FROM daily_bars").fetchone()
-        after = int(after_row[0]) if after_row else 0
-        conn.commit()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
-        quick = conn.execute("PRAGMA quick_check").fetchall()
-        if not quick or any(str(row[0]).lower() != "ok" for row in quick):
-            raise RuntimeError(
-                f"Market SQLite quick_check failed after retention: {quick[:10]}"
-            )
-        conn.execute("VACUUM")
-    return before - after
+        removed = max(int(cursor.rowcount), 0)
+        if removed:
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+            quick = conn.execute("PRAGMA quick_check").fetchall()
+            if not quick or any(str(row[0]).lower() != "ok" for row in quick):
+                raise RuntimeError(
+                    f"Market SQLite quick_check failed after retention: {quick[:10]}"
+                )
+            conn.execute("VACUUM")
+    return removed
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -430,8 +454,47 @@ def main() -> None:
         )
     )
     parser.add_argument("--data-dir", default="data")
+    parser.add_argument(
+        "--if-due-seconds",
+        type=int,
+        default=None,
+        help="Skip compaction when the latest successful pass is newer than this interval.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Run compaction even when --if-due-seconds says it is not due.",
+    )
     args = parser.parse_args()
-    result = compact_runtime_state(Path(args.data_dir))
+    if args.if_due_seconds is not None and args.if_due_seconds < 0:
+        parser.error("--if-due-seconds must be >= 0")
+
+    data_dir = Path(args.data_dir)
+    now = datetime.now(timezone.utc)
+    if (
+        not args.force
+        and args.if_due_seconds is not None
+        and not retention_is_due(
+            data_dir,
+            now=now,
+            min_interval_seconds=args.if_due_seconds,
+        )
+    ):
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "SKIPPED_NOT_DUE",
+                    "checked_at": now.isoformat(),
+                    "min_interval_seconds": args.if_due_seconds,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    result = compact_runtime_state(data_dir, now=now)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
