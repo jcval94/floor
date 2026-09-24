@@ -154,11 +154,15 @@ restore_state() {
   local attempt selected
   for attempt in 1 2 3; do
     rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256" "$TMP/$ASSET.metadata.json"
-    selected=""
-    if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256" ".metadata.json")"; then
-      echo "::warning::Runtime-state generation lookup attempt $attempt failed." >&2
-      sleep $((attempt * 2))
-      continue
+    selected="${RUNTIME_STATE_PAYLOAD_PIN:-}"
+    if [[ "$selected" = "legacy" ]]; then
+      selected=""
+    elif [[ -z "$selected" ]]; then
+      if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256" ".metadata.json")"; then
+        echo "::warning::Runtime-state generation lookup attempt $attempt failed." >&2
+        sleep $((attempt * 2))
+        continue
+      fi
     fi
 
     if [[ -n "$selected" ]]; then
