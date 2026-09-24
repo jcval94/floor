@@ -12,8 +12,15 @@
       "semantic_role": "range_geometry",
       "directional": false,
       "params_schema_version": 2,
-      "required_params": ["floor", "ceiling", "timing", "confidence_calibration"],
-      "required_new_params": ["risk_geometry"],
+      "required_params": [
+        "floor",
+        "ceiling",
+        "timing",
+        "confidence_calibration"
+      ],
+      "required_new_params": [
+        "risk_geometry"
+      ],
       "serving_outputs": {
         "central_floor": "floor_d1",
         "central_ceiling": "ceiling_d1",
@@ -27,8 +34,15 @@
       "semantic_role": "range_geometry",
       "directional": false,
       "params_schema_version": 2,
-      "required_params": ["floor", "ceiling", "timing", "confidence_calibration"],
-      "required_new_params": ["risk_geometry"],
+      "required_params": [
+        "floor",
+        "ceiling",
+        "timing",
+        "confidence_calibration"
+      ],
+      "required_new_params": [
+        "risk_geometry"
+      ],
       "serving_outputs": {
         "central_floor": "floor_w1",
         "central_ceiling": "ceiling_w1",
@@ -42,8 +56,15 @@
       "semantic_role": "range_geometry",
       "directional": false,
       "params_schema_version": 2,
-      "required_params": ["floor", "ceiling", "timing", "confidence_calibration"],
-      "required_new_params": ["risk_geometry"],
+      "required_params": [
+        "floor",
+        "ceiling",
+        "timing",
+        "confidence_calibration"
+      ],
+      "required_new_params": [
+        "risk_geometry"
+      ],
       "serving_outputs": {
         "central_floor": "floor_q1",
         "central_ceiling": "ceiling_q1",
@@ -57,7 +78,12 @@
       "semantic_role": "downside_quantile",
       "directional": false,
       "params_schema_version": 2,
-      "required_params": ["target_space", "weights", "bias", "calibration_scale"],
+      "required_params": [
+        "target_space",
+        "weights",
+        "bias",
+        "calibration_scale"
+      ],
       "required_new_params": [],
       "serving_outputs": {
         "risk_floor": "floor_m3"
@@ -69,7 +95,13 @@
       "semantic_role": "timing_distribution",
       "directional": false,
       "params_schema_version": 2,
-      "required_params": ["model_type", "class_count", "feature_names", "weights", "bias"],
+      "required_params": [
+        "model_type",
+        "class_count",
+        "feature_names",
+        "weights",
+        "bias"
+      ],
       "required_new_params": [],
       "serving_outputs": {
         "distribution": "floor_week_m3_top3",
@@ -78,15 +110,23 @@
       }
     },
     "weekly_opportunity": {
-      "contract_id": "weekly_opportunity_ranker_v1",
+      "contract_id": "weekly_opportunity_net_ranker_v2",
       "horizon": "q1",
       "semantic_role": "directional_ranker",
       "directional": true,
       "params_schema_version": 1,
-      "required_params": ["model_type", "feature_names", "weights", "bias"],
+      "required_params": [
+        "model_type",
+        "feature_names",
+        "weights",
+        "bias",
+        "target_semantics",
+        "target_round_trip_cost_bps"
+      ],
       "required_new_params": [],
       "serving_outputs": {
-        "score": "weekly_opportunity_score"
+        "score": "weekly_opportunity_score",
+        "score_semantics": "net_after_round_trip_costs"
       }
     }
   }
