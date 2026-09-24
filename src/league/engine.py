@@ -96,12 +96,16 @@ def _trade(
     total_cost = commission + sell_fee + slippage_cost
     member["trade_count"] = int(member.get("trade_count", 0)) + 1
     member["costs_paid"] = float(member.get("costs_paid", 0.0)) + total_cost
+    member["gross_traded_notional"] = float(
+        member.get("gross_traded_notional", 0.0)
+    ) + notional
     trades.append(
         {
             "member": member.get("id"),
             "symbol": symbol,
             "side": side,
             "qty": qty,
+            "notional": round(notional, 6),
             "raw_price": round(raw_price, 6),
             "fill_price": round(fill, 6),
             "costs": round(total_cost, 6),
@@ -325,7 +329,19 @@ def _max_drawdown(points: list[dict]) -> float:
 def _member_metrics(member: dict, initial_nav: float) -> dict[str, Any]:
     points = member.get("daily_nav", [])
     nav = float(points[-1]["nav"]) if points else initial_nav
+    nav_values = [float(point.get("nav", 0.0)) for point in points if float(point.get("nav", 0.0)) > 0]
+    average_nav = (
+        sum(nav_values) / len(nav_values)
+        if nav_values
+        else initial_nav
+    )
     costs = float(member.get("costs_paid", 0.0))
+    gross_traded_notional = float(member.get("gross_traded_notional", 0.0))
+    turnover = (
+        gross_traded_notional / average_nav
+        if average_nav > 0
+        else 0.0
+    )
     return {
         "nav": nav,
         "return": nav / initial_nav - 1.0,
@@ -333,6 +349,19 @@ def _member_metrics(member: dict, initial_nav: float) -> dict[str, Any]:
         "max_drawdown": _max_drawdown(points),
         "trades": int(member.get("trade_count", 0)),
         "costs_paid": costs,
+        "gross_traded_notional": gross_traded_notional,
+        "average_nav": average_nav,
+        "turnover": turnover,
+        "cost_drag_bps_nav": (
+            costs / average_nav * 10_000.0
+            if average_nav > 0
+            else 0.0
+        ),
+        "cost_bps_per_traded_notional": (
+            costs / gross_traded_notional * 10_000.0
+            if gross_traded_notional > 0
+            else 0.0
+        ),
         "suppressed_rebalances": int(member.get("suppressed_rebalances", 0)),
         "nav_if_2x_costs_estimate": nav - costs,
         "nav_if_3x_costs_estimate": nav - 2.0 * costs,
@@ -406,6 +435,32 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
                 ),
             )
         )
+        evidence_role = (
+            str(
+                member_spec.get("evidence_role")
+                or semantic_contract.get("evidence_role")
+                or "candidate"
+            )
+            if is_strategy
+            else "benchmark"
+        )
+        strategy_promotion_enabled = (
+            bool(
+                member_spec.get(
+                    "promotion_eligible",
+                    semantic_contract.get("promotion_eligible", True),
+                )
+            )
+            and evidence_role != "diagnostic_only"
+            if is_strategy
+            else False
+        )
+        max_gross_turnover = float(
+            review_cfg.get(
+                "max_gross_turnover",
+                review_cfg.get("max_turnover", float("inf")),
+            )
+        )
         row = {
             "strategy": member_id,
             **member_metrics,
@@ -421,6 +476,16 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
                 else "benchmark"
             ),
             "evidence_contract": evidence_contract if is_strategy else "benchmark",
+            "evidence_role": evidence_role,
+            "strategy_promotion_enabled": strategy_promotion_enabled,
+            "turnover_budget": (
+                max_gross_turnover if is_strategy and math.isfinite(max_gross_turnover) else None
+            ),
+            "turnover_warning": (
+                is_strategy
+                and math.isfinite(max_gross_turnover)
+                and float(member_metrics["turnover"]) > max_gross_turnover
+            ),
             "canonical_variant_promotion_eligible": False,
             "canonical_bidirectional_promotion_eligible": False,
             "promotion_review_eligible": False,
@@ -428,6 +493,7 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         }
         if is_strategy:
             checks = {
+                "strategy_promotion_enabled": strategy_promotion_enabled,
                 "model_suite_frozen": model_suite_frozen,
                 "min_sessions": int(state.get("session_count", 0))
                 >= int(review_cfg.get("min_sessions", 63)),
@@ -438,6 +504,10 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
                 "min_sharpe": member_metrics["sharpe"] is not None
                 and float(member_metrics["sharpe"])
                 >= float(review_cfg.get("min_sharpe", 0.5)),
+                "max_gross_turnover": (
+                    not math.isfinite(max_gross_turnover)
+                    or float(member_metrics["turnover"]) <= max_gross_turnover
+                ),
                 "positive_excess_vs_spy": row["vs_spy"] is not None
                 and float(row["vs_spy"]) > 0,
                 "positive_excess_vs_equal_weight": row["vs_equal_weight"] is not None
@@ -569,6 +639,7 @@ def initialize_league(
             "daily_nav": [{"session": session, "nav": initial_nav}],
             "trade_count": 0,
             "costs_paid": 0.0,
+            "gross_traded_notional": 0.0,
             "suppressed_rebalances": 0,
         }
     member_contracts = {
@@ -578,6 +649,8 @@ def initialize_league(
                 spec.get("league_evidence_can_promote_canonical_variant", False)
             ),
             "canonical_variant": spec.get("canonical_variant"),
+            "evidence_role": spec.get("evidence_role"),
+            "promotion_eligible": spec.get("promotion_eligible"),
         }
         for spec in league_cfg.get("members", [])
         if isinstance(spec, dict)

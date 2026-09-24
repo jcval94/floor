@@ -97,8 +97,22 @@ def compute_metrics(result: dict, horizons: list[int] | None = None, periods_per
         "max_drawdown": _max_drawdown(equity_curve),
         "turnover": float(result.get("turnover", 0.0)),
         "capacity_warning": bool(result.get("capacity_warning", False)),
+        # Canonical attribution is net of transaction costs.  Gross attribution
+        # remains available explicitly for research diagnostics.
         "contribution_by_strategy": dict(result.get("strategy_contribution", {})),
+        "contribution_by_strategy_gross": dict(
+            result.get("strategy_contribution_gross", {})
+        ),
+        "strategy_cost_allocation": dict(
+            result.get("strategy_cost_allocation", {})
+        ),
         "contribution_by_ticker": dict(result.get("ticker_pnl", {})),
+        "gross_realized_pnl": float(result.get("gross_realized_pnl", 0.0)),
+        "realized_pnl": float(result.get("realized_pnl", 0.0)),
+        "total_costs": float(result.get("total_costs", 0.0)),
+        "pnl_reconciliation_error": float(
+            result.get("pnl_reconciliation_error", 0.0)
+        ),
     }
     summary.update(_trade_stats(result.get("closed_trade_pnls", [])))
 

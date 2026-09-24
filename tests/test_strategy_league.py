@@ -39,6 +39,7 @@ def _cfg() -> dict:
             "min_trades": 10,
             "max_drawdown_abs": 0.15,
             "min_sharpe": 0.5,
+            "max_gross_turnover": 12.0,
         },
     }
 
@@ -421,3 +422,98 @@ def test_research_model_epoch_transition_preserves_portfolio_and_cost_history(
     ]
     assert records[-1]["event"] == "MODEL_EPOCH_TRANSITION"
     assert records[-1]["trades"] == []
+
+
+def test_strategy_league_measures_gross_notional_turnover_from_actual_fills(
+    tmp_path: Path,
+) -> None:
+    cfg = _cfg()
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-08-24",
+        _contract(),
+        _targets(),
+    )
+    state = advance_league(
+        tmp_path,
+        state,
+        cfg,
+        "2026-08-25",
+        _bars(open_price=100.0, close_price=100.0),
+        _contract(),
+        {},
+    )
+
+    leaderboard = build_leaderboard(state, cfg)
+    weekly = next(
+        row for row in leaderboard["rows"]
+        if row["strategy"] == "weekly_opportunity_ridge"
+    )
+
+    assert weekly["gross_traded_notional"] > 0
+    assert weekly["average_nav"] > 0
+    assert weekly["turnover"] == pytest.approx(
+        weekly["gross_traded_notional"] / weekly["average_nav"]
+    )
+    assert weekly["cost_drag_bps_nav"] > 0
+    assert weekly["cost_bps_per_traded_notional"] > 0
+    assert weekly["turnover_warning"] is False
+
+
+def test_turnover_budget_is_a_hard_promotion_gate(tmp_path: Path) -> None:
+    cfg = _cfg()
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-08-24",
+        _contract(),
+        _targets(),
+    )
+    state["members"]["weekly_opportunity_ridge"]["gross_traded_notional"] = (
+        20.0 * cfg["initial_nav_usd"]
+    )
+
+    leaderboard = build_leaderboard(state, cfg)
+    weekly = next(
+        row for row in leaderboard["rows"]
+        if row["strategy"] == "weekly_opportunity_ridge"
+    )
+
+    assert weekly["turnover"] == pytest.approx(20.0)
+    assert weekly["turnover_warning"] is True
+    assert weekly["promotion_checks"]["max_gross_turnover"] is False
+    assert weekly["promotion_review_eligible"] is False
+
+
+def test_cross_horizon_is_diagnostic_only_and_cannot_promote(tmp_path: Path) -> None:
+    cfg = _cfg()
+    cfg["members"].append(
+        {
+            "id": "cross_horizon_asymmetry",
+            "type": "strategy",
+            "required": True,
+            "evidence_role": "diagnostic_only",
+            "promotion_eligible": False,
+        }
+    )
+    targets = _targets()
+    targets["cross_horizon_asymmetry"] = {}
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-08-24",
+        _contract(),
+        targets,
+    )
+
+    leaderboard = build_leaderboard(state, cfg)
+    cross = next(
+        row for row in leaderboard["rows"]
+        if row["strategy"] == "cross_horizon_asymmetry"
+    )
+
+    assert cross["evidence_role"] == "diagnostic_only"
+    assert cross["strategy_promotion_enabled"] is False
+    assert cross["promotion_checks"]["strategy_promotion_enabled"] is False
+    assert cross["promotion_review_eligible"] is False

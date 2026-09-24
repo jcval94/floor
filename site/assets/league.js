@@ -306,6 +306,12 @@ function retrospectiveSummaryCards(data, rows) {
 
 function promotionBadge(row) {
   if (isBenchmark(row)) return '<span class="status-badge neutral"><span class="status-dot"></span>Benchmark</span>';
+  if (row?.evidence_role === 'diagnostic_only') {
+    return '<span class="status-badge neutral"><span class="status-dot"></span>Diagnóstico</span>';
+  }
+  if (row?.turnover_warning === true) {
+    return '<span class="status-badge warn"><span class="status-dot"></span>Turnover alto</span>';
+  }
   if (row?.promotion_review_eligible === true) {
     return '<span class="status-badge ok"><span class="status-dot"></span>Elegible</span>';
   }
@@ -314,7 +320,7 @@ function promotionBadge(row) {
 
 function tableRows(rows) {
   if (!rows.length) {
-    return '<tr><td colspan="11"><div class="empty-state"><strong>Sin historial prospectivo todavía.</strong><p>El primer cierre válido de la nueva liga poblará esta clasificación.</p></div></td></tr>';
+    return '<tr><td colspan="13"><div class="empty-state"><strong>Sin historial prospectivo todavía.</strong><p>El primer cierre válido de la nueva liga poblará esta clasificación.</p></div></td></tr>';
   }
   return rows.map((row, index) => {
     const rank = row.rank ?? index + 1;
@@ -330,6 +336,8 @@ function tableRows(rows) {
       <td>${number(row.sharpe)}</td>
       <td class="negative">${pct(row.max_drawdown)}</td>
       <td>${escapeHTML(String(row.trades ?? '—'))}</td>
+      <td>${number(row.turnover)}×</td>
+      <td>${number(row.cost_drag_bps_nav, 0)} bps</td>
       <td>${money(row.costs_paid, 2)}</td>
       <td>${promotionBadge(row)}</td>
     </tr>`;

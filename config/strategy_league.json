@@ -34,7 +34,9 @@
     {
       "id": "cross_horizon_asymmetry",
       "type": "strategy",
-      "required": true
+      "required": true,
+      "evidence_role": "diagnostic_only",
+      "promotion_eligible": false
     },
     {
       "id": "capital_allocation_challenger",
@@ -78,6 +80,7 @@
     "max_drawdown_abs": 0.15,
     "min_sharpe": 0.5,
     "require_positive_excess_vs_spy": true,
-    "require_positive_excess_vs_equal_weight": true
+    "require_positive_excess_vs_equal_weight": true,
+    "max_gross_turnover": 12
   }
 }
