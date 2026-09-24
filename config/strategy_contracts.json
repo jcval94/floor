@@ -51,7 +51,9 @@
       "sell_semantics_in_league": "exit_or_no_position",
       "canonical_variant": "bidirectional",
       "league_evidence_can_promote_canonical_variant": false,
-      "registry_scope": "strategy_registry"
+      "registry_scope": "strategy_registry",
+      "evidence_role": "diagnostic_only",
+      "promotion_eligible": false
     },
     "capital_allocation_challenger": {
       "registry_scope": "league_only",
