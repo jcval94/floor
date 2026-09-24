@@ -350,7 +350,15 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             or (not declared_type and not member_id.startswith("benchmark_"))
         )
         semantic_contract: dict[str, Any] = {}
-        if is_strategy:
+        frozen_member_contracts = state.get("member_contracts")
+        frozen_member_contract = (
+            frozen_member_contracts.get(member_id)
+            if isinstance(frozen_member_contracts, dict)
+            else None
+        )
+        if isinstance(frozen_member_contract, dict):
+            semantic_contract = dict(frozen_member_contract)
+        elif is_strategy:
             try:
                 semantic_contract = strategy_contract(member_id)
             except ValueError:
@@ -534,6 +542,19 @@ def initialize_league(
             "trade_count": 0,
             "costs_paid": 0.0,
         }
+    member_contracts = {
+        str(spec.get("id") or ""): {
+            "evaluation_variant": spec.get("evaluation_variant"),
+            "league_evidence_can_promote_canonical_variant": bool(
+                spec.get("league_evidence_can_promote_canonical_variant", False)
+            ),
+            "canonical_variant": spec.get("canonical_variant"),
+        }
+        for spec in league_cfg.get("members", [])
+        if isinstance(spec, dict)
+        and spec.get("type") == "strategy"
+        and str(spec.get("id") or "")
+    }
     state = {
         "schema_version": 1,
         "league_id": str(league_cfg["league_id"]),
@@ -541,6 +562,7 @@ def initialize_league(
         "last_session": session,
         "session_count": 1,
         "frozen_contract": dict(frozen_contract),
+        "member_contracts": member_contracts,
         "members": members,
         "last_hash": "",
     }
