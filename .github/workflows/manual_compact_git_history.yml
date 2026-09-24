@@ -150,21 +150,46 @@ jobs:
             exit 1
           fi
 
-      - name: Atomically force-push rewritten branches and tags
+      - name: Atomically rewrite only refs covered by exact leases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           MIRROR="$RUNNER_TEMP/floor-mirror.git"
+          REF_SNAPSHOT="$RUNNER_TEMP/history-audit/refs_before.txt"
 
-          # --prune removes remote branches/tags that became empty after filtering.
-          # --atomic guarantees all advertised branch/tag updates succeed together or none do.
-          git -C "$MIRROR" push --dry-run --atomic --force --prune origin \
-            'refs/heads/*:refs/heads/*' \
-            'refs/tags/*:refs/tags/*'
-          git -C "$MIRROR" push --atomic --force --prune origin \
-            'refs/heads/*:refs/heads/*' \
-            'refs/tags/*:refs/tags/*'
+          # Build one exact lease and one explicit refspec per ref observed at
+          # preflight. A ref created after the snapshot is never touched; a ref
+          # moved after the snapshot makes the entire atomic push fail.
+          leases=()
+          refspecs=()
+          while read -r expected_sha ref; do
+            [ -n "$expected_sha" ] && [ -n "$ref" ] || continue
+            case "$ref" in
+              *'^{}') continue ;;
+              refs/heads/*|refs/tags/*) ;;
+              *) continue ;;
+            esac
+
+            leases+=("--force-with-lease=${ref}:${expected_sha}")
+            if git --git-dir="$MIRROR" show-ref --verify --quiet "$ref"; then
+              refspecs+=("${ref}:${ref}")
+            else
+              # The filter removed this ref completely; delete only if its
+              # remote SHA still matches the preflight snapshot.
+              refspecs+=(":${ref}")
+            fi
+          done < "$REF_SNAPSHOT"
+
+          [ "${#refspecs[@]}" -gt 0 ] || {
+            echo "::error::No branch/tag refspecs were resolved for history compaction."
+            exit 1
+          }
+
+          git -C "$MIRROR" push --dry-run --atomic \
+            "${leases[@]}" origin "${refspecs[@]}"
+          git -C "$MIRROR" push --atomic \
+            "${leases[@]}" origin "${refspecs[@]}"
 
           gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_after_push.json"
           git -C "$MIRROR" show-ref > "$RUNNER_TEMP/history-audit/refs_after.txt"
