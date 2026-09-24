@@ -62,10 +62,19 @@ def test_bootstrap_requires_explicit_confirmed_genesis_request() -> None:
 
 
 def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
-    workflow = _text(".github/workflows/pages.yml")
+    pages = _text(".github/workflows/pages.yml")
+    eod = _text(".github/workflows/eod.yml")
+
+    # EOD owns its publication handoff explicitly after durable state is
+    # published. Other evidence producers still use evidence-gated
+    # workflow_run triggers.
+    workflow_run_header = pages.split("push:", 1)[0]
+    assert '"eod"' not in workflow_run_header
+    assert "runtime_state.sh publish" in eod
+    assert "checkpoint_state.sh publish" in eod
+    assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in eod
 
     for upstream in (
-        "eod",
         "retrain_execute",
         "retrain_assessment",
         "strategy_league_bootstrap",
@@ -73,10 +82,9 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "capital_challenger_tournament",
         "walk_forward_oos",
     ):
-        assert upstream in workflow
+        assert upstream in workflow_run_header
 
     for evidence in (
-        "eod-audit-",
         "retrain-execute-",
         "retrain-assessment-",
         "strategy-league-weekly-model-",
@@ -84,14 +92,14 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "capital-tournament-",
         "walk-forward-oos-",
     ):
-        assert evidence in workflow
+        assert evidence in pages
 
-    assert "completed_without_publishable_evidence" in workflow
-    assert "needs.gate.outputs.publish == 'true'" in workflow
-    assert "actions: read" in workflow
-    assert "experiment_observation.json" in workflow
-    assert "node --check site/assets/experiment.js" in workflow
-    assert "operational_paper_gateway_used" in workflow
+    assert "completed_without_publishable_evidence" in pages
+    assert "needs.gate.outputs.publish == 'true'" in pages
+    assert "actions: read" in pages
+    assert "experiment_observation.json" in pages
+    assert "node --check site/assets/experiment.js" in pages
+    assert "operational_paper_gateway_used" in pages
 
 
 def test_retrain_assessment_invalidates_on_model_code_changes() -> None:
