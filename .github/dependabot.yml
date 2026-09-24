@@ -11,10 +11,17 @@ updates:
     labels:
       - dependencies
     groups:
-      python-runtime:
-        dependency-type: production
       python-development:
-        dependency-type: development
+        patterns:
+          - "pytest"
+          - "pytest-cov"
+          - "ruff"
+          - "scikit-learn"
+    ignore:
+      # CI installs the newest NumPy allowed by pyproject. Dependabot currently
+      # mis-handles the duplicated lower-bound requirement across dev/modeling
+      # extras and attempts a no-op 2.2.6 -> 2.2.6 rewrite.
+      - dependency-name: "numpy"
 
   - package-ecosystem: github-actions
     directory: /
