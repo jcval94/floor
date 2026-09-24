@@ -199,6 +199,7 @@ export function multiLineSvg(series = [], options = {}) {
     .map((entry, seriesIndex) => ({
       id: String(entry?.id || `series-${seriesIndex}`),
       label: String(entry?.label || entry?.id || `Serie ${seriesIndex + 1}`),
+      shortLabel: String(entry?.shortLabel || entry?.label || entry?.id || `Serie ${seriesIndex + 1}`),
       seriesIndex,
       points: (Array.isArray(entry?.points) ? entry.points : [])
         .map((point, pointIndex) => ({
@@ -227,20 +228,63 @@ export function multiLineSvg(series = [], options = {}) {
   });
   const labelIndex = new Map(labels.map((label, index) => [label, index]));
 
+  const geometry = {
+    width: 160,
+    height: 72,
+    left: 10,
+    right: 154,
+    top: 12,
+    bottom: 57,
+    axisY: 68,
+  };
+
   const allValues = cleanSeries.flatMap((entry) => entry.points.map((point) => point.value));
-  if (Number.isFinite(numericValue(options.baseline))) allValues.push(numericValue(options.baseline));
+  const baseline = numericValue(options.baseline);
+  if (Number.isFinite(baseline)) allValues.push(baseline);
+  const thresholds = Array.isArray(options.thresholds) ? options.thresholds : [];
+  thresholds.forEach((threshold) => {
+    const value = numericValue(threshold?.value);
+    if (Number.isFinite(value)) allValues.push(value);
+  });
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
   const pad = Math.max((max - min) * 0.10, Math.max(Math.abs(max), 1) * 0.0025);
   const yMin = min - pad;
   const yMax = max + pad;
-  const scaleY = (value) => 86 - ((value - yMin) / Math.max(yMax - yMin, 1e-9)) * 68;
+  const scaleY = (value) => geometry.bottom
+    - ((value - yMin) / Math.max(yMax - yMin, 1e-9)) * (geometry.bottom - geometry.top);
+
+  const referenceMarkup = [];
+  if (Number.isFinite(baseline) && baseline >= yMin && baseline <= yMax) {
+    const y = scaleY(baseline);
+    referenceMarkup.push(
+      `<line class="chart-baseline" x1="${geometry.left}" y1="${y.toFixed(2)}" x2="${geometry.right}" y2="${y.toFixed(2)}" />`,
+    );
+    if (options.baselineLabel) {
+      referenceMarkup.push(
+        `<text x="${geometry.left + 1.5}" y="${Math.max(geometry.top + 2, y - 1.5).toFixed(2)}" text-anchor="start" class="chart-reference-label">${escapeHTML(options.baselineLabel)}</text>`,
+      );
+    }
+  }
+  thresholds.forEach((threshold) => {
+    const value = numericValue(threshold?.value);
+    if (!Number.isFinite(value) || value < yMin || value > yMax) return;
+    const y = scaleY(value);
+    referenceMarkup.push(
+      `<line class="chart-threshold" x1="${geometry.left}" y1="${y.toFixed(2)}" x2="${geometry.right}" y2="${y.toFixed(2)}" />`,
+    );
+    if (threshold?.label) {
+      referenceMarkup.push(
+        `<text x="${geometry.left + 1.5}" y="${Math.max(geometry.top + 2, y - 1.5).toFixed(2)}" text-anchor="start" class="chart-reference-label">${escapeHTML(String(threshold.label))}</text>`,
+      );
+    }
+  });
 
   const polylines = cleanSeries.map((entry) => {
     const coords = entry.points.map((point, pointIndex) => {
       const label = point.label || `#${pointIndex + 1}`;
       const index = labelIndex.get(label) ?? pointIndex;
-      const x = xCoordinate(label, index, labels, 7, 95);
+      const x = xCoordinate(label, index, labels, geometry.left, geometry.right);
       const y = scaleY(point.value);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
@@ -251,20 +295,45 @@ export function multiLineSvg(series = [], options = {}) {
     const label = String(marker?.session ?? marker?.label ?? '');
     const index = labelIndex.get(label);
     if (index == null) return '';
-    const x = xCoordinate(label, index, labels, 7, 95);
-    return `<g class="chart-marker-group"><line class="chart-marker" x1="${x.toFixed(2)}" y1="18" x2="${x.toFixed(2)}" y2="86" />${marker?.text ? `<text class="chart-marker-label" x="${Math.min(92, x + 1.2).toFixed(2)}" y="22">${escapeHTML(String(marker.text))}</text>` : ''}</g>`;
+    const x = xCoordinate(label, index, labels, geometry.left, geometry.right);
+    return `<g class="chart-marker-group"><line class="chart-marker" x1="${x.toFixed(2)}" y1="${geometry.top}" x2="${x.toFixed(2)}" y2="${geometry.bottom}" />${marker?.text ? `<text class="chart-marker-label" x="${Math.min(geometry.right - 2, x + 1.3).toFixed(2)}" y="${geometry.top + 3}">${escapeHTML(String(marker.text))}</text>` : ''}</g>`;
   }).join('');
 
   const endIds = new Set(Array.isArray(options.endLabelIds) ? options.endLabelIds.map(String) : []);
-  const endLabels = cleanSeries.map((entry) => {
-    if (!endIds.has(entry.id)) return '';
-    const last = entry.points[entry.points.length - 1];
-    const label = last.label || labels[labels.length - 1];
-    const index = labelIndex.get(label) ?? labels.length - 1;
-    const x = xCoordinate(label, index, labels, 7, 95);
-    const y = scaleY(last.value);
-    const short = entry.label.length > 18 ? `${entry.label.slice(0, 16)}…` : entry.label;
-    return `<g><circle class="chart-end-point league-series-${entry.seriesIndex % 7}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.8" /><text class="chart-end-label" x="${Math.min(94, x + 1.5).toFixed(2)}" y="${Math.max(10, y - 2).toFixed(2)}" text-anchor="${x > 88 ? 'end' : 'start'}">${escapeHTML(short)} ${escapeHTML(chartValue(last.value, options))}</text></g>`;
+  const rawEndLabels = cleanSeries
+    .filter((entry) => endIds.has(entry.id))
+    .map((entry) => {
+      const last = entry.points[entry.points.length - 1];
+      const label = last.label || labels[labels.length - 1];
+      const index = labelIndex.get(label) ?? labels.length - 1;
+      const x = xCoordinate(label, index, labels, geometry.left, geometry.right);
+      const y = scaleY(last.value);
+      return { entry, last, x, y, labelY: y - 1.4 };
+    })
+    .sort((a, b) => a.y - b.y);
+
+  const labelGap = 4.2;
+  let nextLabelY = geometry.top + 1.5;
+  rawEndLabels.forEach((item) => {
+    item.labelY = Math.max(item.labelY, nextLabelY);
+    nextLabelY = item.labelY + labelGap;
+  });
+  if (rawEndLabels.length) {
+    const lastLabel = rawEndLabels[rawEndLabels.length - 1];
+    const overflow = Math.max(0, lastLabel.labelY - (geometry.bottom - 1));
+    if (overflow > 0) rawEndLabels.forEach((item) => { item.labelY -= overflow; });
+    const firstLabel = rawEndLabels[0];
+    const underflow = Math.max(0, (geometry.top + 1.5) - firstLabel.labelY);
+    if (underflow > 0) rawEndLabels.forEach((item) => { item.labelY += underflow; });
+  }
+
+  const endLabels = rawEndLabels.map(({ entry, last, x, y, labelY }) => {
+    const nearRight = x > geometry.right - 20;
+    const labelX = nearRight ? geometry.right - 1 : Math.min(geometry.right - 1, x + 2);
+    const guide = Math.abs(labelY - y) > 2
+      ? `<line class="chart-label-guide" x1="${x.toFixed(2)}" y1="${y.toFixed(2)}" x2="${labelX.toFixed(2)}" y2="${labelY.toFixed(2)}" />`
+      : '';
+    return `<g>${guide}<circle class="chart-end-point league-series-${entry.seriesIndex % 7}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.15" /><text class="chart-end-label" x="${labelX.toFixed(2)}" y="${labelY.toFixed(2)}" text-anchor="${nearRight ? 'end' : 'start'}">${escapeHTML(entry.shortLabel)} ${escapeHTML(chartValue(last.value, options))}</text></g>`;
   }).join('');
 
   const legend = cleanSeries.map((entry) => {
@@ -276,26 +345,26 @@ export function multiLineSvg(series = [], options = {}) {
   const firstLabel = labels[0] || '';
   const middleLabel = labels[Math.floor((labels.length - 1) / 2)] || '';
   const lastLabel = labels[labels.length - 1] || '';
+  const middleY = (geometry.top + geometry.bottom) / 2;
 
   return `<div class="league-chart-shell">
-    <svg class="league-chart enhanced-chart" viewBox="0 0 100 100" role="img" aria-label="${title}. Mínimo ${chartValue(min, options)}, máximo ${chartValue(max, options)}">
-      <line class="chart-grid" x1="7" y1="18" x2="95" y2="18" />
-      <line class="chart-grid" x1="7" y1="52" x2="95" y2="52" />
-      <line class="chart-grid" x1="7" y1="86" x2="95" y2="86" />
-      ${referenceLines(yMin, yMax, options)}
+    <svg class="league-chart enhanced-chart" viewBox="0 0 ${geometry.width} ${geometry.height}" role="img" aria-label="${title}. Mínimo ${chartValue(min, options)}, máximo ${chartValue(max, options)}">
+      <line class="chart-grid" x1="${geometry.left}" y1="${geometry.top}" x2="${geometry.right}" y2="${geometry.top}" />
+      <line class="chart-grid" x1="${geometry.left}" y1="${middleY.toFixed(2)}" x2="${geometry.right}" y2="${middleY.toFixed(2)}" />
+      <line class="chart-grid" x1="${geometry.left}" y1="${geometry.bottom}" x2="${geometry.right}" y2="${geometry.bottom}" />
+      ${referenceMarkup.join('')}
       ${markerLines}
       ${polylines}
       ${endLabels}
-      <text x="7" y="13" class="chart-label">${escapeHTML(chartValue(max, options))}</text>
-      <text x="7" y="96" class="chart-label">${escapeHTML(chartValue(min, options))}</text>
-      <text x="7" y="91" class="chart-label">${escapeHTML(shortTemporalLabel(firstLabel))}</text>
-      <text x="51" y="91" text-anchor="middle" class="chart-label">${escapeHTML(shortTemporalLabel(middleLabel))}</text>
-      <text x="95" y="91" text-anchor="end" class="chart-label">${escapeHTML(shortTemporalLabel(lastLabel))}</text>
+      <text x="${geometry.left}" y="8" class="chart-label">${escapeHTML(chartValue(max, options))}</text>
+      <text x="${geometry.left}" y="63" class="chart-label">${escapeHTML(chartValue(min, options))}</text>
+      <text x="${geometry.left}" y="${geometry.axisY}" class="chart-label">${escapeHTML(shortTemporalLabel(firstLabel))}</text>
+      <text x="${(geometry.left + geometry.right) / 2}" y="${geometry.axisY}" text-anchor="middle" class="chart-label">${escapeHTML(shortTemporalLabel(middleLabel))}</text>
+      <text x="${geometry.right}" y="${geometry.axisY}" text-anchor="end" class="chart-label">${escapeHTML(shortTemporalLabel(lastLabel))}</text>
     </svg>
     <div class="league-legend" aria-label="Leyenda de estrategias">${legend}</div>
   </div>`;
 }
-
 
 export function m3WeekBarsSvg(top3 = []) {
   if (!Array.isArray(top3) || !top3.length) {
