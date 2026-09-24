@@ -327,6 +327,7 @@ def run_capital_tournament(
     output_dir.mkdir(parents=True, exist_ok=True)
     result = {
         "schema_version": 1,
+        "league_id": str(league_cfg["league_id"]),
         "evidence_type": "retrospective_point_in_time_capital_tournament",
         "prospective_evidence": False,
         "requested_start_session": requested_sessions[0].isoformat(),

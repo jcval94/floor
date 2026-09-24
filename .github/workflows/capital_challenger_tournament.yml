@@ -145,7 +145,15 @@ jobs:
         run: |
           set -euo pipefail
           out="data/replay/capital_tournament_${{ steps.window.outputs.start }}_${{ steps.window.outputs.end }}"
-          league_id="capital_tournament_$(echo '${{ steps.window.outputs.start }}' | tr -d '-')_$(echo '${{ steps.window.outputs.end }}' | tr -d '-')"
+          league_id="$(python - "$out/capital_tournament.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(payload["league_id"])
+          PY
+          )"
           PYTHONPATH=src python -m replay.publish_tournament_report \
             --input "$out/capital_tournament.json" \
             --output data/reports/strategy.json
