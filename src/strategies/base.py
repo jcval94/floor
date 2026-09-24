@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from contracts.trading import round_trip_cost_bps_from_contract
+
 
 @dataclass
 class StrategyDecision:
@@ -38,7 +40,7 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
 
 
 def expected_cost_bps(global_cfg: dict) -> float:
-    return _safe_float(global_cfg["costs"]["commission_bps"]) + _safe_float(global_cfg["costs"]["slippage_bps"])
+    return round_trip_cost_bps_from_contract(dict(global_cfg.get("costs", {})))
 
 
 def range_is_tradeable(row: dict, global_cfg: dict) -> bool:
