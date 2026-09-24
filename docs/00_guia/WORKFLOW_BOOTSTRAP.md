@@ -1,120 +1,111 @@
-# Estado de alistamiento y orden recomendado de Workflows
+# Bootstrap operativo de FLOOR
 
-Esta guía resume **qué debe existir** para decir que el repo ya está “generando contenido” (DB + modelos) y en qué orden conviene ejecutar GitHub Actions.
+Esta guía describe el flujo actual. SQLite y los snapshots generados **no se versionan en Git**; el estado durable operacional se restaura/publica mediante GitHub Releases.
 
-## Checklist de alistamiento
+## Requisitos
 
-### 1) Base de datos local de mercado
-Debe existir este archivo local:
+- Python compatible con `pyproject.toml`.
+- `gh` autenticado para workflows/scripts que usan Releases.
+- acceso de red a Yahoo Finance cuando se requiera refresh.
+- champions de serving válidos en `data/training/models/*.json`.
 
-- `data/market/market_data.sqlite`
-
-Cómo crearlo:
-
-```bash
-make init-dbs
-```
-
-Cómo poblarlo:
+## Bootstrap local
 
 ```bash
+python -m pip install -e '.[dev]'
+make init-db-schemas
 make yahoo-ingest
 ```
 
-Resultado esperado:
-
-- La tabla `daily_bars` debe tener filas (`COUNT(*) > 0`).
-
-> Nota: en entornos con restricciones de red/proxy, `yahoo-ingest` puede no descargar datos y dejar la DB vacía.
-
-### 2) Base de datos de persistencia operativa
-Debe existir este archivo local:
-
-- `data/persistence/app.sqlite`
-
-Cómo crearlo:
-
-```bash
-make init-dbs
-```
-
-### 3) Dataset modelable
-Debe existir:
-
-- `data/training/modelable_dataset.json`
-
-Cómo generarlo desde la DB de mercado:
+Para reconstruir el dataset modelable:
 
 ```bash
 make build-training-from-db
 ```
 
-### 4) Modelos entrenados en repo
-Deben existir (sin `.gitkeep`):
+Para modelado instala también:
 
-- `data/training/models/value_champion.json`
-- `data/training/models/timing_champion.json`
+```bash
+python -m pip install -e '.[modeling]'
+```
 
-Cómo generarlos:
+## Bootstrap en GitHub Actions
 
-- Local: `bash scripts/retrain_models.sh data/training/modelable_dataset.json data/training first-run`
-- Workflow: `retrain_execute` con `force=true`
+No existe un `db_bootstrap` autoritativo separado. Los workflows crean schemas cuando los necesitan y restauran el runtime desde `runtime-state-v1`.
 
-## Orden recomendado de Workflows (primera puesta en marcha)
+Orden recomendado para una instalación sin estado previo:
 
-1. `db_bootstrap` (manual, una sola vez)  
-   Al lanzarlo por `workflow_dispatch`, crea `data/market/market_data.sqlite` y `data/persistence/app.sqlite` y deja un marker para no volver a correr automáticamente.
-2. `ingest`  
-   Inicializa el contenido operativo con datos de mercado y artefactos de ciclo.
-3. `retrain_execute` (`force=true`)  
-   Construye dataset + reentrena + reemplaza artefactos en `data/training/models/`.
-4. `intraday_engine`  
-   Ejecuta el ciclo intradía usando los modelos ya presentes.
-5. `eod`  
-   Consolida reportes diarios y payload de `site/data`.
-6. `monitoring`  
-   Publica métricas operativas básicas.
-7. `pages`  
-   Publica el sitio estático con los datos más recientes.
-8. `archive` (opcional diario)  
-   Compacta índices de datos efímeros.
+1. **ingest** — crea/actualiza market SQLite y publica runtime.
+2. **retrain_assessment** — construye evidencia actual y decide si existe necesidad de retraining.
+3. **retrain_execute** — solo cuando existe autorización explícita de promoción.
+4. **intraday_engine** — ejecuta checkpoints programados.
+5. **eod** — genera cierre canónico y reconciliación.
+6. **monitoring** — publica health aislado.
+7. **pages** — construye y despliega el snapshot auditado.
 
+Una vez inicializado, `intraday_engine`, `eod` y `monitoring` funcionan por schedule. `scheduler_watchdog` solo repone polls ausentes; no duplica runs recientes/activos.
 
-## Preflight SQLite obligatorio en workflows críticos
+## Estado durable
 
-Los workflows `ingest`, `intraday_engine` y `retrain_execute` ejecutan un preflight común al inicio del job crítico:
+### runtime-state-v1
 
-1. `make init-dbs` para asegurar creación de `data/market/market_data.sqlite` y `data/persistence/app.sqlite`.
-2. Saneamiento de permisos para runners:
-   - directorios `data/market` y `data/persistence` con `u+rwx`;
-   - archivos dentro de esas rutas con `u+rw`.
-3. Validación de esquema con `sqlite3`:
-   - en market, existencia de tabla `daily_bars`;
-   - en persistence, existencia de tablas `predictions`, `signals`, `orders`, `training_reviews`.
-4. Preflight de contenido para predicción/retraining (`intraday_engine` y `retrain_execute`):
-   - si `SELECT COUNT(*) FROM daily_bars` devuelve `0`, se registra `::warning::` explícito;
-   - se dispara ingesta Yahoo antes de continuar con ejecución intradía o reentrenamiento.
+Incluye, cuando existen:
 
-Este preflight evita fallos por SQLite inexistente/vacía o por permisos insuficientes de escritura en GitHub-hosted runners.
+- market SQLite;
+- persistence SQLite;
+- predictions/signals/orders/trades;
+- snapshots y reportes;
+- métricas;
+- reviews de training.
 
-## Cadencia sugerida después del arranque
+Cada publicación nueva es una generación inmutable con checksum y metadata. El publisher verifica CAS contra la generación que restauró.
 
-- Intradía continuo: `ingest` + `intraday_engine` + `eod` + `monitoring` + `pages` (sin `db_bootstrap`, porque es one-shot).
-- Gobierno de modelos:
-  - `retrain_assessment` quincenal (ya calendarizado).
-  - `retrain_execute` cuando el assessment indique `RETRAIN` o bajo operación manual controlada.
+### checkpoint-state-v1
 
-## Workflows deprecados
+Contiene únicamente markers ligeros necesarios para gating. Permite decidir si un checkpoint está pendiente sin descargar el runtime completo.
 
-No usar para operación nueva:
+### monitoring-state-v1
 
-- `training-review` (usar `retrain_assessment`)
-- `intraday` (usar `intraday_engine`)
+Snapshot JSON de health operacional. Es aislado del runtime writer.
 
+### research-state-v1
 
-## Ejecución manual (una sola vez)
+Evidencia de research/strategy que puede superponerse para Pages sin convertirse en estado operacional autoritativo.
 
-1. Ir a **Actions** → `db_bootstrap`.
-2. Click en **Run workflow**.
-3. El job crea las dos SQLite y registra `data/snapshots/workflow_runs/db_bootstrap.json`.
-4. En ejecuciones futuras, el mismo workflow se auto-salta con `reason=already_bootstrapped`.
+## Pages
+
+El build de Pages fija al inicio los payloads de Release que utilizará. Esa selección queda registrada en el audit de publicación; un asset nuevo que aparezca durante el build no cambia el snapshot a mitad de ejecución.
+
+El directorio autoritativo es `site/`. `docs/` no debe usarse como fuente de datos operativos.
+
+## Writers autorizados
+
+El inventario está en:
+
+```text
+config/resource_ownership.json
+```
+
+Valídalo con:
+
+```bash
+PYTHONPATH=src python -m utils.resource_ownership
+```
+
+## Validación
+
+```bash
+ruff check src tests scripts
+mypy --ignore-missing-imports src
+pytest -q
+python scripts/validate_repo.py
+```
+
+## Settings de GitHub
+
+Dos controles son administrativos y no pueden imponerse con el `GITHUB_TOKEN` normal:
+
+1. **Pages → Source: GitHub Actions**.
+2. **Ruleset/branch protection para `main`** con PR + CI requerido.
+
+El código contiene guards para reducir el riesgo si esos settings aún no están configurados, pero los settings deben activarse desde la administración del repositorio.
