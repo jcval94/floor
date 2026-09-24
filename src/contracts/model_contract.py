@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_MODEL_CONTRACTS_PATH = Path("config/model_contracts.json")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODEL_CONTRACTS_PATH = REPO_ROOT / "config" / "model_contracts.json"
 MODEL_CONTRACT_SCHEMA_VERSION = 1
 
 
