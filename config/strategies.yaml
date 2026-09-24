@@ -60,7 +60,8 @@ strategies:
     entry:
       min_abs_trend_score: 0.010
       min_reward_risk: 1.25
-      min_net_edge_pct: 0.003
+      min_net_alpha_pct: 0.003
+      min_alpha_to_cost_multiple: 1.50
       momentum_weight: 0.65
       relative_strength_weight: 0.35
     position_sizing:
@@ -92,7 +93,8 @@ strategies:
     entry:
       near_anchor_pct: 0.020
       min_reward_risk: 1.30
-      min_net_edge_pct: 0.004
+      min_net_alpha_pct: 0.004
+      min_alpha_to_cost_multiple: 1.50
       min_recovery_momentum: -0.005
       max_fading_momentum: 0.005
     position_sizing:
@@ -124,7 +126,8 @@ strategies:
     entry:
       min_asymmetry_ratio: 1.35
       min_abs_trend_score: 0.005
-      min_net_edge_pct: 0.004
+      min_net_alpha_pct: 0.004
+      min_alpha_to_cost_multiple: 1.50
       d1_weight: 0.20
       w1_weight: 0.30
       q1_weight: 0.50
@@ -158,12 +161,14 @@ strategies:
       max_price: 2000
       excluded_sectors:
     entry:
-      buy_top_fraction: 0.20
-      sell_bottom_fraction: 0.20
+      buy_top_fraction: 0.10
+      retain_top_fraction: 0.20
+      sell_bottom_fraction: 0.10
       min_buy_score: 0.0
       max_sell_score: 0.0
       min_reward_risk: 1.20
-      min_net_edge_pct: 0.004
+      min_net_alpha_pct: 0.004
+      min_alpha_to_cost_multiple: 2.00
     position_sizing:
       risk_budget_pct_nav: 0.010
       max_weight_pct_nav: 0.20
