@@ -436,12 +436,21 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             )
         )
         evidence_role = (
-            str(member_spec.get("evidence_role") or "candidate")
+            str(
+                member_spec.get("evidence_role")
+                or semantic_contract.get("evidence_role")
+                or "candidate"
+            )
             if is_strategy
             else "benchmark"
         )
         strategy_promotion_enabled = (
-            bool(member_spec.get("promotion_eligible", True))
+            bool(
+                member_spec.get(
+                    "promotion_eligible",
+                    semantic_contract.get("promotion_eligible", True),
+                )
+            )
             and evidence_role != "diagnostic_only"
             if is_strategy
             else False
