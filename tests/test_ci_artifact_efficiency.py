@@ -13,7 +13,8 @@ def test_ci_runs_once_per_pr_update_and_pytest_once_per_job() -> None:
 
     assert "push:\n    branches: [main]" in workflow
     assert "pull_request:\n    branches: [main]" in workflow
-    assert "cancel-in-progress: true" in workflow
+    assert "github.event_name == 'pull_request' && github.event.pull_request.number || github.sha" in workflow
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
     assert workflow.count("pytest -q") == 1
     assert "--cov=src" in workflow
     assert "--cov-fail-under=60" in workflow
