@@ -8,8 +8,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from contracts.model_contract import attach_model_contract
 from features.model_competition import HORIZONS, build_model_specs
 from models.horizon_timing import fit_horizon_timing
+from models.temporal_cv import chronological_calibration_split
 from models.robust_range_v3 import (
     ROBUST_RANGE_FEATURES,
     build_anchored_blend,
@@ -20,6 +22,8 @@ from models.robust_range_v3 import (
 )
 
 logger = logging.getLogger(__name__)
+
+RISK_TARGET_MARGINAL_COVERAGE = 0.80
 
 HORIZON_TARGETS = {
     "d1": ("floor_d1", "ceiling_d1"),
@@ -520,6 +524,81 @@ def _metrics(
     }
 
 
+def _fit_risk_geometry(
+    rows: list[_PreparedRow],
+    floor_predictions: list[float],
+    ceiling_predictions: list[float],
+) -> dict[str, Any]:
+    """Calibrate wider one-sided risk bounds without changing central forecasts.
+
+    Central floor/ceiling remain conditional typical geometry.  Risk geometry
+    widens each side by an out-of-time residual quantile so strategies no longer
+    treat a median-like boundary as a conservative stop.
+    """
+
+    floor_residuals = [
+        item.floor_delta - prediction
+        for item, prediction in zip(rows, floor_predictions)
+    ]
+    ceiling_residuals = [
+        item.ceiling_delta - prediction
+        for item, prediction in zip(rows, ceiling_predictions)
+    ]
+    floor_addon = max(
+        0.0,
+        _quantile(floor_residuals, RISK_TARGET_MARGINAL_COVERAGE),
+    )
+    ceiling_addon = max(
+        0.0,
+        _quantile(ceiling_residuals, RISK_TARGET_MARGINAL_COVERAGE),
+    )
+    return {
+        "schema_version": 1,
+        "method": "validation_residual_quantile",
+        "target_marginal_coverage": RISK_TARGET_MARGINAL_COVERAGE,
+        "floor_delta_addon": floor_addon,
+        "ceiling_delta_addon": ceiling_addon,
+        "calibration_rows": len(rows),
+        "semantics": {
+            "central_geometry": "typical conditional floor/ceiling",
+            "risk_geometry": "wider one-sided residual-quantile boundaries",
+            "strategy_stop_source": "risk_geometry",
+            "strategy_target_source": "central_geometry",
+        },
+    }
+
+
+def _risk_geometry_metrics(
+    rows: list[_PreparedRow],
+    floor_predictions: list[float],
+    ceiling_predictions: list[float],
+    risk_geometry: dict[str, Any],
+) -> dict[str, float]:
+    floor_addon = max(0.0, float(risk_geometry.get("floor_delta_addon") or 0.0))
+    ceiling_addon = max(
+        0.0, float(risk_geometry.get("ceiling_delta_addon") or 0.0)
+    )
+    floor_hits: list[float] = []
+    ceiling_hits: list[float] = []
+    interval_hits: list[float] = []
+    for item, floor_prediction, ceiling_prediction in zip(
+        rows, floor_predictions, ceiling_predictions
+    ):
+        risk_floor_delta = _clamp(floor_prediction + floor_addon)
+        risk_ceiling_delta = _clamp(ceiling_prediction + ceiling_addon)
+        floor_ok = item.floor_delta <= risk_floor_delta
+        ceiling_ok = item.ceiling_delta <= risk_ceiling_delta
+        floor_hits.append(1.0 if floor_ok else 0.0)
+        ceiling_hits.append(1.0 if ceiling_ok else 0.0)
+        interval_hits.append(1.0 if floor_ok and ceiling_ok else 0.0)
+    return {
+        "risk_target_marginal_coverage": RISK_TARGET_MARGINAL_COVERAGE,
+        "risk_floor_coverage": _mean(floor_hits),
+        "risk_ceiling_coverage": _mean(ceiling_hits),
+        "risk_interval_coverage": _mean(interval_hits),
+    }
+
+
 def train_horizon_competition(
     rows: list[dict],
     horizon: str,
@@ -531,19 +610,25 @@ def train_horizon_competition(
         raise ValueError(f"Unsupported horizon: {horizon}")
 
     floor_col, ceiling_col = HORIZON_TARGETS[horizon]
-    train_raw, evaluation_raw = _split(rows, horizon)
+    train_raw, validation_raw = _split(rows, horizon)
+    calibration_raw, evaluation_raw = chronological_calibration_split(validation_raw)
     feature_names = tuple(
         sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
     )
     train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
-    evaluation = _prepare_rows(evaluation_raw, floor_col, ceiling_col, feature_names)
+    calibration = _prepare_rows(
+        calibration_raw, floor_col, ceiling_col, feature_names
+    )
+    evaluation = _prepare_rows(
+        evaluation_raw, floor_col, ceiling_col, feature_names
+    )
     if not train:
         raise ValueError(
             f"No leakage-safe training rows with valid labels for horizon={horizon}"
         )
-    if not evaluation:
+    if not calibration or not evaluation:
         raise ValueError(
-            f"No leakage-safe validation rows for horizon={horizon}; "
+            f"No leakage-safe validation calibration/evaluation rows for horizon={horizon}; "
             "champion selection refuses train/test fallback"
         )
 
@@ -565,9 +650,30 @@ def train_horizon_competition(
         ceiling_params, ceiling_fn = _family_model(
             spec.model_family, train, "ceiling_delta", training_mode
         )
+        calibration_floor_predictions = [
+            floor_fn(item) for item in calibration
+        ]
+        calibration_ceiling_predictions = [
+            ceiling_fn(item) for item in calibration
+        ]
+        risk_geometry = _fit_risk_geometry(
+            calibration,
+            calibration_floor_predictions,
+            calibration_ceiling_predictions,
+        )
         floor_predictions = [floor_fn(item) for item in evaluation]
         ceiling_predictions = [ceiling_fn(item) for item in evaluation]
-        candidate_metrics = _metrics(evaluation, floor_predictions, ceiling_predictions)
+        candidate_metrics = _metrics(
+            evaluation, floor_predictions, ceiling_predictions
+        )
+        candidate_metrics.update(
+            _risk_geometry_metrics(
+                evaluation,
+                floor_predictions,
+                ceiling_predictions,
+                risk_geometry,
+            )
+        )
         candidates.append(
             HorizonCompetitionCandidate(
                 model_id=spec.model_id,
@@ -590,11 +696,14 @@ def train_horizon_competition(
                         "breach_probability": candidate_metrics["empirical_breach_rate"],
                         "evaluation_rows": len(evaluation),
                     },
+                    "risk_geometry": risk_geometry,
                     "split_integrity": {
                         "eligibility_field": f"split_eligible_{horizon}",
                         "selection_split": "validation",
                         "test_used_for_selection": False,
                         "train_rows_raw": len(train_raw),
+                        "validation_rows_raw": len(validation_raw),
+                        "calibration_rows_raw": len(calibration_raw),
                         "evaluation_rows_raw": len(evaluation_raw),
                     },
                 },
@@ -646,8 +755,9 @@ def run(
             params=champion.params,
         )
         artifacts.append(artifact)
+        artifact_payload = attach_model_contract(asdict(artifact), horizon)
         (output_dir / f"{horizon}_champion.json").write_text(
-            json.dumps(asdict(artifact), ensure_ascii=False, indent=2),
+            json.dumps(artifact_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         timing_status = "unknown"
