@@ -44,6 +44,7 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
     volumes = [_safe_float(row.get("volume")) for row in bars]
     spy_closes = [_safe_float(row.get("close")) for row in spy_bars]
 
+    momentum_10 = close / max(closes[-11], 1e-9) - 1.0
     momentum_20 = close / max(closes[-21], 1e-9) - 1.0
     spy_momentum_20 = spy_closes[-1] / max(spy_closes[-21], 1e-9) - 1.0
     sma_65 = _mean(closes[-65:])
@@ -67,6 +68,7 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
         "low": _safe_float(latest.get("low")),
         "close": close,
         "volume": _safe_float(latest.get("volume")),
+        "momentum_10": momentum_10,
         "momentum_20": momentum_20,
         "rel_strength_20": momentum_20 - spy_momentum_20,
         "trend_context_m3": close / max(sma_65, 1e-9) - 1.0,
