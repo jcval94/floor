@@ -226,6 +226,33 @@ def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> di
     return payload
 
 
+def _champion_suite_contract(repo_root: Path) -> dict[str, str]:
+    registry = repo_root / "data" / "training" / "models"
+    tasks = ("d1", "w1", "q1", "value", "timing")
+    hashes: dict[str, str] = {}
+    for task in tasks:
+        path = registry / f"{task}_champion.json"
+        if not path.exists():
+            raise RuntimeError(
+                f"Strategy League cannot freeze missing champion: {path}"
+            )
+        hashes[f"{task}_champion_sha256"] = sha256_file(path)
+    return {
+        "model_suite_contract_version": "v2",
+        **hashes,
+    }
+
+
+def _uses_model_suite_contract(state: dict | None) -> bool:
+    if not isinstance(state, dict):
+        return False
+    frozen = state.get("frozen_contract")
+    return (
+        isinstance(frozen, dict)
+        and frozen.get("model_suite_contract_version") == "v2"
+    )
+
+
 def _holding_sessions(strategy_cfg: dict, default: int) -> int:
     value = int(
         strategy_cfg.get("exits", {}).get("temporal_exit_business_days", default)
@@ -350,6 +377,13 @@ def run_league_eod(
         "strategies_config_sha256": sha256_file(strategies_config_path),
         "weekly_model_sha256": sha256_file(model_path),
     }
+    # Preserve existing v7 history byte-for-byte at the contract boundary.
+    # New epochs freeze every serving champion because Breakout/Mean/Cross and
+    # the capital allocator depend on the classic/M3 model suite.
+    if state is None or _uses_model_suite_contract(state):
+        frozen_contract.update(
+            _champion_suite_contract(league_config_path.parent.parent)
+        )
 
     rows = list(snapshot.get("rows", []))
     next_targets: dict[str, dict[str, dict]] = {}
