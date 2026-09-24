@@ -153,16 +153,15 @@ def validate_authoritative_workflow_ownership() -> list[str]:
         if "state_publish_set" not in state_script:
             errors.append(f"{name} must publish immutable run-scoped Release assets")
 
-    for name in ("manual_compact_git_history.yml", "compact_history_once.yml"):
-        workflow = (workflows / name).read_text(encoding="utf-8")
-        if "--force-with-lease=" not in workflow:
-            errors.append(f"{name} must protect destructive ref updates with exact leases")
-        if "push --atomic --force --prune" in workflow:
-            errors.append(f"{name} must not use unleased wildcard force/prune pushes")
-
-    one_shot = (workflows / "compact_history_once.yml").read_text(encoding="utf-8")
-    if "branches: [main]" in one_shot and 'paths:' in one_shot.split("permissions:", 1)[0]:
-        errors.append("compact_history_once must never self-trigger from a push")
+    workflow = (workflows / "manual_compact_git_history.yml").read_text(encoding="utf-8")
+    if "--force-with-lease=" not in workflow:
+        errors.append(
+            "manual_compact_git_history.yml must protect destructive ref updates with exact leases"
+        )
+    if "push --atomic --force --prune" in workflow:
+        errors.append(
+            "manual_compact_git_history.yml must not use unleased wildcard force/prune pushes"
+        )
 
     return errors
 
