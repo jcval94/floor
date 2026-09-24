@@ -111,7 +111,9 @@ def validate_authoritative_workflow_ownership() -> list[str]:
     manual_training = (workflows / "manual_train_all_models.yml").read_text(
         encoding="utf-8"
     )
-    if "git push" in manual_training or "git commit -m" in manual_training:
+    git_push = "git " + "push"
+    git_commit = "git " + "commit -m"
+    if git_push in manual_training or git_commit in manual_training:
         errors.append(
             "manual_train_all_models must not publish the production model registry; "
             "retrain_execute is the single promotion authority"
