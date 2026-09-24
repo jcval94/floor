@@ -56,7 +56,7 @@ def _rows() -> list[dict]:
             "floor_q1": 97.0,
             "ceiling_q1": 103.0,
             "confidence_score": 0.50,
-            "momentum_20": 0.0,
+            "momentum_20": 0.020,
             "rel_strength_20": 0.0,
             "avg_dollar_volume": 50_000_000,
             "floor_m3": 90.0,
@@ -85,8 +85,8 @@ def test_cost_contract_includes_platform_fee_on_both_sides() -> None:
 
     assert cfg["costs"]["platform_fee_bps_per_side"] == 24.0
     assert all(signal["platform_fee_bps_per_side"] == 24.0 for signal in out["signals"])
-    assert all(signal["round_trip_cost_bps"] == 58.0 for signal in out["signals"])
-    assert all(order["round_trip_cost_bps"] == 58.0 for order in out["orders"])
+    assert all(signal["round_trip_cost_bps"] == 61.0 for signal in out["signals"])
+    assert all(order["round_trip_cost_bps"] == 61.0 for order in out["orders"])
 
 
 def test_legacy_directional_strategies_are_not_registered() -> None:
@@ -137,7 +137,7 @@ def test_mean_reversion_is_symmetric_at_w1_anchors() -> None:
             "close": 100.0,
             "floor_w1": 88.0,
             "ceiling_w1": 101.0,
-            "momentum_20": 0.0,
+            "momentum_20": -0.020,
             "rel_strength_20": 0.0,
         }
     )
