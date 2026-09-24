@@ -23,6 +23,11 @@ class StrategyDecision:
     priority_adjustment: int = 0
     blocked: bool = False
     blocked_reason: str = ""
+    gross_alpha_pct: float = 0.0
+    net_alpha_pct: float = 0.0
+    cost_pct: float = 0.0
+    alpha_source: str = ""
+    payoff_room_pct: float = 0.0
 
 
 def _safe_float(v: Any, default: float = 0.0) -> float:
