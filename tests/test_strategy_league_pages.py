@@ -474,4 +474,8 @@ def test_workflows_wire_intraday_strategy_channel_without_touching_daily_bars() 
     assert "strategy-live-v1" in pages_workflow
     assert "--live-output site/data/strategy_live.json" in pages_workflow
     assert "league.live_snapshot export-base" in eod_workflow
+    assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in eod_workflow
+    assert "actions: write" in eod_workflow
+    workflow_run_header = pages_workflow.split("push:", 1)[0]
+    assert '"eod"' not in workflow_run_header
     assert "upsert_daily_bars" not in engine
