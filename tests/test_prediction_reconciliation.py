@@ -179,7 +179,8 @@ def test_reconciliation_cache_is_reconstructable_from_durable_jsonl(
     append_jsonl(
         data_dir / "predictions" / "AAPL.jsonl",
         {
-            "batch_id": "2026-01-01:OPEN",
+            # Deliberately omit batch_id: hydration will synthesize legacy:...
+            # while the semantic prediction key must remain identical.
             "symbol": "AAPL",
             "as_of": "2026-01-01T12:00:00+00:00",
             "event_type": "OPEN",
@@ -204,8 +205,9 @@ def test_reconciliation_cache_is_reconstructable_from_durable_jsonl(
         prediction_keys = conn.execute(
             "SELECT prediction_key FROM predictions"
         ).fetchall()
-        reconciliations = conn.execute(
-            "SELECT COUNT(*) FROM prediction_reconciliations"
-        ).fetchone()
+        reconciliation_keys = conn.execute(
+            "SELECT prediction_key FROM prediction_reconciliations"
+        ).fetchall()
     assert prediction_keys and prediction_keys[0][0]
-    assert reconciliations and reconciliations[0] == 1
+    assert reconciliation_keys and reconciliation_keys[0][0]
+    assert prediction_keys[0][0] == reconciliation_keys[0][0]

@@ -11,7 +11,9 @@ def prediction_key(payload: dict[str, Any]) -> str:
     symbol = str(payload.get("symbol") or "").strip().upper()
     horizon = str(payload.get("horizon") or "").strip().lower()
     model_version = str(payload.get("model_version") or "").strip()
-    if batch_id:
+    # Hydration assigns synthetic legacy batch ids only for SQLite idempotency.
+    # They must not change the semantic identity of the original durable row.
+    if batch_id and not batch_id.startswith("legacy:"):
         raw = f"batch={batch_id}|symbol={symbol}|horizon={horizon}|model={model_version}"
     else:
         raw = (
