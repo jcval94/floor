@@ -253,7 +253,7 @@ jobs:
         run: bash scripts/monitoring_state.sh restore
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Build and aggressively audit static site payloads
         run: |
