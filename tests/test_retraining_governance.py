@@ -40,16 +40,25 @@ def test_governance_separates_recommendation_authorization_and_execution(
     assert payload["models"]["value"]["retrain_execution"] == "NOT_RUN"
     assert payload["models"]["timing"]["retrain_authorization"] == "NOT_REQUIRED"
 
-def test_retrain_execute_request_can_only_approve_governed_recommendations() -> None:
+def test_retrain_execute_request_supports_governed_or_audited_manual_authorization() -> None:
     workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")
 
     assert "push:" in workflow
     assert "retrain_execute_request.json" in workflow
     assert 'if event_name == "push":' in workflow
-    assert "force = False" in workflow
     assert 'request.get("approve_recommended") is True' in workflow
     assert 'payload.get("tasks_for_auto_retrain_requested", [])' in workflow
     assert "audited_request_approval_of_recommendation" in workflow
+
+    # A committed force request is an explicit human authorization surface,
+    # but it remains fail-closed: only known tasks and the same publish
+    # confirmation used by workflow_dispatch are accepted.
+    assert 'allowed_tasks = {"d1", "w1", "q1", "value", "timing"}' in workflow
+    assert 'request.get("force") is True' in workflow
+    assert 'request.get("confirm_publish")' in workflow
+    assert "PUBLISH_CHAMPIONS_TO_MAIN" in workflow
+    assert "audited_committed_manual_force" in workflow
+    assert "AUDITED_MANUAL_FORCE" in workflow
 
 def test_retrain_execute_reserves_full_m3_validation_and_test_windows() -> None:
     workflow = Path(".github/workflows/retrain_execute.yml").read_text(encoding="utf-8")

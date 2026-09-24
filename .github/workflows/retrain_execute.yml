@@ -103,9 +103,37 @@ jobs:
                   if request_path.exists()
                   else {}
               )
-              force = False
-              approve_recommended = request.get("approve_recommended") is True
-              requested = []
+              allowed_tasks = {"d1", "w1", "q1", "value", "timing"}
+              request_tasks = [
+                  str(x).strip()
+                  for x in request.get("tasks", [])
+                  if str(x).strip()
+              ]
+              unknown_tasks = sorted(set(request_tasks) - allowed_tasks)
+              if unknown_tasks:
+                  raise SystemExit(
+                      "Committed retrain request contains unsupported tasks: "
+                      + ",".join(unknown_tasks)
+                  )
+              request_force = request.get("force") is True
+              request_confirmation = str(request.get("confirm_publish") or "")
+              if request_force:
+                  if request_confirmation != "PUBLISH_CHAMPIONS_TO_MAIN":
+                      raise SystemExit(
+                          "Committed manual-force retrain requires "
+                          "confirm_publish=PUBLISH_CHAMPIONS_TO_MAIN"
+                      )
+                  if not request_tasks:
+                      raise SystemExit(
+                          "Committed manual-force retrain requires explicit tasks"
+                      )
+                  force = True
+                  approve_recommended = False
+                  requested = request_tasks
+              else:
+                  force = False
+                  approve_recommended = request.get("approve_recommended") is True
+                  requested = []
               dataset_path = "data/training/modelable_dataset.json"
           summary_path = Path("data/training/review_summary_latest.json")
           tasks = []
@@ -120,8 +148,16 @@ jobs:
               approve_recommended = False
           if force:
               tasks = requested
-              reason = "manual_force"
-              authorization = "MANUAL_FORCE"
+              reason = (
+                  "audited_committed_manual_force"
+                  if event_name == "push"
+                  else "manual_force"
+              )
+              authorization = (
+                  "AUDITED_MANUAL_FORCE"
+                  if event_name == "push"
+                  else "MANUAL_FORCE"
+              )
           elif approve_recommended and summary_path.exists():
               payload = json.loads(summary_path.read_text(encoding="utf-8"))
               tasks = [
