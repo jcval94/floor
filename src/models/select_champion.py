@@ -9,6 +9,8 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
 
+from contracts.model_contract import validate_model_artifact_contract
+
 logger = logging.getLogger(__name__)
 
 
@@ -204,6 +206,12 @@ def _incompatible_champion_schema(task: str, artifact: dict) -> bool:
 def select_and_persist_champion(new_artifact: object, registry_dir: Path, task: str) -> dict:
     registry_dir.mkdir(parents=True, exist_ok=True)
     payload = _to_dict(new_artifact)
+    contract_check = validate_model_artifact_contract(task, payload, allow_legacy=True)
+    if not contract_check["valid"]:
+        raise ValueError(
+            "Model artifact contract rejected task="
+            f"{task}: {','.join(contract_check['errors'])}"
+        )
     now = datetime.utcnow().isoformat() + "Z"
 
     champion_path = registry_dir / f"{task}_champion.json"
