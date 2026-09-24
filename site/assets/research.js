@@ -1,5 +1,5 @@
 import { escapeHTML, fmtPct, loadJSONState } from './utils.js';
-import { multiLineSvg } from './charts.js';
+import { filterPointsByWindow, multiLineSvg } from './charts.js';
 
 const LABELS = {
   capital_allocation_challenger: 'Capital Allocation Challenger',
@@ -63,16 +63,87 @@ function metric(labelText, value, detail, tone = '') {
   </article>`;
 }
 
-function oosChart(rows) {
+function oosStats(row, windowKey) {
+  const points = filterPointsByWindow(
+    Array.isArray(row?.equity_curve) ? row.equity_curve : [],
+    windowKey,
+  );
+  if (!points.length) return { points, return: null, maxDrawdown: null, end: null };
+  const start = Number(points[0]?.nav);
+  const end = Number(points[points.length - 1]?.nav);
+  const ret = Number.isFinite(start) && Number.isFinite(end) && Math.abs(start) > 1e-9
+    ? end / start - 1.0
+    : null;
+  let peak = Number.NEGATIVE_INFINITY;
+  let maxDrawdown = 0;
+  points.forEach((point) => {
+    const nav = Number(point?.nav);
+    if (!Number.isFinite(nav)) return;
+    peak = Math.max(peak, nav);
+    if (peak > 0) maxDrawdown = Math.min(maxDrawdown, nav / peak - 1.0);
+  });
+  return { points, return: ret, maxDrawdown, end };
+}
+
+function oosKpi(labelText, value) {
+  return `<span class="chart-kpi"><span>${escapeHTML(labelText)}</span><strong>${escapeHTML(value)}</strong></span>`;
+}
+
+function oosChart(rows, data, windowKey) {
+  const ranked = [...rows]
+    .filter((row) => !String(row.strategy || '').startsWith('benchmark_'))
+    .map((row) => ({ row, stats: oosStats(row, windowKey) }))
+    .filter((item) => Number.isFinite(item.stats.return))
+    .sort((a, b) => Number(b.stats.return) - Number(a.stats.return));
+  const leader = ranked[0]?.row?.strategy || null;
   const series = [...rows]
     .filter((row) => Array.isArray(row.equity_curve) && row.equity_curve.length)
     .sort((a, b) => (SERIES_RANK.get(a.strategy) ?? 99) - (SERIES_RANK.get(b.strategy) ?? 99))
     .map((row) => ({
       id: row.strategy,
       label: label(row.strategy),
-      points: row.equity_curve.map((point) => ({ session: point.session, value: point.nav })),
+      points: filterPointsByWindow(row.equity_curve, windowKey)
+        .map((point) => ({ session: point.session, value: point.nav })),
+    }))
+    .filter((entry) => entry.points.length);
+  const visibleSessions = new Set(series.flatMap((entry) => entry.points.map((point) => String(point.session))));
+  const markers = (Array.isArray(data?.fold_reports) ? data.fold_reports : [])
+    .filter((fold) => visibleSessions.has(String(fold?.start_session || '')))
+    .map((fold) => ({
+      session: String(fold.start_session),
+      text: `F${fold.fold}`,
     }));
-  return multiLineSvg(series, { title: 'Walk-forward histórico con modelos entrenados antes de cada fold' });
+  return multiLineSvg(series, {
+    title: 'Walk-forward histórico con modelos entrenados antes de cada fold',
+    valueFormat: 'money',
+    baseline: Number(data?.initial_nav_usd),
+    baselineLabel: 'Capital inicial',
+    markers,
+    endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+  });
+}
+
+function oosWindowMetrics(rows, data, windowKey) {
+  const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
+  const spy = rows.find((row) => row.strategy === 'benchmark_spy');
+  const challengerStats = oosStats(challenger, windowKey);
+  const spyStats = oosStats(spy, windowKey);
+  const points = challengerStats.points;
+  const first = points[0]?.session || '—';
+  const last = points[points.length - 1]?.session || '—';
+  const vsSpy = Number.isFinite(challengerStats.return) && Number.isFinite(spyStats.return)
+    ? challengerStats.return - spyStats.return
+    : null;
+  const visible = new Set(points.map((point) => String(point.session)));
+  const visibleFolds = (Array.isArray(data?.fold_reports) ? data.fold_reports : [])
+    .filter((fold) => visible.has(String(fold?.start_session || ''))).length;
+  return [
+    oosKpi('Periodo', points.length ? `${first} → ${last}` : '—'),
+    oosKpi('Challenger', signedPct(challengerStats.return)),
+    oosKpi('vs SPY', signedPct(vsSpy)),
+    oosKpi('Máx. DD', challengerStats.maxDrawdown == null ? '—' : pct(challengerStats.maxDrawdown)),
+    oosKpi('Folds visibles', String(visibleFolds)),
+  ].join('');
 }
 
 async function renderOOS() {
@@ -97,7 +168,15 @@ async function renderOOS() {
   }
 
   const chart = document.getElementById('oosCompetitionChart');
-  if (chart) chart.innerHTML = rows.length ? oosChart(rows) : '<div class="empty-state"><strong>Sin curva OOS todavía.</strong></div>';
+  const chartMetrics = document.getElementById('oosChartMetrics');
+  const windowControl = document.getElementById('oosWindow');
+  function renderWindow() {
+    const windowKey = String(windowControl?.value || '6m');
+    if (chartMetrics) chartMetrics.innerHTML = rows.length ? oosWindowMetrics(rows, data, windowKey) : '';
+    if (chart) chart.innerHTML = rows.length ? oosChart(rows, data, windowKey) : '<div class="empty-state"><strong>Sin curva OOS todavía.</strong></div>';
+  }
+  windowControl?.addEventListener('change', renderWindow);
+  renderWindow();
 
   const table = document.getElementById('oosTable');
   if (table) {
@@ -116,7 +195,7 @@ async function renderOOS() {
   }
   const note = document.getElementById('oosNote');
   if (note) note.textContent = running
-    ? 'Model-OOS: cada fold entrena únicamente con observaciones y targets maduros anteriores al inicio del fold. La configuración de estrategia fue seleccionada retrospectivamente, así que esto no sustituye la Strategy League prospectiva.'
+    ? 'Model-OOS: cada fold entrena únicamente con observaciones y targets maduros anteriores al inicio del fold. La configuración de estrategia fue seleccionada retrospectivamente, así que esto no sustituye la Strategy League prospectiva. El filtro temporal cambia sólo la visualización.'
     : 'Pendiente de ejecución.';
 }
 
