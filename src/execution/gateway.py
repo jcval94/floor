@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from backtest.cost_model import CostModelConfig
+from contracts.trading import paper_cost_contract
 from execution.paper_executor import PaperExecutionConfig, PaperExecutor
 from execution.risk_gateway import RiskApprovalResult, RiskPolicy, approve_signal_batch, load_risk_policy
-from strategies.run_strategies import load_simple_yaml
 
 
 class PaperExecutionGateway:
@@ -81,16 +81,12 @@ def load_paper_execution_gateway(
     *,
     risk_path: Path = Path("config/risk.yaml"),
     strategies_path: Path = Path("config/strategies.yaml"),
+    costs_path: Path = Path("config/costs.yaml"),
 ) -> PaperExecutionGateway:
     policy = load_risk_policy(risk_path=risk_path, strategies_path=strategies_path)
-    cfg = load_simple_yaml(strategies_path)
-    costs = cfg.get("costs", {})
     return PaperExecutionGateway(
         policy=policy,
-        cost_config=CostModelConfig(
-            commission_bps=float(costs.get("commission_bps", 0.0)),
-            slippage_bps=float(costs.get("slippage_bps", 0.0)),
-        ),
+        cost_config=CostModelConfig(**paper_cost_contract(costs_path)),
     )
 
 
