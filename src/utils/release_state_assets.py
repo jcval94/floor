@@ -24,13 +24,17 @@ def _assets(payload: object) -> list[dict[str, Any]]:
     return [item for item in raw if isinstance(item, dict)]
 
 
+def _pattern(base: str) -> re.Pattern[str]:
+    return re.compile(rf"^{re.escape(base)}\.run-(\d+)-a(\d+)(.*)$")
+
+
 def versioned_groups(
     release_payload: object,
     *,
     base: str,
     suffixes: tuple[str, ...],
 ) -> list[AssetGroup]:
-    pattern = re.compile(rf"^{re.escape(base)}\.run-(\d+)(.*)$")
+    pattern = _pattern(base)
     grouped: dict[str, dict[str, dict[str, Any]]] = {}
     allowed_suffixes = {"", *suffixes}
 
@@ -39,7 +43,7 @@ def versioned_groups(
         match = pattern.match(name)
         if not match:
             continue
-        run_id, suffix = match.groups()
+        run_id, attempt, suffix = match.groups()
         if suffix not in allowed_suffixes:
             continue
         payload_name = f"{base}.run-{run_id}-a{attempt}"
@@ -49,7 +53,10 @@ def versioned_groups(
     for payload_name, members in grouped.items():
         if "" not in members or any(suffix not in members for suffix in suffixes):
             continue
-        updated = max(str(item.get("updated_at") or item.get("created_at") or "") for item in members.values())
+        updated = max(
+            str(item.get("updated_at") or item.get("created_at") or "")
+            for item in members.values()
+        )
         out.append(AssetGroup(payload_name, updated, members))
 
     out.sort(key=lambda item: (item.updated_at, item.payload), reverse=True)
@@ -73,7 +80,9 @@ def payload_is_complete(
     suffixes: tuple[str, ...],
 ) -> bool:
     names = {str(asset.get("name") or "") for asset in _assets(release_payload)}
-    return payload_name in names and all(payload_name + suffix in names for suffix in suffixes)
+    return payload_name in names and all(
+        payload_name + suffix in names for suffix in suffixes
+    )
 
 
 def prune_asset_ids(
@@ -88,7 +97,7 @@ def prune_asset_ids(
 
     complete = versioned_groups(release_payload, base=base, suffixes=suffixes)
     retained = {group.payload for group in complete[:keep]}
-    pattern = re.compile(rf"^{re.escape(base)}\.run-(\d+)(.*)$")
+    pattern = _pattern(base)
     delete: list[int] = []
 
     for asset in _assets(release_payload):
@@ -96,8 +105,8 @@ def prune_asset_ids(
         match = pattern.match(name)
         if not match:
             continue
-        run_id, _ = match.groups()
-        payload_name = f"{base}.run-{run_id}"
+        run_id, attempt, _suffix = match.groups()
+        payload_name = f"{base}.run-{run_id}-a{attempt}"
         if payload_name in retained:
             continue
         asset_id = asset.get("id")
@@ -115,7 +124,9 @@ def _read_stdin_json() -> object:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Select complete versioned GitHub Release state assets")
+    parser = argparse.ArgumentParser(
+        description="Select complete versioned GitHub Release state assets"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     select = sub.add_parser("select")
@@ -136,15 +147,30 @@ def main() -> int:
     suffixes = tuple(args.suffix)
 
     if args.cmd == "select":
-        selected = latest_complete_payload(payload, base=args.base, suffixes=suffixes)
+        selected = latest_complete_payload(
+            payload, base=args.base, suffixes=suffixes
+        )
         if selected:
             print(selected)
         return 0
 
     if args.cmd == "is-complete":
-        return 0 if payload_is_complete(payload, payload_name=args.payload, suffixes=suffixes) else 1
+        return (
+            0
+            if payload_is_complete(
+                payload,
+                payload_name=args.payload,
+                suffixes=suffixes,
+            )
+            else 1
+        )
 
-    for asset_id in prune_asset_ids(payload, base=args.base, suffixes=suffixes, keep=args.keep):
+    for asset_id in prune_asset_ids(
+        payload,
+        base=args.base,
+        suffixes=suffixes,
+        keep=args.keep,
+    ):
         print(asset_id)
     return 0
 
