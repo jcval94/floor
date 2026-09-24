@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from contracts.config_io import load_simple_yaml
+from contracts.config_io import load_simple_yaml as _load_simple_yaml
 from contracts.strategy_contract import validate_strategy_registry
 from contracts.trading import load_strategy_runtime_config
 from strategies.activation import VALID_MODES, activation_snapshot
@@ -12,6 +12,9 @@ from strategies.base import StrategyDecision
 from strategies.common import platform_fee_bps_per_side, round_trip_cost_bps
 from strategies.portfolio_allocator import allocate_orders
 from strategies.registry import STRATEGY_GENERATORS
+
+# Backward-compatible public re-export used by existing callers/tests.
+load_simple_yaml = _load_simple_yaml
 
 
 def _load_forecasts(path: Path) -> list[dict]:
