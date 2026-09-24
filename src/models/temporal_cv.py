@@ -94,3 +94,52 @@ def chronological_calibration_split(
     cut = int(len(ordered) * calibration_fraction)
     cut = max(1, min(len(ordered) - 1, cut))
     return ordered[:cut], ordered[cut:]
+
+
+
+def purged_chronological_calibration_split(
+    rows: list[dict],
+    *,
+    target_end_field: str,
+    calibration_fraction: float = 0.5,
+) -> tuple[list[dict], list[dict]]:
+    """Split validation by whole observation dates and purge crossing labels.
+
+    The later block is a true out-of-time evaluation set.  Calibration rows are
+    retained only when their forward target is fully known before evaluation
+    begins.  When point-in-time metadata is absent, fall back to the legacy
+    chronological split for synthetic/backward-compatible inputs.
+    """
+
+    dated: list[tuple[date, date, dict]] = []
+    for row in rows:
+        observed = _as_date(row.get("timestamp"))
+        target_end = _as_date(row.get(target_end_field))
+        if observed is None or target_end is None:
+            continue
+        dated.append((observed, target_end, row))
+
+    distinct_dates = sorted({observed for observed, _, _ in dated})
+    if len(dated) != len(rows) or len(distinct_dates) < 2:
+        return chronological_calibration_split(
+            rows,
+            calibration_fraction=calibration_fraction,
+        )
+
+    cut = int(len(distinct_dates) * calibration_fraction)
+    cut = max(1, min(len(distinct_dates) - 1, cut))
+    calibration_dates = set(distinct_dates[:cut])
+    evaluation_dates = set(distinct_dates[cut:])
+    evaluation_start = min(evaluation_dates)
+
+    calibration = [
+        row
+        for observed, target_end, row in dated
+        if observed in calibration_dates and target_end < evaluation_start
+    ]
+    evaluation = [
+        row
+        for observed, _, row in dated
+        if observed in evaluation_dates
+    ]
+    return calibration, evaluation
