@@ -791,8 +791,17 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
     fallback_champions = _champion_versions_from_artifacts(artifacts)
     fallback_suite_version = _fallback_suite_version_from_artifacts(artifacts)
     review_summary_stale = _review_summary_is_stale(review_models, artifacts)
+    # A stale review remains useful as historical evidence, but it must never
+    # override the identity or metrics of the champion artifacts currently
+    # served from Git. Once versions diverge, render artifact truth and expose
+    # the review only through sync_status/timeline until a fresh review exists.
+    effective_review_models = {} if review_summary_stale else review_models
     model_details = {
-        model_key: _build_model_detail(model_key, review_models.get(model_key), artifacts.get(model_key))
+        model_key: _build_model_detail(
+            model_key,
+            effective_review_models.get(model_key),
+            artifacts.get(model_key),
+        )
         for model_key in ("d1", "w1", "q1", "value", "timing")
     }
     model_details["m3"] = _build_m3_detail(model_details["value"], model_details["timing"])
@@ -826,12 +835,24 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "champion": champion,
         "timeline": model_timeline,
         "health": metrics_payload,
-        "champions": {**fallback_champions, **(review_summary.get("models", {}) if isinstance(review_summary.get("models"), dict) else {})},
+        "champions": {
+            task: {
+                **fallback_champions[task],
+                **(
+                    effective_review_models.get(task, {})
+                    if isinstance(effective_review_models.get(task), dict)
+                    else {}
+                ),
+            }
+            for task in ("d1", "w1", "q1", "value", "timing", "m3")
+        },
         "suite_status": suite_status,
         "suite_recommendation": suite_recommendation,
         "sync_status": {
             "review_summary_stale": review_summary_stale,
             "latest_model_artifact_at": _latest_model_artifact_timestamp(artifacts),
+            "review_suite_version": review_summary.get("suite_version"),
+            "serving_source": "champion_artifacts",
         },
         "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days, str(suite_recommendation)),
         "details": model_details,

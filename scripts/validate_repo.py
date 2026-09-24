@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def _run(cmd: list[str]) -> int:
     print("$", " ".join(cmd))
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "src") + (":" + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
+    env["PYTHONPATH"] = str(ROOT / "src") + (
+        os.pathsep + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else ""
+    )
     return subprocess.run(cmd, cwd=ROOT, env=env).returncode
 
 
@@ -215,6 +217,9 @@ def main() -> int:
             print(" -", w)
     else:
         print("[OK] secrets/permissions review")
+
+    if _run([sys.executable, "-m", "utils.resource_ownership"]) != 0:
+        failed = True
 
     # Idempotency and gating-related tests
     test_cmds = [

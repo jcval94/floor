@@ -4,8 +4,6 @@ on:
   schedule:
     # Avoid top-of-hour scheduler congestion while retaining four close backstops/hour.
     - cron: "7,22,37,52 20-23 * * 1-5"
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

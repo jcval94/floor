@@ -25,10 +25,14 @@ restore_state() {
   local attempt selected
   for attempt in 1 2 3; do
     rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256"
-    selected=""
-    if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256")"; then
-      sleep $((attempt * 2))
-      continue
+    selected="${MONITORING_STATE_PAYLOAD_PIN:-}"
+    if [[ "$selected" = "legacy" ]]; then
+      selected=""
+    elif [[ -z "$selected" ]]; then
+      if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256")"; then
+        sleep $((attempt * 2))
+        continue
+      fi
     fi
 
     if [[ -n "$selected" ]]; then

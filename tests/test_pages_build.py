@@ -425,6 +425,16 @@ def test_build_pages_data_marks_review_summary_stale_when_versions_diverge(tmp_p
     assert models["suite_recommendation"] == "REBUILD_SITE_DATA"
     assert models["sync_status"]["review_summary_stale"] is True
     assert models["sync_status"]["latest_model_artifact_at"] == "2026-03-19T12:00:00+00:00"
+    assert models["sync_status"]["review_suite_version"] == (
+        "value:m3_value_linear@value-v6|timing:m3_timing_multiclass@timing-v3"
+    )
+    assert models["sync_status"]["serving_source"] == "champion_artifacts"
+    assert models["champions"]["value"]["current_version"] == "value-v7"
+    assert models["champions"]["timing"]["current_version"] == "timing-v4"
+    assert models["details"]["value"]["current_version"] == "value-v7"
+    assert models["details"]["timing"]["current_version"] == "timing-v4"
+    assert models["details"]["value"]["status"] == "UNREVIEWED"
+    assert models["details"]["timing"]["status"] == "UNREVIEWED"
 
 
 def test_build_pages_data_exposes_champion_validation_metrics_without_review(tmp_path: Path) -> None:

@@ -152,19 +152,104 @@ jobs:
           echo "publication_head=$publication_head"
           echo "ancestry_status=$status"
 
+      - name: Pin release-backed publication inputs
+        id: state_snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source scripts/release_state_assets.sh
+
+          resolve_payload() {
+            local tag="$1"
+            local base="$2"
+            shift 2
+            if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              printf '%s' "missing"
+              return 0
+            fi
+            local selected
+            selected="$(state_latest_complete_payload "$GITHUB_REPOSITORY" "$tag" "$base" "$@")"
+            if [ -n "$selected" ]; then
+              printf '%s' "$selected"
+            else
+              printf '%s' "legacy"
+            fi
+          }
+
+          runtime_payload="$(resolve_payload runtime-state-v1 floor-runtime-state.tar.gz .sha256 .metadata.json)"
+          research_payload="$(resolve_payload research-state-v1 floor-research-state.tar.gz .sha256)"
+          monitoring_payload="$(resolve_payload monitoring-state-v1 public_metrics.json .sha256)"
+          publication_head="$(git rev-parse HEAD)"
+          manifest="$RUNNER_TEMP/pages-state-manifest.json"
+
+          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          out = Path(sys.argv[1])
+          source_commit = sys.argv[2]
+          values = {
+              "runtime": ("runtime-state-v1", "floor-runtime-state.tar.gz", sys.argv[3]),
+              "research": ("research-state-v1", "floor-research-state.tar.gz", sys.argv[4]),
+              "monitoring": ("monitoring-state-v1", "public_metrics.json", sys.argv[5]),
+          }
+          sources = {}
+          for name, (tag, base_asset, payload) in values.items():
+              if payload == "missing":
+                  mode = "missing"
+              elif payload == "legacy":
+                  mode = "legacy_compatibility"
+              else:
+                  mode = "versioned_immutable"
+              sources[name] = {
+                  "tag": tag,
+                  "base_asset": base_asset,
+                  "payload": payload,
+                  "mode": mode,
+              }
+          out.write_text(
+              json.dumps(
+                  {
+                      "schema_version": 1,
+                      "resolved_at": datetime.now(timezone.utc).isoformat(),
+                      "source_commit": source_commit,
+                      "sources": sources,
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          {
+            echo "runtime_payload=$runtime_payload"
+            echo "research_payload=$research_payload"
+            echo "monitoring_payload=$monitoring_payload"
+            echo "manifest=$manifest"
+          } >> "$GITHUB_OUTPUT"
+
+          cat "$manifest"
+
       - name: Restore authoritative rolling runtime state
         env:
           GH_TOKEN: ${{ github.token }}
+          RUNTIME_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.runtime_payload }}
         run: bash scripts/runtime_state.sh restore
 
       - name: Overlay durable research evidence
         env:
           GH_TOKEN: ${{ github.token }}
+          RESEARCH_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.research_payload }}
         run: bash scripts/research_state.sh restore
 
       - name: Overlay latest isolated monitoring state
         env:
           GH_TOKEN: ${{ github.token }}
+          MONITORING_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.monitoring_payload }}
         run: bash scripts/monitoring_state.sh restore
 
       - name: Setup Pages
@@ -178,7 +263,8 @@ jobs:
             --data-dir data \
             --site-data-dir site/data \
             --universe-path config/universe.yaml \
-            --source-commit "$SOURCE_COMMIT"
+            --source-commit "$SOURCE_COMMIT" \
+            --state-manifest "${{ steps.state_snapshot.outputs.manifest }}"
           PYTHONPATH=src python -m league.publish_site \
             --data-dir data \
             --league-config config/strategy_league.json \
@@ -224,6 +310,15 @@ jobs:
               raise SystemExit('dashboard publication audit is not batch-coherent')
           if (models.get('publication_audit') or {}).get('batch_as_of') != batch_as_of:
               raise SystemExit('models publication audit is not batch-coherent')
+
+          state_snapshot = audit.get('state_snapshot') or {}
+          if state_snapshot.get('mode') != 'pinned_release_generations':
+              raise SystemExit('Pages must publish from pinned release generations')
+          if state_snapshot.get('source_commit') != audit.get('source_commit'):
+              raise SystemExit('Pages state manifest commit does not match publication commit')
+          state_sources = state_snapshot.get('sources') or {}
+          if (state_sources.get('runtime') or {}).get('mode') == 'missing':
+              raise SystemExit('Pages runtime state source is missing')
           if league.get('live_execution_enabled') is not False:
               raise SystemExit('Strategy League must never publish live execution as enabled')
           if league.get('automatic_promotion') is not False:
