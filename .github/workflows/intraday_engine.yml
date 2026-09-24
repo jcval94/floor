@@ -261,6 +261,20 @@ jobs:
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --data-dir data
 
+      - name: Build compact immutable per-run audit
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m utils.intraday_audit \
+            --data-dir data \
+            --output-dir "${{ runner.temp }}/intraday-audit" \
+            --batch-id "${{ needs.gate.outputs.session_day }}:${{ needs.gate.outputs.event }}" \
+            --event "${{ needs.gate.outputs.event }}" \
+            --session-day "${{ needs.gate.outputs.session_day }}" \
+            --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+            --required-market-session "${{ needs.gate.outputs.required_market_session }}" \
+            --run-id "${{ github.run_id }}" \
+            --source-sha "${{ github.sha }}"
+
       - name: Publish rolling runtime state outside Git
         if: steps.lock_guard.outputs.run == 'true'
         env:
@@ -286,17 +300,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: intraday-audit-${{ github.run_id }}-${{ needs.gate.outputs.event }}
-          path: |
-            data/predictions
-            data/signals
-            data/orders
-            data/snapshots
-            data/reports
-            data/metrics
-            data/logs
-            data/persistence/app.sqlite
-            data/market/market_data.sqlite
-          if-no-files-found: warn
+          path: ${{ runner.temp }}/intraday-audit
+          if-no-files-found: error
           retention-days: 30
 
       - name: Report duplicate checkpoint suppression
