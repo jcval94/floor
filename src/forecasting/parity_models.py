@@ -108,6 +108,31 @@ class ParityChampionModelSet(ChampionModelSet):
         ceiling = close * (1.0 + ceiling_delta)
         spread = max(0.01, ceiling - floor)
 
+        risk_geometry = params.get("risk_geometry")
+        risk_available = (
+            isinstance(risk_geometry, dict)
+            and risk_geometry.get("method") == "validation_residual_quantile"
+        )
+        risk_floor: float | None = None
+        risk_ceiling: float | None = None
+        risk_target_coverage: float | None = None
+        if risk_available:
+            floor_addon = max(
+                0.0, float(risk_geometry.get("floor_delta_addon") or 0.0)
+            )
+            ceiling_addon = max(
+                0.0, float(risk_geometry.get("ceiling_delta_addon") or 0.0)
+            )
+            risk_floor_delta = max(0.0001, min(0.7, floor_delta + floor_addon))
+            risk_ceiling_delta = max(
+                0.0001, min(0.7, ceiling_delta + ceiling_addon)
+            )
+            risk_floor = close * (1.0 - risk_floor_delta)
+            risk_ceiling = close * (1.0 + risk_ceiling_delta)
+            risk_target_coverage = float(
+                risk_geometry.get("target_marginal_coverage") or 0.0
+            )
+
         timing = params.get("timing")
         floor_time = ""
         ceiling_time = ""
@@ -178,6 +203,14 @@ class ParityChampionModelSet(ChampionModelSet):
             breach_prob=round(breach_prob, 4),
             expected_return=0.0,
             expected_range=round(spread, 4),
+            risk_floor=round(risk_floor, 4) if risk_floor is not None else None,
+            risk_ceiling=round(risk_ceiling, 4) if risk_ceiling is not None else None,
+            risk_geometry_available=risk_available,
+            risk_target_marginal_coverage=(
+                round(risk_target_coverage, 4)
+                if risk_target_coverage is not None
+                else None
+            ),
         )
 
     def predict_m3(self, row: dict) -> M3Forecast | None:
