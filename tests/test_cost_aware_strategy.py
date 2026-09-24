@@ -6,7 +6,8 @@ from contracts.trading import (
     round_trip_cost_bps_from_contract,
     strategy_cost_contract,
 )
-from strategies.base import expected_cost_bps
+from league.capital_challenger import build_capital_challenger_targets
+from strategies.base import StrategyDecision, expected_cost_bps
 from strategies.breakout_protected_by_floor import generate_breakout_floor_orders
 from strategies.common import alpha_hurdle, round_trip_cost_bps
 from strategies.mean_reversion_floor_w1 import generate_mean_reversion_orders
@@ -198,6 +199,48 @@ def test_mean_reversion_still_requires_directional_reversal() -> None:
     )[0]
 
     assert decision.side == "HOLD"
+
+
+def test_cross_horizon_quarantine_blocks_capital_allocator_source() -> None:
+    decision = StrategyDecision(
+        strategy_id="cross_horizon_asymmetry",
+        symbol="AAA",
+        side="BUY",
+        score=1.0,
+        qty=10,
+        horizon="q1",
+        entry_reason="test",
+        exit_reason="test",
+        stop_price=95.0,
+        take_profit_price=120.0,
+        expected_return=0.03,
+        expected_range=25.0,
+        timing_alignment=0.5,
+        gross_alpha_pct=0.03,
+        net_alpha_pct=0.0239,
+        cost_pct=0.0061,
+    )
+    cfg = _global_cfg()
+    cfg["strategies"] = {
+        "cross_horizon_asymmetry": {"capital_allocator_enabled": False}
+    }
+    targets = build_capital_challenger_targets(
+        {"cross_horizon_asymmetry": [decision]},
+        {"AAA": {"close": 100.0, "sector": "Technology"}},
+        cfg,
+        {
+            "source_weights": {"cross_horizon_asymmetry": 1.0},
+            "quality_floor": 0.0,
+            "min_position_weight": 0.0,
+            "risk_budget_pct_nav": 0.01,
+            "min_risk_scale": 1.0,
+            "max_position_pct_nav": 0.20,
+            "max_gross_exposure_pct_nav": 0.90,
+            "max_portfolio_heat_pct_nav": 0.04,
+            "max_sector_exposure_pct_nav": 0.35,
+        },
+    )
+    assert targets == {}
 
 
 def test_breakout_requires_directional_alpha_even_with_huge_payoff_room() -> None:
