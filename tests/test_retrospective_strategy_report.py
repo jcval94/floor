@@ -118,6 +118,9 @@ def test_analytics_page_exposes_retrospective_tournament() -> None:
     assert 'id="replayWindow"' in page
     assert 'id="replayTable"' in page
     assert "Retrospective diagnostic · hasta 3 meses" in page
+    assert "Clasificación de la ventana completa" in page
+    assert "El replay retrospectivo de hasta 3 meses es diagnóstico." in page
+    assert "Clasificación de las 2 semanas" not in page
     assert "renderRetrospective" in script
     assert "data/strategy.json" in script
     assert "Torneo retrospectivo de NAV · ventana filtrada" in script
