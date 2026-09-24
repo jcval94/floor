@@ -26,6 +26,7 @@ export RUNTIME_STATE_MAX_MB="$MAX_MB"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+source scripts/release_state_assets.sh
 
 clear_runtime_state() {
   # A release restore is authoritative. Remove only operational paths; never
@@ -140,13 +141,34 @@ restore_state() {
   fi
 
   local restored=false
-  local attempt
+  local attempt selected
   for attempt in 1 2 3; do
     rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256" "$TMP/$ASSET.metadata.json"
-    if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber \
-      && gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.sha256" --dir "$TMP" --clobber \
-      && gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.metadata.json" --dir "$TMP" --clobber \
-      && (cd "$TMP" && sha256sum -c "$ASSET.sha256") \
+    selected=""
+    if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256" ".metadata.json")"; then
+      echo "::warning::Runtime-state generation lookup attempt $attempt failed." >&2
+      sleep $((attempt * 2))
+      continue
+    fi
+
+    if [[ -n "$selected" ]]; then
+      if ! state_download_set "$REPO" "$TAG" "$ASSET" "$selected" "$TMP" ".sha256" ".metadata.json"; then
+        echo "::warning::Runtime-state versioned download attempt $attempt failed payload=$selected." >&2
+        sleep $((attempt * 2))
+        continue
+      fi
+    else
+      # Backward-compatible migration path for the pre-generation release layout.
+      if ! gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber \
+        || ! gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.sha256" --dir "$TMP" --clobber \
+        || ! gh release download "$TAG" --repo "$REPO" --pattern "$ASSET.metadata.json" --dir "$TMP" --clobber; then
+        echo "::warning::Runtime-state legacy download attempt $attempt failed." >&2
+        sleep $((attempt * 2))
+        continue
+      fi
+    fi
+
+    if (cd "$TMP" && sha256sum -c "$ASSET.sha256") \
       && validate_archive "$TMP/$ASSET" \
       && PYTHONPATH=src python -m utils.runtime_state_cas write-token \
         --token "$TOKEN_FILE" \
@@ -155,7 +177,8 @@ restore_state() {
       restored=true
       break
     fi
-    echo "::warning::Runtime-state restore attempt $attempt failed; release may be updating concurrently." >&2
+
+    echo "::warning::Runtime-state restore attempt $attempt failed validation." >&2
     sleep $((attempt * 2))
   done
 
@@ -187,10 +210,20 @@ publish_state() {
   if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     mkdir -p "$TMP/current"
     rm -f "$TMP/current/$ASSET.sha256" "$TMP/current/$ASSET.metadata.json"
-    gh release download "$TAG" --repo "$REPO" \
-      --pattern "$ASSET.sha256" --dir "$TMP/current" --clobber
-    gh release download "$TAG" --repo "$REPO" \
-      --pattern "$ASSET.metadata.json" --dir "$TMP/current" --clobber
+    selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256" ".metadata.json")"
+    if [[ -n "$selected" ]]; then
+      gh release download "$TAG" --repo "$REPO" \
+        --pattern "$selected.sha256" --dir "$TMP/current" --clobber
+      gh release download "$TAG" --repo "$REPO" \
+        --pattern "$selected.metadata.json" --dir "$TMP/current" --clobber
+      mv "$TMP/current/$selected.sha256" "$TMP/current/$ASSET.sha256"
+      mv "$TMP/current/$selected.metadata.json" "$TMP/current/$ASSET.metadata.json"
+    else
+      gh release download "$TAG" --repo "$REPO" \
+        --pattern "$ASSET.sha256" --dir "$TMP/current" --clobber
+      gh release download "$TAG" --repo "$REPO" \
+        --pattern "$ASSET.metadata.json" --dir "$TMP/current" --clobber
+    fi
     if ! PYTHONPATH=src python -m utils.runtime_state_cas verify-parent \
       --token "$TOKEN_FILE" \
       --metadata "$TMP/current/$ASSET.metadata.json" \
@@ -317,17 +350,13 @@ PY
       --prerelease
   fi
 
-  gh release upload "$TAG" \
-    "$TMP/$ASSET" \
-    "$TMP/$ASSET.sha256" \
-    "$TMP/$ASSET.metadata.json" \
-    --repo "$REPO" \
-    --clobber
+  published_payload="$(state_publish_set "$REPO" "$TAG" "$ASSET" "$TMP" ".sha256" ".metadata.json")"
+  state_prune_versioned_sets "$REPO" "$TAG" "$ASSET" 2 ".sha256" ".metadata.json"
   PYTHONPATH=src python -m utils.runtime_state_cas write-token \
     --token "$TOKEN_FILE" \
     --metadata "$TMP/$ASSET.metadata.json" \
     --checksum "$TMP/$ASSET.sha256"
-  echo "Published checksum-verified rolling runtime state to release tag=$TAG generation=$next_generation bytes=$asset_bytes cap_mb=$MAX_MB"
+  echo "Published checksum-verified rolling runtime state tag=$TAG generation=$next_generation payload=$published_payload bytes=$asset_bytes cap_mb=$MAX_MB"
 }
 
 case "$MODE" in
