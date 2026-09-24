@@ -1,6 +1,7 @@
 review:
   cadence_days: 14
   policy: quincenal
+  retrain_soon_sessions: 3
 
 important_features:
   columns: ret_lag_1,rolling_vol_20,atr_14,relative_volume_20,beta_20,vol_regime_score,rsi_14,macd_histogram,vwap_distance,ai_consensus_score
