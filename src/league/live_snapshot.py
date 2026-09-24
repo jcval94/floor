@@ -455,6 +455,7 @@ def build_live_snapshot(
                     else "strategy",
                 ),
                 "nav": round(nav, 6),
+                "eod_nav": round(eod_nav, 6),
                 "return": cumulative_return,
                 "change_since_eod": change_since_eod,
                 "vs_spy": None,
