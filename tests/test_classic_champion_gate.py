@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from contracts.model_contract import attach_model_contract
 from models.classic_champion_gate import gate_one_horizon
 from models.horizon_timing import ALLOWED_CLASSES
 
@@ -116,6 +117,56 @@ def test_classic_gate_keeps_historical_champion_when_candidate_is_worse(
     )
     assert competition["registry_decision"] == "challenger_only"
     assert competition["test_used_for_promotion"] is False
+
+
+
+
+def test_classic_gate_migrates_legacy_contract_without_replacing_central_model(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset.json"
+    registry = tmp_path / "registry"
+    previous = tmp_path / "previous"
+    _dataset(dataset)
+
+    old = _artifact(version="old", floor_delta=0.02, ceiling_delta=0.03)
+    candidate = _artifact(version="new", floor_delta=0.20, ceiling_delta=0.20)
+    candidate["params"]["risk_geometry"] = {
+        "schema_version": 1,
+        "method": "validation_residual_quantile",
+        "target_marginal_coverage": 0.80,
+        "floor_delta_addon": 0.01,
+        "ceiling_delta_addon": 0.01,
+        "calibration_rows": 2,
+    }
+    candidate = attach_model_contract(candidate, "d1")
+
+    _write(previous / "d1_champion.json", old)
+    _write(registry / "d1_champion.json", candidate)
+
+    result = gate_one_horizon(
+        dataset_path=dataset,
+        registry_dir=registry,
+        previous_dir=previous,
+        horizon="d1",
+        version="risk-v1",
+    )
+
+    assert result["decision"] == "promote_contract_migration"
+    active = json.loads((registry / "d1_champion.json").read_text(encoding="utf-8"))
+    assert active["model_name"] == old["model_name"]
+    assert active["params"]["floor"] == old["params"]["floor"]
+    assert active["params"]["ceiling"] == old["params"]["ceiling"]
+    assert active["contract_migration"]["central_params_preserved"] is True
+    assert active["model_contract"]["contract_id"] == "classic_range_geometry_v1"
+    assert active["params"]["risk_geometry"]["method"] == "validation_residual_quantile"
+    assert active["version"] == "risk-v1-risk-contract"
+
+    challenger = json.loads(
+        (registry / "d1_challenger_risk-v1.json").read_text(encoding="utf-8")
+    )
+    assert challenger["version"] == "new"
+    assert challenger["selection"]["decision"] == "challenger_only_central_model"
 
 
 def test_classic_gate_rejects_spread_win_when_one_boundary_regresses(
