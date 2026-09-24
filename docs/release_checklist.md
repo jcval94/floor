@@ -1,34 +1,58 @@
-# Release Checklist (Interna)
+# Release Checklist
 
-## 1) Calidad técnica
+## Calidad técnica
+
 - [ ] `ruff check src tests scripts` limpio.
 - [ ] `mypy --ignore-missing-imports src` limpio.
 - [ ] `pytest -q` en verde.
-- [ ] Cobertura mínima razonable (>=60%) validada en CI.
-- [ ] Smoke test end-to-end ejecutado (`python scripts/validate_repo.py --smoke`).
+- [ ] Cobertura mínima de CI satisfecha.
+- [ ] `python scripts/validate_repo.py` en verde.
+- [ ] `PYTHONPATH=src python -m utils.resource_ownership` en verde.
 
-## 2) Datos y configuración
-- [ ] Configs en `config/*.yaml` revisados y válidos.
-- [ ] Schemas de datasets de `site/data/*.json` validados.
-- [ ] No hay cambios no intencionados en snapshots históricos.
-- [ ] Se generó snapshot `latest` y snapshot histórico particionado.
+## Datos y modelos
 
-## 3) Seguridad y operaciones
-- [ ] Revisión de secretos y permisos completada.
-- [ ] Ningún secreto hardcodeado en código/config/data público.
-- [ ] Alertas y notificaciones con canal principal verificado.
-- [ ] Canal secundario opcional probado (si aplica).
+- [ ] Champions de serving pasan `utils.model_artifact_guard`.
+- [ ] Solo `retrain_execute` modifica `data/training/models/*.json`.
+- [ ] Review y champion versions son coherentes; si divergen, Pages marca `STALE_REVIEW` y sirve artifact truth.
+- [ ] Forecast batch cumple contrato multi-horizonte y frescura.
+- [ ] No se versionaron SQLite, JSONL runtime ni `site/data/*.json`.
 
-## 4) Gobernanza de release
-- [ ] Changelog/PR description actualizado.
-- [ ] Validación funcional por dueño de estrategia.
-- [ ] Rollback plan definido.
-- [ ] Aprobaciones internas completas.
+## Estado operacional
 
-## 5) Respuesta a incidentes (obligatorio para PARTIAL/FAIL)
-- [ ] RCA completado diferenciando síntoma vs causa raíz probable.
-- [ ] Último `run_id` sano identificado en snapshots de workflow.
-- [ ] Impacto evaluado por componente (forecasts, estrategias, paper trading, notificaciones).
-- [ ] Fix inmediato aplicado o planificado con owner y ETA.
-- [ ] Fix estructural registrado con pruebas de no regresión.
-- [ ] Reporte de incidente generado en JSON auditable (`monitoring/incident_commander.py`).
+- [ ] Runtime restore/publish usa generación inmutable y checksum.
+- [ ] CAS parent validation está activa para runtime writers.
+- [ ] Checkpoint frontier es monotónico.
+- [ ] Monitoring no escribe runtime-state.
+- [ ] Research no escribe runtime-state salvo workflows explícitamente autorizados por contrato.
+- [ ] History rewrite, si aplica, es manual y usa exact `--force-with-lease` + `--atomic`.
+
+## Pages
+
+- [ ] Build fija runtime/research/monitoring antes de restaurar.
+- [ ] Audit registra `source_commit` y `state_snapshot`.
+- [ ] Forecasts bloqueados no exponen rows/opportunities accionables.
+- [ ] Static security/CSP pasa.
+- [ ] Deployment autoritativo proviene de `site/`.
+
+## Scheduler
+
+- [ ] Intraday/EOD no se ejecutan por cada push a main.
+- [ ] Watchdog solo despacha cuando no existe run reciente/activo.
+- [ ] Monitoring workflow-run backstop exige evidencia runtime real.
+
+## Seguridad y administración
+
+- [ ] No hay secretos hardcodeados.
+- [ ] Dependabot está habilitado para pip y GitHub Actions.
+- [ ] GitHub Pages Source está configurado como **GitHub Actions**.
+- [ ] `main` tiene ruleset/branch protection con PR y CI requerido.
+
+Los dos últimos controles son settings administrativos del repositorio; no pueden configurarse desde un workflow con el `GITHUB_TOKEN` estándar.
+
+## Post-release
+
+- [ ] CI de `main` termina en success.
+- [ ] Primer Pages deployment post-merge termina en success.
+- [ ] Si cambió persistencia, confirmar restore + publish real.
+- [ ] Si cambió scheduling, comprobar que no aparecen duplicados gate-only.
+- [ ] Si hubo incidente, generar evidencia/RCA auditable antes de cerrar.
