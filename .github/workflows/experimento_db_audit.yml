@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Initialize DBs (if missing)
         run: make init-dbs
@@ -36,7 +36,7 @@ jobs:
           echo "[workflow][experimento_db_audit] DONE DB table audit"
 
       - name: Upload DB audit artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: experimento-db-audit
           path: experimento/artifacts/db_audit
