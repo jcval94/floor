@@ -28,6 +28,7 @@ export function rangeSvg(floor, current, ceiling, label = 'Rango pronosticado') 
 const SESSION_WINDOW_SIZES = {
   '5d': 5,
   '10d': 10,
+  '20d': 20,
   '2w': 10,
   '1m': 21,
   '3m': 63,
