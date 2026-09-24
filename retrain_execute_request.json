@@ -1,7 +1,14 @@
 {
-  "requested_at": "2026-09-22",
-  "reason": "p2_governed_retrain_balanced_timing_candidate",
-  "approve_recommended": true,
-  "assessment_run_id": 35803850505,
-  "iteration": "p2-balanced-timing-v2"
+  "requested_at": "2026-09-24",
+  "reason": "p0_classic_risk_geometry_contract_retrain",
+  "force": true,
+  "approve_recommended": false,
+  "tasks": [
+    "d1",
+    "w1",
+    "q1"
+  ],
+  "confirm_publish": "PUBLISH_CHAMPIONS_TO_MAIN",
+  "authorization_context": "User explicitly approved governed D1/W1/Q1 retraining after P0 risk-geometry contracts were merged.",
+  "iteration": "p0-risk-geometry-v1"
 }
