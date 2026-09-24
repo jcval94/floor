@@ -136,8 +136,18 @@ def validate_model_artifact_contract(
         if key not in params:
             errors.append(f"missing new-artifact params field: {key}")
 
-    if task in {"d1", "w1", "q1"} and isinstance(params.get("risk_geometry"), dict):
-        risk = params["risk_geometry"]
+    if task in {"d1", "w1", "q1"}:
+        risk_raw = params.get("risk_geometry")
+        if not isinstance(risk_raw, dict):
+            if "risk_geometry" in params:
+                errors.append("risk_geometry must be an object")
+            risk = {}
+        else:
+            risk = risk_raw
+    else:
+        risk = {}
+
+    if risk:
         if risk.get("method") != "validation_residual_quantile":
             errors.append("risk_geometry method must be validation_residual_quantile")
         try:
