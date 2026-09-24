@@ -147,14 +147,17 @@ def test_history_compaction_is_manual_guarded_atomic_and_drift_safe() -> None:
     assert "--path data" in workflow
     assert "--invert-paths" in workflow
     assert "git clone --mirror" in workflow
-    assert "refs/heads/*:refs/heads/*" in workflow
-    assert "refs/tags/*:refs/tags/*" in workflow
+    assert 'refs/heads/*|refs/tags/*)' in workflow
+    assert 'leases+=("--force-with-lease=' in workflow
+    assert 'refspecs+=("${ref}:${ref}")' in workflow
     assert "open_prs" in workflow
     assert "protected_branches" in workflow
     assert "refs_pre_push.txt" in workflow
     assert "cmp -s" in workflow
-    assert "push --dry-run --atomic --force --prune" in workflow
-    assert "push --atomic --force --prune" in workflow
+    assert "push --dry-run --atomic" in workflow
+    assert "--force-with-lease=" in workflow
+    assert "push --dry-run --atomic --force --prune" not in workflow
+    assert "push --atomic --force --prune" not in workflow
     restore_pos = workflow.index("runtime_state.sh restore")
     publish_pos = workflow.index("runtime_state.sh publish")
     assert restore_pos < publish_pos
@@ -165,7 +168,10 @@ def test_runtime_state_is_release_backed_checksum_verified_and_authoritative() -
     assert 'TAG="${RUNTIME_STATE_TAG:-runtime-state-v1}"' in script
     assert 'MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"' in script
     assert "gh release download" in script
-    assert "gh release upload" in script
+    helper = _text(ROOT / "scripts" / "release_state_assets.sh")
+    assert "state_publish_set" in script
+    assert "gh release upload" in helper
+    assert "No --clobber" in helper
     assert "sha256sum -c" in script
     assert "for attempt in 1 2 3" in script
     assert "clear_runtime_state" in script
@@ -370,7 +376,9 @@ def test_monitoring_has_runtime_completion_backstop() -> None:
     assert "eod-audit-" in workflow
     assert "completed_without_runtime_evidence" in workflow
     assert workflow.index("Determine monitoring eligibility") < workflow.index("Checkout")
-    assert "steps.eligibility.outputs.run == 'true'" in workflow
+    assert "needs.eligibility.outputs.run == 'true'" in workflow
+    assert "Determine monitoring eligibility before writer lock" in workflow
+    assert "cancel-in-progress: false" in workflow
 
 
 def test_retrain_assessment_invalidates_on_evidence_contract_changes() -> None:
