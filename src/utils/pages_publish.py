@@ -610,6 +610,46 @@ def _normalize_monitoring_payloads(
     }
 
 
+def _load_state_snapshot(
+    manifest_path: Path | None,
+    *,
+    source_commit: str,
+) -> dict[str, Any]:
+    if manifest_path is None:
+        return {
+            "schema_version": 1,
+            "mode": "local_unpinned",
+            "source_commit": source_commit or None,
+            "sources": {},
+        }
+
+    payload = _mapping(_load_json(manifest_path, {}))
+    if int(payload.get("schema_version") or 0) != 1:
+        raise RuntimeError("Pages state manifest must use schema_version=1")
+
+    manifest_commit = str(payload.get("source_commit") or "").strip()
+    if source_commit and manifest_commit != source_commit:
+        raise RuntimeError(
+            "Pages state manifest commit mismatch: "
+            f"manifest={manifest_commit or 'missing'} checkout={source_commit}"
+        )
+
+    sources = _mapping(payload.get("sources"))
+    required = {"runtime", "research", "monitoring"}
+    missing = sorted(required.difference(sources))
+    if missing:
+        raise RuntimeError(
+            "Pages state manifest is missing sources: " + ",".join(missing)
+        )
+
+    runtime = _mapping(sources.get("runtime"))
+    if str(runtime.get("mode") or "") == "missing":
+        raise RuntimeError("Pages publication requires runtime state")
+
+    payload["mode"] = "pinned_release_generations"
+    return payload
+
+
 def _monitoring_warning_codes(monitoring_audit: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
     operational = _mapping(monitoring_audit.get("operational_health"))
@@ -756,11 +796,16 @@ def publish_pages_data(
     universe_path: Path,
     *,
     source_commit: str = "",
+    state_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     build_pages_data(data_dir, site_data_dir, universe_path)
     site_dir = site_data_dir.parent
     symbols = list(parse_universe_yaml(universe_path))
     monitoring_audit = _normalize_monitoring_payloads(site_data_dir)
+    state_snapshot = _load_state_snapshot(
+        state_manifest_path,
+        source_commit=source_commit,
+    )
 
     history, history_source = _read_prediction_history(data_dir)
     batch, batch_audit = select_latest_global_batch(history, symbols)
@@ -857,6 +902,7 @@ def publish_pages_data(
         "models": model_audit,
         "freshness": freshness_audit,
         "monitoring": monitoring_audit,
+        "state_snapshot": state_snapshot,
         "site_schema": schema_audit,
         "expected_symbols": len(symbols),
         "expected_horizons": list(_expected_horizons()),
@@ -869,6 +915,10 @@ def publish_pages_data(
         "batch_as_of": batch_audit.get("as_of"),
         "prediction_model_alignment": alignment["status"],
         "source_commit": source_commit or None,
+        "state_snapshot": {
+            "mode": state_snapshot.get("mode"),
+            "sources": state_snapshot.get("sources", {}),
+        },
         "blockers": blockers,
         "warnings": warnings,
     }
@@ -934,6 +984,7 @@ def main() -> int:
     parser.add_argument("--site-data-dir", default="site/data")
     parser.add_argument("--universe-path", default="config/universe.yaml")
     parser.add_argument("--source-commit", default="")
+    parser.add_argument("--state-manifest", default="")
     parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
 
@@ -946,6 +997,9 @@ def main() -> int:
                 Path(args.site_data_dir),
                 Path(args.universe_path),
                 source_commit=args.source_commit,
+                state_manifest_path=(
+                    Path(args.state_manifest) if args.state_manifest else None
+                ),
             )
             validate_published_site(Path(args.site_data_dir))
     except (RuntimeError, ValueError) as exc:
