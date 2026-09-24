@@ -16,7 +16,8 @@ from league.engine import (
 )
 from league.market_features import _feature_row
 from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
-from replay.point_in_time import build_point_in_time_feature_rows, group_by_symbol
+from replay.historical_close import build_historical_close_feature_rows
+from replay.point_in_time import group_by_symbol
 from replay.runner import (
     _bar_for_day,
     _bars_through,
@@ -24,7 +25,7 @@ from replay.runner import (
     _load_json,
     _sessions,
 )
-from replay.yahoo_source import fetch_replay_market_data
+from replay.yahoo_source import fetch_replay_daily_market_data
 from strategies.run_strategies import load_simple_yaml
 
 
@@ -41,17 +42,17 @@ def run_capital_tournament(
 ) -> dict[str, Any]:
     """Run a CLOSE-only PIT tournament for fast allocator research.
 
-    This is retrospective diagnostic evidence. It intentionally reuses the
-    production replay's PIT feature builder and the Strategy League execution
-    engine so all members see the same bars, next-open execution, costs and
-    conservative stop-before-take exit ordering.
+    This is retrospective diagnostic evidence. It uses completed daily bars
+    at each historical CLOSE checkpoint plus the Strategy League execution
+    engine, so older sessions do not depend on Yahoo's short intraday retention
+    window. All members still see the same point-in-time bars, next-open
+    execution, costs and conservative stop-before-take exit ordering.
     """
 
     sessions = _sessions(start, end)
     symbols = parse_universe_yaml(universe_path)
-    daily_rows, intraday_rows, market_summary = fetch_replay_market_data(symbols)
+    daily_rows, market_summary = fetch_replay_daily_market_data(symbols)
     daily_by_symbol = group_by_symbol(daily_rows)
-    intraday_by_symbol = group_by_symbol(intraday_rows)
 
     league_cfg = _load_json(league_config_path)
     if weekly_model_path is None:
@@ -111,13 +112,11 @@ def run_capital_tournament(
 
     for session_day in sessions:
         session = session_day.isoformat()
-        pit_rows, audit = build_point_in_time_feature_rows(
+        pit_rows, audit = build_historical_close_feature_rows(
             daily_by_symbol=daily_by_symbol,
-            intraday_by_symbol=intraday_by_symbol,
             symbols=symbols,
             benchmark_symbol="SPY",
             session_day=session_day,
-            event="CLOSE",
         )
         audits.append(dict(audit))
         if audit.get("future_data_used") is not False:

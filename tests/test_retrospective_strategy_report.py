@@ -107,3 +107,19 @@ def test_analytics_page_exposes_retrospective_tournament() -> None:
     assert "data/strategy.json" in script
     assert "Torneo retrospectivo de NAV · ventana filtrada" in script
     assert "Diagnóstico" in script
+
+
+def test_capital_tournament_uses_daily_close_history_for_long_windows() -> None:
+    runner = (ROOT / "src" / "replay" / "capital_tournament.py").read_text(
+        encoding="utf-8"
+    )
+    source = (ROOT / "src" / "replay" / "yahoo_source.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "build_historical_close_feature_rows" in runner
+    assert "fetch_replay_daily_market_data" in runner
+    assert "build_point_in_time_feature_rows" not in runner
+    assert "intraday_by_symbol" not in runner
+    assert "def fetch_replay_daily_market_data" in source
+    assert '"checkpoint_mode": "completed_daily_bar_at_close"' in source
