@@ -62,8 +62,18 @@ def build_capital_challenger_targets(
     min_weight = max(0.0, min(1.0, _float(challenger_cfg.get("min_position_weight"), 0.02)))
 
     by_symbol: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    strategy_specs = strategies_cfg.get("strategies", {})
     for strategy_id, source_decisions in decisions_by_strategy.items():
+        strategy_spec = (
+            strategy_specs.get(strategy_id, {})
+            if isinstance(strategy_specs, dict)
+            else {}
+        )
+        if strategy_spec.get("capital_allocator_enabled", True) is not True:
+            continue
         source_weight = max(0.0, _float(source_weights.get(strategy_id), 1.0))
+        if source_weight <= 0.0:
+            continue
         for ranked_decision, percentile_quality in _ranked_buys(source_decisions):
             symbol = str(ranked_decision.symbol)
             row = rows_by_symbol.get(symbol, {})
