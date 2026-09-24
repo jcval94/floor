@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from strategies.base import StrategyDecision
 
 
@@ -29,7 +31,7 @@ def net_edge(gross_pct: float, cfg: dict) -> float:
     return gross_pct - round_trip_cost_bps(cfg) / 10000.0
 
 
-def geometry(row: dict, horizon: str) -> dict[str, float | bool | str]:
+def geometry(row: dict, horizon: str) -> dict[str, Any]:
     """Return central opportunity geometry plus a separately calibrated risk boundary.
 
     Legacy champions do not contain risk geometry.  In that case stops fall back
