@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+from contracts.strategy_contract import strategy_contract
 
 def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -334,8 +335,26 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             declared_type == "strategy"
             or (not declared_type and not member_id.startswith("benchmark_"))
         )
+        semantic_contract: dict[str, Any] = {}
+        if is_strategy:
+            try:
+                semantic_contract = strategy_contract(member_id)
+            except ValueError:
+                # Unit-test/custom league members may intentionally be local.
+                semantic_contract = {}
         evaluation_variant = str(
-            member_spec.get("evaluation_variant") or "long_only_projection"
+            member_spec.get("evaluation_variant")
+            or semantic_contract.get("league_evaluation_variant")
+            or "long_only_projection"
+        )
+        evidence_can_promote_canonical = bool(
+            member_spec.get(
+                "league_evidence_can_promote_canonical_variant",
+                semantic_contract.get(
+                    "league_evidence_can_promote_canonical_variant",
+                    False,
+                ),
+            )
         )
         row = {
             "strategy": member_id,
@@ -377,12 +396,7 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             # evaluated variant; it can never promote the canonical bidirectional
             # strategy without separate short-side evidence.
             row["canonical_bidirectional_promotion_eligible"] = (
-                bool(
-                    member_spec.get(
-                        "league_evidence_can_promote_canonical_variant",
-                        False,
-                    )
-                )
+                evidence_can_promote_canonical
                 and row["promotion_review_eligible"]
             )
         rows.append(row)
