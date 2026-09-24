@@ -1,5 +1,5 @@
 import { escapeHTML, fmtPct, loadJSONState } from './utils.js';
-import { multiLineSvg } from './charts.js';
+import { filterPointsByWindow, multiLineSvg } from './charts.js';
 
 const LABELS = {
   capital_allocation_challenger: 'Capital Allocation Challenger',
@@ -230,7 +230,7 @@ function liveSummaryCards(data, rows) {
 
 function retrospectiveSummaryCards(data, rows) {
   if (!rows.length) {
-    return '<div class="empty-state league-empty"><strong>Sin replay publicado todavía.</strong><p>Cuando termine el torneo de dos semanas aparecerán aquí el líder y las comparaciones.</p></div>';
+    return '<div class="empty-state league-empty"><strong>Sin replay publicado todavía.</strong><p>Cuando termine el torneo retrospectivo aparecerán aquí el líder y las comparaciones.</p></div>';
   }
   const summary = data?.summary && typeof data.summary === 'object' ? data.summary : fallbackSummary(rows);
   const cards = [
@@ -350,7 +350,71 @@ function retrospectiveTableRows(rows) {
 }
 
 
-function curveChart(rows, curveField, title) {
+function curvePoints(row, curveField, windowKey = 'all') {
+  return filterPointsByWindow(
+    Array.isArray(row?.[curveField]) ? row[curveField] : [],
+    windowKey,
+  );
+}
+
+function curveStats(row, curveField, windowKey = 'all') {
+  const points = curvePoints(row, curveField, windowKey);
+  if (!points.length) return { points, start: null, end: null, return: null, maxDrawdown: null };
+  const start = Number(points[0]?.nav ?? points[0]?.equity ?? points[0]?.value);
+  const end = Number(points[points.length - 1]?.nav ?? points[points.length - 1]?.equity ?? points[points.length - 1]?.value);
+  const ret = Number.isFinite(start) && Number.isFinite(end) && Math.abs(start) > 1e-9
+    ? end / start - 1.0
+    : null;
+  let peak = Number.NEGATIVE_INFINITY;
+  let maxDrawdown = 0;
+  points.forEach((point) => {
+    const nav = Number(point?.nav ?? point?.equity ?? point?.value);
+    if (!Number.isFinite(nav)) return;
+    peak = Math.max(peak, nav);
+    if (Number.isFinite(peak) && peak > 0) maxDrawdown = Math.min(maxDrawdown, nav / peak - 1.0);
+  });
+  return { points, start, end, return: ret, maxDrawdown };
+}
+
+function windowLeader(rows, curveField, windowKey) {
+  const candidates = rows
+    .filter((row) => !isBenchmark(row))
+    .map((row) => ({ row, stats: curveStats(row, curveField, windowKey) }))
+    .filter((item) => Number.isFinite(item.stats.return))
+    .sort((a, b) => Number(b.stats.return) - Number(a.stats.return));
+  return candidates[0]?.row?.strategy || null;
+}
+
+function chartKpi(label, value) {
+  return `<span class="chart-kpi"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></span>`;
+}
+
+function chartWindowMetrics(rows, curveField, windowKey, { coverage = null } = {}) {
+  const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
+  const spy = rows.find((row) => row.strategy === 'benchmark_spy');
+  const challengerStats = curveStats(challenger, curveField, windowKey);
+  const spyStats = curveStats(spy, curveField, windowKey);
+  const reference = challengerStats.points.length
+    ? challengerStats.points
+    : curvePoints(rows[0], curveField, windowKey);
+  const firstSession = reference[0]?.session || '—';
+  const lastSession = reference[reference.length - 1]?.session || '—';
+  const vsSpy = Number.isFinite(challengerStats.return) && Number.isFinite(spyStats.return)
+    ? challengerStats.return - spyStats.return
+    : null;
+  const items = [
+    chartKpi('Periodo', reference.length ? `${firstSession} → ${lastSession}` : '—'),
+    chartKpi('Challenger', signedPct(challengerStats.return)),
+    chartKpi('vs SPY', signedPct(vsSpy)),
+    chartKpi('Máx. DD', challengerStats.maxDrawdown == null ? '—' : pct(challengerStats.maxDrawdown)),
+    chartKpi('Sesiones', String(reference.length || 0)),
+  ];
+  if (coverage != null) items.push(chartKpi('Cobertura', pct(coverage)));
+  return items.join('');
+}
+
+function curveChart(rows, curveField, title, options = {}) {
+  const windowKey = options.windowKey || 'all';
   const withCurves = rows
     .filter((row) => Array.isArray(row[curveField]) && row[curveField].length > 0)
     .sort((a, b) => {
@@ -361,18 +425,24 @@ function curveChart(rows, curveField, title) {
   const series = withCurves.map((row) => ({
     id: row.strategy,
     label: labelFor(row.strategy),
-    points: row[curveField].map((point) => ({
+    points: curvePoints(row, curveField, windowKey).map((point) => ({
       session: point.session,
-      value: point.nav,
+      value: point.nav ?? point.equity ?? point.value,
     })),
-  }));
-  return multiLineSvg(series, { title });
+  })).filter((entry) => entry.points.length);
+  return multiLineSvg(series, {
+    title,
+    valueFormat: 'money',
+    baseline: options.baseline,
+    baselineLabel: options.baselineLabel,
+    endLabelIds: options.endLabelIds || [],
+    markers: options.markers || [],
+  });
 }
 
-function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy League') {
-  return curveChart(rows, 'equity_curve', title);
+function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy League', options = {}) {
+  return curveChart(rows, 'equity_curve', title, options);
 }
-
 
 
 async function renderLive() {
@@ -380,6 +450,7 @@ async function renderLive() {
   const summaryRoot = document.getElementById('liveSummary');
   const table = document.getElementById('liveTable');
   const chartRoot = document.getElementById('liveCompetitionChart');
+  const chartMetrics = document.getElementById('liveChartMetrics');
   if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
 
   const result = await loadJSONState('data/strategy_live.json', { status: 'UNKNOWN', rows: [] });
@@ -388,7 +459,22 @@ async function renderLive() {
   if (statusRoot) statusRoot.innerHTML = liveStatusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = liveSummaryCards(data, rows);
   if (table) table.innerHTML = liveTableRows(rows);
-  if (chartRoot) chartRoot.innerHTML = curveChart(rows, 'intraday_curve', 'NAV intradía · mark-to-market');
+
+  const leader = windowLeader(rows, 'intraday_curve', 'all') || data?.summary?.live_strategy_leader;
+  const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
+  if (chartMetrics) {
+    const coverage = Number(data?.quote_source?.fresh_coverage);
+    chartMetrics.innerHTML = chartWindowMetrics(rows, 'intraday_curve', 'all', {
+      coverage: Number.isFinite(coverage) ? coverage : null,
+    });
+  }
+  if (chartRoot) {
+    chartRoot.innerHTML = curveChart(rows, 'intraday_curve', 'NAV intradía · mark-to-market', {
+      baseline: Number.isFinite(Number(challenger?.eod_nav)) ? Number(challenger.eod_nav) : undefined,
+      baselineLabel: 'Challenger EOD',
+      endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+    });
+  }
 
   const note = document.getElementById('liveNote');
   if (note) {
@@ -411,6 +497,8 @@ async function renderRetrospective() {
   const summaryRoot = document.getElementById('replaySummary');
   const table = document.getElementById('replayTable');
   const chartRoot = document.getElementById('replayCompetitionChart');
+  const chartMetrics = document.getElementById('replayChartMetrics');
+  const windowControl = document.getElementById('replayWindow');
   if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
 
   const result = await loadJSONState('data/strategy.json', { status: 'UNKNOWN', rows: [] });
@@ -419,12 +507,27 @@ async function renderRetrospective() {
   if (statusRoot) statusRoot.innerHTML = retrospectiveStatusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = retrospectiveSummaryCards(data, rows);
   if (table) table.innerHTML = retrospectiveTableRows(rows);
-  if (chartRoot) chartRoot.innerHTML = competitionChart(rows, 'Torneo retrospectivo de NAV · dos semanas');
+
+  function renderWindow() {
+    const windowKey = String(windowControl?.value || '3m');
+    const leader = windowLeader(rows, 'equity_curve', windowKey);
+    if (chartMetrics) chartMetrics.innerHTML = chartWindowMetrics(rows, 'equity_curve', windowKey);
+    if (chartRoot) {
+      chartRoot.innerHTML = competitionChart(rows, 'Torneo retrospectivo de NAV · ventana filtrada', {
+        windowKey,
+        baseline: Number(data.initial_nav_usd),
+        baselineLabel: `${money(data.initial_nav_usd)} inicial`,
+        endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+      });
+    }
+  }
+  windowControl?.addEventListener('change', renderWindow);
+  renderWindow();
 
   const note = document.getElementById('replayNote');
   if (note) {
     note.textContent = rows.length
-      ? `${data.methodology_note || 'Replay retrospectivo diagnóstico.'} Ningún resultado de esta sección cuenta como promoción ni evidencia prospectiva.`
+      ? `${data.methodology_note || 'Replay retrospectivo diagnóstico.'} El filtro cambia sólo la lectura visual; la tabla conserva el resultado de la ventana completa. Ningún resultado de esta sección cuenta como promoción ni evidencia prospectiva.`
       : 'Aún no hay un reporte retrospectivo publicado.';
   }
 }
@@ -434,6 +537,8 @@ async function renderLeague() {
   const summaryRoot = document.getElementById('leagueSummary');
   const table = document.getElementById('leagueTable');
   const chartRoot = document.getElementById('leagueCompetitionChart');
+  const chartMetrics = document.getElementById('leagueChartMetrics');
+  const windowControl = document.getElementById('leagueWindow');
   if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
 
   const result = await loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] });
@@ -442,14 +547,29 @@ async function renderLeague() {
   if (statusRoot) statusRoot.innerHTML = statusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = summaryCards(data, rows);
   if (table) table.innerHTML = tableRows(rows);
-  if (chartRoot) chartRoot.innerHTML = competitionChart(rows);
+
+  function renderWindow() {
+    const windowKey = String(windowControl?.value || 'all');
+    const leader = windowLeader(rows, 'equity_curve', windowKey);
+    if (chartMetrics) chartMetrics.innerHTML = chartWindowMetrics(rows, 'equity_curve', windowKey);
+    if (chartRoot) {
+      chartRoot.innerHTML = competitionChart(rows, 'Carrera prospectiva de NAV de Strategy League', {
+        windowKey,
+        baseline: Number(data.initial_nav_usd),
+        baselineLabel: 'Génesis',
+        endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+      });
+    }
+  }
+  windowControl?.addEventListener('change', renderWindow);
+  renderWindow();
 
   const note = document.getElementById('leagueNote');
   if (note) {
     const published = data.published_at ? ` Publicado ${new Date(data.published_at).toLocaleString('es-MX')}.` : '';
     const modelWarning = data.weekly_model?.validation_warning ? ' El modelo semanal congelado mostró validación débil; sus resultados siguen en evaluación.' : '';
     note.textContent = data.status === 'RUNNING'
-      ? `Capital inicial: ${money(data.initial_nav_usd)} por cartera. Datos prospectivos shadow-paper; cada EOD actualiza la liga y Pages automáticamente. ${data.summary?.leader_status === 'INSUFFICIENT_EVIDENCE' ? 'Todavía no hay líder: faltan sesiones o hay un empate.' : 'Líder provisional; la promoción exige controles adicionales.'}${modelWarning}${published}`
+      ? `Capital inicial: ${money(data.initial_nav_usd)} por cartera. Datos prospectivos shadow-paper; cada EOD actualiza la liga y Pages automáticamente. El selector recorta sólo la visualización, nunca reescribe el ranking oficial. ${data.summary?.leader_status === 'INSUFFICIENT_EVIDENCE' ? 'Todavía no hay líder: faltan sesiones o hay un empate.' : 'Líder provisional; la promoción exige controles adicionales.'}${modelWarning}${published}`
       : `Shadow-paper únicamente. El historial empieza cuando todas las carteras pueden arrancar en igualdad de condiciones.${modelWarning}${published}`;
   }
 }
