@@ -68,6 +68,21 @@ def test_live_requires_global_strategy_and_canonical_gates() -> None:
     assert allowed.allowed is True
 
 
+def test_v9_strategy_semantics_quarantine_cross_horizon_from_allocator() -> None:
+    cfg = _config()
+    weekly = cfg["strategies"]["weekly_opportunity_ridge"]
+    mean = cfg["strategies"]["mean_reversion_floor_w1"]
+    cross = cfg["strategies"]["cross_horizon_asymmetry"]
+
+    assert weekly["entry"]["model_score_semantics"] == "net_after_round_trip_costs"
+    assert mean["entry"]["near_anchor_pct"] == 0.03
+    assert mean["entry"]["min_reversal_signal_pct"] == 0.0
+    assert mean["capital_allocator_enabled"] is True
+    assert cross["research_enabled"] is True
+    assert cross["capital_allocator_enabled"] is False
+    assert cross["readiness"] == "research_diagnostic_weak_oos"
+
+
 def test_paper_runner_is_empty_with_repository_defaults() -> None:
     cfg = _config()
     rows = [
