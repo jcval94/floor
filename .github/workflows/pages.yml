@@ -2,14 +2,16 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod", "retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos"]
+    workflows: ["eod", "retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live"]
     types: [completed]
     branches: [main]
   push:
     branches: [main]
     paths:
       - '.github/workflows/pages.yml'
+      - '.github/workflows/strategy_live.yml'
       - 'scripts/runtime_state.sh'
+      - 'scripts/strategy_live_state.sh'
       - 'scripts/monitoring_state.sh'
       - 'scripts/research_state.sh'
       - 'site/**'
@@ -17,6 +19,7 @@ on:
       - 'src/utils/pages_publish.py'
       - 'src/utils/pages_security.py'
       - 'src/league/publish_site.py'
+      - 'src/league/live_snapshot.py'
       - 'src/league/experiment_observation.py'
       - 'config/universe.yaml'
       - 'config/strategy_league.json'
@@ -80,6 +83,10 @@ jobs:
                 ;;
               monitoring)
                 expected="monitoring-health-${upstream_run_id}"
+                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              strategy_live)
+                expected="strategy-live-${upstream_run_id}"
                 count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
                 ;;
               strategy_league_bootstrap)
@@ -180,10 +187,11 @@ jobs:
           runtime_payload="$(resolve_payload runtime-state-v1 floor-runtime-state.tar.gz .sha256 .metadata.json)"
           research_payload="$(resolve_payload research-state-v1 floor-research-state.tar.gz .sha256)"
           monitoring_payload="$(resolve_payload monitoring-state-v1 public_metrics.json .sha256)"
+          strategy_live_payload="$(resolve_payload strategy-live-v1 strategy-live.json .sha256)"
           publication_head="$(git rev-parse HEAD)"
           manifest="$RUNNER_TEMP/pages-state-manifest.json"
 
-          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" <<'PY'
+          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" "$strategy_live_payload" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
@@ -195,6 +203,7 @@ jobs:
               "runtime": ("runtime-state-v1", "floor-runtime-state.tar.gz", sys.argv[3]),
               "research": ("research-state-v1", "floor-research-state.tar.gz", sys.argv[4]),
               "monitoring": ("monitoring-state-v1", "public_metrics.json", sys.argv[5]),
+              "strategy_live": ("strategy-live-v1", "strategy-live.json", sys.argv[6]),
           }
           sources = {}
           for name, (tag, base_asset, payload) in values.items():
@@ -229,6 +238,7 @@ jobs:
             echo "runtime_payload=$runtime_payload"
             echo "research_payload=$research_payload"
             echo "monitoring_payload=$monitoring_payload"
+            echo "strategy_live_payload=$strategy_live_payload"
             echo "manifest=$manifest"
           } >> "$GITHUB_OUTPUT"
 
@@ -251,6 +261,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MONITORING_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.monitoring_payload }}
         run: bash scripts/monitoring_state.sh restore
+
+      - name: Overlay latest intraday Strategy League snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STRATEGY_LIVE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.strategy_live_payload }}
+        run: bash scripts/strategy_live_state.sh restore-snapshot
 
       - name: Recompute health against the pinned runtime snapshot
         run: |
@@ -286,7 +302,8 @@ jobs:
             --data-dir data \
             --league-config config/strategy_league.json \
             --output site/data/strategy_league.json \
-            --observation-output site/data/experiment_observation.json
+            --observation-output site/data/experiment_observation.json \
+            --live-output site/data/strategy_live.json
           PYTHONPATH=src python -m utils.pages_security --site-dir site
           touch site/.nojekyll
 
@@ -310,6 +327,7 @@ jobs:
           models = json.loads(Path('site/data/models.json').read_text(encoding='utf-8'))
           league = json.loads(Path('site/data/strategy_league.json').read_text(encoding='utf-8'))
           observation = json.loads(Path('site/data/experiment_observation.json').read_text(encoding='utf-8'))
+          live = json.loads(Path('site/data/strategy_live.json').read_text(encoding='utf-8'))
 
           if not audit.get('safe_to_deploy'):
               raise SystemExit('audit.safe_to_deploy is false')
@@ -341,6 +359,13 @@ jobs:
           if league.get('automatic_promotion') is not False:
               raise SystemExit('Strategy League must never auto-promote')
 
+          if live.get('live_execution_enabled') is not False:
+              raise SystemExit('Intraday strategy monitor must never enable LIVE execution')
+          if live.get('automatic_promotion') is not False:
+              raise SystemExit('Intraday strategy monitor must never auto-promote')
+          if live.get('counts_as_prospective_evidence') is not False:
+              raise SystemExit('Intraday strategy monitor must not count as official prospective evidence')
+
           safety = observation.get('safety') or {}
           if safety.get('live_execution_enabled') is not False:
               raise SystemExit('Experiment observation must never publish LIVE as enabled')
@@ -358,6 +383,8 @@ jobs:
           print('freshness=', (audit.get('freshness') or {}).get('status'))
           print('league_status=', league.get('status'))
           print('league_sessions=', league.get('sessions'))
+          print('live_strategy_status=', live.get('status'))
+          print('live_strategy_generated_at=', live.get('generated_at'))
           print('observation_status=', observation.get('status'))
           print('observation_reconciled=', (observation.get('evidence') or {}).get('reconciled_count_since_genesis'))
           print('blockers=', audit.get('blockers', []))
@@ -431,6 +458,7 @@ jobs:
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'runtime_state_source': 'github_release:runtime-state-v1',
               'monitoring_state_source': 'github_release:monitoring-state-v1',
+              'strategy_live_state_source': 'github_release:strategy-live-v1',
               'files': entries,
           }
           (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
@@ -457,6 +485,7 @@ jobs:
               out.write(f"- Freshness: `{(audit.get('freshness') or {}).get('status')}`\n")
               out.write(f"- Experiment: `{observation.get('status')}` sessions=`{observation.get('sessions')}`\n")
               out.write('- Runtime state: `github_release:runtime-state-v1`\n')
+              out.write('- Strategy live: `github_release:strategy-live-v1`\n')
               out.write(f"- Blockers: `{audit.get('blockers', [])}`\n")
               out.write(f"- Warnings: `{audit.get('warnings', [])}`\n")
           PY
