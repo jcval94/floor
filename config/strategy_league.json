@@ -81,6 +81,7 @@
     "min_sharpe": 0.5,
     "require_positive_excess_vs_spy": true,
     "require_positive_excess_vs_equal_weight": true,
-    "max_gross_turnover": 12
+    "turnover_review_window_sessions": 63,
+    "max_gross_turnover_per_review_window": 12
   }
 }
