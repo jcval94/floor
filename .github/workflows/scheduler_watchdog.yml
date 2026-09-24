@@ -2,8 +2,7 @@ name: scheduler_watchdog
 
 on:
   schedule:
-    # Independent backstop for dropped/delayed scheduled workflow events.
-    - cron: "5 13-23 * * 1-5"
+    # One hourly backstop is enough because intraday/eod already poll at :07/:22/:37/:52.
     - cron: "35 13-23 * * 1-5"
   push:
     branches: [main]
@@ -27,28 +26,67 @@ jobs:
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch checkpoint backstops
+      - name: Dispatch only missing workflow polls
+        id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           repo="${GITHUB_REPOSITORY}"
-          echo "Dispatching intraday checkpoint guard."
-          gh workflow run intraday_engine.yml --repo "$repo" --ref main
+          now_epoch="$(date -u +%s)"
+
+          has_recent_or_active_run() {
+            local workflow="$1"
+            local max_age_seconds="$2"
+            local runs cutoff
+            cutoff=$((now_epoch - max_age_seconds))
+            runs="$(gh run list \
+              --repo "$repo" \
+              --workflow "$workflow" \
+              --branch main \
+              --limit 20 \
+              --json createdAt,status)"
+
+            jq -e --argjson cutoff "$cutoff" '
+              any(.[];
+                (.status != "completed")
+                or ((.createdAt | fromdateiso8601) >= $cutoff)
+              )
+            ' <<<"$runs" >/dev/null
+          }
+
+          dispatch_if_stale() {
+            local workflow="$1"
+            local max_age_seconds="$2"
+            local output_name="$3"
+            if has_recent_or_active_run "$workflow" "$max_age_seconds"; then
+              echo "$output_name=skipped_recent_or_active" >> "$GITHUB_OUTPUT"
+              echo "$workflow: recent/active run exists; no duplicate dispatch."
+            else
+              gh workflow run "$workflow" --repo "$repo" --ref main
+              echo "$output_name=dispatched" >> "$GITHUB_OUTPUT"
+              echo "$workflow: watchdog dispatched missing poll."
+            fi
+          }
+
+          # Primary market workflows poll every 15 minutes. Twenty minutes
+          # distinguishes a dropped poll from a healthy scheduler without
+          # creating duplicate gate-only runs.
+          dispatch_if_stale intraday_engine.yml 1200 intraday
 
           utc_hour="$(date -u +%H)"
           if [ "$((10#$utc_hour))" -ge 20 ]; then
-            echo "Dispatching EOD close guard."
-            gh workflow run eod.yml --repo "$repo" --ref main
+            dispatch_if_stale eod.yml 1200 eod
           else
-            echo "EOD not yet in UTC close window; skip watchdog dispatch."
+            echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ "$((10#$utc_hour))" -ge 14 ] \
-            && [ "${{ github.event_name }}" = "schedule" ] \
-            && [ "${{ github.event.schedule }}" = "35 13-23 * * 1-5" ]; then
-            echo "Dispatching hourly monitoring backstop."
-            gh workflow run monitoring.yml --repo "$repo" --ref main
+          # Monitoring has its own hourly schedule plus workflow_run triggers.
+          # Dispatch only if neither path produced a run in the past 50 minutes.
+          if [ "$((10#$utc_hour))" -ge 14 ]; then
+            dispatch_if_stale monitoring.yml 3000 monitoring
+          else
+            echo "monitoring=outside_monitoring_window" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Summary
@@ -57,8 +95,9 @@ jobs:
             echo "## Floor scheduler watchdog"
             echo "- trigger: ${{ github.event_name }}"
             echo "- schedule: ${{ github.event.schedule || 'n/a' }}"
-            echo "- intraday: dispatched"
-            echo "- eod: dispatched only inside UTC close window"
-            echo "- monitoring: dispatched on the :35 schedule"
-            echo "- checkpoint/EOD guards remain authoritative and suppress duplicates"
+            echo "- intraday: ${{ steps.dispatch.outputs.intraday }}"
+            echo "- eod: ${{ steps.dispatch.outputs.eod }}"
+            echo "- monitoring: ${{ steps.dispatch.outputs.monitoring }}"
+            echo "- policy: dispatch only when no recent/active run exists"
+            echo "- unconditional main-push execution: disabled for intraday/eod"
           } >> "$GITHUB_STEP_SUMMARY"
