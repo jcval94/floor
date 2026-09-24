@@ -126,6 +126,7 @@ def test_mean_reversion_is_symmetric_at_w1_anchors() -> None:
             "close": 100.0,
             "floor_w1": 99.0,
             "ceiling_w1": 112.0,
+            "momentum_10": 0.040,
             "momentum_20": 0.020,
             "rel_strength_20": 0.0,
         }
@@ -137,6 +138,7 @@ def test_mean_reversion_is_symmetric_at_w1_anchors() -> None:
             "close": 100.0,
             "floor_w1": 88.0,
             "ceiling_w1": 101.0,
+            "momentum_10": -0.040,
             "momentum_20": -0.020,
             "rel_strength_20": 0.0,
         }

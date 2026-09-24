@@ -11,13 +11,18 @@ from pathlib import Path
 from typing import Any
 
 from backtest.run_backtest import run_strategy_backtest
-from contracts.trading import shadow_execution_contract
+from contracts.model_contract import attach_model_contract
+from contracts.trading import (
+    round_trip_cost_bps_from_contract,
+    shadow_execution_contract,
+)
 from features.run_features import assign_split
 from forecasting.parity_models import load_champion_models
 from models.evaluate import pinball_loss
 from models.run_training import run_training as run_m3_training
 from models.train_classic_horizons import run as run_classic_training
 from models.train_weekly_opportunity import (
+    _net_directional_return,
     predict_weekly_opportunity,
     train_weekly_opportunity_model,
 )
@@ -213,8 +218,12 @@ def train_evaluation_suite(
         tune=True,
     )
     weekly_path = models_dir / "weekly_opportunity_challenger.json"
+    weekly_payload = attach_model_contract(
+        asdict(weekly),
+        "weekly_opportunity",
+    )
     weekly_path.write_text(
-        json.dumps(asdict(weekly), ensure_ascii=False, indent=2),
+        json.dumps(weekly_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return {
@@ -387,7 +396,8 @@ def _opportunity_target(row: dict) -> float | None:
     if forward in (None, "") or floor in (None, "") or close <= 0:
         return None
     downside = max(0.01, (close - float(floor)) / close)
-    return max(-3.0, min(3.0, float(forward) / downside))
+    net_directional = _net_directional_return(forward)
+    return max(-3.0, min(3.0, net_directional / downside))
 
 
 def _opportunity_metrics(rows: list[dict], *, params: dict) -> dict:
@@ -397,10 +407,13 @@ def _opportunity_metrics(rows: list[dict], *, params: dict) -> dict:
     true = [float(_opportunity_target(row) or 0.0) for row in usable]
     pred = [predict_weekly_opportunity(row, params) for row in usable]
     forwards = [float(row.get("forward_return_q1") or 0.0) for row in usable]
+    net_forwards = [_net_directional_return(value) for value in forwards]
     n_top = max(1, math.ceil(0.2 * len(usable)))
     top_idx = sorted(range(len(pred)), key=lambda i: pred[i], reverse=True)[:n_top]
     top_returns = [forwards[i] for i in top_idx]
+    top_net_returns = [net_forwards[i] for i in top_idx]
     all_mean = _mean(forwards)
+    all_net_mean = _mean(net_forwards)
     return {
         "status": "ok",
         "rows": len(usable),
@@ -412,6 +425,9 @@ def _opportunity_metrics(rows: list[dict], *, params: dict) -> dict:
         "top_quintile_mean_forward_return_q1": _mean(top_returns),
         "mean_forward_return_q1": all_mean,
         "top_quintile_return_lift": _mean(top_returns) - all_mean,
+        "top_quintile_mean_net_directional_return_q1": _mean(top_net_returns),
+        "mean_net_directional_return_q1": all_net_mean,
+        "top_quintile_net_return_lift": _mean(top_net_returns) - all_net_mean,
     }
 
 
@@ -538,13 +554,7 @@ def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
         "entry_fraction": entry_fraction,
         "retain_fraction": retain_fraction,
         "transaction_costs_included": True,
-        "round_trip_cost_bps": (
-            2.0 * (
-                float(canonical_costs["commission_bps"])
-                + float(canonical_costs["slippage_bps"])
-            )
-            + float(canonical_costs["sell_fee_bps"])
-        ),
+        "round_trip_cost_bps": round_trip_cost_bps_from_contract(canonical_costs),
         "total_return": total_return,
         "equal_weight_buy_hold_return": benchmark_return,
         "excess_return_vs_equal_weight": total_return - benchmark_return,
@@ -741,7 +751,11 @@ def _write_weekly_artifact_for_final(
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps(asdict(artifact), ensure_ascii=False, indent=2),
+        json.dumps(
+            attach_model_contract(asdict(artifact), "weekly_opportunity"),
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 

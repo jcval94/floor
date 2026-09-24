@@ -5,6 +5,10 @@ import math
 
 import numpy as np
 
+from contracts.trading import (
+    round_trip_cost_bps_from_contract,
+    strategy_cost_contract,
+)
 from models.temporal_cv import purged_expanding_folds
 
 
@@ -17,6 +21,10 @@ FEATURE_NAMES = (
     "price_position_in_range_20",
 )
 TARGET_CLIP = 3.0
+TARGET_ROUND_TRIP_COST_BPS = round_trip_cost_bps_from_contract(
+    strategy_cost_contract()
+)
+TARGET_ROUND_TRIP_COST_PCT = TARGET_ROUND_TRIP_COST_BPS / 10000.0
 
 
 @dataclass
@@ -39,6 +47,25 @@ def _to_float(value: object, default: float = 0.0) -> float:
         return default
 
 
+def _net_directional_return(
+    forward_return: object,
+    *,
+    cost_pct: float = TARGET_ROUND_TRIP_COST_PCT,
+) -> float:
+    """Shrink realized directional movement by round-trip friction.
+
+    A move smaller than friction has no executable directional alpha. This
+    avoids turning a small positive move into a false short target (or a small
+    negative move into a false long target) merely because costs exceed it.
+    """
+
+    forward = _to_float(forward_return)
+    magnitude = max(0.0, abs(forward) - max(0.0, cost_pct))
+    if magnitude <= 0.0 or forward == 0.0:
+        return 0.0
+    return math.copysign(magnitude, forward)
+
+
 def _target(row: dict) -> float | None:
     if row.get("split_eligible_q1", True) is False:
         return None
@@ -48,7 +75,8 @@ def _target(row: dict) -> float | None:
     if forward in (None, "") or floor in (None, "") or close <= 0:
         return None
     downside = max(0.01, (close - _to_float(floor)) / close)
-    ratio = _to_float(forward) / downside
+    net_directional = _net_directional_return(forward)
+    ratio = net_directional / downside
     return max(-TARGET_CLIP, min(TARGET_CLIP, ratio))
 
 
@@ -123,6 +151,8 @@ def _fit_ridge(rows: list[dict], *, l2: float = 0.03, lr: float = 0.02, epochs: 
         "learning_rate": lr,
         "epochs": epochs,
         "target_clip": TARGET_CLIP,
+        "target_semantics": "net_directional_return_after_round_trip_costs_over_q1_downside",
+        "target_round_trip_cost_bps": TARGET_ROUND_TRIP_COST_BPS,
         "train_rows": len(usable),
     }
 
@@ -171,6 +201,7 @@ def _metrics(rows: list[dict], predictions: list[float]) -> dict:
     usable = _usable(rows)
     true = [float(_target(row) or 0.0) for row in usable]
     forwards = [_to_float(row.get("forward_return_q1")) for row in usable]
+    net_forwards = [_net_directional_return(value) for value in forwards]
     mae = _mean([abs(t - p) for t, p in zip(true, predictions)])
     directional = _mean([1.0 if (t >= 0) == (p >= 0) else 0.0 for t, p in zip(true, predictions)])
     rank_corr = _correlation(_rank(true), _rank(predictions)) if true else 0.0
@@ -179,8 +210,11 @@ def _metrics(rows: list[dict], predictions: list[float]) -> dict:
     top_n = max(1, math.ceil(count * 0.20)) if count else 0
     top_idx = sorted(range(count), key=lambda idx: predictions[idx], reverse=True)[:top_n]
     top_returns = [forwards[idx] for idx in top_idx]
+    top_net_returns = [net_forwards[idx] for idx in top_idx]
     all_mean = _mean(forwards)
     top_mean = _mean(top_returns)
+    all_net_mean = _mean(net_forwards)
+    top_net_mean = _mean(top_net_returns)
     return {
         "mae_opportunity_score": mae,
         "directional_accuracy": directional,
@@ -189,6 +223,10 @@ def _metrics(rows: list[dict], predictions: list[float]) -> dict:
         "top_quintile_mean_forward_return_q1": top_mean,
         "top_quintile_return_lift": top_mean - all_mean,
         "top_quintile_positive_rate": _mean([1.0 if value > 0 else 0.0 for value in top_returns]),
+        "mean_net_directional_return_q1": all_net_mean,
+        "top_quintile_mean_net_directional_return_q1": top_net_mean,
+        "top_quintile_net_return_lift": top_net_mean - all_net_mean,
+        "target_round_trip_cost_bps": TARGET_ROUND_TRIP_COST_BPS,
         "validation_rows": count,
     }
 
@@ -254,14 +292,17 @@ def train_weekly_opportunity_model(
     metrics.update(
         {
             "horizon": "q1_10_sessions",
-            "target": "forward_return_q1 / max(realized_drawdown_q1, 1%)",
+            "target": (
+                "sign(forward_return_q1) * max(abs(forward_return_q1) - "
+                "round_trip_cost, 0) / max(q1_downside, 1%)"
+            ),
             "train_rows": len(train),
         }
     )
     return WeeklyOpportunityArtifact(
         model_name=model_name,
         horizon="q1",
-        target="risk_adjusted_opportunity_q1",
+        target="cost_adjusted_risk_adjusted_opportunity_q1",
         version=version,
         params=params,
         metrics=metrics,

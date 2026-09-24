@@ -9,7 +9,7 @@ from typing import Any
 
 BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
 CHALLENGER_ID = "capital_allocation_challenger"
-DEFAULT_LEAGUE_ID = "strategy_league_v7_clean_genesis_10k"
+DEFAULT_LEAGUE_ID = "strategy_league_v9_net_target_reversal_10k"
 
 def _load_object(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
@@ -136,7 +136,11 @@ def _weekly_model_summary(data_dir: Path, league_cfg: dict[str, Any]) -> dict[st
     payload = _load_object(model_path)
     metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
     correlation = _number(metrics.get("spearman_rank_correlation"))
-    lift = _number(metrics.get("top_quintile_return_lift"))
+    lift = _number(
+        metrics.get("top_quintile_net_return_lift")
+        if metrics.get("top_quintile_net_return_lift") is not None
+        else metrics.get("top_quintile_return_lift")
+    )
     validation_warning = bool(payload) and (
         (correlation is not None and correlation <= 0)
         or (lift is not None and lift <= 0)

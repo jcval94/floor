@@ -20,6 +20,25 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def round_trip_cost_bps_from_contract(costs: dict[str, Any]) -> float:
+    """Return the exact all-in round-trip friction for one buy then sell.
+
+    The sell fee is charged once; broker/platform/slippage are charged on both
+    sides. Keeping this formula in the trading contract prevents research,
+    strategy gates and execution from drifting (for example 58 vs 61 bps).
+    """
+
+    broker = _float(
+        costs.get("broker_commission_bps"),
+        _float(costs.get("commission_bps"), 0.0)
+        - _float(costs.get("platform_fee_bps_per_side"), 0.0),
+    )
+    platform = _float(costs.get("platform_fee_bps_per_side"), 0.0)
+    slippage = _float(costs.get("slippage_bps"), 0.0)
+    sell_fee = _float(costs.get("sell_fee_bps"), 0.0)
+    return 2.0 * (broker + platform + slippage) + sell_fee
+
+
 def load_trading_cost_contract(
     costs_path: Path = DEFAULT_COSTS_PATH,
 ) -> dict[str, float]:

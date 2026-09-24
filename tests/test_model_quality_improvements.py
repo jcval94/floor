@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from models.temporal_cv import purged_expanding_folds
 from models.train_timing_models import train_floor_week_m3_timing_model
 from models.select_champion import _minimum_quality_gate
 from models.train_value_models import train_floor_m3_value_model
 from models.train_weekly_opportunity import (
+    TARGET_ROUND_TRIP_COST_BPS,
+    _net_directional_return,
     predict_weekly_opportunity,
     train_weekly_opportunity_model,
 )
@@ -104,14 +108,27 @@ def test_weekly_opportunity_challenger_is_risk_adjusted_and_not_canonical() -> N
     rows = _dated_rows(150)
     artifact = train_weekly_opportunity_model(rows[:100], rows[100:], version="v1", tune=True)
     assert artifact.horizon == "q1"
-    assert artifact.target == "risk_adjusted_opportunity_q1"
+    assert artifact.target == "cost_adjusted_risk_adjusted_opportunity_q1"
     assert artifact.params["canonical_serving_enabled"] is False
+    assert artifact.params["target_semantics"] == (
+        "net_directional_return_after_round_trip_costs_over_q1_downside"
+    )
+    assert artifact.params["target_round_trip_cost_bps"] == 61.0
+    assert TARGET_ROUND_TRIP_COST_BPS == 61.0
     assert artifact.metrics["validation_rows"] == len(artifact.predictions)
     assert "top_quintile_return_lift" in artifact.metrics
+    assert "top_quintile_net_return_lift" in artifact.metrics
 
     low = dict(rows[110])
     high = dict(rows[140])
     assert predict_weekly_opportunity(high, artifact.params) > predict_weekly_opportunity(low, artifact.params)
+
+
+def test_weekly_net_directional_target_has_cost_dead_zone() -> None:
+    assert _net_directional_return(0.005) == 0.0
+    assert _net_directional_return(-0.005) == 0.0
+    assert _net_directional_return(0.020) == pytest.approx(0.0139)
+    assert _net_directional_return(-0.020) == pytest.approx(-0.0139)
 
 
 def test_timing_minimum_quality_gate_rejects_worse_than_uniform_model() -> None:

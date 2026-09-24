@@ -26,8 +26,7 @@ def generate_mean_reversion_orders(
     entry = strategy_cfg.get("entry", {})
     near_anchor = to_float(entry.get("near_anchor_pct"), 0.02)
     min_rr = to_float(entry.get("min_reward_risk"), 1.30)
-    min_recovery = to_float(entry.get("min_recovery_momentum"), -0.005)
-    max_fading = to_float(entry.get("max_fading_momentum"), 0.005)
+    min_reversal = max(0.0, to_float(entry.get("min_reversal_signal_pct"), 0.0))
     buffer = to_float(
         strategy_cfg.get("risk", {}).get("stop_buffer_pct"),
         0.0,
@@ -37,7 +36,9 @@ def generate_mean_reversion_orders(
     for row in rows:
         current_geometry = geometry(row, "w1")
         close = current_geometry["close"]
-        momentum = to_float(row.get("momentum_20"))
+        momentum_10 = to_float(row.get("momentum_10"))
+        momentum_20 = to_float(row.get("momentum_20"))
+        reversal_signal = momentum_10 - momentum_20
 
         if close <= 0 or not liquidity_ok(row, strategy_cfg):
             output.append(
@@ -53,12 +54,12 @@ def generate_mean_reversion_orders(
         floor_distance = max(0.0, close - current_geometry["floor"]) / close
         ceiling_distance = max(0.0, current_geometry["ceiling"] - close) / close
         long_alpha_ok, long_alpha = alpha_hurdle(
-            max(0.0, momentum),
+            max(0.0, reversal_signal),
             global_cfg,
             strategy_cfg,
         )
         short_alpha_ok, short_alpha = alpha_hurdle(
-            max(0.0, -momentum),
+            max(0.0, -reversal_signal),
             global_cfg,
             strategy_cfg,
         )
@@ -66,7 +67,7 @@ def generate_mean_reversion_orders(
 
         if (
             floor_distance <= near_anchor
-            and momentum >= min_recovery
+            and reversal_signal >= min_reversal
             and current_geometry["long_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["up"], global_cfg, strategy_cfg
@@ -86,7 +87,7 @@ def generate_mean_reversion_orders(
 
         if (
             ceiling_distance <= near_anchor
-            and momentum <= max_fading
+            and reversal_signal <= -min_reversal
             and current_geometry["short_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["down"], global_cfg, strategy_cfg
@@ -114,7 +115,9 @@ def generate_mean_reversion_orders(
                         "HOLD: no cost-valid W1 reversal with confirmed "
                         f"directional recovery (floor_dist={floor_distance:.2%}, "
                         f"ceiling_dist={ceiling_distance:.2%}, "
-                        f"momentum={momentum:.2%})"
+                        f"momentum10={momentum_10:.2%}, "
+                        f"momentum20={momentum_20:.2%}, "
+                        f"reversal={reversal_signal:.2%})"
                     ),
                 )
             )
@@ -176,8 +179,8 @@ def generate_mean_reversion_orders(
                 qty=qty,
                 horizon="w1",
                 entry_reason=(
-                    f"{action}: W1 reversal with directional-alpha "
-                    f"{alpha['gross_alpha_pct']:.2%}, "
+                    f"{action}: W1 reversal confirmed by 10d-vs-20d momentum "
+                    f"alpha={alpha['gross_alpha_pct']:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
                     f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}"
                 ),
@@ -195,7 +198,7 @@ def generate_mean_reversion_orders(
                 gross_alpha_pct=alpha["gross_alpha_pct"],
                 net_alpha_pct=alpha["net_alpha_pct"],
                 cost_pct=alpha["cost_pct"],
-                alpha_source="signed_momentum_reversal_confirmation",
+                alpha_source="momentum_10_minus_momentum_20_reversal",
                 payoff_room_pct=payoff_room,
             )
         )

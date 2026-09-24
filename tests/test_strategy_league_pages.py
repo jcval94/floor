@@ -103,8 +103,9 @@ def test_frozen_weekly_model_reports_weak_validation(tmp_path: Path) -> None:
     weekly = data_dir / "metrics" / "strategy_league" / "models" / "weak.json"
     weekly.parent.mkdir(parents=True)
     weekly.write_text(json.dumps({"metrics": {
-        "spearman_rank_correlation": -0.087,
-        "top_quintile_return_lift": -0.0056,
+        "spearman_rank_correlation": 0.087,
+        "top_quintile_return_lift": 0.0056,
+        "top_quintile_net_return_lift": -0.0010,
     }}), encoding="utf-8")
     cfg = tmp_path / "league.json"
     cfg.write_text(json.dumps({"weekly_model_path": "data/metrics/strategy_league/models/weak.json"}), encoding="utf-8")
@@ -200,12 +201,17 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
     )
     member_ids = {str(member["id"]) for member in config["members"]}
-    assert config["league_id"] == "strategy_league_v8_net_alpha_10k"
-    assert "strategy_league_v8_net_alpha_10k" in config["weekly_model_path"]
+    assert config["league_id"] == "strategy_league_v9_net_target_reversal_10k"
+    assert "strategy_league_v9_net_target_reversal_10k" in config["weekly_model_path"]
     assert int(config["weekly_review_frequency_sessions"]) == 10
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
     assert float(config["initial_nav_usd"]) == 10000.0
+    assert float(
+        config["capital_allocation_challenger"]["source_weights"][
+            "cross_horizon_asymmetry"
+        ]
+    ) == 0.0
     assert {
         "weekly_opportunity_ridge",
         "breakout_protected_by_floor",

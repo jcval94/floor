@@ -52,7 +52,7 @@ def verify_challenger_freeze(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify frozen Capital Allocation Challenger contract")
     parser.add_argument("--league-config", default="config/strategy_league.json")
-    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v8.json")
+    parser.add_argument("--freeze", default="config/frozen/capital_challenger_v1_v9.json")
     args = parser.parse_args()
     print(json.dumps(verify_challenger_freeze(Path(args.league_config), Path(args.freeze)), indent=2))
 

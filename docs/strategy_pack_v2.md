@@ -42,21 +42,21 @@ Las rutas historicas `strategy_pack_v2.py`, `strategy_breakout_floor.py`, `strat
 
 ## Contrato de costos
 
-La plataforma cobra 0.24% por cada compra y 0.24% por cada venta. El strategy layer modela por lado:
+Existe un solo contrato de fricción para research, gates de estrategia y Strategy League. El round trip completo es **61 bps**:
 
-- plataforma: 24 bps;
-- comision broker existente: 2 bps;
-- slippage: 3 bps.
+- compra: 2 bps broker + 24 bps plataforma + 3 bps slippage = 29 bps;
+- venta: 2 bps broker + 24 bps plataforma + 3 bps slippage + 3 bps sell fee = 32 bps;
+- total compra + venta: **61 bps**.
 
-Esto produce un costo base de 29 bps por lado y 58 bps para un round trip. Las estrategias comparan el upside/downside potencial contra ese costo antes de permitir `BUY` o `SELL`.
+La fórmula vive en `contracts.trading.round_trip_cost_bps_from_contract` y los adaptadores de estrategia reutilizan esa misma autoridad. No existe un gate optimista de 58 bps separado de una ejecución de 61 bps.
 
-El sizing tambien incorpora la friccion round-trip junto con la distancia al stop. En `Strategy League` se conserva ademas el `sell_fee_bps` historico del simulador, por lo que su contabilidad puede ser algo mas conservadora que el gate base de 58 bps.
+Floor/Ceiling sólo aportan geometría de payoff/riesgo. La alpha direccional debe superar el costo completo y el hurdle de cada estrategia antes de permitir `BUY` o `SELL`.
 
 ## Estrategias activas
 
 ### `weekly_opportunity_ridge`
 
-El Ridge sigue siendo la fuente de alpha cross-sectional para Q1. El top tail positivo puede producir `BUY`; el bottom tail negativo puede producir `SELL`; el resto produce `HOLD`. Un score extremo no basta: Q1 floor/ceiling deben ofrecer reward/risk y edge neto suficientes despues de costos.
+El Ridge sigue siendo la fuente de alpha cross-sectional para Q1, pero desde Strategy League v9 su **target ya es neto de costos**: el retorno futuro se reduce por el round trip exacto de 61 bps antes de dividirse por el downside Q1. Movimientos cuya magnitud no cubre la fricción quedan en una zona muerta con target 0. El adaptador conoce esta semántica y no vuelve a descontar los costos una segunda vez. El top tail positivo puede producir `BUY`; el bottom tail negativo puede producir `SELL`; el resto produce `HOLD`.
 
 La Strategy League continua long-only. Por ese motivo, dentro de la liga solo los `BUY` se convierten en targets; `SELL` y `HOLD` significan no abrir o dejar de mantener una posicion en el siguiente rebalanceo. El research runner conserva las tres acciones.
 
@@ -66,11 +66,11 @@ Se conserva el identificador por compatibilidad, pero la logica se reconstruye c
 
 ### `mean_reversion_floor_w1`
 
-Ya no depende de `expected_return_w1`. Cerca del floor W1, una estabilizacion de momentum puede producir `BUY`; cerca del ceiling W1, una perdida de momentum puede producir `SELL`. Si el precio no esta suficientemente cerca de un extremo, la respuesta es `HOLD`.
+Ya no depende de `expected_return_w1`. La confirmación direccional es una **reversión 10d vs 20d** (`momentum_10 - momentum_20`): cerca del floor W1 puede comprar cuando el momentum corto ya mejora aunque el momentum de 20 días todavía sea negativo; cerca del ceiling aplica la señal simétrica. El anchor se amplía a 3%, el RR mínimo baja a 1.20 y el hurdle neto a 25 bps, pero la señal todavía debe cubrir los 61 bps, superar el múltiplo de costo, pasar liquidez y contexto M3.
 
 ### `cross_horizon_asymmetry`
 
-Nuevo challenger. Combina la geometria D1/W1/Q1 con pesos 20%/30%/50%. Solo toma una direccion si la asimetria entre upside y downside supera el threshold y momentum/fuerza relativa confirman el mismo sentido. Si los horizontes no ofrecen una asimetria clara neta de costos, devuelve `HOLD`.
+Challenger diagnóstico. Combina la geometría D1/W1/Q1 con pesos 20%/30%/50% y exige confirmación de momentum/fuerza relativa. Su evidencia OOS existente es débil incluso antes de costos, por lo que **no se retunea contra ese mismo OOS**. Permanece como miembro observable de Strategy League, pero está cuarentenado del Capital Allocation Challenger (`capital_allocator_enabled: false`, source weight 0) hasta acumular evidencia nueva.
 
 ## Estrategias retiradas del registry activo
 
@@ -93,4 +93,4 @@ El numero de acciones se limita por:
 3. friccion round-trip estimada;
 4. notional maximo por estrategia.
 
-PAPER y LIVE permanecen desactivados. Ningun cambio activa ejecucion real ni promocion automatica. Como este refactor es exclusivamente estructural, no reinicia `strategy_league_v4`: IDs, parametros, costos y comportamiento de las estrategias permanecen iguales.
+PAPER y LIVE permanecen desactivados. Ningún cambio activa ejecución real ni promoción automática. Los cambios de target Weekly y semántica de Mean Reversion abren una época limpia, `strategy_league_v9_net_target_reversal_10k`; la evidencia de v8 se conserva pero no se concatena con v9.

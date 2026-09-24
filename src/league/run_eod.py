@@ -29,6 +29,7 @@ from models.train_weekly_opportunity import predict_weekly_opportunity
 from strategies.breakout_protected_by_floor import generate_breakout_floor_orders
 from strategies.cross_horizon_asymmetry import generate_cross_horizon_orders
 from strategies.mean_reversion_floor_w1 import generate_mean_reversion_orders
+from strategies.common import round_trip_cost_bps
 from strategies.run_strategies import load_simple_yaml
 from strategies.weekly_opportunity_ridge import generate_weekly_opportunity_orders
 
@@ -115,6 +116,28 @@ def _strategy_targets(
         raise RuntimeError(
             "Strategy League refuses Weekly artifact unless canonical_serving_enabled=false"
         )
+    weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
+    score_semantics = str(
+        weekly_cfg.get("entry", {}).get("model_score_semantics")
+        or "gross_before_costs"
+    )
+    if score_semantics == "net_after_round_trip_costs":
+        target_semantics = str(params.get("target_semantics") or "")
+        expected_semantics = (
+            "net_directional_return_after_round_trip_costs_over_q1_downside"
+        )
+        if target_semantics != expected_semantics:
+            raise RuntimeError(
+                "Weekly net-alpha strategy requires net-cost model target semantics: "
+                f"expected={expected_semantics} actual={target_semantics!r}"
+            )
+        target_cost_bps = float(params.get("target_round_trip_cost_bps") or -1.0)
+        execution_cost_bps = round_trip_cost_bps(strategies_cfg)
+        if abs(target_cost_bps - execution_cost_bps) > 1e-9:
+            raise RuntimeError(
+                "Weekly target/execution cost drift: "
+                f"target={target_cost_bps} execution={execution_cost_bps}"
+            )
     for row in scored:
         row["weekly_opportunity_score"] = predict_weekly_opportunity(row, params)
     rows_by_symbol = {str(row.get("symbol")): row for row in scored}
@@ -122,7 +145,6 @@ def _strategy_targets(
     targets: dict[str, dict[str, dict]] = {}
     weekly_decisions: list[Any] = []
     if include_weekly or include_challenger:
-        weekly_cfg = strategies_cfg["strategies"]["weekly_opportunity_ridge"]
         weekly_decisions = generate_weekly_opportunity_orders(
             scored,
             strategies_cfg,

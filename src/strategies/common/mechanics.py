@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from contracts.trading import round_trip_cost_bps_from_contract
 from strategies.base import StrategyDecision
 
 
@@ -17,14 +18,7 @@ def platform_fee_bps_per_side(cfg: dict) -> float:
 
 
 def round_trip_cost_bps(cfg: dict) -> float:
-    costs = cfg.get("costs", {})
-    broker = to_float(
-        costs.get("broker_commission_bps"),
-        to_float(costs.get("commission_bps"), 0.0),
-    )
-    slippage = to_float(costs.get("slippage_bps"), 0.0)
-    sell_fee = to_float(costs.get("sell_fee_bps"), 0.0)
-    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg)) + sell_fee
+    return round_trip_cost_bps_from_contract(dict(cfg.get("costs", {})))
 
 
 def round_trip_cost_pct(cfg: dict) -> float:
@@ -88,6 +82,25 @@ def alpha_hurdle(
         and alpha["gross_alpha_pct"] >= alpha["cost_pct"] * min_multiple,
         alpha,
     )
+
+
+def alpha_hurdle_from_net(
+    net_alpha_pct: float,
+    cfg: dict,
+    strategy_cfg: dict,
+) -> tuple[bool, dict[str, float]]:
+    """Apply the normal hurdle to a model that already predicts net alpha.
+
+    We add the deterministic round-trip cost back once to reconstruct the
+    equivalent gross alpha, then reuse alpha_hurdle. This prevents double
+    subtraction when a model target was trained net of costs.
+    """
+
+    net = max(0.0, to_float(net_alpha_pct))
+    gross_equivalent = net + round_trip_cost_pct(cfg)
+    passed, alpha = alpha_hurdle(gross_equivalent, cfg, strategy_cfg)
+    alpha["model_net_alpha_pct"] = net
+    return passed, alpha
 
 
 def payoff_room_clears_cost(

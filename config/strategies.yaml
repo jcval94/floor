@@ -47,6 +47,7 @@ guards:
 strategies:
   breakout_protected_by_floor:
     research_enabled: true
+    capital_allocator_enabled: true
     canonical_serving_enabled: false
     paper_enabled: false
     live_enabled: false
@@ -80,6 +81,7 @@ strategies:
 
   mean_reversion_floor_w1:
     research_enabled: true
+    capital_allocator_enabled: true
     canonical_serving_enabled: false
     paper_enabled: false
     live_enabled: false
@@ -92,12 +94,11 @@ strategies:
       max_price: 2000
       excluded_sectors:
     entry:
-      near_anchor_pct: 0.020
-      min_reward_risk: 1.30
-      min_net_alpha_pct: 0.004
-      min_alpha_to_cost_multiple: 1.50
-      min_recovery_momentum: -0.005
-      max_fading_momentum: 0.005
+      near_anchor_pct: 0.030
+      min_reward_risk: 1.20
+      min_net_alpha_pct: 0.0025
+      min_alpha_to_cost_multiple: 1.25
+      min_reversal_signal_pct: 0.0
     position_sizing:
       risk_budget_pct_nav: 0.007
       max_weight_pct_nav: 0.20
@@ -113,11 +114,12 @@ strategies:
 
   cross_horizon_asymmetry:
     research_enabled: true
+    capital_allocator_enabled: false
     canonical_serving_enabled: false
     paper_enabled: false
     live_enabled: false
     promotion_eligible: false
-    readiness: challenger_waiting_out_of_sample
+    readiness: research_diagnostic_weak_oos
     priority: 3
     horizon: q1
     universe:
@@ -149,6 +151,7 @@ strategies:
 
   weekly_opportunity_ridge:
     research_enabled: true
+    capital_allocator_enabled: true
     canonical_serving_enabled: false
     paper_enabled: false
     live_enabled: false
@@ -167,6 +170,7 @@ strategies:
       sell_bottom_fraction: 0.10
       min_buy_score: 0.0
       max_sell_score: 0.0
+      model_score_semantics: net_after_round_trip_costs
       min_reward_risk: 1.20
       min_net_alpha_pct: 0.004
       min_alpha_to_cost_multiple: 2.00

@@ -7,6 +7,7 @@ one strategy package so strategies cannot silently overlap their logic.
 from strategies.common.mechanics import (
     alpha_after_costs,
     alpha_hurdle,
+    alpha_hurdle_from_net,
     apply_m3_context,
     geometry,
     hold_decision,
@@ -23,6 +24,7 @@ from strategies.common.mechanics import (
 __all__ = [
     "alpha_after_costs",
     "alpha_hurdle",
+    "alpha_hurdle_from_net",
     "apply_m3_context",
     "geometry",
     "hold_decision",

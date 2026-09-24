@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from contracts.trading import round_trip_cost_bps_from_contract
+
 
 @dataclass
 class StrategyDecision:
@@ -38,11 +40,18 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
 
 
 def expected_cost_bps(global_cfg: dict) -> float:
-    return _safe_float(global_cfg["costs"]["commission_bps"]) + _safe_float(global_cfg["costs"]["slippage_bps"])
+    return round_trip_cost_bps_from_contract(dict(global_cfg.get("costs", {})))
 
 
 def range_is_tradeable(row: dict, global_cfg: dict) -> bool:
-    min_range_multiple = _safe_float(global_cfg["guards"]["min_range_vs_cost_multiple"])
+    guards = global_cfg.get("guards", {})
+    min_range_multiple = _safe_float(
+        guards.get(
+            "min_range_vs_roundtrip_cost_multiple",
+            guards.get("min_range_vs_cost_multiple", 1.0),
+        ),
+        1.0,
+    )
     range_pct = _safe_float(row.get("expected_range_d1")) / max(_safe_float(row.get("close"), 1.0), 1e-9)
     cost_pct = expected_cost_bps(global_cfg) / 10000.0
     return range_pct >= (cost_pct * min_range_multiple)
