@@ -45,6 +45,16 @@ def _check(name: str, status: str, detail: str) -> dict[str, str]:
     return {"name": name, "status": status, "detail": detail}
 
 
+def _advisory_check(name: str, detail: str) -> dict[str, str]:
+    """Record a non-operational warning without degrading runtime health."""
+    return {
+        "name": name,
+        "status": "OK",
+        "level": "ADVISORY",
+        "detail": detail,
+    }
+
+
 def _max_status(checks: list[dict[str, str]]) -> str:
     return max(
         (item["status"] for item in checks),
@@ -255,10 +265,9 @@ def _retraining_check(data_dir: Path) -> dict[str, str]:
             f"review requires attention: status={suite_status} recommendation={recommendation}",
         )
     if suite_status in {"WARN", "WARNING", "YELLOW"} or recommendation == "RETRAIN_SOON":
-        return _check(
+        return _advisory_check(
             "retraining_review",
-            "DEGRADED",
-            f"review warning: status={suite_status} recommendation={recommendation}",
+            f"review advisory: status={suite_status} recommendation={recommendation}",
         )
     return _check(
         "retraining_review",
@@ -364,12 +373,18 @@ def build_health_snapshot(
     checks.append(_checkpoint_check(data_dir, now_et))
     status = _max_status(checks)
     alerts = [item["detail"] for item in checks if item["status"] != "OK"]
+    advisories = [
+        item["detail"]
+        for item in checks
+        if item.get("level") == "ADVISORY"
+    ]
     return {
         "generated_at": now_utc.isoformat(),
         "state_changed_at": now_utc.isoformat(),
         "status": status,
         "series": checks,
         "alerts": alerts,
+        "advisories": advisories,
     }
 
 
@@ -378,6 +393,7 @@ def _semantic_state(payload: dict[str, Any]) -> dict[str, Any]:
         "status": payload.get("status"),
         "series": payload.get("series"),
         "alerts": payload.get("alerts"),
+        "advisories": payload.get("advisories"),
     }
 
 
