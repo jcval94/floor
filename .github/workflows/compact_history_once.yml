@@ -1,10 +1,7 @@
 name: compact_history_once
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/compact_history_once.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
