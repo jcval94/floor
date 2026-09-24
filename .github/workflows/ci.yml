@@ -93,6 +93,7 @@ jobs:
           audit = json.loads((root / 'audit.json').read_text(encoding='utf-8'))
           forecasts = json.loads((root / 'forecasts.json').read_text(encoding='utf-8'))
           league = json.loads((root / 'strategy_league.json').read_text(encoding='utf-8'))
+          live = json.loads((root / 'strategy_live.json').read_text(encoding='utf-8'))
           oos = json.loads((root / 'walk_forward_oos.json').read_text(encoding='utf-8'))
           retro_attr = json.loads((root / 'strategy_attribution.json').read_text(encoding='utf-8'))
           prospective_attr = json.loads((root / 'strategy_league_attribution.json').read_text(encoding='utf-8'))
@@ -104,12 +105,16 @@ jobs:
           assert league['live_execution_enabled'] is False
           assert league['automatic_promotion'] is False
           assert league['evidence_type'] == 'prospective_shadow_paper'
+          assert live['live_execution_enabled'] is False
+          assert live['automatic_promotion'] is False
+          assert live['counts_as_prospective_evidence'] is False
           assert oos['prospective_evidence'] is False
           assert oos['historical_model_out_of_sample'] is True
           assert retro_attr['member'] == 'capital_allocation_challenger'
           assert prospective_attr['prospective_evidence'] is True
           print('pages_dry_run_status=', audit['status'])
           print('strategy_league_status=', league.get('status'))
+          print('strategy_live_status=', live.get('status'))
           print('walk_forward_status=', oos.get('status'))
           print('retrospective_attribution=', retro_attr.get('status'))
           print('prospective_attribution=', prospective_attr.get('status'))

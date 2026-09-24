@@ -196,6 +196,20 @@ jobs:
             --strategies-config config/strategies.yaml \
             --universe config/universe.yaml
 
+      - name: Export compact official base for intraday Strategy League
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m league.live_snapshot export-base \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --output data/metrics/strategy_league/live_base.json
+
+      - name: Publish compact official base for intraday Strategy League
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh publish-base
+
       - name: Build experiment observation snapshot
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m league.experiment_observation --data-dir data --league-config config/strategy_league.json

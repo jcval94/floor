@@ -72,6 +72,28 @@ function statusCard(data) {
   </div>`;
 }
 
+
+function liveStatusCard(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const active = data?.status === 'LIVE' && rows.length > 0;
+  const degraded = data?.status === 'DEGRADED' && rows.length > 0;
+  const generated = data?.generated_at
+    ? new Date(data.generated_at).toLocaleString('es-MX')
+    : '—';
+  const detail = rows.length
+    ? `Lectura ${generated} · cobertura fresca ${pct(data?.quote_source?.fresh_coverage)} · base EOD ${data?.last_eod_session || '—'}`
+    : data?.detail || 'Aún no hay una lectura intradía publicable.';
+  const label = active
+    ? 'Monitor intradía activo'
+    : degraded
+      ? 'Monitor intradía parcial'
+      : String(data?.status || 'PENDIENTE');
+  return `<div class="trust-strip ${active ? 'ok' : 'warn'}">
+    <div><strong>${escapeHTML(label)}</strong></div>
+    <span class="trust-detail">${escapeHTML(detail)}</span>
+  </div>`;
+}
+
 function retrospectiveStatusCard(data) {
   const ready = data?.status === 'RETROSPECTIVE_OK' && Array.isArray(data?.rows) && data.rows.length > 0;
   const detail = ready
@@ -161,6 +183,51 @@ function summaryCards(data, rows) {
   </article>`).join('');
 }
 
+
+function liveSummaryCards(data, rows) {
+  if (!rows.length) {
+    return '<div class="empty-state league-empty"><strong>Sin lectura intradía disponible.</strong><p>El monitor se poblará durante una sesión de mercado cuando exista una base EOD oficial.</p></div>';
+  }
+  const summary = data?.summary && typeof data.summary === 'object' ? data.summary : {};
+  const leaderId = summary.live_strategy_leader;
+  const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
+  const coverage = Number(data?.quote_source?.fresh_coverage);
+  const generated = data?.generated_at
+    ? new Date(data.generated_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+  const cards = [
+    {
+      label: 'Mayor retorno ahora',
+      value: leaderId ? labelFor(leaderId) : '—',
+      detail: `${pct(summary.live_strategy_leader_return)} retorno marcado`,
+      tone: leaderId === 'capital_allocation_challenger' ? 'ok' : '',
+    },
+    {
+      label: 'Challenger · desde EOD',
+      value: signedPct(challenger?.change_since_eod),
+      detail: challenger?.rank ? `posición intradía #${challenger.rank}` : 'sin posición',
+      tone: Number(challenger?.change_since_eod) > 0 ? 'ok' : Number(challenger?.change_since_eod) < 0 ? 'bad' : '',
+    },
+    {
+      label: 'Challenger vs SPY',
+      value: signedPct(challenger?.vs_spy),
+      detail: 'diferencia sobre retorno acumulado marcado',
+      tone: Number(challenger?.vs_spy) > 0 ? 'ok' : Number(challenger?.vs_spy) < 0 ? 'bad' : '',
+    },
+    {
+      label: 'Cobertura de quotes',
+      value: Number.isFinite(coverage) ? pct(coverage) : '—',
+      detail: `última publicación ${generated}`,
+      tone: coverage >= 0.95 ? 'ok' : 'bad',
+    },
+  ];
+  return cards.map((card) => `<article class="metric-card league-metric ${card.tone}">
+    <span class="metric-label">${escapeHTML(card.label)}</span>
+    <strong class="metric-value">${escapeHTML(card.value)}</strong>
+    <span class="metric-detail">${escapeHTML(card.detail)}</span>
+  </article>`).join('');
+}
+
 function retrospectiveSummaryCards(data, rows) {
   if (!rows.length) {
     return '<div class="empty-state league-empty"><strong>Sin replay publicado todavía.</strong><p>Cuando termine el torneo de dos semanas aparecerán aquí el líder y las comparaciones.</p></div>';
@@ -231,6 +298,33 @@ function tableRows(rows) {
   }).join('');
 }
 
+
+function liveTableRows(rows) {
+  if (!rows.length) {
+    return '<tr><td colspan="11"><div class="empty-state"><strong>Sin mark-to-market intradía.</strong><p>La vista se activa en horario de mercado y requiere una base oficial del último EOD.</p></div></td></tr>';
+  }
+  return rows.map((row, index) => {
+    const rank = row.rank ?? index + 1;
+    const isChallenger = row.strategy === 'capital_allocation_challenger';
+    const coverage = Number(row.quote_coverage);
+    const coverageTone = coverage >= 0.95 ? 'ok' : 'warn';
+    return `
+    <tr class="${isChallenger ? 'league-challenger-row' : ''}">
+      <td><strong class="league-rank">#${escapeHTML(String(rank))}</strong></td>
+      <td><strong>${escapeHTML(labelFor(row.strategy))}</strong>${isChallenger ? '<span class="league-chip">Challenger</span>' : ''}</td>
+      <td>${isBenchmark(row) ? 'Benchmark' : 'Estrategia'}</td>
+      <td>${money(row.nav, 2)}</td>
+      <td class="${Number(row.change_since_eod) >= 0 ? 'positive' : 'negative'}">${signedPct(row.change_since_eod)}</td>
+      <td class="${Number(row.return) >= 0 ? 'positive' : 'negative'}">${pct(row.return)}</td>
+      <td class="${Number(row.vs_spy) >= 0 ? 'positive' : 'negative'}">${signedPct(row.vs_spy)}</td>
+      <td>${pct(row.gross_exposure_pct)}</td>
+      <td>${pct(row.cash_pct)}</td>
+      <td>${escapeHTML(String(row.position_count ?? '—'))}</td>
+      <td><span class="status-badge ${coverageTone}"><span class="status-dot"></span>${pct(row.quote_coverage)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
 function retrospectiveTableRows(rows) {
   if (!rows.length) {
     return '<tr><td colspan="11"><div class="empty-state"><strong>Sin torneo retrospectivo todavía.</strong><p>El workflow publicará esta tabla al terminar el replay.</p></div></td></tr>';
@@ -255,9 +349,10 @@ function retrospectiveTableRows(rows) {
   }).join('');
 }
 
-function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy League') {
+
+function curveChart(rows, curveField, title) {
   const withCurves = rows
-    .filter((row) => Array.isArray(row.equity_curve) && row.equity_curve.length > 0)
+    .filter((row) => Array.isArray(row[curveField]) && row[curveField].length > 0)
     .sort((a, b) => {
       const aRank = SERIES_RANK.get(String(a.strategy)) ?? SERIES_ORDER.length;
       const bRank = SERIES_RANK.get(String(b.strategy)) ?? SERIES_ORDER.length;
@@ -266,13 +361,50 @@ function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy 
   const series = withCurves.map((row) => ({
     id: row.strategy,
     label: labelFor(row.strategy),
-    points: row.equity_curve.map((point) => ({
+    points: row[curveField].map((point) => ({
       session: point.session,
       value: point.nav,
     })),
   }));
   return multiLineSvg(series, { title });
 }
+
+function competitionChart(rows, title = 'Carrera prospectiva de NAV de Strategy League') {
+  return curveChart(rows, 'equity_curve', title);
+}
+
+
+
+async function renderLive() {
+  const statusRoot = document.getElementById('liveStatus');
+  const summaryRoot = document.getElementById('liveSummary');
+  const table = document.getElementById('liveTable');
+  const chartRoot = document.getElementById('liveCompetitionChart');
+  if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
+
+  const result = await loadJSONState('data/strategy_live.json', { status: 'UNKNOWN', rows: [] });
+  const data = result.data || { status: 'UNKNOWN', rows: [] };
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  if (statusRoot) statusRoot.innerHTML = liveStatusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = liveSummaryCards(data, rows);
+  if (table) table.innerHTML = liveTableRows(rows);
+  if (chartRoot) chartRoot.innerHTML = curveChart(rows, 'intraday_curve', 'NAV intradía · mark-to-market');
+
+  const note = document.getElementById('liveNote');
+  if (note) {
+    if (rows.length) {
+      const source = data?.quote_source?.provider || 'fuente intradía';
+      const interval = data?.quote_source?.interval || '—';
+      const generated = data.generated_at
+        ? new Date(data.generated_at).toLocaleString('es-MX')
+        : '—';
+      note.textContent = `Lectura observacional publicada ${generated}. Fuente: ${source}, intervalo ${interval}. Los precios faltantes degradan la cobertura y pueden usar caché de la sesión o el último EOD; este snapshot no cuenta para promoción y no genera órdenes.`;
+    } else {
+      note.textContent = data?.detail || 'El monitor intradía todavía no tiene datos publicables.';
+    }
+  }
+}
+
 
 async function renderRetrospective() {
   const statusRoot = document.getElementById('replayStatus');
@@ -322,5 +454,7 @@ async function renderLeague() {
   }
 }
 
+renderLive();
 renderRetrospective();
 renderLeague();
+setInterval(renderLive, 60_000);

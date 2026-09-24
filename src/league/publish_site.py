@@ -11,7 +11,6 @@ BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
 CHALLENGER_ID = "capital_allocation_challenger"
 DEFAULT_LEAGUE_ID = "strategy_league_v7_clean_genesis_10k"
 
-
 def _load_object(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
@@ -21,14 +20,12 @@ def _load_object(path: Path | None) -> dict[str, Any]:
         return {}
     return payload if isinstance(payload, dict) else {}
 
-
 def _write_object(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-
 
 def _number(value: Any) -> float | None:
     try:
@@ -37,14 +34,12 @@ def _number(value: Any) -> float | None:
         return None
     return numeric
 
-
 def _return_sort_key(row: dict[str, Any]) -> tuple[bool, float]:
     value = _number(row.get("return"))
     return (
         value is not None,
         value if value is not None else float("-inf"),
     )
-
 
 def _rank_rows(raw_rows: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_rows, list):
@@ -65,23 +60,19 @@ def _rank_rows(raw_rows: Any) -> list[dict[str, Any]]:
         )
     return rows
 
-
 def _row_by_id(rows: list[dict[str, Any]], strategy_id: str) -> dict[str, Any] | None:
     return next(
         (row for row in rows if str(row.get("strategy")) == strategy_id),
         None,
     )
 
-
 def _return_of(row: dict[str, Any] | None) -> float | None:
     return _number(row.get("return")) if row else None
-
 
 def _delta(left: float | None, right: float | None) -> float | None:
     if left is None or right is None:
         return None
     return left - right
-
 
 def _competition_summary(rows: list[dict[str, Any]], sessions: int, min_sessions: int) -> dict[str, Any]:
     strategy_rows = [row for row in rows if row.get("member_type") == "strategy"]
@@ -119,7 +110,6 @@ def _competition_summary(rows: list[dict[str, Any]], sessions: int, min_sessions
         "benchmarks": len(rows) - len(strategy_rows),
     }
 
-
 def _member_ids(league_cfg: dict[str, Any]) -> list[str]:
     raw = league_cfg.get("members", [])
     if not isinstance(raw, list):
@@ -129,7 +119,6 @@ def _member_ids(league_cfg: dict[str, Any]) -> list[str]:
         for member in raw
         if isinstance(member, dict) and member.get("id")
     ]
-
 
 def _configured_data_path(data_dir: Path, raw_path: Any) -> Path | None:
     raw = str(raw_path or "").strip()
@@ -141,7 +130,6 @@ def _configured_data_path(data_dir: Path, raw_path: Any) -> Path | None:
     if path.parts and path.parts[0] == "data":
         return data_dir.joinpath(*path.parts[1:])
     return data_dir / path
-
 
 def _weekly_model_summary(data_dir: Path, league_cfg: dict[str, Any]) -> dict[str, Any]:
     model_path = _configured_data_path(data_dir, league_cfg.get("weekly_model_path"))
@@ -161,7 +149,6 @@ def _weekly_model_summary(data_dir: Path, league_cfg: dict[str, Any]) -> dict[st
         "validation_metrics": metrics,
         "validation_warning": validation_warning,
     }
-
 
 def _waiting_payload(
     league_cfg: dict[str, Any],
@@ -184,7 +171,6 @@ def _waiting_payload(
         "live_execution_enabled": False,
         "rows": [],
     }
-
 
 def publish_league_payload(
     data_dir: Path,
@@ -245,6 +231,110 @@ def publish_league_payload(
     _write_object(output_path, payload)
     return payload
 
+
+def publish_live_payload(
+    data_dir: Path,
+    output_path: Path,
+    league_config_path: Path | None = None,
+) -> dict[str, Any]:
+    """Publish the latest observational intraday mark-to-market snapshot.
+
+    Intraday rows are deliberately isolated from official EOD evidence. A snapshot
+    based on an older EOD state is withheld rather than mixed with the current
+    prospective Strategy League epoch.
+    """
+
+    source = data_dir / "metrics" / "strategy_league" / "live_snapshot.json"
+    source_payload = _load_object(source)
+    league_cfg = _load_object(league_config_path)
+    expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+    official = _load_object(
+        data_dir / "metrics" / "strategy_league" / "leaderboard.json"
+    )
+
+    status = "WAITING_FOR_LIVE_SNAPSHOT"
+    detail = "The first market-hours intraday snapshot has not been published yet."
+    payload: dict[str, Any]
+    if not source_payload:
+        payload = {
+            "schema_version": 1,
+            "league_id": expected_league_id,
+            "mode": "shadow_paper_mark_to_market",
+            "status": status,
+            "detail": detail,
+            "market_session": None,
+            "generated_at": None,
+            "last_eod_session": official.get("last_session"),
+            "sessions": int(official.get("sessions", 0) or 0),
+            "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 10000.0)),
+            "quote_source": {
+                "provider": "Yahoo Finance chart",
+                "interval": "5m",
+                "required_symbols": 0,
+                "fresh_symbols": 0,
+                "fresh_coverage": 0.0,
+            },
+            "rows": [],
+        }
+    elif str(source_payload.get("league_id") or "") != expected_league_id:
+        payload = {
+            "schema_version": 1,
+            "league_id": expected_league_id,
+            "mode": "shadow_paper_mark_to_market",
+            "status": "WAITING_FOR_LIVE_SNAPSHOT",
+            "detail": (
+                "The available intraday snapshot belongs to a previous Strategy "
+                "League epoch and is not published."
+            ),
+            "market_session": None,
+            "generated_at": None,
+            "last_eod_session": official.get("last_session"),
+            "sessions": int(official.get("sessions", 0) or 0),
+            "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 10000.0)),
+            "quote_source": {
+                "provider": "Yahoo Finance chart",
+                "interval": "5m",
+                "required_symbols": 0,
+                "fresh_symbols": 0,
+                "fresh_coverage": 0.0,
+            },
+            "rows": [],
+        }
+    elif (
+        official
+        and official.get("last_session")
+        and source_payload.get("last_eod_session")
+        != official.get("last_session")
+    ):
+        payload = {
+            "schema_version": 1,
+            "league_id": expected_league_id,
+            "mode": "shadow_paper_mark_to_market",
+            "status": "STALE_BASE",
+            "detail": (
+                "The latest intraday snapshot predates the current official EOD "
+                "Strategy League state, so its rows are withheld."
+            ),
+            "market_session": source_payload.get("market_session"),
+            "generated_at": source_payload.get("generated_at"),
+            "last_eod_session": source_payload.get("last_eod_session"),
+            "sessions": int(official.get("sessions", 0) or 0),
+            "initial_nav_usd": float(league_cfg.get("initial_nav_usd", 10000.0)),
+            "quote_source": source_payload.get("quote_source", {}),
+            "rows": [],
+        }
+    else:
+        payload = dict(source_payload)
+        payload.pop("quote_cache", None)
+        payload["rows"] = _rank_rows(payload.get("rows", []))
+
+    payload["evidence_type"] = "intraday_mark_to_market_non_promotional"
+    payload["counts_as_prospective_evidence"] = False
+    payload["automatic_promotion"] = False
+    payload["live_execution_enabled"] = False
+    payload["published_at"] = datetime.now(timezone.utc).isoformat()
+    _write_object(output_path, payload)
+    return payload
 
 def publish_observation_payload(
     data_dir: Path,
@@ -316,10 +406,20 @@ def main() -> None:
         "--observation-output",
         default="site/data/experiment_observation.json",
     )
+    parser.add_argument(
+        "--live-output",
+        default=None,
+        help="Optional live snapshot output; defaults beside --output.",
+    )
     args = parser.parse_args()
     data_dir = Path(args.data_dir)
     league_config = Path(args.league_config)
     output_path = Path(args.output)
+    live_output_path = (
+        Path(args.live_output)
+        if args.live_output
+        else output_path.parent / "strategy_live.json"
+    )
     payload = publish_league_payload(
         data_dir,
         output_path,
@@ -328,6 +428,11 @@ def main() -> None:
     observation = publish_observation_payload(
         data_dir,
         Path(args.observation_output),
+        league_config,
+    )
+    live = publish_live_payload(
+        data_dir,
+        live_output_path,
         league_config,
     )
 
@@ -347,6 +452,7 @@ def main() -> None:
                 "sessions": payload.get("sessions"),
                 "leader": (payload.get("summary") or {}).get("strategy_leader"),
                 "observation_status": observation.get("status"),
+                "live_status": live.get("status"),
                 **research,
             },
             ensure_ascii=False,

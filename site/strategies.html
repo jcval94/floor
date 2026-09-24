@@ -16,12 +16,25 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Evidence ladder</span><h1>Backtest, model-OOS y estrategias compitiendo.</h1><p class="lead">Esta página separa tres niveles de evidencia: replay retrospectivo, walk-forward con modelos entrenados sólo con pasado y Strategy League prospectiva. Todos usan las mismas reglas de capital y costos, sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Evidence ladder</span><h1>Backtest, model-OOS y estrategias compitiendo.</h1><p class="lead">Esta página separa tres niveles de evidencia: replay retrospectivo, walk-forward con modelos entrenados sólo con pasado y Strategy League prospectiva. Encima de ellos se muestra un monitor intradía observacional, aislado de la evidencia oficial y sin activar ejecución LIVE.</p></div><div id="strategyStatus"></div></section>
   <section id="strategyMetrics" class="metrics-grid"></section>
   <p id="strategyHint" class="small" aria-live="polite"></p>
   <section class="section two-column">
     <article class="panel"><div class="section-heading"><div><span class="eyebrow">Performance</span><h2>Curva del challenger retrospectivo</h2></div></div><div id="equityCurve"></div></article>
     <article class="panel"><div class="section-heading"><div><span class="eyebrow">Risk</span><h2>Drawdown del challenger</h2></div></div><div id="drawdownCurve"></div></article>
+  </section>
+
+  <section id="strategy-live" class="section">
+    <div class="section-heading">
+      <div><span class="eyebrow">Intraday mark-to-market · actualización ~15 min</span><h2>Estrategias en tiempo casi real</h2><p class="lead">Las posiciones oficiales del último EOD se marcan durante el mercado con cotizaciones intradía de 5 minutos. Esta vista observa NAV, cambio del día, exposición, cash y cobertura sin generar órdenes ni alterar la Strategy League oficial.</p></div>
+      <span class="status-badge neutral"><span class="status-dot"></span>Observacional</span>
+    </div>
+    <div id="liveStatus" aria-live="polite"></div>
+    <div id="liveSummary" class="league-summary-grid" aria-label="Resumen intradía de estrategias"></div>
+    <article class="panel league-race-panel"><div class="league-race-head"><div><span class="eyebrow">Intraday NAV race</span><h3>Cómo se mueven hoy</h3><p>Cada punto es un mark-to-market del mismo portafolio oficial del último cierre; no se rebalancea intradía.</p></div><span class="status-badge neutral"><span class="status-dot"></span>5m quotes</span></div><div id="liveCompetitionChart" aria-live="polite"></div></article>
+    <article class="panel league-table-panel"><div class="section-heading"><div><span class="eyebrow">Live monitor</span><h3>Clasificación intradía</h3><p>El orden refleja el NAV marcado más reciente; es una lectura operacional, no una señal de compra/venta ni evidencia para promoción.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV ahora</th><th>Desde EOD</th><th>Retorno acum.</th><th>vs SPY</th><th>Exposición</th><th>Cash</th><th>Posiciones</th><th>Cobertura</th></tr></thead><tbody id="liveTable"></tbody></table></div></article>
+    <p id="liveNote" class="small" aria-live="polite"></p>
+    <div class="league-automation-note"><span class="status-badge ok"><span class="status-dot"></span>Automático</span><p><strong>Mercado abierto → quotes 5m → mark-to-market → Pages.</strong> El objetivo es refrescar aproximadamente cada 15 minutos. Los snapshots intradía viven en un canal separado y nunca cuentan como evidencia prospectiva oficial ni habilitan ejecución LIVE.</p></div>
   </section>
 
   <section id="retrospective-tournament" class="section">

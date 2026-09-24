@@ -1,0 +1,121 @@
+name: strategy_live
+
+on:
+  schedule:
+    # Four observations per hour. The market-hours gate handles DST and early closes.
+    - cron: "5,20,35,50 13-22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: floor-strategy-live-state-writer
+  cancel-in-progress: false
+
+jobs:
+  live_mark:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Gate to US market hours
+        id: market
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import os
+          from datetime import datetime, time
+
+          from floor.calendar import ET, is_early_close, is_market_session
+
+          now = datetime.now(ET)
+          close_time = time(13, 0) if is_early_close(now.date()) else time(16, 0)
+          wall = now.time().replace(tzinfo=None)
+          active = is_market_session(now.date()) and time(9, 30) <= wall <= close_time
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"run={'true' if active else 'false'}\n")
+              out.write(f"session={now.date().isoformat()}\n")
+              out.write(f"now_et={now.isoformat()}\n")
+          print(f"strategy_live active={active} now_et={now.isoformat()} close={close_time}")
+          PY
+
+      - name: Restore compact official EOD base
+        if: steps.market.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh restore-base
+
+      - name: Bootstrap compact EOD base when the release channel is empty
+        id: base
+        if: steps.market.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -s data/metrics/strategy_league/live_base.json ]; then
+            echo "Compact live base does not exist yet; bootstrapping once from authoritative runtime state."
+            bash scripts/runtime_state.sh restore
+            PYTHONPATH=src python -m league.live_snapshot export-base \
+              --data-dir data \
+              --league-config config/strategy_league.json \
+              --output data/metrics/strategy_league/live_base.json
+            status="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("data/metrics/strategy_league/live_base.json").read_text(encoding="utf-8"))
+          print(payload.get("status", "UNKNOWN"))
+          PY
+          )"
+            if [ "$status" = "READY" ]; then
+              bash scripts/strategy_live_state.sh publish-base
+            fi
+          fi
+
+          if [ -s data/metrics/strategy_league/live_base.json ] \
+            && [ "$(python -c 'import json; print(json.load(open("data/metrics/strategy_league/live_base.json")).get("status"))')" = "READY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No official Strategy League EOD state is available yet."
+          fi
+
+      - name: Restore previous intraday snapshot
+        if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh restore-snapshot
+
+      - name: Build intraday mark-to-market snapshot
+        if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
+        run: |
+          PYTHONPATH=src python -m league.live_snapshot mark             --base data/metrics/strategy_league/live_base.json             --previous-snapshot data/metrics/strategy_league/live_snapshot.json             --output data/metrics/strategy_league/live_snapshot.json             --range 1d             --interval 5m
+
+      - name: Publish compact intraday snapshot
+        if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh publish-snapshot
+
+      - name: Upload immutable intraday evidence
+        if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: strategy-live-${{ github.run_id }}
+          path: data/metrics/strategy_league/live_snapshot.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report closed-market skip
+        if: steps.market.outputs.run != 'true'
+        run: |
+          echo "Strategy live mark skipped outside US market hours."
+          echo "now_et=${{ steps.market.outputs.now_et }}"
+          echo "session=${{ steps.market.outputs.session }}"
