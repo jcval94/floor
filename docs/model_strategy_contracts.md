@@ -86,6 +86,13 @@ cost profile is validated against the canonical shadow-cost contract.
 Changing a frozen Strategy League experiment still requires a new league epoch;
 contract validation must never rewrite historical evidence.
 
+New Strategy League epochs use a v2 evidence contract that freezes the hashes of
+all five serving champions plus the model/strategy contract registries. Legacy
+epochs remain readable and continue accumulating their existing history, but are
+reported as `legacy_v1_model_suite_unfrozen` and cannot satisfy promotion review.
+This avoids retroactively pretending that historical strategy evidence was
+generated under a model suite that was never frozen.
+
 ## Promotion invariant
 
 A model/strategy can be technically valid without being promotion-ready.
