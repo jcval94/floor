@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from strategies.base import StrategyDecision
 from strategies.common import (
+    alpha_hurdle,
     apply_m3_context,
     geometry,
     hold_decision,
     liquidity_ok,
-    net_edge,
+    payoff_room_clears_cost,
     risk_sized_qty,
     round_trip_cost_bps,
     to_float,
@@ -26,7 +27,6 @@ def generate_breakout_floor_orders(
     entry = strategy_cfg.get("entry", {})
     min_trend = to_float(entry.get("min_abs_trend_score"), 0.01)
     min_rr = to_float(entry.get("min_reward_risk"), 1.25)
-    min_net = to_float(entry.get("min_net_edge_pct"), 0.003)
     momentum_weight = to_float(entry.get("momentum_weight"), 0.65)
     relative_strength_weight = to_float(
         entry.get("relative_strength_weight"),
@@ -44,26 +44,45 @@ def generate_breakout_floor_orders(
             momentum_weight * to_float(row.get("momentum_20"))
             + relative_strength_weight * to_float(row.get("rel_strength_20"))
         )
+        long_alpha_ok, long_alpha = alpha_hurdle(
+            max(0.0, trend),
+            global_cfg,
+            strategy_cfg,
+        )
+        short_alpha_ok, short_alpha = alpha_hurdle(
+            max(0.0, -trend),
+            global_cfg,
+            strategy_cfg,
+        )
 
         action = "HOLD"
-        gross_edge = 0.0
         reward_risk = 0.0
+        payoff_room = 0.0
+        alpha = long_alpha
         if (
             trend >= min_trend
             and current_geometry["long_rr"] >= min_rr
-            and net_edge(current_geometry["up"], global_cfg) >= min_net
+            and payoff_room_clears_cost(
+                current_geometry["up"], global_cfg, strategy_cfg
+            )
+            and long_alpha_ok
         ):
             action = "BUY"
-            gross_edge = current_geometry["up"]
             reward_risk = current_geometry["long_rr"]
+            payoff_room = current_geometry["up"]
+            alpha = long_alpha
         elif (
             trend <= -min_trend
             and current_geometry["short_rr"] >= min_rr
-            and net_edge(current_geometry["down"], global_cfg) >= min_net
+            and payoff_room_clears_cost(
+                current_geometry["down"], global_cfg, strategy_cfg
+            )
+            and short_alpha_ok
         ):
             action = "SELL"
-            gross_edge = current_geometry["down"]
             reward_risk = current_geometry["short_rr"]
+            payoff_room = current_geometry["down"]
+            alpha = short_alpha
 
         if action == "HOLD" or not liquidity_ok(row, strategy_cfg):
             output.append(
@@ -72,8 +91,8 @@ def generate_breakout_floor_orders(
                     row,
                     "d1",
                     (
-                        "HOLD: trend/range does not clear cost-adjusted gate "
-                        f"(trend={trend:.4f})"
+                        "HOLD: directional alpha/payoff room does not clear "
+                        f"cost-adjusted gate (trend={trend:.4f})"
                     ),
                 )
             )
@@ -98,9 +117,11 @@ def generate_breakout_floor_orders(
         if action == "BUY":
             stop = current_geometry["risk_floor"] * (1 - buffer)
             take_profit = current_geometry["ceiling"]
+            expected_return = alpha["gross_alpha_pct"]
         else:
             stop = current_geometry["risk_ceiling"] * (1 + buffer)
             take_profit = current_geometry["floor"]
+            expected_return = -alpha["gross_alpha_pct"]
 
         qty = risk_sized_qty(
             row,
@@ -125,7 +146,7 @@ def generate_breakout_floor_orders(
             min(1.0, to_float(row.get("confidence_score"), 0.5)),
         )
         score = (
-            max(0.0, net_edge(gross_edge, global_cfg))
+            max(0.0, alpha["net_alpha_pct"])
             * min(reward_risk, 3.0)
             * confidence
         )
@@ -138,14 +159,15 @@ def generate_breakout_floor_orders(
                 qty=qty,
                 horizon="d1",
                 entry_reason=(
-                    f"{action}: trend={trend:.4f}, rr={reward_risk:.2f}, "
-                    f"net_edge={net_edge(gross_edge, global_cfg):.2%} after "
-                    f"{round_trip_cost_bps(global_cfg):.0f} bps round-trip"
+                    f"{action}: trend-alpha={alpha['gross_alpha_pct']:.2%}, "
+                    f"net_alpha={alpha['net_alpha_pct']:.2%}, "
+                    f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}, "
+                    f"cost={round_trip_cost_bps(global_cfg):.0f} bps"
                 ),
                 exit_reason="D1 floor/ceiling or one-session timeout",
                 stop_price=stop,
                 take_profit_price=take_profit,
-                expected_return=0.0,
+                expected_return=expected_return,
                 expected_range=max(
                     0.0,
                     current_geometry["ceiling"] - current_geometry["floor"],
@@ -153,6 +175,11 @@ def generate_breakout_floor_orders(
                 timing_alignment=0.5,
                 m3_context=m3_context,
                 priority_adjustment=priority,
+                gross_alpha_pct=alpha["gross_alpha_pct"],
+                net_alpha_pct=alpha["net_alpha_pct"],
+                cost_pct=alpha["cost_pct"],
+                alpha_source="momentum_relative_strength_trend_proxy",
+                payoff_room_pct=payoff_room,
             )
         )
 
