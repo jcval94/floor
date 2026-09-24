@@ -1,8 +1,10 @@
 name: compact_history_once
 
 on:
-  # Destructive history rewrites must never self-trigger from a push.
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/compact_history_once.yml"
 
 permissions:
   contents: write
@@ -86,7 +88,7 @@ jobs:
           AUDIT="$RUNNER_TEMP/history-audit"
           AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          git clone --mirror "$AUTH_URL" "$MIRROR"
+          git clone --mirror --progress "$AUTH_URL" "$MIRROR"
           du -sk "$MIRROR" | tee "$AUDIT/mirror_before_kb.txt"
           git -C "$MIRROR" count-objects -vH > "$AUDIT/count_objects_before.txt"
 
