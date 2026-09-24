@@ -1,99 +1,107 @@
 # Prospective Strategy League
 
-The Strategy League is a **shadow-paper** experiment. It is intentionally separate from the operational PAPER/LIVE order gateway.
+Strategy League is a **shadow-paper** experiment, isolated from the operational PAPER/LIVE order gateway. Its purpose is to measure prospective strategy performance without rewriting history after prices are known.
 
-## Purpose
+## Current epoch
 
-Measure whether a frozen strategy can create prospective excess return without rewriting history after prices are known.
+The active contract is:
 
-League v1 contains four independent portfolios:
+- league: `strategy_league_v9_net_target_reversal_10k`;
+- initial NAV: **USD 10,000 per member**;
+- evidence: new prospective evidence starts only at the first complete v9 EOD genesis;
+- v8 evidence remains preserved, but it is not stitched into v9;
+- automatic promotion: disabled;
+- PAPER/LIVE execution: disabled.
 
-- `weekly_opportunity_ridge`
-- `breakout_protected_by_floor`
-- `benchmark_spy`
-- `benchmark_equal_weight`
+Members:
 
-Every member starts with exactly **$100,000 virtual USD on the same session**.
+- `weekly_opportunity_ridge`;
+- `breakout_protected_by_floor`;
+- `mean_reversion_floor_w1`;
+- `cross_horizon_asymmetry`;
+- `capital_allocation_challenger`;
+- `benchmark_spy`;
+- `benchmark_equal_weight`.
+
+Cross-Horizon remains a standalone measured member, but it is not allowed to feed the capital allocator while its OOS edge remains weak. This is a quarantine, not a deletion: fresh evidence can justify a future contract change, which would require another explicit freeze/epoch decision.
 
 ## Start contract
 
-The league does not start until all of the following are available on the same current market session:
+The league does not start until the same current market session has:
 
-1. complete current forecast inputs for the configured universe;
-2. the frozen Weekly Opportunity challenger artifact;
+1. complete forecast inputs for the configured universe;
+2. the frozen Weekly Opportunity artifact for the current league;
 3. current local market bars including SPY.
 
-At genesis every member still has $100,000 cash. Decisions generated at close `t` can only execute at open `t+1`.
+At genesis every member is cash-only. A decision generated at close `t` can only execute at open `t+1`.
+
+## Weekly Opportunity v9
+
+The v9 Weekly model is trained on a cost-adjusted target:
+
+`sign(r_q1) * max(abs(r_q1) - round_trip_cost, 0) / max(q1_downside, 1%)`
+
+The round-trip cost is the exact **61 bps** execution contract. Therefore movements too small to pay friction have target 0. The artifact stores both its target semantics and the cost in bps; EOD fails closed if those values drift from the current execution contract.
+
+The strategy interprets `weekly_opportunity_score × q1_downside` as model-implied **net** directional alpha, so costs are not subtracted twice.
+
+New Weekly entries use the top 10% positive scores. Existing positions can remain while they stay in the top 20% positive scores, providing hysteresis. Review cadence and maximum holding remain 10 sessions.
+
+## Mean Reversion v9
+
+Mean Reversion uses W1 Floor/Ceiling only as payoff/risk anchors. Direction comes from:
+
+`reversal_signal = momentum_10 - momentum_20`
+
+This lets a long reversal be recognized while 20-day momentum is still negative if the shorter 10-day window is improving enough. The symmetrical rule is used for shorts in research.
+
+Current gates are:
+
+- within 3% of the relevant W1 anchor;
+- minimum reward/risk 1.20;
+- minimum net alpha 25 bps after the 61 bps cost;
+- minimum gross-alpha/cost multiple 1.25;
+- liquidity, sizing and M3 context still apply.
+
+## Exact execution-cost contract
+
+Research gates and Strategy League execution use the same formula:
+
+- buy: 2 bps broker + 24 bps platform + 3 bps slippage = 29 bps;
+- sell: 2 bps broker + 24 bps platform + 3 bps slippage + 3 bps sell fee = 32 bps;
+- full round trip: **61 bps**.
+
+The formula is centralized in `contracts.trading.round_trip_cost_bps_from_contract`. There is no separate 58 bps strategy gate.
 
 ## Frozen evidence
 
-At genesis the league stores SHA-256 hashes for:
+At genesis the league freezes hashes for its league/strategy configuration, Weekly artifact and serving model suite. A semantic or parameter change requires a new `league_id`; the old epoch is retained rather than mutated.
 
-- `config/strategy_league.json`;
-- `config/strategies.yaml`;
-- the frozen Weekly Opportunity artifact.
+Each league history record participates in an audit hash chain. Walk-forward research also keeps one continuous account across model folds: retraining changes the model epoch, not cash, positions, accumulated transaction costs or trade history.
 
-If any frozen input changes, the existing league refuses to continue. A changed rule/model must use a new `league_id`; it cannot overwrite the old challenger history.
+## Capital Allocation Challenger
 
-Each daily audit row also contains `prev_hash` and `record_hash`, forming a hash chain over decisions, trades and portfolio state.
+The allocator combines eligible source strategies after ranking each source internally. It respects position, gross, heat and sector constraints. Consensus can improve ranking, but does not increase the configured per-position risk budget.
 
-## Execution assumptions
+For v9:
 
-The simulator includes:
-
-- commission: 2 bps;
-- slippage: 3 bps;
-- sell fee: 3 bps;
-- integer shares;
-- signal at close `t` -> execution at open `t+1`;
-- stop/take-profit checks using the following session's OHLC;
-- conservative stop-first handling if stop and take profit are both touched in the same daily bar;
-- daily close mark-to-market.
-
-Weekly Opportunity is rescored every five completed league sessions to reduce turnover and compute. Breakout is reviewed at each completed EOD and closes by its session timeout.
+- Weekly Opportunity: eligible source;
+- Breakout: eligible source;
+- Mean Reversion: eligible source;
+- Cross-Horizon: **not eligible as allocator source** (source weight 0 and `capital_allocator_enabled: false`).
 
 ## Promotion review
 
-There is **no automatic promotion**. A strategy is only marked eligible for human review after at least 63 prospective sessions and only if all configured checks pass, including:
+There is no automatic promotion. Human review only becomes eligible after the configured prospective minimums, including at least 63 sessions, trade-count requirements, drawdown/Sharpe gates, and positive excess return versus SPY and equal-weight.
 
-- minimum trade count;
-- Sharpe threshold;
-- maximum drawdown threshold;
-- positive excess return versus SPY;
-- positive excess return versus equal-weight;
-- positive result under a simple 3x transaction-cost stress estimate.
+Historical walk-forward is supporting model-OOS evidence, not prospective evidence. It must not be treated as permission for PAPER or LIVE execution.
 
-Eligibility is evidence for review, not permission to trade real money.
+## Persistence and publication
 
-## Compute budget
+Rolling operational state is persisted outside Git in the versioned runtime-state Release. EOD writes Strategy League state, publishes durable runtime/checkpoint state and then explicitly dispatches Pages. Pages restores pinned Release generations before building the public snapshot.
 
-The daily EOD path is deliberately cheap:
+This preserves the causal sequence:
 
-- no Yahoo download;
-- no historical backtest rebuild;
-- no ML training;
-- one local SQLite market-data read;
-- one local prediction read;
-- simple rolling feature calculations;
-- one linear Ridge scoring pass;
-- four small virtual portfolio updates.
+`EOD compute → durable state → Pages publication`
 
-The Weekly Opportunity artifact is trained **once, manually**, with `.github/workflows/strategy_league_bootstrap.yml`. That bootstrap restores the already-retained market SQLite, builds the modelable dataset locally, trains only the weekly Ridge challenger, deletes the temporary dataset and persists only the small frozen model artifact.
-
-## Persistence
-
-Rolling state is stored below `data/metrics/strategy_league/`, which is already included in Floor's external runtime-state release. The EOD workflow also uploads a compact Strategy League audit artifact with 90-day retention.
-
-## Safety boundary
-
-This implementation does not change any of these operational defaults:
-
-```yaml
-paper_execution_enabled: false
-live_execution_enabled: false
-canonical_serving_enabled: false
-paper_enabled: false
-live_enabled: false
-```
-
-The Strategy League never calls the operational broker/order gateway.
+and prevents the dashboard from racing ahead of the state it claims to display.
