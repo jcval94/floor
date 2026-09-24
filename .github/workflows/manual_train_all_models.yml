@@ -35,7 +35,7 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: manual-train-all-models-${{ github.ref }}
@@ -109,8 +109,8 @@ jobs:
           PYTHONPATH=src python -m features.run_features \
             --input data/training/yahoo_market_rows.jsonl \
             --output data/training/modelable_dataset.json \
-            --validation-days 75 \
-            --test-days 76 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+            --validation-days 140 \
+            --test-days 141 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
       - name: Validate ABT quality and P0 integrity metadata
         env:
