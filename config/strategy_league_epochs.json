@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "current_league_id": "strategy_league_v8_net_alpha_10k",
+  "current_league_id": "strategy_league_v9_net_target_reversal_10k",
   "epochs": [
     {
       "league_id": "strategy_league_v6_all_strategies_10k",
@@ -23,12 +23,23 @@
     },
     {
       "league_id": "strategy_league_v8_net_alpha_10k",
-      "status": "DECLARED_CLEAN_EPOCH",
+      "status": "CLOSED_TARGET_AND_STRATEGY_SEMANTICS_CHANGE",
       "declared_on": "2026-09-24",
       "freeze_id": "capital_challenger_v1_refrozen_20260924_v8",
       "strategy_parameters_changed": true,
       "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v8. No v7 sessions are inherited.",
-      "change_summary": "Cost-aware directional alpha gates, Floor/Ceiling no longer used as expected edge, Weekly turnover hysteresis, 10-session review cadence, and rebalance deadbands."
+      "change_summary": "Cost-aware directional alpha gates, Floor/Ceiling no longer used as expected edge, Weekly turnover hysteresis, 10-session review cadence, and rebalance deadbands.",
+      "closed_on": "2026-09-24",
+      "close_reason": "Weekly target changed to net-of-cost directional alpha and Mean Reversion changed to 10d-vs-20d reversal confirmation; Cross-Horizon was quarantined from the capital allocator. Do not stitch v8 evidence into v9."
+    },
+    {
+      "league_id": "strategy_league_v9_net_target_reversal_10k",
+      "status": "DECLARED_CLEAN_EPOCH",
+      "declared_on": "2026-09-24",
+      "freeze_id": "capital_challenger_v1_refrozen_20260924_v9",
+      "strategy_parameters_changed": true,
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v9. No v8 sessions are inherited.",
+      "change_summary": "Weekly learns net directional opportunity after exact 61 bps round-trip costs; Mean Reversion uses 10d-vs-20d reversal confirmation with lighter gates; Cross-Horizon remains measurable but contributes zero capital-allocation weight pending new evidence."
     }
   ]
 }
