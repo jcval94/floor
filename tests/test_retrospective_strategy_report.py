@@ -33,9 +33,20 @@ def _payload() -> dict:
         "evidence_type": "retrospective_point_in_time_capital_tournament",
         "prospective_evidence": False,
         "future_data_used": False,
+        "requested_start_session": "2026-08-22",
+        "requested_end_session": "2026-09-04",
+        "requested_sessions": 11,
         "start_session": "2026-08-24",
         "end_session": "2026-09-04",
         "sessions": 10,
+        "market_source": {
+            "session_selection": {
+                "requested_sessions": 11,
+                "effective_sessions": 10,
+                "incomplete_sessions": ["2026-08-22"],
+                "selection_rule": "longest_contiguous_common_complete_daily_bar_run",
+            }
+        },
         "initial_nav_usd": 10000.0,
         "leaderboard": {
             "rows": [
@@ -57,9 +68,13 @@ def test_build_strategy_report_preserves_retrospective_contract() -> None:
     assert report["status"] == "RETROSPECTIVE_OK"
     assert report["prospective_evidence"] is False
     assert report["future_data_used"] is False
+    assert report["requested_start_session"] == "2026-08-22"
+    assert report["requested_end_session"] == "2026-09-04"
+    assert report["requested_sessions"] == 11
     assert report["start_session"] == "2026-08-24"
     assert report["end_session"] == "2026-09-04"
     assert report["sessions"] == 10
+    assert report["session_selection"]["incomplete_sessions"] == ["2026-08-22"]
     assert len(report["rows"]) == 7
     assert report["rows"][0]["strategy"] == "capital_allocation_challenger"
     assert report["rows"][0]["rank"] == 1
@@ -106,6 +121,9 @@ def test_analytics_page_exposes_retrospective_tournament() -> None:
     assert "renderRetrospective" in script
     assert "data/strategy.json" in script
     assert "Torneo retrospectivo de NAV · ventana filtrada" in script
+    assert "coverageDetail" in script
+    assert "coverageNote" in script
+    assert "bloque contiguo completo más largo" in script
     assert "Diagnóstico" in script
 
 
