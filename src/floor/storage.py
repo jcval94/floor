@@ -127,6 +127,13 @@ def append_jsonl(
     duplicate = key is not None and _jsonl_contains_key(path, key)
 
     data_root = _find_data_root(path)
+    # Reject a misrouted writer before touching the durable ledger.
+    if writer is not None:
+        if data_root is None:
+            raise ValueError("Batch writer requires a path under data/")
+        expected_db = (data_root / "persistence" / "app.sqlite").resolve()
+        if writer.db_path != expected_db:
+            raise ValueError("SQLite batch writer does not match JSONL data root")
 
     def mirror() -> None:
         if data_root is None:
@@ -136,8 +143,6 @@ def append_jsonl(
         if writer is None:
             persist_payload(db_path=db_path, stream=stream, payload=payload)
         else:
-            if writer.db_path != db_path.resolve():
-                raise ValueError("SQLite batch writer does not match JSONL data root")
             writer.persist(stream, payload)
 
     if duplicate:
