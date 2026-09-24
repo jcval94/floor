@@ -21,7 +21,8 @@ def round_trip_cost_bps(cfg: dict) -> float:
         to_float(costs.get("commission_bps"), 0.0),
     )
     slippage = to_float(costs.get("slippage_bps"), 0.0)
-    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg))
+    sell_fee = to_float(costs.get("sell_fee_bps"), 0.0)
+    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg)) + sell_fee
 
 
 def net_edge(gross_pct: float, cfg: dict) -> float:
