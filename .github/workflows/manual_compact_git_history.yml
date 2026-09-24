@@ -95,6 +95,16 @@ jobs:
           mkdir -p "$LIGHT/data/training/models" "$RUNNER_TEMP/history-audit"
           cp -a data/training/models/*.json "$LIGHT/data/training/models/"
           : > "$LIGHT/data/.gitkeep"
+          (
+            cd "$LIGHT"
+            sha256sum data/training/models/*.json | sort > "$RUNNER_TEMP/history-audit/model_registry_before.sha256"
+          )
+          for champion in d1 w1 q1 value timing; do
+            test -s "data/training/models/${champion}_champion.json" || {
+              echo "::error::Missing champion before rewrite: ${champion}_champion.json"
+              exit 1
+            }
+          done
           gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_before.json"
           git ls-remote --heads --tags origin | sort > "$RUNNER_TEMP/history-audit/refs_before.txt"
           printf '%s\n' \
@@ -110,7 +120,7 @@ jobs:
           set -euo pipefail
           MIRROR="$RUNNER_TEMP/floor-mirror.git"
           AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git clone --mirror "$AUTH_URL" "$MIRROR"
+          git clone --mirror --progress "$AUTH_URL" "$MIRROR"
           du -sk "$MIRROR" | tee "$RUNNER_TEMP/history-audit/mirror_before_kb.txt"
 
           git -C "$MIRROR" filter-repo \
@@ -132,6 +142,14 @@ jobs:
           mkdir -p "$WORK/data/training/models"
           cp -a "$LIGHT/data/.gitkeep" "$WORK/data/.gitkeep"
           cp -a "$LIGHT/data/training/models/"*.json "$WORK/data/training/models/"
+          (
+            cd "$WORK"
+            sha256sum data/training/models/*.json | sort > "$RUNNER_TEMP/history-audit/model_registry_after_restore.sha256"
+          )
+          cmp "$RUNNER_TEMP/history-audit/model_registry_before.sha256" "$RUNNER_TEMP/history-audit/model_registry_after_restore.sha256" || {
+            echo "::error::Model registry changed during history rewrite."
+            exit 1
+          }
           git -C "$WORK" config user.name "github-actions[bot]"
           git -C "$WORK" config user.email "github-actions[bot]@users.noreply.github.com"
           git -C "$WORK" add -f data/.gitkeep data/training/models/*.json
@@ -193,6 +211,26 @@ jobs:
 
           gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/history-audit/repo_after_push.json"
           git -C "$MIRROR" show-ref > "$RUNNER_TEMP/history-audit/refs_after.txt"
+
+      - name: Verify rewritten main and model hashes from remote
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERIFY="$RUNNER_TEMP/verify-main"
+          AUTH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --depth=1 --branch main "$AUTH_URL" "$VERIFY"
+          (
+            cd "$VERIFY"
+            sha256sum data/training/models/*.json | sort > "$RUNNER_TEMP/history-audit/model_registry_remote.sha256"
+          )
+          cmp "$RUNNER_TEMP/history-audit/model_registry_before.sha256" "$RUNNER_TEMP/history-audit/model_registry_remote.sha256" || {
+            echo "::error::Remote model registry differs after rewrite."
+            exit 1
+          }
+          test ! -d "$VERIFY/data/predictions"
+          test ! -d "$VERIFY/data/signals"
+          du -sk "$VERIFY" | tee "$RUNNER_TEMP/history-audit/shallow_clone_after_kb.txt"
 
       - name: Report compaction result
         run: |
