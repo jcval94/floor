@@ -11,6 +11,19 @@ const LABELS = {
   benchmark_equal_weight: 'Equal Weight',
 };
 
+const SHORT_LABELS = {
+  capital_allocation_challenger: 'Challenger',
+  weekly_opportunity_ridge: 'Weekly',
+  breakout_protected_by_floor: 'Momentum',
+  mean_reversion_floor_w1: 'Mean Reversion',
+  cross_horizon_asymmetry: 'Cross-Horizon',
+  benchmark_spy: 'SPY',
+  benchmark_equal_weight: 'Equal Weight',
+};
+
+const LIVE_MIN_POINTS = 3;
+const LEAGUE_MIN_SESSIONS = 5;
+
 const BENCHMARKS = new Set(['benchmark_spy', 'benchmark_equal_weight']);
 const SERIES_ORDER = [
   'capital_allocation_challenger',
@@ -60,6 +73,23 @@ function labelFor(strategy) {
   return LABELS[strategy] || strategy || '—';
 }
 
+function shortLabelFor(strategy) {
+  return SHORT_LABELS[strategy] || labelFor(strategy);
+}
+
+function marketTime(value, includeDate = false) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-MX', {
+    timeZone: 'America/New_York',
+    ...(includeDate ? { day: '2-digit', month: 'short' } : {}),
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
 function isBenchmark(row) {
   return row?.member_type === 'benchmark' || BENCHMARKS.has(String(row?.strategy || ''));
 }
@@ -81,11 +111,9 @@ function liveStatusCard(data) {
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   const active = data?.status === 'LIVE' && rows.length > 0;
   const degraded = data?.status === 'DEGRADED' && rows.length > 0;
-  const generated = data?.generated_at
-    ? new Date(data.generated_at).toLocaleString('es-MX')
-    : '—';
+  const generated = marketTime(data?.generated_at, true);
   const detail = rows.length
-    ? `Lectura ${generated} · cobertura fresca ${pct(data?.quote_source?.fresh_coverage)} · base EOD ${data?.last_eod_session || '—'}`
+    ? `Lectura ${generated} ET · cobertura fresca ${pct(data?.quote_source?.fresh_coverage)} · base EOD ${data?.last_eod_session || '—'}`
     : data?.detail || 'Aún no hay una lectura intradía publicable.';
   const label = active
     ? 'Monitor intradía activo'
@@ -204,9 +232,7 @@ function liveSummaryCards(data, rows) {
   const leaderId = summary.live_strategy_leader;
   const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
   const coverage = Number(data?.quote_source?.fresh_coverage);
-  const generated = data?.generated_at
-    ? new Date(data.generated_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-    : '—';
+  const generated = marketTime(data?.generated_at);
   const cards = [
     {
       label: 'Mayor retorno ahora',
@@ -229,7 +255,7 @@ function liveSummaryCards(data, rows) {
     {
       label: 'Cobertura de quotes',
       value: Number.isFinite(coverage) ? pct(coverage) : '—',
-      detail: `última publicación ${generated}`,
+      detail: `última publicación ${generated} ET`,
       tone: coverage >= 0.95 ? 'ok' : 'bad',
     },
   ];
@@ -369,6 +395,28 @@ function curvePoints(row, curveField, windowKey = 'all') {
   );
 }
 
+function curveDepth(rows, curveField, windowKey = 'all') {
+  return Math.max(
+    0,
+    ...(Array.isArray(rows) ? rows : []).map((row) => curvePoints(row, curveField, windowKey).length),
+  );
+}
+
+function warmupChartState(title, detail, current, target) {
+  const safeCurrent = Math.max(0, Number(current) || 0);
+  const safeTarget = Math.max(1, Number(target) || 1);
+  const progress = Math.min(100, (safeCurrent / safeTarget) * 100);
+  return `<div class="chart-warmup" role="status">
+    <div class="chart-warmup-copy">
+      <strong>${escapeHTML(title)}</strong>
+      <span>${escapeHTML(detail)}</span>
+    </div>
+    <div class="chart-warmup-progress" aria-label="${escapeHTML(`${safeCurrent} de ${safeTarget}`)}">
+      <span style="width:${progress.toFixed(1)}%"></span>
+    </div>
+  </div>`;
+}
+
 function curveStats(row, curveField, windowKey = 'all') {
   const points = curvePoints(row, curveField, windowKey);
   if (!points.length) return { points, start: null, end: null, return: null, maxDrawdown: null };
@@ -401,7 +449,12 @@ function chartKpi(label, value) {
   return `<span class="chart-kpi"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></span>`;
 }
 
-function chartWindowMetrics(rows, curveField, windowKey, { coverage = null } = {}) {
+function chartWindowMetrics(
+  rows,
+  curveField,
+  windowKey,
+  { coverage = null, countLabel = 'Sesiones', sessionSuffix = '' } = {},
+) {
   const challenger = rows.find((row) => row.strategy === 'capital_allocation_challenger');
   const spy = rows.find((row) => row.strategy === 'benchmark_spy');
   const challengerStats = curveStats(challenger, curveField, windowKey);
@@ -414,12 +467,15 @@ function chartWindowMetrics(rows, curveField, windowKey, { coverage = null } = {
   const vsSpy = Number.isFinite(challengerStats.return) && Number.isFinite(spyStats.return)
     ? challengerStats.return - spyStats.return
     : null;
+  const period = reference.length
+    ? `${firstSession}${sessionSuffix} → ${lastSession}${sessionSuffix}`
+    : '—';
   const items = [
-    chartKpi('Periodo', reference.length ? `${firstSession} → ${lastSession}` : '—'),
+    chartKpi('Periodo', period),
     chartKpi('Challenger', signedPct(challengerStats.return)),
     chartKpi('vs SPY', signedPct(vsSpy)),
     chartKpi('Máx. DD', challengerStats.maxDrawdown == null ? '—' : pct(challengerStats.maxDrawdown)),
-    chartKpi('Sesiones', String(reference.length || 0)),
+    chartKpi(countLabel, String(reference.length || 0)),
   ];
   if (coverage != null) items.push(chartKpi('Cobertura', pct(coverage)));
   return items.join('');
@@ -437,6 +493,7 @@ function curveChart(rows, curveField, title, options = {}) {
   const series = withCurves.map((row) => ({
     id: row.strategy,
     label: labelFor(row.strategy),
+    shortLabel: shortLabelFor(row.strategy),
     points: curvePoints(row, curveField, windowKey).map((point) => ({
       session: point.session,
       value: point.nav ?? point.equity ?? point.value,
@@ -478,14 +535,24 @@ async function renderLive() {
     const coverage = Number(data?.quote_source?.fresh_coverage);
     chartMetrics.innerHTML = chartWindowMetrics(rows, 'intraday_curve', 'all', {
       coverage: Number.isFinite(coverage) ? coverage : null,
+      countLabel: 'Snapshots',
+      sessionSuffix: ' ET',
     });
   }
   if (chartRoot) {
-    chartRoot.innerHTML = curveChart(rows, 'intraday_curve', 'NAV intradía · mark-to-market', {
-      baseline: Number.isFinite(Number(challenger?.eod_nav)) ? Number(challenger.eod_nav) : undefined,
-      baselineLabel: 'Challenger EOD',
-      endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
-    });
+    const livePoints = curveDepth(rows, 'intraday_curve', 'all');
+    chartRoot.innerHTML = livePoints < LIVE_MIN_POINTS
+      ? warmupChartState(
+        'Esperando más observaciones intradía',
+        `${livePoints}/${LIVE_MIN_POINTS} snapshots de mercado. La curva aparece cuando ya existe una forma útil; las horas se muestran en ET.`,
+        livePoints,
+        LIVE_MIN_POINTS,
+      )
+      : curveChart(rows, 'intraday_curve', 'NAV intradía · mark-to-market', {
+        baseline: Number.isFinite(Number(challenger?.eod_nav)) ? Number(challenger.eod_nav) : undefined,
+        baselineLabel: 'Challenger EOD',
+        endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+      });
   }
 
   const note = document.getElementById('liveNote');
@@ -493,10 +560,8 @@ async function renderLive() {
     if (rows.length) {
       const source = data?.quote_source?.provider || 'fuente intradía';
       const interval = data?.quote_source?.interval || '—';
-      const generated = data.generated_at
-        ? new Date(data.generated_at).toLocaleString('es-MX')
-        : '—';
-      note.textContent = `Lectura observacional publicada ${generated}. Fuente: ${source}, intervalo ${interval}. Los precios faltantes degradan la cobertura y pueden usar caché de la sesión o el último EOD; este snapshot no cuenta para promoción y no genera órdenes.`;
+      const generated = marketTime(data.generated_at, true);
+      note.textContent = `Lectura observacional publicada ${generated} ET. Fuente: ${source}, intervalo ${interval}. Los precios faltantes degradan la cobertura y pueden usar caché de la sesión o el último EOD; este snapshot no cuenta para promoción y no genera órdenes.`;
     } else {
       note.textContent = data?.detail || 'El monitor intradía todavía no tiene datos publicables.';
     }
@@ -574,12 +639,20 @@ async function renderLeague() {
     const leader = windowLeader(rows, 'equity_curve', windowKey);
     if (chartMetrics) chartMetrics.innerHTML = chartWindowMetrics(rows, 'equity_curve', windowKey);
     if (chartRoot) {
-      chartRoot.innerHTML = competitionChart(rows, 'Carrera prospectiva de NAV de Strategy League', {
-        windowKey,
-        baseline: Number(data.initial_nav_usd),
-        baselineLabel: 'Génesis',
-        endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
-      });
+      const visibleSessions = curveDepth(rows, 'equity_curve', windowKey);
+      chartRoot.innerHTML = visibleSessions < LEAGUE_MIN_SESSIONS
+        ? warmupChartState(
+          'Calentamiento de Strategy League',
+          `${visibleSessions}/${LEAGUE_MIN_SESSIONS} sesiones visibles. La carrera completa se habilita al reunir suficiente trayectoria para que las líneas sean interpretables.`,
+          visibleSessions,
+          LEAGUE_MIN_SESSIONS,
+        )
+        : competitionChart(rows, 'Carrera prospectiva de NAV de Strategy League', {
+          windowKey,
+          baseline: Number(data.initial_nav_usd),
+          baselineLabel: 'Génesis',
+          endLabelIds: ['capital_allocation_challenger', 'benchmark_spy', leader].filter(Boolean),
+        });
     }
   }
   windowControl?.addEventListener('change', renderWindow);

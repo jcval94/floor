@@ -255,12 +255,28 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "'20d': 20" in charts
     assert "seriesIndex % 7" in charts
     assert "chart-threshold" in charts
+    assert "width: 220" in charts
+    assert "height: 72" in charts
+    assert "rawEndLabels" in charts
+    assert "shortLabel" in charts
     assert ".league-summary-grid" in styles
     assert ".league-series-0" in styles
     assert ".league-series-6" in styles
     assert ".league-challenger-row" in styles
     assert ".chart-kpi-strip" in styles
     assert ".chart-window-select" in styles
+    assert ".chart-warmup" in styles
+    assert "aspect-ratio: 220 / 72" in styles
+    assert "min-height: 330px" not in styles
+    assert "LIVE_MIN_POINTS = 3" in script
+    assert "LEAGUE_MIN_SESSIONS = 5" in script
+    assert "warmupChartState" in script
+    assert "countLabel: 'Snapshots'" in script
+    assert "sessionSuffix: ' ET'" in script
+    assert "marketTime" in script
+    assert "Hoy · ET" in page
+    assert "Las horas se muestran en ET." in page
+    assert "shortLabel: shortLabel(row.strategy)" in research
     assert 'id="oosWindow"' in page
     assert 'id="oosChartMetrics"' in page
     assert "F${fold.fold}" in research
