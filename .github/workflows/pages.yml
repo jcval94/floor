@@ -254,11 +254,20 @@ jobs:
 
       - name: Recompute health against the pinned runtime snapshot
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           PYTHONPATH=src python -m monitoring.health_snapshot \
             --data-dir data \
             --output data/metrics/public_metrics.json \
             --universe config/universe.yaml
+          health_rc=$?
+          set -e
+          # Exit 1 means a valid CRITICAL health snapshot was produced. Pages
+          # must still publish that truth rather than serving an older green
+          # snapshot. Unexpected execution errors (>1) remain fatal.
+          if [ "$health_rc" -gt 1 ]; then
+            exit "$health_rc"
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
