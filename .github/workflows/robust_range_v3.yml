@@ -10,9 +10,12 @@ on:
       - "pyproject.toml"
       - "src/features/**"
       - "src/models/**"
+      - "src/contracts/model_contract.py"
+      - "config/model_contracts.json"
       - "src/forecasting/parity_models.py"
       - "tests/test_robust_range_v3.py"
       - "tests/test_classic_champion_gate.py"
+      - "tests/test_p0_contracts.py"
   push:
     branches:
       - feat/differential-range-v3
@@ -74,18 +77,27 @@ jobs:
 
       - name: Determine whether strict promotion dominance is required
         id: promotion_gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          # A pull request validates that training, contracts and champion
-          # gating work correctly. A valid outcome is challenger_only: code
-          # must not be forced to promote a freshly retrained model merely to
-          # merge an implementation change. Manual/promotion runs remain
-          # strict and still require actual statistical dominance.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "require_dominance=false" >> "$GITHUB_OUTPUT"
-          else
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "require_dominance=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          git fetch --no-tags --depth=1 origin "${BASE_SHA}" "${HEAD_SHA}"
+          changed="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"
+          printf '%s\n' "$changed"
+          require=false
+          while IFS= read -r path; do
+            case "$path" in
+              src/features/*|src/models/robust_range_v3.py|src/models/evaluate_range_v3.py|src/models/train_classic_horizons.py|src/models/classic_horizon_predictor.py|tests/test_robust_range_v3.py|tests/test_train_classic_horizons.py|tests/test_classic_champion_gate.py)
+                require=true
+                ;;
+            esac
+          done <<< "$changed"
+          echo "require_dominance=$require" >> "$GITHUB_OUTPUT"
 
       - name: Train conservative robust challenger
         run: |
@@ -123,7 +135,7 @@ jobs:
           if [ "${{ steps.promotion_gate.outputs.require_dominance }}" = "true" ]; then
             args+=(--require-dominance)
           else
-            echo "PR audit is informational for promotion: challenger_only is a valid governed outcome."
+            echo "Strict promotion dominance is informational for this PR because robust-range training/features did not change."
           fi
           PYTHONPATH=src python -m models.evaluate_range_v3 "${args[@]}"
 
