@@ -8,10 +8,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_pages_republishes_after_evidence_backed_state_updates() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
+    pages = (ROOT / ".github" / "workflows" / "pages.yml").read_text(
+        encoding="utf-8"
+    )
+    eod = (ROOT / ".github" / "workflows" / "eod.yml").read_text(
+        encoding="utf-8"
+    )
+
+    workflow_run_header = pages.split("push:", 1)[0]
+    assert '"eod"' not in workflow_run_header
+    assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in eod
+    assert eod.index("runtime_state.sh publish") < eod.index(
+        "gh workflow run pages.yml"
+    )
+    assert eod.index("checkpoint_state.sh publish") < eod.index(
+        "gh workflow run pages.yml"
+    )
 
     for upstream in (
-        "eod",
         "retrain_execute",
         "retrain_assessment",
         "strategy_league_bootstrap",
@@ -19,10 +33,9 @@ def test_pages_republishes_after_evidence_backed_state_updates() -> None:
         "capital_challenger_tournament",
         "walk_forward_oos",
     ):
-        assert upstream in workflow
+        assert upstream in workflow_run_header
 
     for evidence in (
-        "eod-audit-",
         "retrain-execute-",
         "retrain-assessment-",
         "strategy-league-weekly-model-",
@@ -30,10 +43,10 @@ def test_pages_republishes_after_evidence_backed_state_updates() -> None:
         "capital-tournament-",
         "walk-forward-oos-",
     ):
-        assert evidence in workflow
+        assert evidence in pages
 
-    assert "data/training/models/**" in workflow
-    assert "bash scripts/research_state.sh restore" in workflow
+    assert "data/training/models/**" in pages
+    assert "bash scripts/research_state.sh restore" in pages
 
 
 def test_research_workflows_persist_public_evidence() -> None:
