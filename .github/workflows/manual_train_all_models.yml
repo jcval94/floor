@@ -24,13 +24,13 @@ on:
         required: false
         default: "45"
       commit_champions:
-        description: "Commit lightweight champion/competition JSON only (never DBs, datasets, PKLs or logs)"
+        description: "Deprecated safety switch: production champion publication is owned by retrain_execute"
         required: false
         default: "false"
         type: choice
         options: ["false", "true"]
       confirm_publish:
-        description: "Type PUBLISH_CHAMPIONS_TO_MAIN when commit_champions=true"
+        description: "Deprecated; manual training cannot publish production champions"
         required: false
         default: ""
 
@@ -247,34 +247,12 @@ jobs:
               writer.writerows(rows)
           PY
 
-      - name: Commit lightweight champions only
+      - name: Block manual production champion publication
         if: inputs.commit_champions == 'true'
-        env:
-          CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}
         run: |
-          set -euo pipefail
-          [ "$CONFIRM_PUBLISH" = "PUBLISH_CHAMPIONS_TO_MAIN" ] || {
-            echo "::error::Champion publish requires exact confirmation PUBLISH_CHAMPIONS_TO_MAIN."
-            exit 1
-          }
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
-            data/training/models/d1_champion.json \
-            data/training/models/w1_champion.json \
-            data/training/models/q1_champion.json \
-            data/training/models/value_champion.json \
-            data/training/models/timing_champion.json \
-            data/training/models/d1_competition.json \
-            data/training/models/w1_competition.json \
-            data/training/models/q1_competition.json \
-            "${{ steps.runmeta.outputs.csv_file }}"
-          if git diff --cached --quiet; then
-            echo "No lightweight champion changes to commit."
-            exit 0
-          fi
-          git commit -m "chore: publish trained champion metadata"
-          git push
+          echo "::error::manual_train_all_models is experiment-only. Production champion publication is exclusively owned by retrain_execute.yml."
+          echo "::error::Run the governed retrain assessment and explicitly authorize retrain_execute instead."
+          exit 1
 
       - name: Upload full training run artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -294,5 +272,5 @@ jobs:
             echo "- Version: \`${{ steps.runmeta.outputs.version }}\`"
             echo "- Full DB/dataset/PKL/log outputs: Actions artifact only (14 days)"
             echo "- Classic promotion: same-current-validation champion gate"
-            echo "- Git commit enabled: \`${{ inputs.commit_champions }}\` (lightweight JSON/CSV only)"
+            echo "- Production registry write: disabled (single authority: retrain_execute.yml)"
           } >> "$GITHUB_STEP_SUMMARY"
