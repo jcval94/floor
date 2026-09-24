@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "resources": {
+    "runtime_state_release": {
+      "description": "Authoritative operational runtime snapshot in runtime-state-v1.",
+      "markers": ["runtime_state.sh publish"],
+      "allowed_workflows": [
+        "eod.yml",
+        "ingest.yml",
+        "intraday_engine.yml",
+        "manual_compact_git_history.yml",
+        "retrain_assessment.yml",
+        "retrain_execute.yml",
+        "strategy_league_bootstrap.yml"
+      ]
+    },
+    "checkpoint_state_release": {
+      "description": "Lightweight checkpoint frontier in checkpoint-state-v1.",
+      "markers": ["checkpoint_state.sh publish"],
+      "allowed_workflows": ["eod.yml", "intraday_engine.yml"]
+    },
+    "monitoring_state_release": {
+      "description": "Isolated operational health snapshot in monitoring-state-v1.",
+      "markers": ["monitoring_state.sh publish"],
+      "allowed_workflows": ["monitoring.yml"]
+    },
+    "research_state_release": {
+      "description": "Durable non-authoritative research evidence in research-state-v1.",
+      "markers": ["research_state.sh publish"],
+      "allowed_workflows": ["capital_challenger_tournament.yml", "walk_forward_oos.yml"]
+    },
+    "production_model_registry": {
+      "description": "Git-backed serving champion registry.",
+      "markers": ["git add -f data/training/models/*.json", "git push"],
+      "allowed_workflows": ["retrain_execute.yml"]
+    },
+    "pages_deployment": {
+      "description": "Authoritative GitHub Pages deployment.",
+      "markers": ["actions/deploy-pages@"],
+      "allowed_workflows": ["pages.yml"]
+    },
+    "workflow_dispatch": {
+      "description": "Workflows allowed to dispatch other workflows.",
+      "markers": ["gh workflow run"],
+      "allowed_workflows": [
+        "pages_source_guard.yml",
+        "runtime_checkpoint_repair.yml",
+        "scheduler_watchdog.yml"
+      ]
+    },
+    "destructive_history_rewrite": {
+      "description": "History rewrite protected by exact leases.",
+      "markers": ["--force-with-lease="],
+      "allowed_workflows": ["manual_compact_git_history.yml"]
+    }
+  }
+}
