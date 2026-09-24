@@ -89,3 +89,7 @@ def test_vectorized_fit_preserves_serialized_model_contract() -> None:
     assert params["learning_rate"] == 0.02
     assert params["epochs"] == 3
     assert params["target_clip"] == 3.0
+    assert params["target_semantics"] == (
+        "net_directional_return_after_round_trip_costs_over_q1_downside"
+    )
+    assert params["target_round_trip_cost_bps"] == pytest.approx(61.0)
