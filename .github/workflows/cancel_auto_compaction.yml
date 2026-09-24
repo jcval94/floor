@@ -1,0 +1,25 @@
+name: cancel-auto-compaction
+
+on:
+  push:
+    branches: [fix/p1-authoritative-state-writers]
+    paths:
+      - ".github/workflows/cancel_auto_compaction.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel obsolete auto-triggered compaction
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run cancel 35938847999 --repo "${GITHUB_REPOSITORY}" || true
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/35938847999/force-cancel" || true
+          echo "cancel_requested_run=35938847999"
