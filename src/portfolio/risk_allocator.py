@@ -20,7 +20,8 @@ def _round_trip_cost_bps(config: dict) -> float:
     )
     slippage = _float(costs.get("slippage_bps"), 0.0)
     platform = _float(costs.get("platform_fee_bps_per_side"), 0.0)
-    return 2.0 * (broker + slippage + platform)
+    sell_fee = _float(costs.get("sell_fee_bps"), 0.0)
+    return 2.0 * (broker + slippage + platform) + sell_fee
 
 
 @dataclass
