@@ -5,11 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from league.publish_site import publish_league_payload, publish_observation_payload
+from league.publish_site import (
+    publish_league_payload,
+    publish_live_payload,
+    publish_observation_payload,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
 
 def test_publish_league_payload_ranks_and_summarizes_competition(
     tmp_path: Path,
@@ -78,7 +81,6 @@ def test_publish_league_payload_ranks_and_summarizes_competition(
     assert payload["live_execution_enabled"] is False
     assert output.exists()
 
-
 def test_league_with_one_session_and_all_tied_has_no_leader(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     source = data_dir / "metrics" / "strategy_league" / "leaderboard.json"
@@ -96,7 +98,6 @@ def test_league_with_one_session_and_all_tied_has_no_leader(tmp_path: Path) -> N
     assert payload["summary"]["overall_leader"] is None
     assert {row["rank"] for row in payload["rows"]} == {1}
 
-
 def test_frozen_weekly_model_reports_weak_validation(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     weekly = data_dir / "metrics" / "strategy_league" / "models" / "weak.json"
@@ -110,7 +111,6 @@ def test_frozen_weekly_model_reports_weak_validation(tmp_path: Path) -> None:
     result = publish_league_payload(data_dir, tmp_path / "site" / "data" / "league.json", cfg)
     assert result["weekly_model"]["status"] == "FROZEN"
     assert result["weekly_model"]["validation_warning"] is True
-
 
 def test_publish_league_payload_rejects_stale_runtime_state(
     tmp_path: Path,
@@ -166,7 +166,6 @@ def test_publish_league_payload_rejects_stale_runtime_state(
     assert "previous league strategy_league_v4_old" in payload["detail"]
 
 
-
 def test_publish_observation_payload_rejects_previous_epoch(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     source = data_dir / "metrics" / "strategy_league" / "experiment_observation.json"
@@ -196,7 +195,6 @@ def test_publish_observation_payload_rejects_previous_epoch(tmp_path: Path) -> N
     assert payload["sessions"] == 0
     assert payload["evidence"]["prediction_count_since_genesis"] == 0
 
-
 def test_strategy_league_config_tracks_every_base_strategy() -> None:
     config = json.loads(
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
@@ -215,7 +213,6 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
         "benchmark_equal_weight",
     } == member_ids
 
-
 def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     page = (ROOT / "site" / "strategies.html").read_text(encoding="utf-8")
     home = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
@@ -223,6 +220,11 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
 
+    assert 'id="strategy-live"' in page
+    assert 'id="liveSummary"' in page
+    assert 'id="liveCompetitionChart"' in page
+    assert 'id="liveTable"' in page
+    assert "actualización ~15 min" in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
     assert 'id="leagueCompetitionChart"' in page
@@ -240,6 +242,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "challenger_vs_best_base" in script
     assert "costs_paid" in script
     assert "promotion_review_eligible" in script
+    assert "data/strategy_live.json" in script
+    assert "intraday_curve" in script
+    assert "setInterval(renderLive, 60_000)" in script
 
     assert "export function multiLineSvg" in charts
     assert "seriesIndex % 7" in charts
@@ -247,7 +252,6 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert ".league-series-0" in styles
     assert ".league-series-6" in styles
     assert ".league-challenger-row" in styles
-
 
 def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
@@ -285,7 +289,6 @@ def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path
     assert weekly_observation["status"] == "FROZEN"
     assert weekly_observation["validation_metrics"]["spearman_rank_correlation"] == 0.22
 
-
 def test_waiting_league_reports_missing_weekly_model_truthfully(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     league_config = tmp_path / "strategy_league.json"
@@ -302,3 +305,142 @@ def test_waiting_league_reports_missing_weekly_model_truthfully(tmp_path: Path) 
 
     assert payload["status"] == "WAITING_FOR_WEEKLY_MODEL"
     assert payload["weekly_model"]["status"] == "MISSING"
+
+
+def test_publish_live_payload_is_non_promotional_and_strips_internal_cache(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    metrics = data_dir / "metrics" / "strategy_league"
+    metrics.mkdir(parents=True)
+    (metrics / "leaderboard.json").write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v7_clean_genesis_10k",
+                "status": "RUNNING",
+                "last_session": "2026-09-23",
+                "sessions": 9,
+                "rows": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (metrics / "live_snapshot.json").write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v7_clean_genesis_10k",
+                "status": "LIVE",
+                "last_eod_session": "2026-09-23",
+                "market_session": "2026-09-24",
+                "generated_at": "2026-09-24T15:00:00+00:00",
+                "rows": [
+                    {
+                        "strategy": "capital_allocation_challenger",
+                        "return": 0.02,
+                        "nav": 10200,
+                    },
+                    {
+                        "strategy": "benchmark_spy",
+                        "return": 0.01,
+                        "nav": 10100,
+                    },
+                ],
+                "quote_cache": {"SPY": {"price": 700.0}},
+                "automatic_promotion": True,
+                "live_execution_enabled": True,
+                "counts_as_prospective_evidence": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "strategy_league.json"
+    cfg.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v7_clean_genesis_10k",
+                "initial_nav_usd": 10000,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output = tmp_path / "site" / "data" / "strategy_live.json"
+    payload = publish_live_payload(data_dir, output, cfg)
+
+    assert payload["status"] == "LIVE"
+    assert [row["rank"] for row in payload["rows"]] == [1, 2]
+    assert "quote_cache" not in payload
+    assert payload["counts_as_prospective_evidence"] is False
+    assert payload["automatic_promotion"] is False
+    assert payload["live_execution_enabled"] is False
+
+def test_publish_live_payload_withholds_snapshot_from_older_eod_base(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    metrics = data_dir / "metrics" / "strategy_league"
+    metrics.mkdir(parents=True)
+    (metrics / "leaderboard.json").write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v7_clean_genesis_10k",
+                "last_session": "2026-09-24",
+                "sessions": 10,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (metrics / "live_snapshot.json").write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v7_clean_genesis_10k",
+                "status": "LIVE",
+                "last_eod_session": "2026-09-23",
+                "rows": [
+                    {
+                        "strategy": "capital_allocation_challenger",
+                        "return": 0.99,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "strategy_league.json"
+    cfg.write_text(
+        json.dumps({"league_id": "strategy_league_v7_clean_genesis_10k"}),
+        encoding="utf-8",
+    )
+
+    payload = publish_live_payload(
+        data_dir,
+        tmp_path / "site" / "data" / "strategy_live.json",
+        cfg,
+    )
+
+    assert payload["status"] == "STALE_BASE"
+    assert payload["rows"] == []
+    assert payload["counts_as_prospective_evidence"] is False
+
+def test_workflows_wire_intraday_strategy_channel_without_touching_daily_bars() -> None:
+    live_workflow = (ROOT / ".github" / "workflows" / "strategy_live.yml").read_text(
+        encoding="utf-8"
+    )
+    pages_workflow = (ROOT / ".github" / "workflows" / "pages.yml").read_text(
+        encoding="utf-8"
+    )
+    eod_workflow = (ROOT / ".github" / "workflows" / "eod.yml").read_text(
+        encoding="utf-8"
+    )
+    engine = (ROOT / "src" / "league" / "live_snapshot.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "schedule:" in live_workflow
+    assert "--interval 5m" in live_workflow
+    assert "strategy-live-${{ github.run_id }}" in live_workflow
+    assert "strategy_live" in pages_workflow
+    assert "strategy-live-v1" in pages_workflow
+    assert "--live-output site/data/strategy_live.json" in pages_workflow
+    assert "league.live_snapshot export-base" in eod_workflow
+    assert "upsert_daily_bars" not in engine
