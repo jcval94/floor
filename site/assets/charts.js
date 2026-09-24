@@ -229,10 +229,10 @@ export function multiLineSvg(series = [], options = {}) {
   const labelIndex = new Map(labels.map((label, index) => [label, index]));
 
   const geometry = {
-    width: 160,
+    width: 220,
     height: 72,
     left: 10,
-    right: 154,
+    right: 214,
     top: 12,
     bottom: 57,
     axisY: 68,
