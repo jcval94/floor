@@ -129,6 +129,49 @@ def fetch_rows_with_retries(
     ) from last_error
 
 
+
+def fetch_replay_daily_market_data(
+    symbols: list[str],
+    *,
+    benchmark_symbol: str = "SPY",
+    sleep_seconds: float = 0.15,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fetch durable daily history for historical CLOSE-only replays.
+
+    Daily bars remain available well beyond Yahoo's short intraday retention
+    window and are sufficient at a CLOSE checkpoint because the completed
+    session OHLCV bar is observable at that time.
+    """
+
+    requested = sorted(
+        set([*(symbol.upper() for symbol in symbols), benchmark_symbol.upper()])
+    )
+    daily: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
+
+    for symbol in requested:
+        try:
+            daily.extend(
+                fetch_rows_with_retries(symbol, range_="2y", interval="1d")
+            )
+        except Exception as exc:
+            failures.append({"symbol": symbol, "error": str(exc)})
+        time.sleep(sleep_seconds)
+
+    if failures:
+        raise RuntimeError(f"incomplete replay daily market download: {failures}")
+
+    summary = {
+        "symbols": len(requested),
+        "daily_rows": len(daily),
+        "intraday_rows": 0,
+        "daily_source": "Yahoo chart range=2y interval=1d",
+        "intraday_source": None,
+        "checkpoint_mode": "completed_daily_bar_at_close",
+        "failures": failures,
+    }
+    return daily, summary
+
 def fetch_replay_market_data(
     symbols: list[str],
     *,
