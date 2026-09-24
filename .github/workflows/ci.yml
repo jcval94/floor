@@ -2,7 +2,14 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -41,9 +48,9 @@ jobs:
         run: |
           mypy --ignore-missing-imports src
 
-      - name: Unit and integration tests
+      - name: Unit and integration tests with coverage
         run: |
-          pytest -q
+          pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60
 
       - name: Smoke tests end-to-end
         run: |
@@ -105,10 +112,6 @@ jobs:
           print('retrospective_attribution=', retro_attr.get('status'))
           print('prospective_attribution=', prospective_attr.get('status'))
           PY
-
-      - name: Enforce minimum coverage
-        run: |
-          pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60
 
       - name: Validate repo quality gates
         run: |
