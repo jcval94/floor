@@ -285,6 +285,8 @@ def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     assert "RUNTIME_STATE_PAYLOAD_PIN" in workflow
     assert "RESEARCH_STATE_PAYLOAD_PIN" in workflow
     assert "MONITORING_STATE_PAYLOAD_PIN" in workflow
+    assert "Recompute health against the pinned runtime snapshot" in workflow
+    assert "python -m monitoring.health_snapshot" in workflow
     assert "--state-manifest" in workflow
 
 
