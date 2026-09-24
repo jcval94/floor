@@ -2,7 +2,11 @@ from datetime import date
 
 import pytest
 
-from replay.walk_forward_oos import (\n    _aggregate_continuous_folds,\n    _fold_sessions,\n    _training_cutoff_audit,\n)
+from replay.walk_forward_oos import (
+    _aggregate_continuous_folds,
+    _fold_sessions,
+    _training_cutoff_audit,
+)
 
 
 def test_training_cutoff_requires_observation_and_m3_target_before_fold() -> None:
