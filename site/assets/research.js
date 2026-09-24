@@ -11,6 +11,16 @@ const LABELS = {
   benchmark_equal_weight: 'Equal Weight',
 };
 
+const SHORT_LABELS = {
+  capital_allocation_challenger: 'Challenger',
+  weekly_opportunity_ridge: 'Weekly',
+  breakout_protected_by_floor: 'Momentum',
+  mean_reversion_floor_w1: 'Mean Reversion',
+  cross_horizon_asymmetry: 'Cross-Horizon',
+  benchmark_spy: 'SPY',
+  benchmark_equal_weight: 'Equal Weight',
+};
+
 const SERIES_ORDER = [
   'capital_allocation_challenger',
   'weekly_opportunity_ridge',
@@ -24,6 +34,10 @@ const SERIES_RANK = new Map(SERIES_ORDER.map((id, index) => [id, index]));
 
 function label(id) {
   return LABELS[id] || id || '—';
+}
+
+function shortLabel(id) {
+  return SHORT_LABELS[id] || label(id);
 }
 
 function pct(value) {
@@ -106,6 +120,7 @@ function oosChart(rows, data, windowKey) {
     .map((row) => ({
       id: row.strategy,
       label: label(row.strategy),
+      shortLabel: shortLabel(row.strategy),
       points: filterPointsByWindow(row.equity_curve, windowKey)
         .map((point) => ({ session: point.session, value: point.nav })),
     }))
