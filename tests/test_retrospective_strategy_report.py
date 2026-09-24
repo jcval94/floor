@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
+from replay.capital_tournament import _complete_market_sessions
 from replay.publish_tournament_report import build_strategy_report, publish_tournament_report
 
 
@@ -123,3 +125,43 @@ def test_capital_tournament_uses_daily_close_history_for_long_windows() -> None:
     assert "intraday_by_symbol" not in runner
     assert "def fetch_replay_daily_market_data" in source
     assert '"checkpoint_mode": "completed_daily_bar_at_close"' in source
+
+
+def _daily_row(symbol: str, day: date) -> dict:
+    return {
+        "symbol": symbol,
+        "timestamp": f"{day.isoformat()}T14:30:00+00:00",
+        "open": 100.0,
+        "high": 101.0,
+        "low": 99.0,
+        "close": 100.5,
+        "volume": 1000.0,
+    }
+
+
+def test_complete_market_sessions_skips_small_gaps_without_forward_fill() -> None:
+    sessions = [date(2026, 9, 21), date(2026, 9, 22), date(2026, 9, 23)]
+    daily = {
+        "AAA": [_daily_row("AAA", day) for day in sessions if day != date(2026, 9, 22)],
+        "SPY": [_daily_row("SPY", day) for day in sessions],
+    }
+
+    usable, skipped = _complete_market_sessions(sessions, daily, ["AAA"])
+
+    assert usable == [date(2026, 9, 21), date(2026, 9, 23)]
+    assert skipped == [
+        {"session": "2026-09-22", "missing_symbols": ["AAA"]}
+    ]
+
+
+def test_complete_market_sessions_fails_closed_on_material_gaps() -> None:
+    start = date(2026, 9, 1)
+    sessions = [start + timedelta(days=index) for index in range(10)]
+    missing = set(sessions[:3])
+    daily = {
+        "AAA": [_daily_row("AAA", day) for day in sessions if day not in missing],
+        "SPY": [_daily_row("SPY", day) for day in sessions],
+    }
+
+    with pytest.raises(RuntimeError, match="market coverage too incomplete"):
+        _complete_market_sessions(sessions, daily, ["AAA"])
