@@ -39,7 +39,8 @@ def _cfg() -> dict:
             "min_trades": 10,
             "max_drawdown_abs": 0.15,
             "min_sharpe": 0.5,
-            "max_gross_turnover": 12.0,
+            "turnover_review_window_sessions": 63,
+            "max_gross_turnover_per_review_window": 12.0,
         },
     }
 
@@ -481,6 +482,7 @@ def test_turnover_budget_is_a_hard_promotion_gate(tmp_path: Path) -> None:
     )
 
     assert weekly["turnover"] == pytest.approx(20.0)
+    assert weekly["turnover_review_window"] == pytest.approx(20.0 * 63.0)
     assert weekly["turnover_warning"] is True
     assert weekly["promotion_checks"]["max_gross_turnover"] is False
     assert weekly["promotion_review_eligible"] is False
@@ -517,3 +519,36 @@ def test_cross_horizon_is_diagnostic_only_and_cannot_promote(tmp_path: Path) -> 
     assert cross["strategy_promotion_enabled"] is False
     assert cross["promotion_checks"]["strategy_promotion_enabled"] is False
     assert cross["promotion_review_eligible"] is False
+
+
+def test_turnover_gate_is_rate_normalized_instead_of_growing_with_league_age(
+    tmp_path: Path,
+) -> None:
+    cfg = _cfg()
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-01-01",
+        _contract(),
+        _targets(),
+    )
+    state["session_count"] = 126
+    state["members"]["weekly_opportunity_ridge"]["gross_traded_notional"] = (
+        20.0 * cfg["initial_nav_usd"]
+    )
+    # Keep average NAV exactly at initial capital for a transparent rate check.
+    state["members"]["weekly_opportunity_ridge"]["daily_nav"] = [
+        {"session": "2026-01-01", "nav": cfg["initial_nav_usd"]}
+    ]
+
+    leaderboard = build_leaderboard(state, cfg)
+    weekly = next(
+        row for row in leaderboard["rows"]
+        if row["strategy"] == "weekly_opportunity_ridge"
+    )
+
+    assert weekly["turnover"] == pytest.approx(20.0)
+    assert weekly["turnover_review_window_sessions"] == 63
+    assert weekly["turnover_review_window"] == pytest.approx(10.0)
+    assert weekly["turnover_warning"] is False
+    assert weekly["promotion_checks"]["max_gross_turnover"] is True
