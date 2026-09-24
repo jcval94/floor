@@ -240,8 +240,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run retrospective PIT Strategy League tournament for capital allocation"
     )
-    parser.add_argument("--start", default="2026-08-24")
-    parser.add_argument("--end", default="2026-09-04")
+    parser.add_argument("--start", default="2026-06-22")
+    parser.add_argument("--end", default="2026-09-23")
     parser.add_argument("--output", required=True)
     parser.add_argument("--universe", default="config/universe.yaml")
     parser.add_argument("--model-registry", default="data/training/models")
