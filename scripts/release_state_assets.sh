@@ -58,7 +58,7 @@ state_publish_set() {
     return 2
   fi
 
-  local payload="$base.run-$run_id"
+  local payload="$base.run-$run_id-a$run_attempt"
   local -a upload=()
   cp "$dir/$base" "$dir/$payload"
   upload+=("$dir/$payload")
