@@ -378,6 +378,11 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
     spy_return = metrics.get("benchmark_spy", {}).get("return")
     equal_return = metrics.get("benchmark_equal_weight", {}).get("return")
     review_cfg = league_cfg.get("promotion_review", {})
+    review_window_sessions = max(
+        1,
+        int(review_cfg.get("turnover_review_window_sessions", review_cfg.get("min_sessions", 63))),
+    )
+    observed_sessions = max(1, int(state.get("session_count", 0)))
     member_specs = {
         str(spec.get("id") or ""): spec
         for spec in league_cfg.get("members", [])
@@ -457,9 +462,17 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         )
         max_gross_turnover = float(
             review_cfg.get(
-                "max_gross_turnover",
-                review_cfg.get("max_turnover", float("inf")),
+                "max_gross_turnover_per_review_window",
+                review_cfg.get(
+                    "max_gross_turnover",
+                    review_cfg.get("max_turnover", float("inf")),
+                ),
             )
+        )
+        turnover_review_window = (
+            float(member_metrics["turnover"])
+            * review_window_sessions
+            / observed_sessions
         )
         row = {
             "strategy": member_id,
@@ -478,13 +491,15 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             "evidence_contract": evidence_contract if is_strategy else "benchmark",
             "evidence_role": evidence_role,
             "strategy_promotion_enabled": strategy_promotion_enabled,
+            "turnover_review_window_sessions": review_window_sessions,
+            "turnover_review_window": turnover_review_window,
             "turnover_budget": (
                 max_gross_turnover if is_strategy and math.isfinite(max_gross_turnover) else None
             ),
             "turnover_warning": (
                 is_strategy
                 and math.isfinite(max_gross_turnover)
-                and float(member_metrics["turnover"]) > max_gross_turnover
+                and turnover_review_window > max_gross_turnover
             ),
             "canonical_variant_promotion_eligible": False,
             "canonical_bidirectional_promotion_eligible": False,
@@ -506,7 +521,7 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
                 >= float(review_cfg.get("min_sharpe", 0.5)),
                 "max_gross_turnover": (
                     not math.isfinite(max_gross_turnover)
-                    or float(member_metrics["turnover"]) <= max_gross_turnover
+                    or turnover_review_window <= max_gross_turnover
                 ),
                 "positive_excess_vs_spy": row["vs_spy"] is not None
                 and float(row["vs_spy"]) > 0,
