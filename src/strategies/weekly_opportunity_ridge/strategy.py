@@ -123,10 +123,10 @@ def generate_weekly_opportunity_orders(
             continue
 
         if action == "BUY":
-            stop = current_geometry["floor"] * (1 - buffer)
+            stop = current_geometry["risk_floor"] * (1 - buffer)
             take_profit = current_geometry["ceiling"]
         else:
-            stop = current_geometry["ceiling"] * (1 + buffer)
+            stop = current_geometry["risk_ceiling"] * (1 + buffer)
             take_profit = current_geometry["floor"]
 
         qty = risk_sized_qty(row, strategy_cfg, global_cfg, stop)

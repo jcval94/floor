@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from contracts.strategy_contract import validate_strategy_registry
 from strategies.base import StrategyDecision
 from strategies.breakout_protected_by_floor import (
     STRATEGY_ID as BREAKOUT_ID,
@@ -39,6 +40,7 @@ def validate_registry() -> None:
         raise RuntimeError(f"Duplicate strategy ids in registry: {ids}")
     if set(ids) != set(STRATEGY_GENERATORS):
         raise RuntimeError("Strategy registry keys do not match package STRATEGY_ID values")
+    validate_strategy_registry(set(STRATEGY_GENERATORS))
 
 
 validate_registry()

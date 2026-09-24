@@ -10,12 +10,21 @@ EventType = Literal["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLO
 
 
 MULTI_HORIZON_PREDICTION_CONTRACT: dict[str, object] = {
-    "version": "v1",
+    "version": "v2",
     "horizons": ["d1", "w1", "q1", "m3"],
     "required_fields": {
-        "d1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
-        "w1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
-        "q1": ["floor_value", "ceiling_value", "floor_time_bucket", "ceiling_time_bucket"],
+        "d1": [
+            "floor_value", "ceiling_value", "risk_floor_value", "risk_ceiling_value",
+            "risk_geometry_available", "floor_time_bucket", "ceiling_time_bucket"
+        ],
+        "w1": [
+            "floor_value", "ceiling_value", "risk_floor_value", "risk_ceiling_value",
+            "risk_geometry_available", "floor_time_bucket", "ceiling_time_bucket"
+        ],
+        "q1": [
+            "floor_value", "ceiling_value", "risk_floor_value", "risk_ceiling_value",
+            "risk_geometry_available", "floor_time_bucket", "ceiling_time_bucket"
+        ],
         "m3": [
             "floor_m3",
             "floor_week_m3",
@@ -37,8 +46,13 @@ class PredictionRecord:
     horizon: Horizon
     floor_value: float | None
     ceiling_value: float | None
-    floor_quantile: float = 0.1
-    ceiling_quantile: float = 0.9
+    floor_quantile: float | None = None
+    ceiling_quantile: float | None = None
+    risk_floor_value: float | None = None
+    risk_ceiling_value: float | None = None
+    risk_geometry_available: bool = False
+    risk_target_marginal_coverage: float | None = None
+    geometry_semantics: str = "central_typical_boundary"
     floor_time_bucket: str = ""
     ceiling_time_bucket: str = ""
     floor_time_probability: float = 0.0

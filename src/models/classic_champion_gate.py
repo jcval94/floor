@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from contracts.model_contract import validate_model_artifact_contract
 from models.classic_horizon_predictor import (
     model_family,
     predict_family_delta,
@@ -78,6 +79,14 @@ def _number(value: object) -> float | None:
 def _artifact_compatible(artifact: dict[str, Any], horizon: str) -> tuple[bool, str]:
     if horizon not in HORIZON_TARGETS:
         return False, f"unsupported_horizon:{horizon}"
+
+    contract_check = validate_model_artifact_contract(
+        horizon, artifact, allow_legacy=True
+    )
+    if not contract_check["valid"]:
+        return False, "invalid_model_contract:" + ",".join(
+            contract_check["errors"]
+        )
 
     model_name = str(artifact.get("model_name") or "")
     family = model_family(model_name)

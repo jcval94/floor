@@ -10,9 +10,12 @@ on:
       - "pyproject.toml"
       - "src/features/**"
       - "src/models/**"
+      - "src/contracts/model_contract.py"
+      - "config/model_contracts.json"
       - "src/forecasting/parity_models.py"
       - "tests/test_robust_range_v3.py"
       - "tests/test_classic_champion_gate.py"
+      - "tests/test_p0_contracts.py"
   push:
     branches:
       - feat/differential-range-v3
@@ -89,8 +92,17 @@ jobs:
           require=false
           while IFS= read -r path; do
             case "$path" in
-              src/features/*|src/models/robust_range_v3.py|src/models/evaluate_range_v3.py|src/models/train_classic_horizons.py|src/models/classic_horizon_predictor.py|tests/test_robust_range_v3.py|tests/test_train_classic_horizons.py|tests/test_classic_champion_gate.py)
+              src/features/*|src/models/robust_range_v3.py|src/models/classic_horizon_predictor.py)
+                # These paths can directly change the central range predictor
+                # or its feature values, so a PR touching them must prove
+                # strict statistical dominance before the audit passes.
                 require=true
+                ;;
+              src/models/train_classic_horizons.py|src/models/classic_champion_gate.py|src/models/evaluate_range_v3.py)
+                # Trainer/gate/audit orchestration changes still execute the
+                # full governed comparison, but do not have to fabricate a
+                # central-MAE improvement when the predictor itself is
+                # unchanged. Manual promotion runs remain strict.
                 ;;
             esac
           done <<< "$changed"

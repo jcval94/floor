@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from contracts.model_contract import attach_model_contract
 from floor.persistence_db import persist_payload
 from models.dataset_summary import summarize_modelable_rows
 from models.select_champion import select_and_persist_champion
@@ -246,7 +247,7 @@ def run_training(
             version=version,
             training_mode=training_mode,
         )
-        value_payload = asdict(value_artifact)
+        value_payload = attach_model_contract(asdict(value_artifact), "value")
         value_payload["dataset_summary"] = dataset_summary
         selection["value"] = select_and_persist_champion(value_payload, models_dir, task="value")
         metrics_payload["value"] = value_artifact.metrics
@@ -260,7 +261,7 @@ def run_training(
             version=version,
             training_mode=training_mode,
         )
-        timing_payload = asdict(timing_artifact)
+        timing_payload = attach_model_contract(asdict(timing_artifact), "timing")
         timing_payload["dataset_summary"] = dataset_summary
         selection["timing"] = select_and_persist_champion(timing_payload, models_dir, task="timing")
         metrics_payload["timing"] = timing_artifact.metrics

@@ -6,13 +6,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-
-STRATEGY_MEMBERS = {
-    "weekly_opportunity_ridge",
-    "breakout_protected_by_floor",
-    "capital_allocation_challenger",
-}
-
+from contracts.strategy_contract import strategy_contract
 
 def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -196,6 +190,7 @@ def _apply_strategy_exits(
         position = member["positions"].get(symbol, {})
         qty = int(position.get("qty", 0))
         bar = bars.get(symbol, {})
+        open_price = float(bar.get("open", 0.0) or 0.0)
         low = float(bar.get("low", 0.0) or 0.0)
         high = float(bar.get("high", 0.0) or 0.0)
         close = float(bar.get("close", 0.0) or 0.0)
@@ -214,11 +209,27 @@ def _apply_strategy_exits(
         exit_price = 0.0
         reason = ""
         if stop > 0 and low > 0 and low <= stop:
-            exit_price = stop
-            reason = "stop_touched_conservative_first"
+            exit_price = (
+                min(stop, open_price)
+                if open_price > 0
+                else stop
+            )
+            reason = (
+                "stop_gap_through_at_open"
+                if open_price > 0 and open_price < stop
+                else "stop_touched_conservative_first"
+            )
         elif take > 0 and high >= take:
-            exit_price = take
-            reason = "take_profit_touched"
+            exit_price = (
+                max(take, open_price)
+                if open_price > 0
+                else take
+            )
+            reason = (
+                "take_profit_gap_through_at_open"
+                if open_price > take
+                else "take_profit_touched"
+            )
         elif timeout_due and close > 0:
             exit_price = close
             reason = f"max_holding_sessions_{max_holding_sessions}"
@@ -310,9 +321,63 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
     spy_return = metrics.get("benchmark_spy", {}).get("return")
     equal_return = metrics.get("benchmark_equal_weight", {}).get("return")
     review_cfg = league_cfg.get("promotion_review", {})
+    member_specs = {
+        str(spec.get("id") or ""): spec
+        for spec in league_cfg.get("members", [])
+        if isinstance(spec, dict) and str(spec.get("id") or "")
+    }
+    frozen_contract = state.get("frozen_contract")
+    model_suite_frozen = (
+        isinstance(frozen_contract, dict)
+        and frozen_contract.get("model_suite_contract_version") == "v2"
+        and all(
+            str(frozen_contract.get(f"{task}_champion_sha256") or "")
+            for task in ("d1", "w1", "q1", "value", "timing")
+        )
+    )
+    evidence_contract = (
+        "v2_model_suite_frozen"
+        if model_suite_frozen
+        else "legacy_v1_model_suite_unfrozen"
+    )
     rows: list[dict[str, Any]] = []
     for member_id, member_metrics in metrics.items():
         ret = float(member_metrics["return"])
+        member_spec = member_specs.get(member_id, {})
+        declared_type = str(member_spec.get("type") or "")
+        is_strategy = (
+            declared_type == "strategy"
+            or (not declared_type and not member_id.startswith("benchmark_"))
+        )
+        semantic_contract: dict[str, Any] = {}
+        frozen_member_contracts = state.get("member_contracts")
+        frozen_member_contract = (
+            frozen_member_contracts.get(member_id)
+            if isinstance(frozen_member_contracts, dict)
+            else None
+        )
+        if isinstance(frozen_member_contract, dict):
+            semantic_contract = dict(frozen_member_contract)
+        elif is_strategy:
+            try:
+                semantic_contract = strategy_contract(member_id)
+            except ValueError:
+                # Unit-test/custom league members may intentionally be local.
+                semantic_contract = {}
+        evaluation_variant = str(
+            member_spec.get("evaluation_variant")
+            or semantic_contract.get("league_evaluation_variant")
+            or "long_only_projection"
+        )
+        evidence_can_promote_canonical = bool(
+            member_spec.get(
+                "league_evidence_can_promote_canonical_variant",
+                semantic_contract.get(
+                    "league_evidence_can_promote_canonical_variant",
+                    False,
+                ),
+            )
+        )
         row = {
             "strategy": member_id,
             **member_metrics,
@@ -320,11 +385,22 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             "vs_equal_weight": (
                 ret - float(equal_return) if equal_return is not None else None
             ),
+            "evaluation_variant": evaluation_variant if is_strategy else "benchmark",
+            "evidence_scope": "long_only" if is_strategy else "benchmark",
+            "canonical_variant": (
+                str(semantic_contract.get("canonical_variant") or "unspecified")
+                if is_strategy
+                else "benchmark"
+            ),
+            "evidence_contract": evidence_contract if is_strategy else "benchmark",
+            "canonical_variant_promotion_eligible": False,
+            "canonical_bidirectional_promotion_eligible": False,
             "promotion_review_eligible": False,
             "promotion_checks": {},
         }
-        if member_id in STRATEGY_MEMBERS:
+        if is_strategy:
             checks = {
+                "model_suite_frozen": model_suite_frozen,
                 "min_sessions": int(state.get("session_count", 0))
                 >= int(review_cfg.get("min_sessions", 63)),
                 "min_trades": int(member_metrics["trades"])
@@ -345,6 +421,15 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             }
             row["promotion_checks"] = checks
             row["promotion_review_eligible"] = all(checks.values())
+            row["canonical_variant_promotion_eligible"] = (
+                evidence_can_promote_canonical
+                and row["promotion_review_eligible"]
+            )
+            # Backward-compatible explicit field for the directional strategies.
+            row["canonical_bidirectional_promotion_eligible"] = (
+                str(row["canonical_variant"]) == "bidirectional"
+                and bool(row["canonical_variant_promotion_eligible"])
+            )
         rows.append(row)
     rows.sort(key=lambda item: float(item.get("return", 0.0)), reverse=True)
     return {
@@ -358,6 +443,8 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
         "initial_nav_usd": initial_nav,
         "automatic_promotion": False,
         "live_execution_enabled": False,
+        "evidence_contract": evidence_contract,
+        "model_suite_frozen": model_suite_frozen,
         "rows": rows,
         "audit_hash": state.get("last_hash"),
     }
@@ -455,6 +542,19 @@ def initialize_league(
             "trade_count": 0,
             "costs_paid": 0.0,
         }
+    member_contracts = {
+        str(spec.get("id") or ""): {
+            "evaluation_variant": spec.get("evaluation_variant"),
+            "league_evidence_can_promote_canonical_variant": bool(
+                spec.get("league_evidence_can_promote_canonical_variant", False)
+            ),
+            "canonical_variant": spec.get("canonical_variant"),
+        }
+        for spec in league_cfg.get("members", [])
+        if isinstance(spec, dict)
+        and spec.get("type") == "strategy"
+        and str(spec.get("id") or "")
+    }
     state = {
         "schema_version": 1,
         "league_id": str(league_cfg["league_id"]),
@@ -462,6 +562,7 @@ def initialize_league(
         "last_session": session,
         "session_count": 1,
         "frozen_contract": dict(frozen_contract),
+        "member_contracts": member_contracts,
         "members": members,
         "last_hash": "",
     }

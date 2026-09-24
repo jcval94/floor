@@ -5,7 +5,7 @@ from math import floor
 from pathlib import Path
 from typing import Any, Iterable
 
-from strategies.run_strategies import load_simple_yaml
+from contracts.config_io import load_simple_yaml
 
 
 @dataclass(frozen=True)

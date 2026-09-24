@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from strategies.base import StrategyDecision
 
 
@@ -21,39 +23,83 @@ def round_trip_cost_bps(cfg: dict) -> float:
         to_float(costs.get("commission_bps"), 0.0),
     )
     slippage = to_float(costs.get("slippage_bps"), 0.0)
-    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg))
+    sell_fee = to_float(costs.get("sell_fee_bps"), 0.0)
+    return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg)) + sell_fee
 
 
 def net_edge(gross_pct: float, cfg: dict) -> float:
     return gross_pct - round_trip_cost_bps(cfg) / 10000.0
 
 
-def geometry(row: dict, horizon: str) -> dict[str, float]:
+def geometry(row: dict, horizon: str) -> dict[str, Any]:
+    """Return central opportunity geometry plus a separately calibrated risk boundary.
+
+    Legacy champions do not contain risk geometry.  In that case stops fall back
+    to the central boundary, but the result is explicitly marked uncalibrated so
+    callers and dashboards cannot mistake it for a risk quantile.
+    """
+
     close = to_float(row.get("close"))
     floor = to_float(row.get(f"floor_{horizon}"))
     ceiling = to_float(row.get(f"ceiling_{horizon}"))
-    if close <= 0 or floor <= 0 or ceiling <= floor:
+    risk_available = bool(row.get(f"risk_geometry_available_{horizon}", False))
+    risk_floor = to_float(row.get(f"risk_floor_{horizon}"))
+    risk_ceiling = to_float(row.get(f"risk_ceiling_{horizon}"))
+    if not risk_available or risk_floor <= 0:
+        risk_floor = floor
+    if not risk_available or risk_ceiling <= 0:
+        risk_ceiling = ceiling
+
+    if (
+        close <= 0
+        or floor <= 0
+        or ceiling <= floor
+        or risk_floor <= 0
+        or risk_ceiling <= risk_floor
+    ):
         return {
             "close": close,
             "floor": floor,
             "ceiling": ceiling,
+            "risk_floor": risk_floor,
+            "risk_ceiling": risk_ceiling,
+            "risk_geometry_available": risk_available,
+            "geometry_semantics": (
+                "central_plus_calibrated_risk"
+                if risk_available
+                else "central_only_legacy_fallback"
+            ),
             "up": 0.0,
             "down": 0.0,
+            "long_risk": 0.0,
+            "short_risk": 0.0,
             "long_rr": 0.0,
             "short_rr": 0.0,
         }
+
     up = max(0.0, ceiling - close) / close
     down = max(0.0, close - floor) / close
+    long_risk = max(0.0, close - risk_floor) / close
+    short_risk = max(0.0, risk_ceiling - close) / close
     return {
         "close": close,
         "floor": floor,
         "ceiling": ceiling,
+        "risk_floor": risk_floor,
+        "risk_ceiling": risk_ceiling,
+        "risk_geometry_available": risk_available,
+        "geometry_semantics": (
+            "central_plus_calibrated_risk"
+            if risk_available
+            else "central_only_legacy_fallback"
+        ),
         "up": up,
         "down": down,
-        "long_rr": up / max(down, 1e-9),
-        "short_rr": down / max(up, 1e-9),
+        "long_risk": long_risk,
+        "short_risk": short_risk,
+        "long_rr": up / max(long_risk, 1e-9),
+        "short_rr": down / max(short_risk, 1e-9),
     }
-
 
 def liquidity_ok(row: dict, strategy_cfg: dict) -> bool:
     adv = to_float(row.get("avg_dollar_volume", row.get("dollar_volume", 0.0)))

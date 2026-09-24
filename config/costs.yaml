@@ -1,8 +1,18 @@
+# Canonical transaction-cost contract for FLOOR.
+# Strategy research, PAPER and Strategy League read explicit profiles from here.
 cost_model:
+  schema_version: 1
   currency: USD
+  broker_commission_bps: 2.0
   platform_fee_bps_per_side: 24.0
-  commission_bps: 0.5
-  spread_bps: 1.0
+  commission_bps: 26.0
+  strategy_slippage_bps: 3.0
+  paper_slippage_bps: 3.0
+  shadow_slippage_bps: 3.0
+  strategy_sell_fee_bps: 0.0
+  paper_sell_fee_bps: 0.0
+  shadow_sell_fee_bps: 3.0
+  spread_bps: 0.0
   slippage_bps_open: 3.0
   slippage_bps_intraday: 1.5
   min_ticket_fee_usd: 0.0

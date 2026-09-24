@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from pathlib import Path
 
+from contracts.model_contract import validate_model_artifact_contract
 from models.inference import format_champion_version, predict_timing_week_probabilities, predict_value_floor_m3
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,10 @@ class HorizonForecast:
     breach_prob: float
     expected_return: float
     expected_range: float
+    risk_floor: float | None = None
+    risk_ceiling: float | None = None
+    risk_geometry_available: bool = False
+    risk_target_marginal_coverage: float | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +225,20 @@ class ChampionModelSet:
 
         artifact = self._load_json(json_path)
         if artifact is not None:
+            contract_check = validate_model_artifact_contract(
+                task, artifact, allow_legacy=True
+            )
+            if not contract_check["valid"]:
+                logger.error(
+                    "[forecasting] rejected model contract task=%s errors=%s",
+                    task,
+                    contract_check["errors"],
+                )
+                self._load_diagnostics[task] = (
+                    "invalid_model_contract:" + ",".join(contract_check["errors"])
+                )
+                artifact = None
+        if artifact is not None:
             logger.info(
                 "[forecasting] using json champion task=%s path=%s payload_type=%s",
                 task,
@@ -233,6 +252,21 @@ class ChampionModelSet:
             manifest = self._load_manifest(manifest_path)
             if self._validate_manifest(task, pkl_path, manifest):
                 artifact = self._load_pickle(pkl_path)
+                if isinstance(artifact, dict):
+                    contract_check = validate_model_artifact_contract(
+                        task, artifact, allow_legacy=True
+                    )
+                    if not contract_check["valid"]:
+                        logger.error(
+                            "[forecasting] rejected pickle model contract task=%s errors=%s",
+                            task,
+                            contract_check["errors"],
+                        )
+                        self._load_diagnostics[task] = (
+                            "invalid_model_contract:"
+                            + ",".join(contract_check["errors"])
+                        )
+                        artifact = None
                 if artifact is not None:
                     logger.info(
                         "[forecasting] using pkl champion task=%s path=%s manifest=%s payload_type=%s",

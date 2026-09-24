@@ -5,6 +5,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from contracts.model_contract import validate_model_artifact_contract
+from contracts.strategy_contract import (
+    strategy_contract,
+    validate_league_strategy_members,
+    validate_strategy_registry,
+)
+from contracts.trading import (
+    shadow_execution_contract,
+    validate_shadow_execution_contract,
+)
 from floor.universe import parse_universe_yaml
 from league.capital_challenger import build_capital_challenger_targets
 from league.engine import (
@@ -220,6 +230,42 @@ def _write_waiting(root: Path, league_cfg: dict, status: str, detail: str) -> di
     return payload
 
 
+def _champion_suite_contract(repo_root: Path) -> dict[str, str]:
+    registry = repo_root / "data" / "training" / "models"
+    tasks = ("d1", "w1", "q1", "value", "timing")
+    hashes: dict[str, str] = {}
+    for task in tasks:
+        path = registry / f"{task}_champion.json"
+        if not path.exists():
+            raise RuntimeError(
+                f"Strategy League cannot freeze missing champion: {path}"
+            )
+        hashes[f"{task}_champion_sha256"] = sha256_file(path)
+    return {
+        "model_suite_contract_version": "v2",
+        "model_contracts_sha256": sha256_file(
+            repo_root / "config" / "model_contracts.json"
+        ),
+        "strategy_contracts_sha256": sha256_file(
+            repo_root / "config" / "strategy_contracts.json"
+        ),
+        "costs_contract_sha256": sha256_file(
+            repo_root / "config" / "costs.yaml"
+        ),
+        **hashes,
+    }
+
+
+def _uses_model_suite_contract(state: dict | None) -> bool:
+    if not isinstance(state, dict):
+        return False
+    frozen = state.get("frozen_contract")
+    return (
+        isinstance(frozen, dict)
+        and frozen.get("model_suite_contract_version") == "v2"
+    )
+
+
 def _holding_sessions(strategy_cfg: dict, default: int) -> int:
     value = int(
         strategy_cfg.get("exits", {}).get("temporal_exit_business_days", default)
@@ -246,6 +292,14 @@ def run_league_eod(
         )
     if str(league_cfg.get("mode")) != "shadow_paper":
         raise RuntimeError("Strategy League only supports shadow_paper mode")
+    validate_shadow_execution_contract(league_cfg.get("execution", {}))
+    validate_league_strategy_members(
+        {
+            str(spec.get("id") or "")
+            for spec in league_cfg.get("members", [])
+            if isinstance(spec, dict) and spec.get("type") == "strategy"
+        }
+    )
 
     root = data_dir / "metrics" / "strategy_league"
     model_path = Path(str(league_cfg["weekly_model_path"]))
@@ -260,8 +314,19 @@ def run_league_eod(
         )
 
     weekly_artifact = _load_json(model_path)
+    weekly_contract = validate_model_artifact_contract(
+        "weekly_opportunity",
+        weekly_artifact,
+        allow_legacy=True,
+    )
+    if not weekly_contract["valid"]:
+        raise RuntimeError(
+            "Strategy League weekly model contract invalid: "
+            + ",".join(weekly_contract["errors"])
+        )
     strategies_cfg = load_simple_yaml(strategies_config_path)
     strategy_configs = strategies_cfg["strategies"]
+    validate_strategy_registry(set(strategy_configs))
     weekly_cfg = strategy_configs["weekly_opportunity_ridge"]
     mean_cfg = strategy_configs["mean_reversion_floor_w1"]
     cross_cfg = strategy_configs["cross_horizon_asymmetry"]
@@ -277,8 +342,26 @@ def run_league_eod(
     if challenger_max_holding_sessions <= 0:
         raise RuntimeError("Capital challenger max holding sessions must be positive")
 
+    runtime_members: list[dict[str, Any]] = []
+    for raw_spec in league_cfg.get("members", []):
+        spec = dict(raw_spec)
+        if spec.get("type") == "strategy":
+            contract = strategy_contract(str(spec.get("id") or ""))
+            spec["evaluation_variant"] = str(
+                contract.get("league_evaluation_variant")
+                or "long_only_projection"
+            )
+            spec["league_evidence_can_promote_canonical_variant"] = bool(
+                contract.get("league_evidence_can_promote_canonical_variant", False)
+            )
+            spec["canonical_variant"] = str(
+                contract.get("canonical_variant") or "unspecified"
+            )
+        runtime_members.append(spec)
+
     runtime_league_cfg = {
         **league_cfg,
+        "members": runtime_members,
         "strategy_max_holding_sessions": {
             "weekly_opportunity_ridge": weekly_max_holding_sessions,
             "mean_reversion_floor_w1": mean_max_holding_sessions,
@@ -300,6 +383,10 @@ def run_league_eod(
     run_dir = root / "runs" / league_id
     state = load_state(run_dir)
 
+    if state is None or _uses_model_suite_contract(state):
+        # v2 epochs use one cost profile for signal gating and execution.
+        strategies_cfg["costs"] = shadow_execution_contract()
+
     if not session:
         return _write_waiting(
             root,
@@ -320,6 +407,13 @@ def run_league_eod(
         "strategies_config_sha256": sha256_file(strategies_config_path),
         "weekly_model_sha256": sha256_file(model_path),
     }
+    # Preserve existing v7 history byte-for-byte at the contract boundary.
+    # New epochs freeze every serving champion because Breakout/Mean/Cross and
+    # the capital allocator depend on the classic/M3 model suite.
+    if state is None or _uses_model_suite_contract(state):
+        frozen_contract.update(
+            _champion_suite_contract(league_config_path.parent.parent)
+        )
 
     rows = list(snapshot.get("rows", []))
     next_targets: dict[str, dict[str, dict]] = {}
