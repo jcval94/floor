@@ -17,7 +17,7 @@ from league.engine import (
 from league.market_features import _feature_row
 from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
 from replay.historical_close import build_historical_close_feature_rows
-from replay.point_in_time import group_by_symbol
+from replay.point_in_time import _session_date, group_by_symbol
 from replay.runner import (
     _bar_for_day,
     _bars_through,
@@ -27,6 +27,106 @@ from replay.runner import (
 )
 from replay.yahoo_source import fetch_replay_daily_market_data
 from strategies.run_strategies import load_simple_yaml
+
+
+def _select_complete_session_run(
+    *,
+    requested_sessions: list[date],
+    daily_by_symbol: dict[str, list[dict[str, Any]]],
+    symbols: list[str],
+    benchmark_symbol: str = "SPY",
+    min_sessions: int = 21,
+) -> tuple[list[date], dict[str, Any]]:
+    """Select the longest contiguous requested run with complete daily bars.
+
+    A retrospective tournament must never silently bridge over a missing market
+    session: doing so could skip stops, exits, or rebalance opportunities. When
+    a provider omits one or more daily bars, keep the longest contiguous block
+    where every strategy symbol and the benchmark have exactly one bar.
+    """
+
+    if not requested_sessions:
+        raise RuntimeError("retrospective tournament has no requested sessions")
+
+    requested = list(requested_sessions)
+    requested_set = set(requested)
+    required_symbols = sorted(
+        set([*(symbol.upper() for symbol in symbols), benchmark_symbol.upper()])
+    )
+    complete_by_symbol: dict[str, set[date]] = {}
+    missing_by_symbol: dict[str, list[str]] = {}
+
+    for symbol in required_symbols:
+        counts: dict[date, int] = {}
+        for row in daily_by_symbol.get(symbol, []):
+            session_day = _session_date(row.get("timestamp"))
+            if session_day in requested_set:
+                counts[session_day] = counts.get(session_day, 0) + 1
+        complete = {session_day for session_day, count in counts.items() if count == 1}
+        complete_by_symbol[symbol] = complete
+        missing_by_symbol[symbol] = [
+            session_day.isoformat()
+            for session_day in requested
+            if session_day not in complete
+        ]
+
+    common_complete = set(requested)
+    for complete in complete_by_symbol.values():
+        common_complete &= complete
+
+    runs: list[list[date]] = []
+    current: list[date] = []
+    for session_day in requested:
+        if session_day in common_complete:
+            current.append(session_day)
+            continue
+        if current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+
+    if not runs:
+        raise RuntimeError("no common complete daily-bar sessions in requested window")
+
+    # Prefer the longest complete run; on ties prefer the most recent segment.
+    selected = max(runs, key=lambda run: (len(run), run[-1]))
+    required_min = min(max(int(min_sessions), 1), len(requested))
+    if len(selected) < required_min:
+        raise RuntimeError(
+            "insufficient contiguous complete sessions for retrospective tournament: "
+            f"selected={len(selected)} required={required_min}"
+        )
+
+    selected_set = set(selected)
+    incomplete = [
+        session_day.isoformat()
+        for session_day in requested
+        if session_day not in common_complete
+    ]
+    trimmed_complete = [
+        session_day.isoformat()
+        for session_day in requested
+        if session_day in common_complete and session_day not in selected_set
+    ]
+    audit = {
+        "requested_start_session": requested[0].isoformat(),
+        "requested_end_session": requested[-1].isoformat(),
+        "requested_sessions": len(requested),
+        "effective_start_session": selected[0].isoformat(),
+        "effective_end_session": selected[-1].isoformat(),
+        "effective_sessions": len(selected),
+        "common_session_coverage": len(selected) / len(requested),
+        "incomplete_sessions": incomplete,
+        "trimmed_complete_sessions": trimmed_complete,
+        "missing_sessions_by_symbol": {
+            symbol: sessions
+            for symbol, sessions in missing_by_symbol.items()
+            if sessions
+        },
+        "selection_rule": "longest_contiguous_common_complete_daily_bar_run",
+    }
+    return selected, audit
 
 
 def run_capital_tournament(
@@ -49,10 +149,20 @@ def run_capital_tournament(
     execution, costs and conservative stop-before-take exit ordering.
     """
 
-    sessions = _sessions(start, end)
+    requested_sessions = _sessions(start, end)
     symbols = parse_universe_yaml(universe_path)
     daily_rows, market_summary = fetch_replay_daily_market_data(symbols)
     daily_by_symbol = group_by_symbol(daily_rows)
+    sessions, session_selection = _select_complete_session_run(
+        requested_sessions=requested_sessions,
+        daily_by_symbol=daily_by_symbol,
+        symbols=symbols,
+        benchmark_symbol="SPY",
+    )
+    market_summary = {
+        **market_summary,
+        "session_selection": session_selection,
+    }
 
     league_cfg = _load_json(league_config_path)
     if weekly_model_path is None:
@@ -219,6 +329,9 @@ def run_capital_tournament(
         "schema_version": 1,
         "evidence_type": "retrospective_point_in_time_capital_tournament",
         "prospective_evidence": False,
+        "requested_start_session": requested_sessions[0].isoformat(),
+        "requested_end_session": requested_sessions[-1].isoformat(),
+        "requested_sessions": len(requested_sessions),
         "start_session": sessions[0].isoformat(),
         "end_session": sessions[-1].isoformat(),
         "sessions": len(sessions),

@@ -84,9 +84,23 @@ def build_strategy_report(tournament: dict[str, Any]) -> dict[str, Any]:
         "prospective_evidence": False,
         "future_data_used": False,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "requested_start_session": tournament.get(
+            "requested_start_session", tournament.get("start_session")
+        ),
+        "requested_end_session": tournament.get(
+            "requested_end_session", tournament.get("end_session")
+        ),
+        "requested_sessions": int(
+            tournament.get("requested_sessions", tournament.get("sessions", 0)) or 0
+        ),
         "start_session": tournament.get("start_session"),
         "end_session": tournament.get("end_session"),
         "sessions": int(tournament.get("sessions", 0) or 0),
+        "session_selection": (
+            tournament.get("market_source", {}).get("session_selection", {})
+            if isinstance(tournament.get("market_source"), dict)
+            else {}
+        ),
         "initial_nav_usd": float(tournament.get("initial_nav_usd", 0.0) or 0.0),
         "focus_strategy": FOCUS_STRATEGY,
         "equity_curve": focus_curve,

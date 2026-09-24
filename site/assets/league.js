@@ -100,8 +100,16 @@ function liveStatusCard(data) {
 
 function retrospectiveStatusCard(data) {
   const ready = data?.status === 'RETROSPECTIVE_OK' && Array.isArray(data?.rows) && data.rows.length > 0;
+  const requestedSessions = Number(data?.requested_sessions);
+  const effectiveSessions = Number(data?.sessions);
+  const excludedSessions = Number.isFinite(requestedSessions) && Number.isFinite(effectiveSessions)
+    ? Math.max(0, requestedSessions - effectiveSessions)
+    : 0;
+  const coverageDetail = excludedSessions > 0
+    ? ` · ${excludedSessions} sesión${excludedSessions === 1 ? '' : 'es'} fuera de la ventana efectiva por cobertura`
+    : '';
   const detail = ready
-    ? `${data.start_session || '—'} → ${data.end_session || '—'} · ${data.sessions || 0} sesiones · ${money(data.initial_nav_usd)} iniciales por cartera`
+    ? `${data.start_session || '—'} → ${data.end_session || '—'} · ${data.sessions || 0} sesiones · ${money(data.initial_nav_usd)} iniciales por cartera${coverageDetail}`
     : 'El torneo retrospectivo aún no ha sido publicado.';
   return `<div class="trust-strip ${ready ? 'ok' : 'warn'}">
     <div><strong>${escapeHTML(ready ? 'Replay retrospectivo disponible' : String(data?.status || 'PENDIENTE'))}</strong></div>
@@ -528,10 +536,19 @@ async function renderRetrospective() {
   windowControl?.addEventListener('change', renderWindow);
   renderWindow();
 
-  const note = document.getElementById('replayNote');
+const note = document.getElementById('replayNote');
   if (note) {
+    const selection = data?.session_selection && typeof data.session_selection === 'object'
+      ? data.session_selection
+      : {};
+    const incomplete = Array.isArray(selection.incomplete_sessions)
+      ? selection.incomplete_sessions
+      : [];
+    const coverageNote = incomplete.length
+      ? ` Cobertura de mercado incompleta en ${incomplete.length} sesión${incomplete.length === 1 ? '' : 'es'}; se usa el bloque contiguo completo más largo y queda auditado en el reporte.`
+      : '';
     note.textContent = rows.length
-      ? `${data.methodology_note || 'Replay retrospectivo diagnóstico.'} El filtro cambia sólo la lectura visual; la tabla conserva el resultado de la ventana completa. Ningún resultado de esta sección cuenta como promoción ni evidencia prospectiva.`
+      ? `${data.methodology_note || 'Replay retrospectivo diagnóstico.'} El filtro cambia sólo la lectura visual; la tabla conserva el resultado de la ventana completa.${coverageNote} Ningún resultado de esta sección cuenta como promoción ni evidencia prospectiva.`
       : 'Aún no hay un reporte retrospectivo publicado.';
   }
 }
