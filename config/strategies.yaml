@@ -21,6 +21,7 @@ costs:
   broker_commission_bps: 2.0
   slippage_bps: 3.0
   platform_fee_bps_per_side: 24.0
+  sell_fee_bps: 3.0
 
 m3_context:
   enabled: true
