@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from contracts.strategy_contract import validate_strategy_registry
+from contracts.strategy_contract import (
+    validate_league_strategy_members,
+    validate_strategy_registry,
+)
 from contracts.trading import validate_shadow_execution_contract
 from floor.universe import parse_universe_yaml
 from league.capital_challenger import build_capital_challenger_targets
@@ -249,6 +252,13 @@ def run_league_eod(
     if str(league_cfg.get("mode")) != "shadow_paper":
         raise RuntimeError("Strategy League only supports shadow_paper mode")
     validate_shadow_execution_contract(league_cfg.get("execution", {}))
+    validate_league_strategy_members(
+        {
+            str(spec.get("id") or "")
+            for spec in league_cfg.get("members", [])
+            if isinstance(spec, dict) and spec.get("type") == "strategy"
+        }
+    )
 
     root = data_dir / "metrics" / "strategy_league"
     model_path = Path(str(league_cfg["weekly_model_path"]))
