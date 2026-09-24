@@ -13,6 +13,7 @@ from datetime import timedelta
 from datetime import timezone
 from typing import Any
 
+from floor.calendar import is_market_session
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from floor.schemas import MULTI_HORIZON_PREDICTION_CONTRACT
 from floor.universe import parse_universe_yaml
@@ -267,9 +268,27 @@ def _compute_coverage(total_symbols: int, observed_symbols: int) -> float:
     return observed_symbols / float(total_symbols)
 
 
-def _compute_retraining_schedule(last_review_at: Any, cadence_days: int, recommendation: str = "") -> dict[str, Any]:
+def _market_session_date_after(start: date, sessions: int) -> date:
+    cursor = start
+    remaining = max(int(sessions), 0)
+    while remaining:
+        cursor += timedelta(days=1)
+        if is_market_session(cursor):
+            remaining -= 1
+    return cursor
+
+
+def _compute_retraining_schedule(
+    last_review_at: Any,
+    cadence_days: int,
+    recommendation: str = "",
+    retrain_soon_sessions: int = 3,
+) -> dict[str, Any]:
     cadence_days = max(int(cadence_days), 1)
-    action_required_now = str(recommendation).upper() == "RETRAIN_NOW"
+    retrain_soon_sessions = max(int(retrain_soon_sessions), 1)
+    recommendation = str(recommendation).upper()
+    action_required_now = recommendation == "RETRAIN_NOW"
+    advisory_active = recommendation == "RETRAIN_SOON"
     last_dt = _parse_iso_datetime(last_review_at)
     if last_dt is None:
         return {
@@ -277,7 +296,16 @@ def _compute_retraining_schedule(last_review_at: Any, cadence_days: int, recomme
             "last_review_at": None,
             "next_review_at": None,
             "seconds_until_due": None,
-            "human_eta": "reentrenamiento requerido ahora" if action_required_now else "sin fecha de última revisión",
+            "recommended_retrain_by": None,
+            "recommended_retrain_window_sessions": (
+                retrain_soon_sessions if advisory_active else 0
+            ),
+            "retrain_advisory_active": advisory_active,
+            "human_eta": (
+                "reentrenamiento requerido ahora"
+                if action_required_now
+                else "sin fecha de última revisión"
+            ),
             "is_overdue": None,
             "action_required_now": action_required_now,
         }
@@ -290,13 +318,33 @@ def _compute_retraining_schedule(last_review_at: Any, cadence_days: int, recomme
     days = abs_seconds // 86400
     hours = (abs_seconds % 86400) // 3600
     prefix = "vencido hace" if is_overdue else "faltan"
-    human_eta = "reentrenamiento requerido ahora" if action_required_now else f"{prefix} {days}d {hours}h"
+
+    recommended_retrain_by: str | None = None
+    if advisory_active:
+        recommended_retrain_by = _market_session_date_after(
+            last_dt.date(),
+            retrain_soon_sessions,
+        ).isoformat()
+        human_eta = (
+            f"reentrenamiento recomendado antes de {recommended_retrain_by} "
+            f"({retrain_soon_sessions} sesiones)"
+        )
+    elif action_required_now:
+        recommended_retrain_by = last_dt.date().isoformat()
+        human_eta = "reentrenamiento requerido ahora"
+    else:
+        human_eta = f"{prefix} {days}d {hours}h"
 
     return {
         "cadence_days": cadence_days,
         "last_review_at": last_dt.isoformat(),
         "next_review_at": next_dt.isoformat(),
         "seconds_until_due": seconds_until_due,
+        "recommended_retrain_by": recommended_retrain_by,
+        "recommended_retrain_window_sessions": (
+            retrain_soon_sessions if advisory_active else 0
+        ),
+        "retrain_advisory_active": advisory_active,
         "human_eta": human_eta,
         "is_overdue": is_overdue,
         "action_required_now": action_required_now,
@@ -472,17 +520,29 @@ def _latest_model_artifact_timestamp(artifacts: dict[str, dict]) -> str | None:
     return latest.isoformat() if latest else None
 
 
-def _read_cadence_days(config_path: Path, default: int = 14) -> int:
+def _read_review_int(config_path: Path, key: str, default: int) -> int:
     if not config_path.exists():
         return default
     content = config_path.read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r"^\s*cadence_days\s*:\s*(\d+)\s*$", content, flags=re.MULTILINE)
+    match = re.search(
+        rf"^\s*{re.escape(key)}\s*:\s*(\d+)\s*$",
+        content,
+        flags=re.MULTILINE,
+    )
     if not match:
         return default
     try:
         return max(int(match.group(1)), 1)
     except ValueError:
         return default
+
+
+def _read_cadence_days(config_path: Path, default: int = 14) -> int:
+    return _read_review_int(config_path, "cadence_days", default)
+
+
+def _read_retrain_soon_sessions(config_path: Path, default: int = 3) -> int:
+    return _read_review_int(config_path, "retrain_soon_sessions", default)
 
 
 def _opportunity_row(row: dict) -> dict | None:
@@ -758,13 +818,27 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         json.dumps(_sanitize(incident_payload), indent=2),
         encoding="utf-8",
     )
-    retraining_cfg = _read_json(data_dir / "reports" / "retraining_config_snapshot.json", {})
-    if isinstance(retraining_cfg, dict):
-        cadence_days = int(((retraining_cfg.get("review", {}) if isinstance(retraining_cfg.get("review"), dict) else {}).get("cadence_days", 14) or 14))
-    else:
-        cadence_days = 14
+    retraining_cfg = _read_json(
+        data_dir / "reports" / "retraining_config_snapshot.json",
+        {},
+    )
+    review_cfg = (
+        retraining_cfg.get("review", {})
+        if isinstance(retraining_cfg, dict)
+        and isinstance(retraining_cfg.get("review"), dict)
+        else {}
+    )
+    cadence_days = int(review_cfg.get("cadence_days", 14) or 14)
+    retrain_soon_sessions = int(
+        review_cfg.get("retrain_soon_sessions", 3) or 3
+    )
     if cadence_days <= 0:
         cadence_days = _read_cadence_days(Path("config/retraining.yaml"), 14)
+    if retrain_soon_sessions <= 0:
+        retrain_soon_sessions = _read_retrain_soon_sessions(
+            Path("config/retraining.yaml"),
+            3,
+        )
 
     model_timeline = []
     for row in _read_jsonl(data_dir / "training" / "reviews.jsonl")[-30:]:
@@ -854,7 +928,12 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             "review_suite_version": review_summary.get("suite_version"),
             "serving_source": "champion_artifacts",
         },
-        "retraining_schedule": _compute_retraining_schedule(last_review_at, cadence_days, str(suite_recommendation)),
+        "retraining_schedule": _compute_retraining_schedule(
+            last_review_at,
+            cadence_days,
+            str(suite_recommendation),
+            retrain_soon_sessions,
+        ),
         "details": model_details,
     }
     (site_data_dir / "models.json").write_text(json.dumps(_sanitize(models), indent=2), encoding="utf-8")
