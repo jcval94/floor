@@ -44,7 +44,14 @@ def expected_cost_bps(global_cfg: dict) -> float:
 
 
 def range_is_tradeable(row: dict, global_cfg: dict) -> bool:
-    min_range_multiple = _safe_float(global_cfg["guards"]["min_range_vs_cost_multiple"])
+    guards = global_cfg.get("guards", {})
+    min_range_multiple = _safe_float(
+        guards.get(
+            "min_range_vs_roundtrip_cost_multiple",
+            guards.get("min_range_vs_cost_multiple", 1.0),
+        ),
+        1.0,
+    )
     range_pct = _safe_float(row.get("expected_range_d1")) / max(_safe_float(row.get("close"), 1.0), 1e-9)
     cost_pct = expected_cost_bps(global_cfg) / 10000.0
     return range_pct >= (cost_pct * min_range_multiple)
