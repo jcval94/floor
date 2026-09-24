@@ -12,6 +12,12 @@ on:
       - ".github/workflows/strategy_live.yml"
       - ".github/workflows/eod.yml"
       - ".github/workflows/monitoring.yml"
+      # A new Strategy League epoch can bootstrap its frozen Weekly artifact
+      # successfully while still waiting for the first valid EOD genesis.
+      # Wake the watchdog on league/genesis contract changes so it can request
+      # a guarded EOD immediately when the market-close window is already due.
+      - "config/strategy_league.json"
+      - "config/strategy_league_genesis_request.json"
   workflow_dispatch:
 
 permissions:
