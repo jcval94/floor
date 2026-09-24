@@ -74,8 +74,14 @@ function shortTemporalLabel(label) {
   }).format(date);
 }
 
-function chartValue(value, options = {}) {
+function numericValue(value) {
+  if (value === null || value === undefined || value === '') return NaN;
   const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : NaN;
+}
+
+function chartValue(value, options = {}) {
+  const numeric = numericValue(value);
   if (!Number.isFinite(numeric)) return '—';
   if (options.valueFormat === 'percent') {
     return `${(numeric * 100).toFixed(options.valueDigits ?? 1)}%`;
@@ -107,8 +113,8 @@ function xCoordinate(label, index, labels, left = 7, right = 95) {
 function referenceLines(yMin, yMax, options = {}) {
   const scaleY = (value) => 86 - ((value - yMin) / Math.max(yMax - yMin, 1e-9)) * 68;
   const lines = [];
-  if (Number.isFinite(Number(options.baseline))) {
-    const value = Number(options.baseline);
+  if (Number.isFinite(numericValue(options.baseline))) {
+    const value = numericValue(options.baseline);
     if (value >= yMin && value <= yMax) {
       const y = scaleY(value);
       lines.push(`<line class="chart-baseline" x1="7" y1="${y.toFixed(2)}" x2="95" y2="${y.toFixed(2)}" />`);
@@ -118,7 +124,7 @@ function referenceLines(yMin, yMax, options = {}) {
     }
   }
   (Array.isArray(options.thresholds) ? options.thresholds : []).forEach((threshold) => {
-    const value = Number(threshold?.value);
+    const value = numericValue(threshold?.value);
     if (!Number.isFinite(value) || value < yMin || value > yMax) return;
     const y = scaleY(value);
     lines.push(`<line class="chart-threshold" x1="7" y1="${y.toFixed(2)}" x2="95" y2="${y.toFixed(2)}" />`);
@@ -133,7 +139,7 @@ export function lineSvg(points = [], options = {}) {
   const clean = (Array.isArray(points) ? points : [])
     .map((p, idx) => ({
       idx,
-      value: Number(p?.value ?? p?.equity ?? p?.drawdown),
+      value: numericValue(p?.value ?? p?.equity ?? p?.drawdown),
       label: String(p?.label ?? p?.session ?? ''),
     }))
     .filter((p) => Number.isFinite(p.value));
@@ -141,7 +147,7 @@ export function lineSvg(points = [], options = {}) {
 
   const labels = clean.map((point, index) => point.label || String(index + 1));
   const referenceValues = [
-    ...(Number.isFinite(Number(options.baseline)) ? [Number(options.baseline)] : []),
+    ...(Number.isFinite(numericValue(options.baseline)) ? [numericValue(options.baseline)] : []),
     ...(Array.isArray(options.thresholds)
       ? options.thresholds.map((item) => Number(item?.value)).filter(Number.isFinite)
       : []),
@@ -197,7 +203,7 @@ export function multiLineSvg(series = [], options = {}) {
       points: (Array.isArray(entry?.points) ? entry.points : [])
         .map((point, pointIndex) => ({
           idx: pointIndex,
-          value: Number(point?.value ?? point?.nav ?? point?.equity),
+          value: numericValue(point?.value ?? point?.nav ?? point?.equity),
           label: String(point?.label ?? point?.session ?? ''),
         }))
         .filter((point) => Number.isFinite(point.value)),
@@ -222,7 +228,7 @@ export function multiLineSvg(series = [], options = {}) {
   const labelIndex = new Map(labels.map((label, index) => [label, index]));
 
   const allValues = cleanSeries.flatMap((entry) => entry.points.map((point) => point.value));
-  if (Number.isFinite(Number(options.baseline))) allValues.push(Number(options.baseline));
+  if (Number.isFinite(numericValue(options.baseline))) allValues.push(numericValue(options.baseline));
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
   const pad = Math.max((max - min) * 0.10, Math.max(Math.abs(max), 1) * 0.0025);
