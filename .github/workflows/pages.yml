@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["eod", "retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live"]
+    workflows: ["retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live"]
     types: [completed]
     branches: [main]
   push:
@@ -69,10 +69,6 @@ jobs:
 
             count=0
             case "$upstream_name" in
-              eod)
-                expected="eod-audit-${upstream_run_id}"
-                count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
-                ;;
               retrain_execute)
                 expected="retrain-execute-${upstream_run_id}"
                 count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
