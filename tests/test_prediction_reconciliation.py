@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from floor import prediction_reconciliation as reconciliation_module
+from floor.persistence_hydration import hydrate_persistence_from_jsonl
 from floor.prediction_reconciliation import reconcile_predictions
 from floor.storage import append_jsonl
 from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
@@ -102,3 +104,108 @@ def test_reconcile_predictions_skips_until_window_is_complete(tmp_path: Path) ->
     with sqlite3.connect(db_path) as conn:
         count = conn.execute("SELECT COUNT(*) FROM prediction_reconciliations").fetchone()[0]
     assert count == 0
+
+
+def test_reconciliation_uses_sqlite_pending_index_instead_of_full_jsonl_scans(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    _seed_market(data_dir / "market" / "market_data.sqlite", sessions=5)
+    append_jsonl(
+        data_dir / "predictions" / "AAPL.jsonl",
+        {
+            "batch_id": "2026-01-01:OPEN",
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "event_type": "OPEN",
+            "horizon": "d1",
+            "floor_value": 98.5,
+            "ceiling_value": 103.0,
+            "model_version": "v1",
+        },
+    )
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("durable full-ledger fallback should not be used")
+
+    monkeypatch.setattr(reconciliation_module, "_prediction_ledger", forbidden)
+    monkeypatch.setattr(reconciliation_module, "_reconciliation_ledger_keys", forbidden)
+
+    result = reconcile_predictions(data_dir)
+    assert result["pending"] == 1
+    assert result["reconciled"] == 1
+
+
+def test_reconciliation_with_no_pending_rows_does_not_scan_market_history(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    _seed_market(data_dir / "market" / "market_data.sqlite", sessions=5)
+    append_jsonl(
+        data_dir / "predictions" / "AAPL.jsonl",
+        {
+            "batch_id": "2026-01-01:OPEN",
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "event_type": "OPEN",
+            "horizon": "d1",
+            "floor_value": 98.5,
+            "ceiling_value": 103.0,
+            "model_version": "v1",
+        },
+    )
+    first = reconcile_predictions(data_dir)
+    assert first["reconciled"] == 1
+
+    def forbidden_market_scan(*_args, **_kwargs):
+        raise AssertionError("market history should not be loaded when pending=0")
+
+    monkeypatch.setattr(
+        reconciliation_module,
+        "_load_symbol_bars",
+        forbidden_market_scan,
+    )
+    second = reconcile_predictions(data_dir)
+    assert second == {"pending": 0, "reconciled": 0, "skipped": 0}
+
+
+def test_reconciliation_cache_is_reconstructable_from_durable_jsonl(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    _seed_market(data_dir / "market" / "market_data.sqlite", sessions=5)
+    append_jsonl(
+        data_dir / "predictions" / "AAPL.jsonl",
+        {
+            "batch_id": "2026-01-01:OPEN",
+            "symbol": "AAPL",
+            "as_of": "2026-01-01T12:00:00+00:00",
+            "event_type": "OPEN",
+            "horizon": "d1",
+            "floor_value": 98.5,
+            "ceiling_value": 103.0,
+            "model_version": "v1",
+        },
+    )
+    assert reconcile_predictions(data_dir)["reconciled"] == 1
+
+    db_path = data_dir / "persistence" / "app.sqlite"
+    db_path.unlink()
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(db_path) + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
+
+    result = hydrate_persistence_from_jsonl(data_dir)
+    assert result["reconciliation_rows_seen"] == 1
+    with sqlite3.connect(db_path) as conn:
+        prediction_keys = conn.execute(
+            "SELECT prediction_key FROM predictions"
+        ).fetchall()
+        reconciliations = conn.execute(
+            "SELECT COUNT(*) FROM prediction_reconciliations"
+        ).fetchone()
+    assert prediction_keys and prediction_keys[0][0]
+    assert reconciliations and reconciliations[0] == 1
