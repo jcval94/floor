@@ -33,8 +33,9 @@ Classic range models have two distinct geometries:
 
 New classic artifacts must emit `params.risk_geometry`. The current contract
 calibrates additive downside/upside delta residuals on the earlier chronological
-half of validation and evaluates them on the later half. The target is 80%
-marginal coverage per side.
+validation block and evaluates them on the later block. The split is made by
+whole observation dates, and calibration labels whose target end crosses the
+evaluation boundary are purged. The target is 80% marginal coverage per side.
 
 Never label the central classic boundaries as q10/q90 unless a future model
 actually trains and validates those quantiles. `PredictionRecord` therefore
