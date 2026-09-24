@@ -8,7 +8,7 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any
 
-from floor.persistence_db import persist_payload
+from floor.persistence_db import PersistenceWriter
 from floor.prediction_identity import prediction_key, stable_prediction_id
 from floor.storage import load_jsonl_rows
 
@@ -306,80 +306,79 @@ def reconcile_predictions(data_dir: Path) -> dict[str, int]:
     now = dt.datetime.now(tz=timezone.utc).isoformat()
     durable_keys_by_symbol: dict[str, set[str]] = {}
 
-    for pred, as_of_date in parsed_pending:
-        horizon = str(pred["horizon"])
-        required_sessions = _REQUIRED_SESSIONS[horizon]
-        symbol = str(pred["symbol"]).upper()
-        bars = symbol_bars.get(symbol) or []
-        if not bars:
-            skipped += 1
-            continue
+    # Batch newly matured reconciliations on one initialized SQLite
+    # connection; durable JSONL continues to be written first.
+    with PersistenceWriter(db_path, commit_every=500) as writer:
+        for pred, as_of_date in parsed_pending:
+            horizon = str(pred["horizon"])
+            required_sessions = _REQUIRED_SESSIONS[horizon]
+            symbol = str(pred["symbol"]).upper()
+            bars = symbol_bars.get(symbol) or []
+            if not bars:
+                skipped += 1
+                continue
 
-        future = [bar for bar in bars if bar["date"] > as_of_date]
-        if len(future) < required_sessions:
-            skipped += 1
-            continue
+            future = [bar for bar in bars if bar["date"] > as_of_date]
+            if len(future) < required_sessions:
+                skipped += 1
+                continue
 
-        window = future[:required_sessions]
-        floor_bar = min(window, key=lambda item: float(item["low"]))
-        ceiling_bar = max(window, key=lambda item: float(item["high"]))
-        realized_floor = float(floor_bar["low"])
-        realized_ceiling = float(ceiling_bar["high"])
-        predicted_floor = _optional_float(pred.get("floor_value"))
-        predicted_ceiling = _optional_float(pred.get("ceiling_value"))
+            window = future[:required_sessions]
+            floor_bar = min(window, key=lambda item: float(item["low"]))
+            ceiling_bar = max(window, key=lambda item: float(item["high"]))
+            realized_floor = float(floor_bar["low"])
+            realized_ceiling = float(ceiling_bar["high"])
+            predicted_floor = _optional_float(pred.get("floor_value"))
+            predicted_ceiling = _optional_float(pred.get("ceiling_value"))
 
-        m3_pred_week = (
-            _optional_int(pred.get("floor_week_m3")) if horizon == "m3" else None
-        )
-        m3_real_week = _week_index_for_floor(window) if horizon == "m3" else None
-        key = str(pred["prediction_key"])
-        payload: dict[str, Any] = {
-            "prediction_id": stable_prediction_id(key),
-            "prediction_key": key,
-            "batch_id": pred.get("batch_id"),
-            "symbol": symbol,
-            "horizon": horizon,
-            "predicted_as_of": pred["as_of"],
-            "resolved_at": now,
-            "model_version": pred.get("model_version") or None,
-            "window_start": window[0]["ts_utc"],
-            "window_end": window[-1]["ts_utc"],
-            "window_sessions": len(window),
-            "predicted_floor": predicted_floor,
-            "predicted_ceiling": predicted_ceiling,
-            "realized_floor": realized_floor,
-            "realized_ceiling": realized_ceiling,
-            "abs_error_floor": (
-                None if predicted_floor is None else abs(predicted_floor - realized_floor)
-            ),
-            "abs_error_ceiling": (
-                None if predicted_ceiling is None else abs(predicted_ceiling - realized_ceiling)
-            ),
-            "m3_predicted_week": m3_pred_week,
-            "m3_realized_week": m3_real_week,
-            "m3_week_hit": (
-                m3_pred_week == m3_real_week
-                if m3_pred_week is not None and m3_real_week is not None
-                else None
-            ),
-            "realized_floor_at": floor_bar["ts_utc"],
-            "realized_ceiling_at": ceiling_bar["ts_utc"],
-        }
+            m3_pred_week = (
+                _optional_int(pred.get("floor_week_m3")) if horizon == "m3" else None
+            )
+            m3_real_week = _week_index_for_floor(window) if horizon == "m3" else None
+            key = str(pred["prediction_key"])
+            payload: dict[str, Any] = {
+                "prediction_id": stable_prediction_id(key),
+                "prediction_key": key,
+                "batch_id": pred.get("batch_id"),
+                "symbol": symbol,
+                "horizon": horizon,
+                "predicted_as_of": pred["as_of"],
+                "resolved_at": now,
+                "model_version": pred.get("model_version") or None,
+                "window_start": window[0]["ts_utc"],
+                "window_end": window[-1]["ts_utc"],
+                "window_sessions": len(window),
+                "predicted_floor": predicted_floor,
+                "predicted_ceiling": predicted_ceiling,
+                "realized_floor": realized_floor,
+                "realized_ceiling": realized_ceiling,
+                "abs_error_floor": (
+                    None if predicted_floor is None else abs(predicted_floor - realized_floor)
+                ),
+                "abs_error_ceiling": (
+                    None if predicted_ceiling is None else abs(predicted_ceiling - realized_ceiling)
+                ),
+                "m3_predicted_week": m3_pred_week,
+                "m3_realized_week": m3_real_week,
+                "m3_week_hit": (
+                    m3_pred_week == m3_real_week
+                    if m3_pred_week is not None and m3_real_week is not None
+                    else None
+                ),
+                "realized_floor_at": floor_bar["ts_utc"],
+                "realized_ceiling_at": ceiling_bar["ts_utc"],
+            }
 
-        if symbol not in durable_keys_by_symbol:
-            durable_keys_by_symbol[symbol] = _reconciliation_symbol_keys(data_dir, symbol)
-        appended = _append_reconciliation_once(
-            data_dir,
-            payload,
-            durable_keys_by_symbol[symbol],
-        )
-        persist_payload(
-            db_path=db_path,
-            stream="prediction_reconciliation",
-            payload=payload,
-        )
-        if appended:
-            reconciled += 1
+            if symbol not in durable_keys_by_symbol:
+                durable_keys_by_symbol[symbol] = _reconciliation_symbol_keys(data_dir, symbol)
+            appended = _append_reconciliation_once(
+                data_dir,
+                payload,
+                durable_keys_by_symbol[symbol],
+            )
+            writer.persist("prediction_reconciliation", payload)
+            if appended:
+                reconciled += 1
 
     logger.info(
         "[reconcile] source=%s ledger=%s already=%s pending=%s reconciled=%s skipped=%s "

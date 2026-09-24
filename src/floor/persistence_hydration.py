@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from floor.persistence_db import init_persistence_db, persist_payload
+from floor.persistence_db import PersistenceWriter
 from floor.prediction_identity import stable_prediction_id
 from floor.storage import load_jsonl_rows
 
@@ -19,9 +19,8 @@ def _legacy_batch_id(stream: str, payload: dict[str, Any]) -> str:
     return f"legacy:{as_of}"
 
 
-def _replay_stream(data_dir: Path, stream: str) -> tuple[int, int]:
+def _replay_stream(data_dir: Path, stream: str, writer: PersistenceWriter) -> tuple[int, int]:
     stream_dir = data_dir / stream
-    db_path = data_dir / "persistence" / "app.sqlite"
     seen = 0
     inserted = 0
     if not stream_dir.exists():
@@ -35,14 +34,13 @@ def _replay_stream(data_dir: Path, stream: str) -> tuple[int, int]:
             if not str(payload.get("batch_id") or "").strip():
                 payload["batch_id"] = _legacy_batch_id(stream, payload)
             seen += 1
-            if persist_payload(db_path=db_path, stream=stream, payload=payload):
+            if writer.persist(stream, payload):
                 inserted += 1
     return seen, inserted
 
 
-def _replay_reconciliations(data_dir: Path) -> tuple[int, int]:
+def _replay_reconciliations(data_dir: Path, writer: PersistenceWriter) -> tuple[int, int]:
     directory = data_dir / "predictions" / "reconciliations"
-    db_path = data_dir / "persistence" / "app.sqlite"
     seen = 0
     inserted = 0
     if not directory.exists():
@@ -59,11 +57,7 @@ def _replay_reconciliations(data_dir: Path) -> tuple[int, int]:
             if payload.get("prediction_id") is None:
                 payload["prediction_id"] = stable_prediction_id(key)
             seen += 1
-            if persist_payload(
-                db_path=db_path,
-                stream="prediction_reconciliation",
-                payload=payload,
-            ):
+            if writer.persist("prediction_reconciliation", payload):
                 inserted += 1
     return seen, inserted
 
@@ -72,10 +66,12 @@ def hydrate_persistence_from_jsonl(data_dir: Path) -> dict[str, int]:
     """Replay durable ledgers into the reconstructable SQLite query/index cache."""
 
     db_path = data_dir / "persistence" / "app.sqlite"
-    init_persistence_db(db_path)
-    prediction_seen, prediction_inserted = _replay_stream(data_dir, "predictions")
-    signal_seen, signal_inserted = _replay_stream(data_dir, "signals")
-    reconciliation_seen, reconciliation_inserted = _replay_reconciliations(data_dir)
+    # One schema migration and connection for the entire rebuild; bounded
+    # commits avoid holding an enormous write transaction on large ledgers.
+    with PersistenceWriter(db_path, commit_every=1_000) as writer:
+        prediction_seen, prediction_inserted = _replay_stream(data_dir, "predictions", writer)
+        signal_seen, signal_inserted = _replay_stream(data_dir, "signals", writer)
+        reconciliation_seen, reconciliation_inserted = _replay_reconciliations(data_dir, writer)
     return {
         "prediction_rows_seen": prediction_seen,
         "prediction_rows_inserted": prediction_inserted,
