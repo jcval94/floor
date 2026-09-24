@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "action": "BOOTSTRAP_CLEAN_GENESIS",
-  "league_id": "strategy_league_v8_net_alpha_10k",
-  "freeze_id": "capital_challenger_v1_refrozen_20260924_v8",
+  "league_id": "strategy_league_v9_net_target_reversal_10k",
+  "freeze_id": "capital_challenger_v1_refrozen_20260924_v9",
   "requested_on": "2026-09-24",
-  "reason": "Create a clean epoch for cost-aware alpha gating and lower-turnover strategy semantics. Do not inherit v7 evidence."
+  "reason": "Create a clean epoch for a Weekly target trained net of the exact 61 bps round-trip cost, relaxed Mean Reversion reversal confirmation, and Cross-Horizon quarantine from capital allocation. Do not inherit v8 evidence."
 }
