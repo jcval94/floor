@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_STRATEGY_CONTRACTS_PATH = Path("config/strategy_contracts.json")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_STRATEGY_CONTRACTS_PATH = REPO_ROOT / "config" / "strategy_contracts.json"
 
 
 def load_strategy_contracts(
