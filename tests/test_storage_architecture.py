@@ -284,6 +284,7 @@ def test_retrain_execute_requires_explicit_human_authorization() -> None:
     assert "tasks_for_auto_retrain_requested" in workflow
     assert "MANUAL_APPROVAL" in workflow
     assert "MANUAL_FORCE" in workflow
+    assert "AUDITED_MANUAL_FORCE" in workflow
     assert "AUTHORIZED_PENDING_EXECUTION" in workflow
     assert 'control["execution"] = "COMPLETED"' in workflow
     assert "make init-db-schemas" in workflow
