@@ -37,6 +37,10 @@ class HorizonForecast:
     breach_prob: float
     expected_return: float
     expected_range: float
+    risk_floor: float | None = None
+    risk_ceiling: float | None = None
+    risk_geometry_available: bool = False
+    risk_target_marginal_coverage: float | None = None
 
 
 @dataclass(frozen=True)
