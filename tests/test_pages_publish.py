@@ -8,6 +8,7 @@ import pytest
 
 from utils.pages_publish import (
     _inject_audit_script,
+    _load_state_snapshot,
     _monitoring_warning_codes,
     _normalize_monitoring_payloads,
     model_suite_compatibility,
@@ -280,6 +281,11 @@ def test_pages_workflow_publishes_branch_head_not_upstream_start_sha() -> None:
     assert "utils.pages_publish" in workflow
     assert "utils.pages_security" in workflow
     assert "workflow_run.head_sha || github.sha" not in workflow
+    assert "Pin release-backed publication inputs" in workflow
+    assert "RUNTIME_STATE_PAYLOAD_PIN" in workflow
+    assert "RESEARCH_STATE_PAYLOAD_PIN" in workflow
+    assert "MONITORING_STATE_PAYLOAD_PIN" in workflow
+    assert "--state-manifest" in workflow
 
 
 def test_monitoring_audit_separates_live_health_from_historical_reports(
@@ -363,3 +369,59 @@ def test_monitoring_audit_is_ok_when_live_and_diagnostic_evidence_are_current(
     assert audit["operational_health"]["status"] == "OK"
     assert audit["diagnostic_reports"]["status"] == "OK"
     assert _monitoring_warning_codes(audit) == []
+
+
+
+def test_state_snapshot_manifest_is_commit_pinned(tmp_path: Path) -> None:
+    manifest = tmp_path / "state.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_commit": "abc123",
+                "sources": {
+                    "runtime": {
+                        "payload": "floor-runtime-state.tar.gz.run-10-a1",
+                        "mode": "versioned_immutable",
+                    },
+                    "research": {
+                        "payload": "legacy",
+                        "mode": "legacy_compatibility",
+                    },
+                    "monitoring": {
+                        "payload": "public_metrics.json.run-11-a1",
+                        "mode": "versioned_immutable",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = _load_state_snapshot(manifest, source_commit="abc123")
+    assert payload["mode"] == "pinned_release_generations"
+    assert payload["sources"]["runtime"]["payload"].endswith(".run-10-a1")
+
+    with pytest.raises(RuntimeError, match="manifest commit mismatch"):
+        _load_state_snapshot(manifest, source_commit="different")
+
+
+def test_state_snapshot_manifest_requires_runtime_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "state.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_commit": "abc123",
+                "sources": {
+                    "runtime": {"payload": "missing", "mode": "missing"},
+                    "research": {"payload": "legacy", "mode": "legacy_compatibility"},
+                    "monitoring": {"payload": "legacy", "mode": "legacy_compatibility"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="requires runtime state"):
+        _load_state_snapshot(manifest, source_commit="abc123")
