@@ -247,7 +247,7 @@ def run_intraday_cycle(
                         cfg.data_dir / "signals" / f"{symbol}.jsonl",
                         signal,
                         batch_id=batch_id,
-                    writer=writer,
+                        writer=writer,
                     )
 
     _write_input_snapshot_marker(
