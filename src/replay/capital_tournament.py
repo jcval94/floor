@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ from league.engine import (
 from league.market_features import _feature_row
 from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
 from replay.historical_close import build_historical_close_feature_rows
-from replay.point_in_time import group_by_symbol
+from replay.point_in_time import _session_date, group_by_symbol
 from replay.runner import (
     _bar_for_day,
     _bars_through,
@@ -27,6 +28,68 @@ from replay.runner import (
 )
 from replay.yahoo_source import fetch_replay_daily_market_data
 from strategies.run_strategies import load_simple_yaml
+
+
+def _complete_market_sessions(
+    sessions: list[date],
+    daily_by_symbol: dict[str, list[dict[str, Any]]],
+    symbols: list[str],
+    *,
+    benchmark_symbol: str = "SPY",
+    max_missing_fraction: float = 0.05,
+) -> tuple[list[date], list[dict[str, Any]]]:
+    """Keep only sessions with one observable daily bar for every participant.
+
+    A missing asset bar is never forward-filled because doing so would distort
+    both execution and mark-to-market. A small number of incomplete sessions
+    may be skipped transparently; larger gaps fail closed as a data-quality
+    problem instead of silently shrinking the replay.
+    """
+
+    requested = sorted(
+        set([*(symbol.upper() for symbol in symbols), benchmark_symbol.upper()])
+    )
+    available = {
+        symbol: {
+            _session_date(row.get("timestamp"))
+            for row in daily_by_symbol.get(symbol, [])
+            if row.get("timestamp")
+        }
+        for symbol in requested
+    }
+
+    usable: list[date] = []
+    skipped: list[dict[str, Any]] = []
+    for session_day in sessions:
+        missing = [
+            symbol
+            for symbol in requested
+            if session_day not in available.get(symbol, set())
+        ]
+        if missing:
+            skipped.append(
+                {
+                    "session": session_day.isoformat(),
+                    "missing_symbols": missing,
+                }
+            )
+        else:
+            usable.append(session_day)
+
+    allowed_missing = max(
+        2,
+        math.ceil(len(sessions) * max(0.0, float(max_missing_fraction))),
+    )
+    if len(skipped) > allowed_missing:
+        raise RuntimeError(
+            "capital tournament market coverage too incomplete: "
+            f"requested={len(sessions)} usable={len(usable)} "
+            f"skipped={len(skipped)} allowed={allowed_missing} "
+            f"examples={skipped[:3]}"
+        )
+    if not usable:
+        raise RuntimeError("capital tournament has no complete market sessions")
+    return usable, skipped
 
 
 def run_capital_tournament(
@@ -49,10 +112,22 @@ def run_capital_tournament(
     execution, costs and conservative stop-before-take exit ordering.
     """
 
-    sessions = _sessions(start, end)
+    requested_sessions = _sessions(start, end)
     symbols = parse_universe_yaml(universe_path)
     daily_rows, market_summary = fetch_replay_daily_market_data(symbols)
     daily_by_symbol = group_by_symbol(daily_rows)
+    sessions, skipped_sessions = _complete_market_sessions(
+        requested_sessions,
+        daily_by_symbol,
+        symbols,
+        benchmark_symbol="SPY",
+    )
+    market_summary = {
+        **market_summary,
+        "requested_sessions": len(requested_sessions),
+        "usable_sessions": len(sessions),
+        "skipped_incomplete_sessions": skipped_sessions,
+    }
 
     league_cfg = _load_json(league_config_path)
     if weekly_model_path is None:
