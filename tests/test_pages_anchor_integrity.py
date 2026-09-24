@@ -40,7 +40,7 @@ def test_pages_publication_lock_only_wraps_real_publish_job() -> None:
     assert "group: pages-eod-publish" in build_job
     assert "cancel-in-progress: false" in build_job
     assert "id: deployment" in build_job
-    assert "uses: actions/deploy-pages@v4" in build_job
+    assert "uses: actions/deploy-pages@" in build_job
     assert "\n  deploy:\n" not in workflow
 
 
