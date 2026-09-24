@@ -20,6 +20,7 @@ from contracts.trading import (
 )
 from floor.schemas import PredictionRecord
 from league.engine import advance_league, build_leaderboard, initialize_league
+from models.temporal_cv import purged_chronological_calibration_split
 from models.train_classic_horizons import run as run_classic_horizons
 from strategies.common import geometry
 from strategies.registry import STRATEGY_GENERATORS
@@ -151,6 +152,53 @@ def test_strategy_geometry_uses_central_targets_and_separate_risk_boundary() -> 
     assert result["long_rr"] == pytest.approx(1.0)
     assert result["short_rr"] == pytest.approx(1.0 / 3.0)
     assert result["geometry_semantics"] == "central_plus_calibrated_risk"
+
+
+def test_risk_calibration_split_keeps_dates_together_and_purges_crossing_labels() -> None:
+    rows = [
+        {
+            "timestamp": "2026-01-01T20:00:00+00:00",
+            "symbol": symbol,
+            "target_end_date_d1": "2026-01-02",
+        }
+        for symbol in ("AAA", "BBB")
+    ]
+    rows += [
+        {
+            "timestamp": "2026-01-02T20:00:00+00:00",
+            "symbol": symbol,
+            "target_end_date_d1": "2026-01-04",
+        }
+        for symbol in ("AAA", "BBB")
+    ]
+    rows += [
+        {
+            "timestamp": "2026-01-03T20:00:00+00:00",
+            "symbol": symbol,
+            "target_end_date_d1": "2026-01-04",
+        }
+        for symbol in ("AAA", "BBB")
+    ]
+    rows += [
+        {
+            "timestamp": "2026-01-04T20:00:00+00:00",
+            "symbol": symbol,
+            "target_end_date_d1": "2026-01-05",
+        }
+        for symbol in ("AAA", "BBB")
+    ]
+
+    calibration, evaluation = purged_chronological_calibration_split(
+        rows,
+        target_end_field="target_end_date_d1",
+    )
+
+    calibration_dates = {row["timestamp"][:10] for row in calibration}
+    evaluation_dates = {row["timestamp"][:10] for row in evaluation}
+    assert calibration_dates == {"2026-01-01"}
+    assert evaluation_dates == {"2026-01-03", "2026-01-04"}
+    assert {row["symbol"] for row in calibration} == {"AAA", "BBB"}
+    assert calibration_dates.isdisjoint(evaluation_dates)
 
 
 def test_new_classic_training_emits_risk_geometry_and_model_contract(
