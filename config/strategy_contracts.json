@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "registered_strategy_requires_contract": true,
+    "shadow_long_only_evidence_cannot_promote_bidirectional_variant": true
+  },
+  "strategies": {
+    "weekly_opportunity_ridge": {
+      "research_action_space": ["BUY", "SELL", "HOLD"],
+      "league_evaluation_variant": "long_only_projection",
+      "sell_semantics_in_league": "exit_or_no_position",
+      "canonical_variant": "bidirectional",
+      "league_evidence_can_promote_canonical_variant": false
+    },
+    "breakout_protected_by_floor": {
+      "research_action_space": ["BUY", "SELL", "HOLD"],
+      "league_evaluation_variant": "long_only_projection",
+      "sell_semantics_in_league": "exit_or_no_position",
+      "canonical_variant": "bidirectional",
+      "league_evidence_can_promote_canonical_variant": false
+    },
+    "mean_reversion_floor_w1": {
+      "research_action_space": ["BUY", "SELL", "HOLD"],
+      "league_evaluation_variant": "long_only_projection",
+      "sell_semantics_in_league": "exit_or_no_position",
+      "canonical_variant": "bidirectional",
+      "league_evidence_can_promote_canonical_variant": false
+    },
+    "cross_horizon_asymmetry": {
+      "research_action_space": ["BUY", "SELL", "HOLD"],
+      "league_evaluation_variant": "long_only_projection",
+      "sell_semantics_in_league": "exit_or_no_position",
+      "canonical_variant": "bidirectional",
+      "league_evidence_can_promote_canonical_variant": false
+    }
+  }
+}
