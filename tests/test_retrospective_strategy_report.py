@@ -141,3 +141,14 @@ def test_capital_tournament_uses_daily_close_history_for_long_windows() -> None:
     assert "intraday_by_symbol" not in runner
     assert "def fetch_replay_daily_market_data" in source
     assert '"checkpoint_mode": "completed_daily_bar_at_close"' in source
+    assert '"league_id": str(league_cfg["league_id"])' in runner
+
+
+def test_tournament_workflow_uses_effective_league_id_for_attribution() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "capital_challenger_tournament.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'print(payload["league_id"])' in workflow
+    assert '--history "$out/runs/$league_id/history.jsonl"' in workflow
+    assert 'capital_tournament_$(echo' not in workflow
