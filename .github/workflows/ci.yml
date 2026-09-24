@@ -40,7 +40,7 @@ jobs:
         run: |
           PYTHONPATH=src python -m league.freeze \
             --league-config config/strategy_league.json \
-            --freeze config/frozen/capital_challenger_v1_v8.json
+            --freeze config/frozen/capital_challenger_v1_v9.json
 
       - name: Lint
         run: |
