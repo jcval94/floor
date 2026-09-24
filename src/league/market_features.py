@@ -127,6 +127,14 @@ def build_league_market_snapshot(
             pred = horizons[horizon] or {}
             row[f"floor_{horizon}"] = pred.get("floor_value")
             row[f"ceiling_{horizon}"] = pred.get("ceiling_value")
+            row[f"risk_floor_{horizon}"] = pred.get("risk_floor_value")
+            row[f"risk_ceiling_{horizon}"] = pred.get("risk_ceiling_value")
+            row[f"risk_geometry_available_{horizon}"] = bool(
+                pred.get("risk_geometry_available", False)
+            )
+            row[f"risk_target_marginal_coverage_{horizon}"] = pred.get(
+                "risk_target_marginal_coverage"
+            )
             row[f"floor_time_bucket_{horizon}"] = pred.get("floor_time_bucket")
             row[f"ceiling_time_bucket_{horizon}"] = pred.get("ceiling_time_bucket")
             if horizon == "d1":
