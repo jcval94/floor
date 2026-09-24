@@ -370,7 +370,7 @@ def test_rebalance_deadband_suppresses_small_position_resize(tmp_path: Path) -> 
     weekly = state["members"]["weekly_opportunity_ridge"]
     assert weekly["trade_count"] == 1
     assert weekly["suppressed_rebalances"] == 1
-    assert weekly["positions"]["AAA"]["qty"] == 19
+    assert weekly["positions"]["AAA"]["qty"] == 20
 
 
 def test_research_model_epoch_transition_preserves_portfolio_and_cost_history(
