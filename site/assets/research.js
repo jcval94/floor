@@ -209,12 +209,12 @@ async function renderOOS() {
       <td class="negative">${pct(row.max_drawdown)}</td>
       <td>${escapeHTML(String(row.trades ?? '—'))}</td>
       <td>${escapeHTML(`${row.positive_folds ?? 0}/${row.folds ?? data.folds ?? 0}`)}</td>
-      <td>${money(row.costs_paid_per_10k_fold_sum)}</td>
+      <td>${money(row.costs_paid_continuous ?? row.costs_paid_per_10k_fold_sum)}</td>
     </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><strong>Sin resultados walk-forward.</strong></div></td></tr>';
   }
   const note = document.getElementById('oosNote');
   if (note) note.textContent = running
-    ? 'Model-OOS: cada fold entrena únicamente con observaciones y targets maduros anteriores al inicio del fold. La configuración de estrategia fue seleccionada retrospectivamente, así que esto no sustituye la Strategy League prospectiva. El filtro temporal cambia sólo la visualización.'
+    ? 'Model-OOS: cada fold entrena únicamente con pasado, pero cash, posiciones y costos continúan en una sola cartera entre folds; cambiar el modelo no liquida ni reinicia la cuenta. La configuración de estrategia fue seleccionada retrospectivamente, así que esto no sustituye la Strategy League prospectiva. El filtro temporal cambia sólo la visualización.'
     : 'Pendiente de ejecución.';
 }
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "current_league_id": "strategy_league_v7_clean_genesis_10k",
+  "current_league_id": "strategy_league_v8_net_alpha_10k",
   "epochs": [
     {
       "league_id": "strategy_league_v6_all_strategies_10k",
@@ -13,11 +13,22 @@
     },
     {
       "league_id": "strategy_league_v7_clean_genesis_10k",
-      "status": "DECLARED_CLEAN_EPOCH",
+      "status": "CLOSED_STRATEGY_SEMANTICS_CHANGE",
       "declared_on": "2026-09-22",
       "freeze_id": "capital_challenger_v1_refrozen_20260922_v7",
       "strategy_parameters_changed": false,
-      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for this league. No v6 sessions are inherited."
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for this league. No v6 sessions are inherited.",
+      "closed_on": "2026-09-24",
+      "close_reason": "Upstream strategy entry semantics and turnover controls changed; do not stitch v7 evidence into v8."
+    },
+    {
+      "league_id": "strategy_league_v8_net_alpha_10k",
+      "status": "DECLARED_CLEAN_EPOCH",
+      "declared_on": "2026-09-24",
+      "freeze_id": "capital_challenger_v1_refrozen_20260924_v8",
+      "strategy_parameters_changed": true,
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v8. No v7 sessions are inherited.",
+      "change_summary": "Cost-aware directional alpha gates, Floor/Ceiling no longer used as expected edge, Weekly turnover hysteresis, 10-session review cadence, and rebalance deadbands."
     }
   ]
 }

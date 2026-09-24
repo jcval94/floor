@@ -27,8 +27,106 @@ def round_trip_cost_bps(cfg: dict) -> float:
     return 2.0 * (broker + slippage + platform_fee_bps_per_side(cfg)) + sell_fee
 
 
+def round_trip_cost_pct(cfg: dict) -> float:
+    return round_trip_cost_bps(cfg) / 10000.0
+
+
+def alpha_after_costs(gross_alpha_pct: float, cfg: dict) -> dict[str, float]:
+    """Evaluate directional alpha after the exact round-trip friction contract.
+
+    This function deliberately does not inspect floor/ceiling geometry. Those
+    boundaries describe payoff/risk space, not expected return.
+    """
+
+    gross = max(0.0, to_float(gross_alpha_pct))
+    cost = round_trip_cost_pct(cfg)
+    return {
+        "gross_alpha_pct": gross,
+        "cost_pct": cost,
+        "net_alpha_pct": gross - cost,
+    }
+
+
+def alpha_hurdle(
+    gross_alpha_pct: float,
+    cfg: dict,
+    strategy_cfg: dict,
+) -> tuple[bool, dict[str, float]]:
+    entry = strategy_cfg.get("entry", {})
+    alpha = alpha_after_costs(gross_alpha_pct, cfg)
+    min_net = to_float(
+        entry.get(
+            "min_net_alpha_pct",
+            entry.get(
+                "min_net_edge_pct",
+                cfg.get("guards", {}).get("min_net_edge_pct", 0.0),
+            ),
+        ),
+        0.0,
+    )
+    min_multiple = max(
+        0.0,
+        to_float(
+            entry.get(
+                "min_alpha_to_cost_multiple",
+                cfg.get("guards", {}).get(
+                    "min_range_vs_roundtrip_cost_multiple",
+                    1.0,
+                ),
+            ),
+            1.0,
+        ),
+    )
+    alpha["min_net_alpha_pct"] = min_net
+    alpha["min_alpha_to_cost_multiple"] = min_multiple
+    alpha["required_gross_alpha_pct"] = max(
+        alpha["cost_pct"] * min_multiple,
+        alpha["cost_pct"] + min_net,
+    )
+    return (
+        alpha["net_alpha_pct"] >= min_net
+        and alpha["gross_alpha_pct"] >= alpha["cost_pct"] * min_multiple,
+        alpha,
+    )
+
+
+def payoff_room_clears_cost(
+    payoff_room_pct: float,
+    cfg: dict,
+    strategy_cfg: dict | None = None,
+) -> bool:
+    """Require enough target room to make execution friction economically sane.
+
+    This is a feasibility gate only. It must never be described as expected
+    alpha or expected return.
+    """
+
+    strategy_cfg = strategy_cfg or {}
+    entry = strategy_cfg.get("entry", {})
+    multiple = max(
+        0.0,
+        to_float(
+            entry.get(
+                "min_payoff_to_cost_multiple",
+                cfg.get("guards", {}).get(
+                    "min_range_vs_roundtrip_cost_multiple",
+                    1.5,
+                ),
+            ),
+            1.5,
+        ),
+    )
+    return max(0.0, to_float(payoff_room_pct)) >= round_trip_cost_pct(cfg) * multiple
+
+
 def net_edge(gross_pct: float, cfg: dict) -> float:
-    return gross_pct - round_trip_cost_bps(cfg) / 10000.0
+    """Backward-compatible alias for old callers.
+
+    New strategy code should use alpha_hurdle/alpha_after_costs and reserve
+    floor/ceiling distances for payoff geometry.
+    """
+
+    return alpha_after_costs(gross_pct, cfg)["net_alpha_pct"]
 
 
 def geometry(row: dict, horizon: str) -> dict[str, Any]:

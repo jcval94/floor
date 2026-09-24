@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "action": "BOOTSTRAP_CLEAN_GENESIS",
-  "league_id": "strategy_league_v7_clean_genesis_10k",
-  "freeze_id": "capital_challenger_v1_refrozen_20260922_v7",
-  "requested_on": "2026-09-22",
-  "reason": "Create an epoch-scoped frozen Weekly challenger for Strategy League v7 after P0 runtime hardening. Do not create market-session evidence until a valid EOD."
+  "league_id": "strategy_league_v8_net_alpha_10k",
+  "freeze_id": "capital_challenger_v1_refrozen_20260924_v8",
+  "requested_on": "2026-09-24",
+  "reason": "Create a clean epoch for cost-aware alpha gating and lower-turnover strategy semantics. Do not inherit v7 evidence."
 }

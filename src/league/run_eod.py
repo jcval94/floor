@@ -66,6 +66,12 @@ def _decision_targets(
             "stop_price": float(decision.stop_price or 0.0),
             "take_profit_price": float(decision.take_profit_price or 0.0),
             "score": float(decision.score),
+            "expected_return": float(decision.expected_return or 0.0),
+            "gross_alpha_pct": float(decision.gross_alpha_pct or 0.0),
+            "net_alpha_pct": float(decision.net_alpha_pct or 0.0),
+            "cost_pct": float(decision.cost_pct or 0.0),
+            "alpha_source": str(decision.alpha_source or ""),
+            "payoff_room_pct": float(decision.payoff_room_pct or 0.0),
         }
     return targets
 
@@ -99,8 +105,10 @@ def _strategy_targets(
     include_cross_horizon: bool = False,
     include_challenger: bool = False,
     challenger_cfg: dict | None = None,
+    current_positions_by_strategy: dict[str, set[str]] | None = None,
 ) -> dict[str, dict[str, dict]]:
     challenger_cfg = challenger_cfg or {}
+    current_positions_by_strategy = current_positions_by_strategy or {}
     scored = [dict(row) for row in rows]
     params = weekly_artifact.get("params", {})
     if params.get("canonical_serving_enabled") is not False:
@@ -120,6 +128,10 @@ def _strategy_targets(
             strategies_cfg,
             weekly_cfg,
             "CLOSE",
+            held_symbols=current_positions_by_strategy.get(
+                "weekly_opportunity_ridge",
+                set(),
+            ),
         )
         if include_weekly:
             raw_targets = _decision_targets(
@@ -419,8 +431,13 @@ def run_league_eod(
     next_targets: dict[str, dict[str, dict]] = {}
     if snapshot.get("status") == "OK":
         weekly_frequency = max(
-            1,
-            int(league_cfg.get("weekly_review_frequency_sessions", 5)),
+            weekly_max_holding_sessions,
+            int(
+                league_cfg.get(
+                    "weekly_review_frequency_sessions",
+                    weekly_max_holding_sessions,
+                )
+            ),
         )
         mean_frequency = mean_max_holding_sessions
         cross_frequency = cross_max_holding_sessions
@@ -433,6 +450,11 @@ def run_league_eod(
         include_mean_reversion = state is None or current_count % mean_frequency == 0
         include_cross_horizon = state is None or current_count % cross_frequency == 0
         include_challenger = state is None or current_count % challenger_frequency == 0
+        current_positions_by_strategy = {
+            member_id: set(member.get("positions", {}))
+            for member_id, member in (state or {}).get("members", {}).items()
+            if isinstance(member, dict)
+        }
         next_targets = _strategy_targets(
             rows,
             strategies_cfg,
@@ -442,6 +464,7 @@ def run_league_eod(
             include_cross_horizon=include_cross_horizon,
             include_challenger=include_challenger,
             challenger_cfg=challenger_cfg,
+            current_positions_by_strategy=current_positions_by_strategy,
         )
 
     if state is None:

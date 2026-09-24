@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from backtest.run_backtest import run_strategy_backtest
+from contracts.trading import shadow_execution_contract
 from features.run_features import assign_split
 from forecasting.parity_models import load_champion_models
 from models.evaluate import pinball_loss
@@ -415,6 +416,14 @@ def _opportunity_metrics(rows: list[dict], *, params: dict) -> dict:
 
 
 def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
+    """Low-frequency Weekly diagnostic using the same friction philosophy as League.
+
+    This remains a lightweight report backtest, not the authoritative Strategy
+    League simulator. It deliberately reviews only every 10 sessions and uses
+    entry/retention hysteresis so the report cannot reintroduce daily top-20%
+    churn that the live research strategy explicitly rejects.
+    """
+
     by_day: dict[date, list[dict]] = defaultdict(list)
     for row in latest_rows:
         by_day[_day(row["timestamp"])].append(row)
@@ -424,20 +433,32 @@ def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
 
     all_symbols = sorted({str(row["symbol"]) for row in latest_rows})
     targets: dict[str, dict[str, float]] = {}
+    held: set[str] = set()
+    review_frequency = 10
+    entry_fraction = 0.10
+    retain_fraction = 0.20
+
     for idx, session in enumerate(days[:-1]):
+        if idx % review_frequency != 0:
+            continue
         scores = [
             (str(row["symbol"]), predict_weekly_opportunity(row, params))
             for row in by_day[session]
         ]
         scores.sort(key=lambda item: item[1], reverse=True)
         positive = [item for item in scores if item[1] > 0]
-        top_n = max(1, math.ceil(len(scores) * 0.20)) if scores else 0
-        selected = positive[:top_n]
+        entry_n = max(1, math.ceil(len(scores) * entry_fraction)) if scores else 0
+        retain_n = max(entry_n, math.ceil(len(scores) * retain_fraction)) if scores else 0
+        new_entries = {symbol for symbol, _ in positive[:entry_n]}
+        retention_band = {symbol for symbol, _ in positive[:retain_n]}
+        selected = sorted(new_entries | (held & retention_band))
+        held = set(selected)
+
         next_day = days[idx + 1].isoformat()
         day_targets = {symbol: 0.0 for symbol in all_symbols}
         if selected:
             weight = min(1.0 / len(selected), 0.20)
-            for symbol, _ in selected:
+            for symbol in selected:
                 day_targets[symbol] = weight
         targets[next_day] = day_targets
 
@@ -456,11 +477,12 @@ def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
                 }
             )
 
+    canonical_costs = shadow_execution_contract()
     config: dict[str, Any] = {
         "costs": {
-            "commission_bps": 2.0,
-            "slippage_bps": 2.0,
-            "sell_fee_bps": 3.0,
+            "commission_bps": canonical_costs["commission_bps"],
+            "slippage_bps": canonical_costs["slippage_bps"],
+            "sell_fee_bps": canonical_costs["sell_fee_bps"],
             "min_commission": 0.0,
         },
         "execution": {"max_participation_rate": 0.10, "price_reference": "ohlc4"},
@@ -472,7 +494,12 @@ def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
         },
         "horizons": [5, 10, 20],
     }
-    result = run_strategy_backtest(market_data, "weekly_opportunity", targets, config)
+    result = run_strategy_backtest(
+        market_data,
+        "weekly_opportunity",
+        targets,
+        config,
+    )
     curve = result["equity_curve"]
     total_return = (
         float(curve[-1]["equity"]) / float(curve[0]["equity"]) - 1.0
@@ -507,7 +534,17 @@ def _portfolio_backtest(latest_rows: list[dict], *, params: dict) -> dict:
     return {
         "status": "ok",
         "signal_to_trade_lag": "1 session",
+        "review_frequency_sessions": review_frequency,
+        "entry_fraction": entry_fraction,
+        "retain_fraction": retain_fraction,
         "transaction_costs_included": True,
+        "round_trip_cost_bps": (
+            2.0 * (
+                float(canonical_costs["commission_bps"])
+                + float(canonical_costs["slippage_bps"])
+            )
+            + float(canonical_costs["sell_fee_bps"])
+        ),
         "total_return": total_return,
         "equal_weight_buy_hold_return": benchmark_return,
         "excess_return_vs_equal_weight": total_return - benchmark_return,
@@ -590,8 +627,9 @@ def build_backtest_report(
                 "whose realized target is already known"
             ),
             "portfolio": (
-                "weekly opportunity scores at session t are traded at t+1 with "
-                "2 bps commission, 2 bps slippage, 3 bps sell fee and 10% max participation"
+                "weekly opportunity is reviewed every 10 sessions with top-10% entry / "
+                "top-20% retention hysteresis; signals trade at t+1 using the canonical "
+                "Strategy League cost profile and 10% max participation"
             ),
             "test_holdout_used_for_training": False,
             "live_or_paper_execution_enabled": False,

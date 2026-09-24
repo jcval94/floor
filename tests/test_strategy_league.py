@@ -10,6 +10,7 @@ from league.engine import (
     build_leaderboard,
     initialize_league,
     load_state,
+    transition_research_model_epoch,
 )
 from league.run_eod import _equal_weight_capped_targets
 from strategies.run_strategies import load_simple_yaml
@@ -320,3 +321,103 @@ def test_operational_paper_and_live_gates_remain_disabled() -> None:
         assert strategy["paper_enabled"] is False
         assert strategy["live_enabled"] is False
         assert strategy["canonical_serving_enabled"] is False
+
+
+
+def test_rebalance_deadband_suppresses_small_position_resize(tmp_path: Path) -> None:
+    cfg = _cfg()
+    cfg["initial_nav_usd"] = 10_000.0
+    cfg["execution"]["min_rebalance_weight_delta"] = 0.02
+    cfg["execution"]["min_rebalance_notional_usd"] = 100.0
+    targets = _targets()
+    targets["weekly_opportunity_ridge"]["AAA"]["weight"] = 0.20
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-08-24",
+        _contract(),
+        targets,
+    )
+    state = advance_league(
+        tmp_path,
+        state,
+        cfg,
+        "2026-08-25",
+        _bars(open_price=100.0, close_price=100.0),
+        _contract(),
+        {
+            "weekly_opportunity_ridge": {
+                "AAA": {
+                    "weight": 0.215,
+                    "stop_price": 80.0,
+                    "take_profit_price": 130.0,
+                }
+            }
+        },
+    )
+    weekly = state["members"]["weekly_opportunity_ridge"]
+    assert weekly["trade_count"] == 1
+
+    state = advance_league(
+        tmp_path,
+        state,
+        cfg,
+        "2026-08-26",
+        _bars(open_price=100.0, close_price=100.0),
+        _contract(),
+        {},
+    )
+    weekly = state["members"]["weekly_opportunity_ridge"]
+    assert weekly["trade_count"] == 1
+    assert weekly["suppressed_rebalances"] == 1
+    assert weekly["positions"]["AAA"]["qty"] == 20
+
+
+def test_research_model_epoch_transition_preserves_portfolio_and_cost_history(
+    tmp_path: Path,
+) -> None:
+    cfg = _cfg()
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-08-24",
+        _contract(),
+        _targets(),
+    )
+    state = advance_league(
+        tmp_path,
+        state,
+        cfg,
+        "2026-08-25",
+        _bars(open_price=100.0, close_price=100.0),
+        _contract(),
+        {},
+    )
+    weekly_before = json.loads(
+        json.dumps(state["members"]["weekly_opportunity_ridge"])
+    )
+    new_contract = {**_contract(), "weekly_model_sha256": "fold-2"}
+
+    state = transition_research_model_epoch(
+        tmp_path,
+        state,
+        new_contract,
+        next_fold_start="2026-08-26",
+        fold_index=2,
+    )
+
+    weekly_after = state["members"]["weekly_opportunity_ridge"]
+    assert weekly_after["cash"] == pytest.approx(weekly_before["cash"])
+    assert weekly_after["positions"] == weekly_before["positions"]
+    assert weekly_after["trade_count"] == weekly_before["trade_count"]
+    assert weekly_after["costs_paid"] == pytest.approx(weekly_before["costs_paid"])
+    assert state["frozen_contract"] == new_contract
+    assert state["model_epoch_transitions"][-1]["fold"] == 2
+
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "history.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert records[-1]["event"] == "MODEL_EPOCH_TRANSITION"
+    assert records[-1]["trades"] == []

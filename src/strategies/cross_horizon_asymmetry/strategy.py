@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from strategies.base import StrategyDecision
 from strategies.common import (
+    alpha_hurdle,
     apply_m3_context,
     geometry,
     hold_decision,
     liquidity_ok,
-    net_edge,
+    payoff_room_clears_cost,
     risk_sized_qty,
     to_float,
 )
@@ -25,7 +26,6 @@ def generate_cross_horizon_orders(
     entry = strategy_cfg.get("entry", {})
     min_ratio = to_float(entry.get("min_asymmetry_ratio"), 1.35)
     min_trend = to_float(entry.get("min_abs_trend_score"), 0.005)
-    min_net = to_float(entry.get("min_net_edge_pct"), 0.004)
 
     weights = {
         "d1": to_float(entry.get("d1_weight"), 0.2),
@@ -85,26 +85,41 @@ def generate_cross_horizon_orders(
             momentum_weight * to_float(row.get("momentum_20"))
             + relative_strength_weight * to_float(row.get("rel_strength_20"))
         )
+        long_alpha_ok, long_alpha = alpha_hurdle(
+            max(0.0, trend),
+            global_cfg,
+            strategy_cfg,
+        )
+        short_alpha_ok, short_alpha = alpha_hurdle(
+            max(0.0, -trend),
+            global_cfg,
+            strategy_cfg,
+        )
 
         action = "HOLD"
-        gross_edge = 0.0
+        payoff_room = 0.0
         reward_risk = 0.0
+        alpha = long_alpha
         if (
             long_ratio >= min_ratio
             and trend >= min_trend
-            and net_edge(weighted_up, global_cfg) >= min_net
+            and payoff_room_clears_cost(weighted_up, global_cfg, strategy_cfg)
+            and long_alpha_ok
         ):
             action = "BUY"
-            gross_edge = weighted_up
+            payoff_room = weighted_up
             reward_risk = long_ratio
+            alpha = long_alpha
         elif (
             short_ratio >= min_ratio
             and trend <= -min_trend
-            and net_edge(weighted_down, global_cfg) >= min_net
+            and payoff_room_clears_cost(weighted_down, global_cfg, strategy_cfg)
+            and short_alpha_ok
         ):
             action = "SELL"
-            gross_edge = weighted_down
+            payoff_room = weighted_down
             reward_risk = short_ratio
+            alpha = short_alpha
 
         if action == "HOLD":
             output.append(
@@ -113,9 +128,9 @@ def generate_cross_horizon_orders(
                     row,
                     "q1",
                     (
-                        "HOLD: asymmetry/trend inconclusive "
-                        f"(long={long_ratio:.2f}, short={short_ratio:.2f}, "
-                        f"trend={trend:.4f})"
+                        "HOLD: asymmetry is only payoff geometry; directional "
+                        f"alpha does not clear costs (long={long_ratio:.2f}, "
+                        f"short={short_ratio:.2f}, trend={trend:.4f})"
                     ),
                 )
             )
@@ -141,9 +156,11 @@ def generate_cross_horizon_orders(
         if action == "BUY":
             stop = q1["risk_floor"] * (1 - buffer)
             take_profit = q1["ceiling"]
+            expected_return = alpha["gross_alpha_pct"]
         else:
             stop = q1["risk_ceiling"] * (1 + buffer)
             take_profit = q1["floor"]
+            expected_return = -alpha["gross_alpha_pct"]
 
         qty = risk_sized_qty(
             row,
@@ -168,7 +185,7 @@ def generate_cross_horizon_orders(
             min(1.0, to_float(row.get("confidence_score"), 0.5)),
         )
         score = (
-            max(0.0, net_edge(gross_edge, global_cfg))
+            max(0.0, alpha["net_alpha_pct"])
             * min(reward_risk, 3.0)
             * confidence
         )
@@ -181,18 +198,24 @@ def generate_cross_horizon_orders(
                 qty=qty,
                 horizon="q1",
                 entry_reason=(
-                    f"{action}: cross-horizon asymmetry={reward_risk:.2f}, "
-                    f"trend={trend:.4f}, "
-                    f"net_edge={net_edge(gross_edge, global_cfg):.2%}"
+                    f"{action}: cross-horizon payoff asymmetry={reward_risk:.2f}, "
+                    f"trend-alpha={alpha['gross_alpha_pct']:.2%}, "
+                    f"net_alpha={alpha['net_alpha_pct']:.2%}, "
+                    f"payoff_room={payoff_room:.2%}"
                 ),
                 exit_reason="Q1 anchor or ten-session timeout",
                 stop_price=stop,
                 take_profit_price=take_profit,
-                expected_return=0.0,
+                expected_return=expected_return,
                 expected_range=max(0.0, q1["ceiling"] - q1["floor"]),
                 timing_alignment=0.5,
                 m3_context=m3_context,
                 priority_adjustment=priority,
+                gross_alpha_pct=alpha["gross_alpha_pct"],
+                net_alpha_pct=alpha["net_alpha_pct"],
+                cost_pct=alpha["cost_pct"],
+                alpha_source="momentum_relative_strength_trend_proxy",
+                payoff_room_pct=payoff_room,
             )
         )
 

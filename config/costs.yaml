@@ -9,7 +9,7 @@ cost_model:
   strategy_slippage_bps: 3.0
   paper_slippage_bps: 3.0
   shadow_slippage_bps: 3.0
-  strategy_sell_fee_bps: 0.0
+  strategy_sell_fee_bps: 3.0
   paper_sell_fee_bps: 0.0
   shadow_sell_fee_bps: 3.0
   spread_bps: 0.0

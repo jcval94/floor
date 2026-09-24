@@ -135,6 +135,33 @@ def _execute_target(
             desired_qty[symbol] = int((nav * weight) / price)
 
     current_symbols = set(member.get("positions", {}))
+    min_weight_delta = max(
+        0.0,
+        float(execution_cfg.get("min_rebalance_weight_delta", 0.0) or 0.0),
+    )
+    min_rebalance_notional = max(
+        0.0,
+        float(execution_cfg.get("min_rebalance_notional_usd", 0.0) or 0.0),
+    )
+    for symbol in sorted(current_symbols & set(desired_qty)):
+        current = int(member.get("positions", {}).get(symbol, {}).get("qty", 0))
+        desired = desired_qty.get(symbol, 0)
+        price = open_prices.get(symbol, 0.0)
+        if current <= 0 or desired <= 0 or price <= 0 or nav <= 0:
+            continue
+        current_weight = current * price / nav
+        desired_weight = desired * price / nav
+        delta_notional = abs(desired - current) * price
+        if (
+            abs(desired_weight - current_weight) < min_weight_delta
+            or delta_notional < min_rebalance_notional
+        ):
+            if desired != current:
+                member["suppressed_rebalances"] = int(
+                    member.get("suppressed_rebalances", 0)
+                ) + 1
+            desired_qty[symbol] = current
+
     for symbol in sorted(current_symbols | set(desired_qty)):
         current = int(member.get("positions", {}).get(symbol, {}).get("qty", 0))
         desired = desired_qty.get(symbol, 0)
@@ -306,6 +333,7 @@ def _member_metrics(member: dict, initial_nav: float) -> dict[str, Any]:
         "max_drawdown": _max_drawdown(points),
         "trades": int(member.get("trade_count", 0)),
         "costs_paid": costs,
+        "suppressed_rebalances": int(member.get("suppressed_rebalances", 0)),
         "nav_if_2x_costs_estimate": nav - costs,
         "nav_if_3x_costs_estimate": nav - 2.0 * costs,
         "equity_curve": list(points),
@@ -541,6 +569,7 @@ def initialize_league(
             "daily_nav": [{"session": session, "nav": initial_nav}],
             "trade_count": 0,
             "costs_paid": 0.0,
+            "suppressed_rebalances": 0,
         }
     member_contracts = {
         str(spec.get("id") or ""): {
@@ -567,6 +596,43 @@ def initialize_league(
         "last_hash": "",
     }
     _append_record(state_dir, "GENESIS", state, [], initial_targets)
+    return state
+
+
+def transition_research_model_epoch(
+    state_dir: Path,
+    state: dict,
+    new_frozen_contract: dict[str, str],
+    *,
+    next_fold_start: str,
+    fold_index: int,
+) -> dict:
+    """Change the frozen model suite without liquidating a research portfolio.
+
+    This is intentionally separate from production/shadow Strategy League
+    advancement. Walk-forward research retrains models between folds, but a
+    broker account does not reset cash, positions, costs, or trade counters when
+    the model version changes.
+    """
+
+    old_contract = state.get("frozen_contract")
+    if old_contract == new_frozen_contract:
+        return state
+    transition = {
+        "fold": int(fold_index),
+        "next_fold_start": str(next_fold_start),
+        "from_contract": dict(old_contract) if isinstance(old_contract, dict) else {},
+        "to_contract": dict(new_frozen_contract),
+    }
+    state["frozen_contract"] = dict(new_frozen_contract)
+    state.setdefault("model_epoch_transitions", []).append(transition)
+    _append_record(
+        state_dir,
+        "MODEL_EPOCH_TRANSITION",
+        state,
+        [],
+        {"model_epoch_transition": transition},
+    )
     return state
 
 

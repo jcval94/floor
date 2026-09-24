@@ -16,6 +16,7 @@ from league.engine import (
 )
 from league.market_features import _feature_row
 from league.run_eod import _benchmark_targets, _holding_sessions, _strategy_targets
+from contracts.trading import shadow_execution_contract
 from replay.historical_close import build_historical_close_feature_rows
 from replay.point_in_time import _session_date, group_by_symbol
 from replay.runner import (
@@ -173,6 +174,7 @@ def run_capital_tournament(
             )
         weekly_model_path = Path(configured_weekly_model)
     strategies_cfg = load_simple_yaml(strategies_config_path)
+    strategies_cfg["costs"] = shadow_execution_contract()
     weekly_artifact = _load_json(weekly_model_path)
     challenger_cfg = dict(league_cfg.get("capital_allocation_challenger", {}))
 
@@ -210,8 +212,8 @@ def run_capital_tournament(
     audits: list[dict[str, Any]] = []
 
     weekly_frequency = max(
-        1,
-        int(league_cfg.get("weekly_review_frequency_sessions", 5)),
+        weekly_max_holding,
+        int(league_cfg.get("weekly_review_frequency_sessions", weekly_max_holding)),
     )
     mean_frequency = mean_max_holding
     cross_frequency = cross_max_holding
@@ -287,6 +289,11 @@ def run_capital_tournament(
         include_mean_reversion = state is None or current_count % mean_frequency == 0
         include_cross_horizon = state is None or current_count % cross_frequency == 0
         include_challenger = state is None or current_count % challenger_frequency == 0
+        current_positions_by_strategy = {
+            member_id: set(member.get("positions", {}))
+            for member_id, member in (state or {}).get("members", {}).items()
+            if isinstance(member, dict)
+        }
         next_targets = _strategy_targets(
             feature_rows,
             strategies_cfg,
@@ -296,6 +303,7 @@ def run_capital_tournament(
             include_cross_horizon=include_cross_horizon,
             include_challenger=include_challenger,
             challenger_cfg=challenger_cfg,
+            current_positions_by_strategy=current_positions_by_strategy,
         )
 
         if state is None:
