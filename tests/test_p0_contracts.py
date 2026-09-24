@@ -226,10 +226,51 @@ def test_league_governance_applies_to_every_strategy_member(tmp_path: Path) -> N
         "cross_horizon_asymmetry",
     }
     for row in rows.values():
+        assert row["promotion_checks"]["model_suite_frozen"] is False
         assert row["promotion_checks"]["min_sessions"] is False
         assert row["evaluation_variant"] == "long_only_projection"
         assert row["evidence_scope"] == "long_only"
+        assert row["evidence_contract"] == "legacy_v1_model_suite_unfrozen"
         assert row["canonical_bidirectional_promotion_eligible"] is False
+
+
+def test_new_league_contract_freezes_serving_model_suite(tmp_path: Path) -> None:
+    cfg = _league_cfg()
+    frozen = {
+        **_frozen_contract(),
+        "model_suite_contract_version": "v2",
+        "model_contracts_sha256": "models-contract",
+        "strategy_contracts_sha256": "strategies-contract",
+        "d1_champion_sha256": "d1",
+        "w1_champion_sha256": "w1",
+        "q1_champion_sha256": "q1",
+        "value_champion_sha256": "value",
+        "timing_champion_sha256": "timing",
+    }
+    state = initialize_league(
+        tmp_path,
+        cfg,
+        "2026-09-01",
+        frozen,
+        {
+            "weekly_opportunity_ridge": {},
+            "mean_reversion_floor_w1": {},
+            "cross_horizon_asymmetry": {},
+            "benchmark_spy": {"SPY": {"weight": 1.0}},
+        },
+    )
+    leaderboard = build_leaderboard(state, cfg)
+    assert leaderboard["model_suite_frozen"] is True
+    assert leaderboard["evidence_contract"] == "v2_model_suite_frozen"
+    strategies = [
+        row
+        for row in leaderboard["rows"]
+        if not row["strategy"].startswith("benchmark_")
+    ]
+    assert all(
+        row["promotion_checks"]["model_suite_frozen"] is True
+        for row in strategies
+    )
 
 
 def test_league_stop_gap_through_fills_at_open_not_stale_stop(tmp_path: Path) -> None:
