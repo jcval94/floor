@@ -31,6 +31,7 @@ def test_governance_separates_recommendation_authorization_and_execution(
     assert payload["retraining_control"] == {
         "recommendation": "RETRAIN_NOW",
         "recommended_tasks": ["value"],
+        "advisory_tasks": [],
         "authorization": "BLOCKED_BY_GOVERNANCE",
         "authorized_tasks": [],
         "execution": "NOT_RUN",
@@ -78,3 +79,14 @@ def test_retrain_execute_refreshes_review_before_runtime_publish() -> None:
     )
     assert 'control["execution"] = "COMPLETED"' in workflow or '"execution": "COMPLETED"' in workflow
 
+
+
+def test_retrain_assessment_runs_isolated_challenger_validation_for_advisories() -> None:
+    workflow = Path(".github/workflows/retrain_assessment.yml").read_text(encoding="utf-8")
+
+    assert "Plan isolated advisory challenger validation" in workflow
+    assert "Train and validate challengers in isolated registry" in workflow
+    assert "tasks_for_retrain_recommended" in workflow
+    assert 'promotion_authorized": False' in workflow
+    assert 'authoritative_registry_changed": False' in workflow
+    assert "data/training/advisory_challenger_run" in workflow
