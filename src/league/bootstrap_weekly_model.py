@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from contracts.model_contract import attach_model_contract
 from models.train_weekly_opportunity import train_weekly_opportunity_model
 
 
@@ -20,7 +21,7 @@ def bootstrap_weekly_model(dataset_path: Path, output_path: Path, version: str) 
         )
 
     artifact = train_weekly_opportunity_model(train, valid, version=version, tune=True)
-    result = asdict(artifact)
+    result = attach_model_contract(asdict(artifact), "weekly_opportunity")
     params = result.get("params", {})
     if params.get("canonical_serving_enabled") is not False:
         raise RuntimeError("Weekly challenger bootstrap refused: canonical serving must remain disabled")
