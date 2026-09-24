@@ -7,13 +7,6 @@ from pathlib import Path
 from typing import Any
 
 
-STRATEGY_MEMBERS = {
-    "weekly_opportunity_ridge",
-    "breakout_protected_by_floor",
-    "capital_allocation_challenger",
-}
-
-
 def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -196,6 +189,7 @@ def _apply_strategy_exits(
         position = member["positions"].get(symbol, {})
         qty = int(position.get("qty", 0))
         bar = bars.get(symbol, {})
+        open_price = float(bar.get("open", 0.0) or 0.0)
         low = float(bar.get("low", 0.0) or 0.0)
         high = float(bar.get("high", 0.0) or 0.0)
         close = float(bar.get("close", 0.0) or 0.0)
@@ -214,11 +208,27 @@ def _apply_strategy_exits(
         exit_price = 0.0
         reason = ""
         if stop > 0 and low > 0 and low <= stop:
-            exit_price = stop
-            reason = "stop_touched_conservative_first"
+            exit_price = (
+                min(stop, open_price)
+                if open_price > 0
+                else stop
+            )
+            reason = (
+                "stop_gap_through_at_open"
+                if open_price > 0 and open_price < stop
+                else "stop_touched_conservative_first"
+            )
         elif take > 0 and high >= take:
-            exit_price = take
-            reason = "take_profit_touched"
+            exit_price = (
+                max(take, open_price)
+                if open_price > 0
+                else take
+            )
+            reason = (
+                "take_profit_gap_through_at_open"
+                if open_price > take
+                else "take_profit_touched"
+            )
         elif timeout_due and close > 0:
             exit_price = close
             reason = f"max_holding_sessions_{max_holding_sessions}"
@@ -310,9 +320,23 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
     spy_return = metrics.get("benchmark_spy", {}).get("return")
     equal_return = metrics.get("benchmark_equal_weight", {}).get("return")
     review_cfg = league_cfg.get("promotion_review", {})
+    member_specs = {
+        str(spec.get("id") or ""): spec
+        for spec in league_cfg.get("members", [])
+        if isinstance(spec, dict) and str(spec.get("id") or "")
+    }
     rows: list[dict[str, Any]] = []
     for member_id, member_metrics in metrics.items():
         ret = float(member_metrics["return"])
+        member_spec = member_specs.get(member_id, {})
+        declared_type = str(member_spec.get("type") or "")
+        is_strategy = (
+            declared_type == "strategy"
+            or (not declared_type and not member_id.startswith("benchmark_"))
+        )
+        evaluation_variant = str(
+            member_spec.get("evaluation_variant") or "long_only_projection"
+        )
         row = {
             "strategy": member_id,
             **member_metrics,
@@ -320,10 +344,13 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             "vs_equal_weight": (
                 ret - float(equal_return) if equal_return is not None else None
             ),
+            "evaluation_variant": evaluation_variant if is_strategy else "benchmark",
+            "evidence_scope": "long_only" if is_strategy else "benchmark",
+            "canonical_bidirectional_promotion_eligible": False,
             "promotion_review_eligible": False,
             "promotion_checks": {},
         }
-        if member_id in STRATEGY_MEMBERS:
+        if is_strategy:
             checks = {
                 "min_sessions": int(state.get("session_count", 0))
                 >= int(review_cfg.get("min_sessions", 63)),
@@ -345,6 +372,14 @@ def build_leaderboard(state: dict, league_cfg: dict) -> dict[str, Any]:
             }
             row["promotion_checks"] = checks
             row["promotion_review_eligible"] = all(checks.values())
+            # Strategy League currently projects BUY/SELL/HOLD strategies into
+            # long-only portfolios. Passing this review can only validate that
+            # evaluated variant; it can never promote the canonical bidirectional
+            # strategy without separate short-side evidence.
+            row["canonical_bidirectional_promotion_eligible"] = (
+                evaluation_variant == "full_action_space"
+                and row["promotion_review_eligible"]
+            )
         rows.append(row)
     rows.sort(key=lambda item: float(item.get("return", 0.0)), reverse=True)
     return {
