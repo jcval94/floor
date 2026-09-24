@@ -9,7 +9,6 @@ DIRECT_GIT_PUSH = re.compile(r"\bgit(?:\s+-C\s+\S+)?\s+push\b")
 EXPECTED_GIT_WRITERS = {
     "retrain_execute.yml",
     "manual_compact_git_history.yml",
-    "compact_history_once.yml",
 }
 
 
