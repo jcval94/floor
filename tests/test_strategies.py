@@ -56,7 +56,7 @@ def _rows() -> list[dict]:
             "floor_q1": 97.0,
             "ceiling_q1": 103.0,
             "confidence_score": 0.50,
-            "momentum_20": 0.020,
+            "momentum_20": 0.0,
             "rel_strength_20": 0.0,
             "avg_dollar_volume": 50_000_000,
             "floor_m3": 90.0,
@@ -126,7 +126,7 @@ def test_mean_reversion_is_symmetric_at_w1_anchors() -> None:
             "close": 100.0,
             "floor_w1": 99.0,
             "ceiling_w1": 112.0,
-            "momentum_20": 0.0,
+            "momentum_20": 0.020,
             "rel_strength_20": 0.0,
         }
     )
