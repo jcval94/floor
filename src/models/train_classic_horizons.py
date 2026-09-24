@@ -11,7 +11,7 @@ from typing import Any, Callable
 from contracts.model_contract import attach_model_contract
 from features.model_competition import HORIZONS, build_model_specs
 from models.horizon_timing import fit_horizon_timing
-from models.temporal_cv import chronological_calibration_split
+from models.temporal_cv import purged_chronological_calibration_split
 from models.robust_range_v3 import (
     ROBUST_RANGE_FEATURES,
     build_anchored_blend,
@@ -611,7 +611,10 @@ def train_horizon_competition(
 
     floor_col, ceiling_col = HORIZON_TARGETS[horizon]
     train_raw, validation_raw = _split(rows, horizon)
-    calibration_raw, evaluation_raw = chronological_calibration_split(validation_raw)
+    calibration_raw, evaluation_raw = purged_chronological_calibration_split(
+        validation_raw,
+        target_end_field=f"target_end_date_{horizon}",
+    )
     feature_names = tuple(
         sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
     )
