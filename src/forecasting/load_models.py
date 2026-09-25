@@ -41,6 +41,9 @@ class HorizonForecast:
     risk_ceiling: float | None = None
     risk_geometry_available: bool = False
     risk_target_marginal_coverage: float | None = None
+    risk_target_joint_coverage: float | None = None
+    risk_empirical_joint_coverage: float | None = None
+    central_skill_vs_best_dummy: float | None = None
 
 
 @dataclass(frozen=True)
