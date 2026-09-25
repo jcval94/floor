@@ -42,8 +42,14 @@ def _m3_block_reason(row: dict) -> str | None:
 
 
 def _horizon_quality(forecast: Any) -> float:
-    """Prefer OOS joint risk coverage; fall back to central non-breach rate."""
+    """Prefer OOS joint risk coverage; fall back to central non-breach rate.
 
+    Numeric inputs are retained as a compatibility path and are interpreted as
+    legacy breach probabilities.
+    """
+
+    if isinstance(forecast, (int, float)):
+        return max(0.0, min(1.0, 1.0 - float(forecast)))
     empirical_joint = getattr(forecast, "risk_empirical_joint_coverage", None)
     if empirical_joint is not None:
         return max(0.0, min(1.0, float(empirical_joint)))
