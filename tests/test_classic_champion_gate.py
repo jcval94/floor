@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from contracts.model_contract import attach_model_contract
 from models.classic_champion_gate import gate_one_horizon
 from models.horizon_timing import ALLOWED_CLASSES
