@@ -6,6 +6,10 @@ risk:
   max_single_name_weight: 0.08
   max_sector_weight: 0.25
   daily_loss_limit_bps: 150
+  intraday_drawdown_limit_bps: 250
+  position_loss_add_block_bps: 150
+  position_profit_add_block_bps: 300
+  min_drawdown_risk_scale: 0.50
   kill_switch:
     enabled: true
     triggers:
