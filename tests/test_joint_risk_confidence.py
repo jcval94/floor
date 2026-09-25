@@ -106,6 +106,42 @@ def test_temporal_tuning_can_raise_nominal_without_using_external_evaluation() -
     assert risk["semantics"]["external_risk_evaluation_used_for_selection"] is False
 
 
+def test_temporal_refit_never_shrinks_below_proven_tuning_addon() -> None:
+    rows: list[_PreparedRow] = []
+    # The earlier fit slice needs a 3pp addon at q80, while the later tuning
+    # slice is easy. Refitting q80 on all rows would otherwise shrink to 0.5pp.
+    calibration_scores = [0.005] * 110 + [0.03] * 30 + [0.005] * 60
+    for idx, score in enumerate(calibration_scores):
+        day = f"2027-{idx:04d}"
+        rows.append(
+            _PreparedRow(
+                row={
+                    "timestamp": f"{day}T20:00:00+00:00",
+                    "symbol": "AAA",
+                    "target_end_date_d1": day,
+                },
+                close=100.0,
+                floor_delta=0.02 + score,
+                ceiling_delta=0.02 + score,
+                features={"atr_14": 0.02},
+            )
+        )
+
+    predictions = [0.02] * len(rows)
+    risk = _fit_risk_geometry(
+        rows,
+        predictions,
+        predictions,
+        horizon="d1",
+    )
+
+    assert risk["nominal_conformal_coverage"] == pytest.approx(0.80)
+    assert risk["selected_fit_addon"] == pytest.approx(0.03)
+    assert risk["full_calibration_addon"] == pytest.approx(0.005)
+    assert risk["joint_score_quantile"] == pytest.approx(0.03)
+    assert risk["anti_shrinkage_applied"] is True
+
+
 def test_joint_risk_calibration_does_not_modify_central_predictions() -> None:
     rows = [_row(0.03, 0.04), _row(0.04, 0.05), _row(0.05, 0.06)]
     floor_predictions = [0.02, 0.03, 0.04]
