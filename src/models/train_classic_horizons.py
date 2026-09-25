@@ -28,8 +28,16 @@ logger = logging.getLogger(__name__)
 # calibrated independently to a JOINT coverage target so uncertainty can improve
 # without widening or otherwise changing the central predictor.
 RISK_TARGET_JOINT_COVERAGE = 0.80
-# Compatibility alias for downstream readers of pre-v2 artifacts.  New artifacts
-# must use target_joint_coverage for semantics.
+# Temporal drift can make an 80% nominal conformal quantile under-cover later
+# observations. Select the smallest conservative nominal level that reaches the
+# service target on an INTERNAL chronological tuning slice. The later risk
+# evaluation block remains untouched.
+RISK_NOMINAL_COVERAGE_GRID = (0.80, 0.85, 0.90, 0.95, 0.975)
+RISK_TUNING_FRACTION = 0.30
+RISK_MIN_TUNING_ROWS = 50
+RISK_CALIBRATION_POLICY_VERSION = "nested-temporal-v1"
+# Compatibility alias for downstream readers of pre-v2 artifacts. New artifacts
+# use target_joint_coverage for semantics.
 RISK_TARGET_MARGINAL_COVERAGE = RISK_TARGET_JOINT_COVERAGE
 
 HORIZON_TARGETS = {
@@ -551,46 +559,173 @@ def _metrics(
     }
 
 
+def _joint_nonconformity(
+    item: _PreparedRow,
+    floor_prediction: float,
+    ceiling_prediction: float,
+) -> float:
+    floor_miss = max(0.0, item.floor_delta - floor_prediction)
+    ceiling_miss = max(0.0, item.ceiling_delta - ceiling_prediction)
+    return max(floor_miss, ceiling_miss)
+
+
+def _session_day(item: _PreparedRow) -> str:
+    return str(item.row.get("timestamp") or "")[:10]
+
+
+def _target_end_day(item: _PreparedRow, horizon: str | None) -> str:
+    if not horizon:
+        return ""
+    return str(item.row.get(f"target_end_date_{horizon}") or "")[:10]
+
+
+def _risk_nominal_coverage(
+    rows: list[_PreparedRow],
+    scores: list[float],
+    *,
+    horizon: str | None,
+) -> tuple[float, dict[str, Any]]:
+    """Choose nominal coverage on an earlier temporal sub-split only.
+
+    The calibration block is internally split by session. Candidate nominal
+    levels are fit on the earlier sub-block and judged on the later tuning
+    sub-block. The external risk-evaluation block is never consulted here.
+    """
+
+    indexed = sorted(
+        zip(rows, scores),
+        key=lambda pair: (
+            _session_day(pair[0]),
+            str(pair[0].row.get("symbol") or ""),
+        ),
+    )
+    unique_days = sorted(
+        {
+            _session_day(item)
+            for item, _score in indexed
+            if _session_day(item)
+        }
+    )
+    if len(indexed) < (2 * RISK_MIN_TUNING_ROWS) or len(unique_days) < 4:
+        return RISK_TARGET_JOINT_COVERAGE, {
+            "selection_method": "fixed_nominal_small_sample",
+            "fit_rows": len(indexed),
+            "tuning_rows": 0,
+            "tuning_coverage": None,
+        }
+
+    pivot = max(
+        1,
+        min(
+            len(unique_days) - 1,
+            int(len(unique_days) * (1.0 - RISK_TUNING_FRACTION)),
+        ),
+    )
+    tune_start = unique_days[pivot]
+    fit_scores: list[float] = []
+    tune_scores: list[float] = []
+    for item, score in indexed:
+        session_day = _session_day(item)
+        if session_day >= tune_start:
+            tune_scores.append(score)
+            continue
+        target_end_day = _target_end_day(item, horizon)
+        if target_end_day and target_end_day >= tune_start:
+            # Purge labels that cross the internal tuning boundary.
+            continue
+        fit_scores.append(score)
+
+    if (
+        len(fit_scores) < RISK_MIN_TUNING_ROWS
+        or len(tune_scores) < RISK_MIN_TUNING_ROWS
+    ):
+        return RISK_TARGET_JOINT_COVERAGE, {
+            "selection_method": "fixed_nominal_insufficient_temporal_tuning",
+            "fit_rows": len(fit_scores),
+            "tuning_rows": len(tune_scores),
+            "tuning_coverage": None,
+        }
+
+    selected = RISK_NOMINAL_COVERAGE_GRID[-1]
+    selected_coverage = 0.0
+    diagnostics: list[dict[str, float]] = []
+    for nominal in RISK_NOMINAL_COVERAGE_GRID:
+        addon = _conformal_quantile(fit_scores, nominal)
+        tune_coverage = _mean(
+            [1.0 if score <= addon else 0.0 for score in tune_scores]
+        )
+        diagnostics.append(
+            {
+                "nominal_coverage": nominal,
+                "tuning_coverage": tune_coverage,
+                "addon": addon,
+            }
+        )
+        selected = nominal
+        selected_coverage = tune_coverage
+        if tune_coverage >= RISK_TARGET_JOINT_COVERAGE:
+            break
+
+    return selected, {
+        "selection_method": "nested_temporal_nominal_grid",
+        "fit_rows": len(fit_scores),
+        "tuning_rows": len(tune_scores),
+        "tuning_start": tune_start,
+        "tuning_coverage": selected_coverage,
+        "nominal_grid_results": diagnostics,
+    }
+
+
 def _fit_risk_geometry(
     rows: list[_PreparedRow],
     floor_predictions: list[float],
     ceiling_predictions: list[float],
+    *,
+    horizon: str | None = None,
 ) -> dict[str, Any]:
     """Jointly conformalize risk bounds while preserving central forecasts.
 
     One nonconformity score per row measures the larger miss across floor and
-    ceiling.  A single split-conformal addon therefore calibrates the event that
-    BOTH realized extremes are contained by the risk range.  Central predictions
-    are never changed, so central MAE/sharpness remain exactly as selected.
+    ceiling. An internal chronological tuning split may lift the nominal
+    conformal level when an 80% nominal quantile under-covers under drift.
+    Central predictions are never changed.
     """
 
-    joint_scores: list[float] = []
-    for item, floor_prediction, ceiling_prediction in zip(
-        rows, floor_predictions, ceiling_predictions
-    ):
-        floor_miss = max(0.0, item.floor_delta - floor_prediction)
-        ceiling_miss = max(0.0, item.ceiling_delta - ceiling_prediction)
-        joint_scores.append(max(floor_miss, ceiling_miss))
-
+    joint_scores = [
+        _joint_nonconformity(item, floor_prediction, ceiling_prediction)
+        for item, floor_prediction, ceiling_prediction in zip(
+            rows, floor_predictions, ceiling_predictions
+        )
+    ]
+    nominal_coverage, tuning = _risk_nominal_coverage(
+        rows,
+        joint_scores,
+        horizon=horizon,
+    )
     joint_addon = _conformal_quantile(
         joint_scores,
-        RISK_TARGET_JOINT_COVERAGE,
+        nominal_coverage,
     )
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "method": "joint_validation_conformal_max_residual",
+        "calibration_policy_version": RISK_CALIBRATION_POLICY_VERSION,
         "target_joint_coverage": RISK_TARGET_JOINT_COVERAGE,
-        # Kept only so legacy consumers fail soft during the rollout.  It no
+        "nominal_conformal_coverage": nominal_coverage,
+        # Kept only so legacy consumers fail soft during the rollout. It no
         # longer describes the calibration objective.
         "target_marginal_coverage": None,
         "floor_delta_addon": joint_addon,
         "ceiling_delta_addon": joint_addon,
         "joint_score_quantile": joint_addon,
         "calibration_rows": len(rows),
+        **tuning,
         "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": False,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry",
         },
@@ -787,6 +922,7 @@ def train_horizon_competition(
             risk_calibration,
             calibration_floor_predictions,
             calibration_ceiling_predictions,
+            horizon=horizon,
         )
 
         # Preserve the historical central-model selection contract: all usable
