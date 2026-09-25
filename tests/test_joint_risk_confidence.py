@@ -72,7 +72,6 @@ def test_joint_conformal_calibrates_pair_not_each_side_independently() -> None:
 
 def test_temporal_tuning_can_raise_nominal_without_using_external_evaluation() -> None:
     rows: list[_PreparedRow] = []
-    scores: list[float] = []
     # Earlier fit block: 85% of misses fit inside 1pp, then a mild tail.
     fit_scores = [0.01] * 119 + [0.02] * 14 + [0.03] * 7
     # Later internal tuning block is harder: 80% need a 2pp addon.
@@ -92,7 +91,6 @@ def test_temporal_tuning_can_raise_nominal_without_using_external_evaluation() -
                 features={"atr_14": 0.02},
             )
         )
-        scores.append(score)
 
     predictions = [0.02] * len(rows)
     risk = _fit_risk_geometry(
