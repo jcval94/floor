@@ -22,6 +22,7 @@ from models.train_classic_horizons import (
     FEATURES_BY_FAMILY,
     HORIZON_TARGETS,
     _load_rows,
+    _dummy_benchmark,
     _fit_risk_geometry,
     _metrics,
     _prepare_rows,
@@ -266,14 +267,37 @@ def _migrate_incumbent_risk_contract(
         risk_geometry,
     )
 
+    rows = _load_rows(dataset_path)
+    train_raw, _validation_raw = _split(rows, horizon)
+    floor_col, ceiling_col = HORIZON_TARGETS[horizon]
+    feature_names = tuple(
+        sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
+    )
+    train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
+    dummy_benchmark = _dummy_benchmark(train, evaluation)
+    central_metrics = _metrics(evaluation, eval_floor, eval_ceiling)
+    dummy_loss = float(dummy_benchmark["best_mae_spread_pct"])
+    central_loss = float(central_metrics["mae_spread_pct"])
+    central_skill_vs_dummy = (
+        1.0 - (central_loss / dummy_loss)
+        if dummy_loss > 0.0
+        else 0.0
+    )
+
     migrated = deepcopy(artifact)
     previous_version = str(migrated.get("version") or "")
     migrated["version"] = f"{version}-risk-contract"
     params = deepcopy(_mapping(migrated.get("params")))
     params["risk_geometry"] = risk_geometry
+    params["dummy_benchmark"] = {
+        **dummy_benchmark,
+        "comparison_split": "late_validation_risk_evaluation",
+    }
     migrated["params"] = params
     metrics = deepcopy(_mapping(migrated.get("metrics")))
     metrics.update(risk_metrics)
+    metrics["central_skill_vs_best_dummy"] = central_skill_vs_dummy
+    metrics["dummy_comparison_mae_spread_pct"] = central_loss
     migrated["metrics"] = metrics
     migrated["contract_migration"] = {
         "from_version": previous_version,
@@ -464,6 +488,13 @@ def gate_one_horizon(
         )
         candidate_risk_schema = int(candidate_risk.get("schema_version") or 0)
         previous_risk_schema = int(previous_risk.get("schema_version") or 0)
+        previous_params = _mapping(previous.get("params"))
+        previous_metrics = _mapping(previous.get("metrics"))
+        dummy_diagnostics_missing = (
+            not _mapping(previous_params.get("dummy_benchmark"))
+            or _number(previous_metrics.get("central_skill_vs_best_dummy"))
+            is None
+        )
         risk_contract_upgrade = (
             candidate_contract["status"] == "declared_valid"
             and candidate_risk.get("method")
@@ -472,6 +503,7 @@ def gate_one_horizon(
                 previous_risk.get("method")
                 != "joint_validation_conformal_max_residual"
                 or candidate_risk_schema > previous_risk_schema
+                or dummy_diagnostics_missing
             )
         )
         if strict_error_dominance and coverage_guard_pass:
@@ -500,10 +532,10 @@ def gate_one_horizon(
         elif risk_contract_upgrade:
             decision = "promote_risk_calibration_migration"
             reason = (
-                "Central challenger did not earn promotion, but it carries a newer "
-                "risk-calibration contract. Preserve the incumbent central predictor "
-                "exactly and recalibrate only its risk geometry on leakage-safe "
-                "temporal calibration data."
+                "Central challenger did not earn promotion, but risk calibration "
+                "or benchmark diagnostics need an upgrade. Preserve the incumbent "
+                "central predictor exactly, recalibrate only risk geometry, and "
+                "refresh leakage-safe dummy comparisons."
             )
             active = _migrate_incumbent_risk_contract(
                 previous,
