@@ -607,8 +607,11 @@ def _risk_geometry_metrics(
     ceiling_addon = max(
         0.0, float(risk_geometry.get("ceiling_delta_addon") or 0.0)
     )
-    target_joint = float(
-        risk_geometry.get("target_joint_coverage") or RISK_TARGET_JOINT_COVERAGE
+    raw_target_joint = risk_geometry.get("target_joint_coverage")
+    target_joint = (
+        float(raw_target_joint)
+        if raw_target_joint is not None
+        else None
     )
     floor_hits: list[float] = []
     ceiling_hits: list[float] = []
@@ -626,14 +629,24 @@ def _risk_geometry_metrics(
         interval_hits.append(1.0 if floor_ok and ceiling_ok else 0.0)
         widths.append(risk_floor_delta + risk_ceiling_delta)
     joint_coverage = _mean(interval_hits)
-    return {
-        "risk_target_joint_coverage": target_joint,
+    metrics = {
         "risk_floor_coverage": _mean(floor_hits),
         "risk_ceiling_coverage": _mean(ceiling_hits),
         "risk_interval_coverage": joint_coverage,
-        "risk_joint_coverage_error": abs(joint_coverage - target_joint),
         "risk_mean_width_pct": _mean(widths),
     }
+    if target_joint is not None:
+        metrics["risk_target_joint_coverage"] = target_joint
+        metrics["risk_joint_coverage_error"] = abs(
+            joint_coverage - target_joint
+        )
+    else:
+        raw_target_marginal = risk_geometry.get("target_marginal_coverage")
+        if raw_target_marginal is not None:
+            metrics["risk_target_marginal_coverage"] = float(
+                raw_target_marginal
+            )
+    return metrics
 
 
 def _dummy_benchmark(
