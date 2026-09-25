@@ -1,7 +1,7 @@
 {
   "horizon": "w1",
   "model_name": "robust_range_v3_w1",
-  "version": "20260924T192816Z-risk-contract",
+  "version": "20260925T195326Z-risk-contract",
   "floor_delta": 0.03596582758435288,
   "ceiling_delta": 0.03946902976837086,
   "train_rows": 54950,
@@ -18,9 +18,12 @@
     "test_interval_coverage": 0.21685714285714286,
     "empirical_breach_rate": 0.7831428571428571,
     "risk_target_marginal_coverage": 0.8,
-    "risk_floor_coverage": 0.7432352941176471,
-    "risk_ceiling_coverage": 0.7755882352941177,
-    "risk_interval_coverage": 0.5288235294117647
+    "risk_floor_coverage": 0.918235294117647,
+    "risk_ceiling_coverage": 0.9361764705882353,
+    "risk_interval_coverage": 0.8555882352941176,
+    "risk_mean_width_pct": 0.16546383260686448,
+    "risk_target_joint_coverage": 0.8,
+    "risk_joint_coverage_error": 0.055588235294117605
   },
   "params": {
     "schema_version": 2,
@@ -8831,42 +8834,77 @@
       "evaluation_rows_raw": 3500
     },
     "risk_geometry": {
-      "schema_version": 1,
-      "method": "validation_residual_quantile",
-      "target_marginal_coverage": 0.8,
-      "floor_delta_addon": 0.013936820169319318,
-      "ceiling_delta_addon": 0.01604791627589225,
+      "schema_version": 3,
+      "method": "joint_validation_conformal_max_residual",
+      "calibration_policy_version": "nested-temporal-v1",
+      "target_joint_coverage": 0.8,
+      "nominal_conformal_coverage": 0.9,
+      "target_marginal_coverage": null,
+      "floor_delta_addon": 0.050307991336571774,
+      "ceiling_delta_addon": 0.050307991336571774,
+      "joint_score_quantile": 0.050307991336571774,
+      "full_calibration_addon": 0.050307991336571774,
+      "anti_shrinkage_applied": false,
       "calibration_rows": 3100,
+      "selection_method": "nested_temporal_nominal_grid",
+      "fit_rows": 1900,
+      "tuning_rows": 950,
+      "tuning_start": "2025-10-15",
+      "tuning_coverage": 0.8168421052631579,
+      "selected_fit_addon": 0.04225005633331132,
+      "nominal_grid_results": [
+        {
+          "nominal_coverage": 0.8,
+          "tuning_coverage": 0.7252631578947368,
+          "addon": 0.027318109144051143
+        },
+        {
+          "nominal_coverage": 0.85,
+          "tuning_coverage": 0.7642105263157895,
+          "addon": 0.03332627367752477
+        },
+        {
+          "nominal_coverage": 0.9,
+          "tuning_coverage": 0.8168421052631579,
+          "addon": 0.04225005633331132
+        }
+      ],
       "semantics": {
         "central_geometry": "typical conditional floor/ceiling",
-        "risk_geometry": "wider one-sided residual-quantile boundaries",
+        "risk_geometry": "joint split-conformal range with temporal robustness tuning",
+        "coverage_objective": "joint_floor_and_ceiling",
+        "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+        "external_risk_evaluation_used_for_selection": false,
         "strategy_stop_source": "risk_geometry",
         "strategy_target_source": "central_geometry"
       }
     }
   },
   "selection": {
-    "decision": "promote_contract_migration",
-    "reason": "Candidate did not earn central-model promotion, but the incumbent is pre-contract. Preserve the incumbent central predictor exactly and calibrate risk geometry on leakage-safe validation data so the serving registry can migrate without accepting a central-MAE regression.",
+    "decision": "promote_risk_calibration_migration",
+    "reason": "Central challenger did not earn promotion, but it carries a newer risk-calibration contract. Preserve the incumbent central predictor exactly and recalibrate only its risk geometry on leakage-safe temporal calibration data.",
     "scoring_version": "classic-boundary-pareto-v3",
     "selection_split": "validation",
     "test_used_for_selection": false,
     "candidate_current_validation_score": [
-      0.02270685651,
-      0.043530480687
+      0.022693095087,
+      0.043603182222
     ],
     "existing_current_validation_score": [
-      0.022761498469,
-      0.043522149566
+      0.022750222278,
+      0.043601490352
     ],
     "candidate_current_validation_rows": 6750,
     "max_interval_coverage_regression": 0.05,
-    "candidate_interval_coverage_delta": 0.000592592592592589
+    "candidate_interval_coverage_delta": 0.0007407407407407363
   },
   "contract_migration": {
-    "from_version": "robust-range-v3-20260906",
+    "from_version": "20260924T192816Z-risk-contract",
     "central_model_preserved": true,
     "central_params_preserved": true,
+    "risk_only_migration": true,
+    "risk_schema_version": 3,
+    "risk_calibration_policy_version": "nested-temporal-v1",
     "calibration_rows": 3100,
     "evaluation_rows": 3400,
     "test_used_for_selection": false

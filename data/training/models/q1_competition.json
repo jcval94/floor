@@ -1,6 +1,6 @@
 {
   "horizon": "q1",
-  "version": "20260925T183908Z",
+  "version": "20260925T195326Z",
   "selection_metric": "mae_spread_pct_then_total_boundary_mae_pct",
   "selection_split": "validation",
   "test_used_for_selection": false,
@@ -13,7 +13,7 @@
       "model_id": "robust_range_v3_q1",
       "model_family": "robust_range_v3",
       "horizon": "q1",
-      "version": "20260925T183908Z",
+      "version": "20260925T195326Z",
       "floor_delta": 0.03620604284297684,
       "ceiling_delta": 0.04121216520916275,
       "train_rows": 48200,
@@ -30,12 +30,12 @@
         "test_interval_coverage": 0.24246153846153845,
         "empirical_breach_rate": 0.7575384615384615,
         "central_skill_vs_best_dummy": -0.00168398127791769,
-        "risk_floor_coverage": 0.8470769230769231,
-        "risk_ceiling_coverage": 0.8664615384615385,
-        "risk_interval_coverage": 0.7172307692307692,
-        "risk_mean_width_pct": 0.17862684224032752,
+        "risk_floor_coverage": 0.924923076923077,
+        "risk_ceiling_coverage": 0.9393846153846154,
+        "risk_interval_coverage": 0.8643076923076923,
+        "risk_mean_width_pct": 0.24112411555265095,
         "risk_target_joint_coverage": 0.8,
-        "risk_joint_coverage_error": 0.08276923076923082
+        "risk_joint_coverage_error": 0.06430769230769229
       },
       "params": {
         "schema_version": 2,
@@ -8914,18 +8914,47 @@
           "evaluation_rows": 6500
         },
         "risk_geometry": {
-          "schema_version": 2,
+          "schema_version": 3,
           "method": "joint_validation_conformal_max_residual",
+          "calibration_policy_version": "nested-temporal-v1",
           "target_joint_coverage": 0.8,
+          "nominal_conformal_coverage": 0.9,
           "target_marginal_coverage": null,
-          "floor_delta_addon": 0.04243729603074123,
-          "ceiling_delta_addon": 0.04243729603074123,
-          "joint_score_quantile": 0.04243729603074123,
+          "floor_delta_addon": 0.07368593268690321,
+          "ceiling_delta_addon": 0.07368593268690321,
+          "joint_score_quantile": 0.07368593268690321,
+          "full_calibration_addon": 0.07368593268690321,
+          "anti_shrinkage_applied": false,
           "calibration_rows": 2750,
+          "selection_method": "nested_temporal_nominal_grid",
+          "fit_rows": 1400,
+          "tuning_rows": 850,
+          "tuning_start": "2025-10-08",
+          "tuning_coverage": 0.8352941176470589,
+          "selected_fit_addon": 0.06537046364632648,
+          "nominal_grid_results": [
+            {
+              "nominal_coverage": 0.8,
+              "tuning_coverage": 0.6870588235294117,
+              "addon": 0.03577774225988467
+            },
+            {
+              "nominal_coverage": 0.85,
+              "tuning_coverage": 0.7482352941176471,
+              "addon": 0.04593249474511114
+            },
+            {
+              "nominal_coverage": 0.9,
+              "tuning_coverage": 0.8352941176470589,
+              "addon": 0.06537046364632648
+            }
+          ],
           "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": false,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry"
           }
@@ -8954,7 +8983,7 @@
       "model_id": "regime_median_q1",
       "model_family": "regime_median",
       "horizon": "q1",
-      "version": "20260925T183908Z",
+      "version": "20260925T195326Z",
       "floor_delta": 0.03075422437905259,
       "ceiling_delta": 0.03546616702401524,
       "train_rows": 48200,
@@ -8971,12 +9000,12 @@
         "test_interval_coverage": 0.11292307692307692,
         "empirical_breach_rate": 0.8870769230769231,
         "central_skill_vs_best_dummy": -0.026214484889066636,
-        "risk_floor_coverage": 0.8449230769230769,
-        "risk_ceiling_coverage": 0.8584615384615385,
-        "risk_interval_coverage": 0.7076923076923077,
-        "risk_mean_width_pct": 0.17742239045266367,
+        "risk_floor_coverage": 0.9252307692307692,
+        "risk_ceiling_coverage": 0.9372307692307692,
+        "risk_interval_coverage": 0.8624615384615385,
+        "risk_mean_width_pct": 0.24111618269322235,
         "risk_target_joint_coverage": 0.8,
-        "risk_joint_coverage_error": 0.09230769230769231
+        "risk_joint_coverage_error": 0.06246153846153846
       },
       "params": {
         "schema_version": 2,
@@ -9231,18 +9260,47 @@
           "evaluation_rows": 6500
         },
         "risk_geometry": {
-          "schema_version": 2,
+          "schema_version": 3,
           "method": "joint_validation_conformal_max_residual",
+          "calibration_policy_version": "nested-temporal-v1",
           "target_joint_coverage": 0.8,
+          "nominal_conformal_coverage": 0.9,
           "target_marginal_coverage": null,
-          "floor_delta_addon": 0.05104589160691239,
-          "ceiling_delta_addon": 0.05104589160691239,
-          "joint_score_quantile": 0.05104589160691239,
+          "floor_delta_addon": 0.08289278772719327,
+          "ceiling_delta_addon": 0.08289278772719327,
+          "joint_score_quantile": 0.08289278772719327,
+          "full_calibration_addon": 0.08289278772719327,
+          "anti_shrinkage_applied": false,
           "calibration_rows": 2750,
+          "selection_method": "nested_temporal_nominal_grid",
+          "fit_rows": 1400,
+          "tuning_rows": 850,
+          "tuning_start": "2025-10-08",
+          "tuning_coverage": 0.8388235294117647,
+          "selected_fit_addon": 0.07302175561952459,
+          "nominal_grid_results": [
+            {
+              "nominal_coverage": 0.8,
+              "tuning_coverage": 0.6752941176470588,
+              "addon": 0.04373682635883916
+            },
+            {
+              "nominal_coverage": 0.85,
+              "tuning_coverage": 0.74,
+              "addon": 0.054194657938646446
+            },
+            {
+              "nominal_coverage": 0.9,
+              "tuning_coverage": 0.8388235294117647,
+              "addon": 0.07302175561952459
+            }
+          ],
           "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": false,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry"
           }
@@ -9271,7 +9329,7 @@
       "model_id": "boosted_stumps_q1",
       "model_family": "boosted_stumps",
       "horizon": "q1",
-      "version": "20260925T183908Z",
+      "version": "20260925T195326Z",
       "floor_delta": 0.037843228816792064,
       "ceiling_delta": 0.04151766424603663,
       "train_rows": 48200,
@@ -9288,12 +9346,12 @@
         "test_interval_coverage": 0.27615384615384614,
         "empirical_breach_rate": 0.7238461538461538,
         "central_skill_vs_best_dummy": -0.06435824554601166,
-        "risk_floor_coverage": 0.8458461538461538,
-        "risk_ceiling_coverage": 0.8652307692307692,
-        "risk_interval_coverage": 0.7156923076923077,
-        "risk_mean_width_pct": 0.1788924844667895,
+        "risk_floor_coverage": 0.9224615384615384,
+        "risk_ceiling_coverage": 0.9366153846153846,
+        "risk_interval_coverage": 0.8593846153846154,
+        "risk_mean_width_pct": 0.23999117300099054,
         "risk_target_joint_coverage": 0.8,
-        "risk_joint_coverage_error": 0.0843076923076923
+        "risk_joint_coverage_error": 0.05938461538461537
       },
       "params": {
         "schema_version": 2,
@@ -9602,18 +9660,47 @@
           "evaluation_rows": 6500
         },
         "risk_geometry": {
-          "schema_version": 2,
+          "schema_version": 3,
           "method": "joint_validation_conformal_max_residual",
+          "calibration_policy_version": "nested-temporal-v1",
           "target_joint_coverage": 0.8,
+          "nominal_conformal_coverage": 0.9,
           "target_marginal_coverage": null,
-          "floor_delta_addon": 0.040759750509825325,
-          "ceiling_delta_addon": 0.040759750509825325,
-          "joint_score_quantile": 0.040759750509825325,
+          "floor_delta_addon": 0.07130909477692637,
+          "ceiling_delta_addon": 0.07130909477692637,
+          "joint_score_quantile": 0.07130909477692637,
+          "full_calibration_addon": 0.07130909477692637,
+          "anti_shrinkage_applied": false,
           "calibration_rows": 2750,
+          "selection_method": "nested_temporal_nominal_grid",
+          "fit_rows": 1400,
+          "tuning_rows": 850,
+          "tuning_start": "2025-10-08",
+          "tuning_coverage": 0.8305882352941176,
+          "selected_fit_addon": 0.06232486816020487,
+          "nominal_grid_results": [
+            {
+              "nominal_coverage": 0.8,
+              "tuning_coverage": 0.6823529411764706,
+              "addon": 0.033173002067213374
+            },
+            {
+              "nominal_coverage": 0.85,
+              "tuning_coverage": 0.7482352941176471,
+              "addon": 0.044496290746342065
+            },
+            {
+              "nominal_coverage": 0.9,
+              "tuning_coverage": 0.8305882352941176,
+              "addon": 0.06232486816020487
+            }
+          ],
           "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": false,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry"
           }
@@ -9642,7 +9729,7 @@
       "model_id": "sequence_linear_q1",
       "model_family": "sequence_linear",
       "horizon": "q1",
-      "version": "20260925T183908Z",
+      "version": "20260925T195326Z",
       "floor_delta": 0.04478718626023625,
       "ceiling_delta": 0.05067488422131331,
       "train_rows": 48200,
@@ -9659,12 +9746,12 @@
         "test_interval_coverage": 0.3376923076923077,
         "empirical_breach_rate": 0.6623076923076923,
         "central_skill_vs_best_dummy": -0.2286956576894119,
-        "risk_floor_coverage": 0.8332307692307692,
-        "risk_ceiling_coverage": 0.8572307692307692,
-        "risk_interval_coverage": 0.6956923076923077,
-        "risk_mean_width_pct": 0.173831208710352,
+        "risk_floor_coverage": 0.9181538461538462,
+        "risk_ceiling_coverage": 0.9363076923076923,
+        "risk_interval_coverage": 0.8556923076923076,
+        "risk_mean_width_pct": 0.24271808757322277,
         "risk_target_joint_coverage": 0.8,
-        "risk_joint_coverage_error": 0.10430769230769232
+        "risk_joint_coverage_error": 0.0556923076923076
       },
       "params": {
         "schema_version": 2,
@@ -9925,18 +10012,47 @@
           "evaluation_rows": 6500
         },
         "risk_geometry": {
-          "schema_version": 2,
+          "schema_version": 3,
           "method": "joint_validation_conformal_max_residual",
+          "calibration_policy_version": "nested-temporal-v1",
           "target_joint_coverage": 0.8,
+          "nominal_conformal_coverage": 0.9,
           "target_marginal_coverage": null,
-          "floor_delta_addon": 0.03915407153049047,
-          "ceiling_delta_addon": 0.03915407153049047,
-          "joint_score_quantile": 0.03915407153049047,
+          "floor_delta_addon": 0.07359751096192586,
+          "ceiling_delta_addon": 0.07359751096192586,
+          "joint_score_quantile": 0.07359751096192586,
+          "full_calibration_addon": 0.07359751096192586,
+          "anti_shrinkage_applied": false,
           "calibration_rows": 2750,
+          "selection_method": "nested_temporal_nominal_grid",
+          "fit_rows": 1400,
+          "tuning_rows": 850,
+          "tuning_start": "2025-10-08",
+          "tuning_coverage": 0.8176470588235294,
+          "selected_fit_addon": 0.06276344132884146,
+          "nominal_grid_results": [
+            {
+              "nominal_coverage": 0.8,
+              "tuning_coverage": 0.668235294117647,
+              "addon": 0.031344877708249654
+            },
+            {
+              "nominal_coverage": 0.85,
+              "tuning_coverage": 0.7352941176470589,
+              "addon": 0.042877635370493626
+            },
+            {
+              "nominal_coverage": 0.9,
+              "tuning_coverage": 0.8176470588235294,
+              "addon": 0.06276344132884146
+            }
+          ],
           "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": false,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry"
           }
@@ -9965,7 +10081,7 @@
       "model_id": "regularized_linear_q1",
       "model_family": "regularized_linear",
       "horizon": "q1",
-      "version": "20260925T183908Z",
+      "version": "20260925T195326Z",
       "floor_delta": 0.04472571479832374,
       "ceiling_delta": 0.05059478833577666,
       "train_rows": 48200,
@@ -9982,12 +10098,12 @@
         "test_interval_coverage": 0.338,
         "empirical_breach_rate": 0.6619999999999999,
         "central_skill_vs_best_dummy": -0.21765250637368538,
-        "risk_floor_coverage": 0.8326153846153846,
-        "risk_ceiling_coverage": 0.8556923076923076,
-        "risk_interval_coverage": 0.6938461538461539,
-        "risk_mean_width_pct": 0.17292213598531384,
+        "risk_floor_coverage": 0.9178461538461539,
+        "risk_ceiling_coverage": 0.9356923076923077,
+        "risk_interval_coverage": 0.8544615384615385,
+        "risk_mean_width_pct": 0.24162330367992732,
         "risk_target_joint_coverage": 0.8,
-        "risk_joint_coverage_error": 0.10615384615384615
+        "risk_joint_coverage_error": 0.05446153846153845
       },
       "params": {
         "schema_version": 2,
@@ -10248,18 +10364,47 @@
           "evaluation_rows": 6500
         },
         "risk_geometry": {
-          "schema_version": 2,
+          "schema_version": 3,
           "method": "joint_validation_conformal_max_residual",
+          "calibration_policy_version": "nested-temporal-v1",
           "target_joint_coverage": 0.8,
+          "nominal_conformal_coverage": 0.9,
           "target_marginal_coverage": null,
-          "floor_delta_addon": 0.03858685244804206,
-          "ceiling_delta_addon": 0.03858685244804206,
-          "joint_score_quantile": 0.03858685244804206,
+          "floor_delta_addon": 0.07293743629534835,
+          "ceiling_delta_addon": 0.07293743629534835,
+          "joint_score_quantile": 0.07293743629534835,
+          "full_calibration_addon": 0.07293743629534835,
+          "anti_shrinkage_applied": false,
           "calibration_rows": 2750,
+          "selection_method": "nested_temporal_nominal_grid",
+          "fit_rows": 1400,
+          "tuning_rows": 850,
+          "tuning_start": "2025-10-08",
+          "tuning_coverage": 0.8211764705882353,
+          "selected_fit_addon": 0.06250221305506273,
+          "nominal_grid_results": [
+            {
+              "nominal_coverage": 0.8,
+              "tuning_coverage": 0.668235294117647,
+              "addon": 0.03145574117564404
+            },
+            {
+              "nominal_coverage": 0.85,
+              "tuning_coverage": 0.7341176470588235,
+              "addon": 0.04210185592666675
+            },
+            {
+              "nominal_coverage": 0.9,
+              "tuning_coverage": 0.8211764705882353,
+              "addon": 0.06250221305506273
+            }
+          ],
           "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "risk_geometry": "joint split-conformal range with temporal robustness tuning",
             "coverage_objective": "joint_floor_and_ceiling",
+            "nominal_selection": "earlier_fit_then_later_tuning_within_calibration_block",
+            "external_risk_evaluation_used_for_selection": false,
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry"
           }
@@ -10285,12 +10430,12 @@
       }
     }
   ],
-  "registry_decision": "challenger_only",
-  "registry_reason": "Candidate did not strictly improve all of floor MAE, ceiling MAE, and spread MAE with the five-point coverage guard on the same current leakage-safe validation split: existing=(0.031783203041958016, 0.06122054151851131) candidate=(0.03179997623552035, 0.06126978180297406).",
+  "registry_decision": "promote_risk_calibration_migration",
+  "registry_reason": "Central challenger did not earn promotion, but it carries a newer risk-calibration contract. Preserve the incumbent central predictor exactly and recalibrate only its risk geometry on leakage-safe temporal calibration data.",
   "candidate_model_id": "robust_range_v3_q1",
-  "candidate_version": "20260925T183908Z",
+  "candidate_version": "20260925T195326Z",
   "active_champion_model_id": "robust_range_v3_q1",
-  "active_champion_version": "20260924T192816Z-risk-contract",
+  "active_champion_version": "20260925T195326Z-risk-contract",
   "candidate_current_validation_score": [
     0.031799976236,
     0.061269781803
