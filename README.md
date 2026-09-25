@@ -104,6 +104,31 @@ Los workflows de mercado **no corren por cada push a `main`**. Producción usa s
 
 El audit publicado registra el commit y las generaciones de Release utilizadas, evitando que un build mezcle silenciosamente “lo último” de distintas fuentes durante su ejecución.
 
+### Pronósticos y Vista rápida
+
+La página `site/forecasts.html` permite explorar los rangos pronosticados por horizonte y filtrar por ticker y cobertura mínima. **Vista rápida** conserva como orden predeterminado la mayor cobertura observada OOS, pero también permite ordenar los activos por geometría del rango:
+
+- mayor cobertura;
+- más cargado a la derecha;
+- más cargado a la izquierda;
+- más balanceado;
+- mayor upside;
+- mayor downside;
+- rango más amplio;
+- rango más estrecho;
+- mayor `skill vs dummy`;
+- ticker A–Z.
+
+El sesgo izquierda/derecha se calcula alrededor de la referencia de precio:
+
+```text
+sesgo = upside - abs(downside)
+```
+
+Un sesgo positivo indica que el rango tiene más extensión hacia arriba; uno negativo, más extensión hacia abajo; y un valor cercano a cero representa un rango más balanceado. La amplitud se calcula como `upside + abs(downside)`.
+
+El criterio elegido se aplica tanto a las tarjetas de **Vista rápida** como a la tabla **Comparar activos**. Los valores faltantes se envían al final del orden correspondiente. Estos criterios describen la forma del rango pronosticado y **no convierten su amplitud o sesgo en alpha ni en una recomendación de compra o venta**.
+
 `docs/` no es una fuente autoritativa de datos de inversión.
 
 ## Persistencia SQLite
