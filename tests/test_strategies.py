@@ -184,6 +184,25 @@ def test_m3_timing_only_blocks_buy_when_timing_is_reliable() -> None:
     assert breakout["m3_context"]["timing_reliable"] is False
 
 
+def test_range_coverage_does_not_change_active_strategy_scores() -> None:
+    cfg = load_simple_yaml(Path("config/strategies.yaml"))
+    low_rows = [dict(row, confidence_score=0.05) for row in _rows()]
+    high_rows = [dict(row, confidence_score=0.95) for row in _rows()]
+
+    low = run_strategies(low_rows, cfg, session="OPEN_PLUS_2H")
+    high = run_strategies(high_rows, cfg, session="OPEN_PLUS_2H")
+
+    low_scores = {
+        (signal["strategy_id"], signal["symbol"]): signal["score"]
+        for signal in low["signals"]
+    }
+    high_scores = {
+        (signal["strategy_id"], signal["symbol"]): signal["score"]
+        for signal in high["signals"]
+    }
+    assert low_scores == high_scores
+
+
 def test_allocator_keeps_one_order_per_symbol() -> None:
     cfg = load_simple_yaml(Path("config/strategies.yaml"))
     out = run_strategies(_rows(), cfg, session="OPEN_PLUS_2H")

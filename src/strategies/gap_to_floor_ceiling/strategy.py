@@ -247,14 +247,13 @@ def generate_gap_to_floor_ceiling_orders(
             )
             continue
 
-        confidence = max(
-            0.0,
-            min(1.0, to_float(row.get("confidence_score"), 0.5)),
-        )
+        # Range coverage is a calibration property of the risk envelope, not
+        # directional conviction.  Never let a wider/better-calibrated interval
+        # mechanically raise a trading score.  Directional ranking stays driven
+        # by net alpha after costs and realized payoff asymmetry.
         score = (
             max(0.0, alpha["net_alpha_pct"])
             * min(reward_risk, 3.0)
-            * confidence
         )
         expected_return = (
             alpha["gross_alpha_pct"]

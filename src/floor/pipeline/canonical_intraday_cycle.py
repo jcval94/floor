@@ -240,7 +240,8 @@ def run_intraday_cycle(
                         confidence=round(float(prediction.confidence_score or 0.0), 4),
                         rationale=(
                             "Directional alpha unavailable; HOLD emitted. "
-                            "Confidence describes validation interval coverage only."
+                            "Range coverage describes OOS interval calibration only; "
+                            "it is not directional conviction."
                         ),
                     )
                     append_jsonl(
