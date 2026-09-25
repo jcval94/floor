@@ -41,15 +41,19 @@ def _m3_block_reason(row: dict) -> str | None:
     return f"Missing m3 fields: {','.join(missing)}" if missing else None
 
 
-def _model_confidence(*breach_probs: float) -> float:
-    """Aggregate empirically calibrated non-breach probabilities.
+def _horizon_quality(forecast: Any) -> float:
+    """Prefer OOS joint risk coverage; fall back to central non-breach rate."""
 
-    Individual horizon probabilities are validation-holdout rates. We keep the
-    aggregate as a quality/readiness score only; it is not a probability of a
-    BUY/SELL outcome.
-    """
+    empirical_joint = getattr(forecast, "risk_empirical_joint_coverage", None)
+    if empirical_joint is not None:
+        return max(0.0, min(1.0, float(empirical_joint)))
+    return max(0.0, min(1.0, 1.0 - float(forecast.breach_prob)))
 
-    values = [max(0.0, min(1.0, 1.0 - float(prob))) for prob in breach_probs]
+
+def _model_confidence(*forecasts: Any) -> float:
+    """Aggregate empirical range quality without inventing directional alpha."""
+
+    values = [_horizon_quality(forecast) for forecast in forecasts]
     return sum(values) / len(values) if values else 0.0
 
 
@@ -145,10 +149,10 @@ def generate_forecasts(
         expected_range_avg = (
             d1.expected_range + w1.expected_range + q1.expected_range
         ) / 3
-        model_conf = _model_confidence(
-            d1.breach_prob,
-            w1.breach_prob,
-            q1.breach_prob,
+        model_conf = _model_confidence(d1, w1, q1)
+        joint_risk_available = all(
+            forecast.risk_empirical_joint_coverage is not None
+            for forecast in (d1, w1, q1)
         )
 
         midpoint_d1 = _midpoint_return(close, d1.floor, d1.ceiling)
@@ -166,6 +170,9 @@ def generate_forecasts(
             "risk_ceiling_d1": d1.risk_ceiling,
             "risk_geometry_available_d1": d1.risk_geometry_available,
             "risk_target_marginal_coverage_d1": d1.risk_target_marginal_coverage,
+            "risk_target_joint_coverage_d1": d1.risk_target_joint_coverage,
+            "risk_empirical_joint_coverage_d1": d1.risk_empirical_joint_coverage,
+            "central_skill_vs_best_dummy_d1": d1.central_skill_vs_best_dummy,
             "floor_time_bucket_d1": d1.floor_time,
             "ceiling_time_bucket_d1": d1.ceiling_time,
             "breach_prob_d1": d1.breach_prob,
@@ -178,6 +185,9 @@ def generate_forecasts(
             "risk_ceiling_w1": w1.risk_ceiling,
             "risk_geometry_available_w1": w1.risk_geometry_available,
             "risk_target_marginal_coverage_w1": w1.risk_target_marginal_coverage,
+            "risk_target_joint_coverage_w1": w1.risk_target_joint_coverage,
+            "risk_empirical_joint_coverage_w1": w1.risk_empirical_joint_coverage,
+            "central_skill_vs_best_dummy_w1": w1.central_skill_vs_best_dummy,
             "floor_day_w1": int(w1.floor_time),
             "ceiling_day_w1": int(w1.ceiling_time),
             "breach_prob_w1": w1.breach_prob,
@@ -190,6 +200,9 @@ def generate_forecasts(
             "risk_ceiling_q1": q1.risk_ceiling,
             "risk_geometry_available_q1": q1.risk_geometry_available,
             "risk_target_marginal_coverage_q1": q1.risk_target_marginal_coverage,
+            "risk_target_joint_coverage_q1": q1.risk_target_joint_coverage,
+            "risk_empirical_joint_coverage_q1": q1.risk_empirical_joint_coverage,
+            "central_skill_vs_best_dummy_q1": q1.central_skill_vs_best_dummy,
             "floor_day_q1": int(q1.floor_time),
             "ceiling_day_q1": int(q1.ceiling_time),
             "breach_prob_q1": q1.breach_prob,
@@ -198,7 +211,11 @@ def generate_forecasts(
             "expected_range_q1": q1.expected_range,
             "confidence_score": round(model_conf, 4),
             "model_confidence_score": round(model_conf, 4),
-            "confidence_semantics": "mean_validation_central_interval_non_breach_rate",
+            "confidence_semantics": (
+                "mean_oos_joint_risk_interval_coverage"
+                if joint_risk_available
+                else "mean_validation_central_interval_non_breach_rate_fallback"
+            ),
             "range_geometry_semantics": {
                 "central": "typical conditional floor/ceiling; not directional alpha",
                 "risk": (
@@ -293,7 +310,7 @@ def generate_forecasts(
             else "m3 week 1..13 = semanas bursátiles relativas hacia adelante."
         )
         out["explanation_compact"] = (
-            f"{symbol}: range-confidence={out['confidence_score']:.2f}, "
+            f"{symbol}: range-quality={out['confidence_score']:.2f}, "
             f"d1_range={out['expected_range_d1']:.2f}, "
             "directional BUY/SELL disabled until a dedicated model proves "
             f"out-of-time lift. {m3_explanation}"
