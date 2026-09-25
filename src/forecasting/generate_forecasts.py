@@ -219,12 +219,19 @@ def generate_forecasts(
             "range_geometry_semantics": {
                 "central": "typical conditional floor/ceiling; not directional alpha",
                 "risk": (
-                    "validation residual-quantile risk boundary"
-                    if any(
-                        forecast.risk_geometry_available
+                    "joint split-conformal risk range"
+                    if all(
+                        forecast.risk_target_joint_coverage is not None
                         for forecast in (d1, w1, q1)
                     )
-                    else "unavailable on legacy champion; central fallback is explicitly uncalibrated"
+                    else (
+                        "legacy marginal residual-quantile risk boundary"
+                        if any(
+                            forecast.risk_geometry_available
+                            for forecast in (d1, w1, q1)
+                        )
+                        else "unavailable on legacy champion; central fallback is explicitly uncalibrated"
+                    )
                 ),
             },
             "directional_signal_available": False,
