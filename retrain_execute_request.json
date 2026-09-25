@@ -1,6 +1,6 @@
 {
   "requested_at": "2026-09-25",
-  "reason": "nested_temporal_joint_conformal_risk_recalibration",
+  "reason": "refresh_serving_champion_dummy_benchmarks",
   "force": true,
   "approve_recommended": false,
   "tasks": [
@@ -9,6 +9,6 @@
     "q1"
   ],
   "confirm_publish": "PUBLISH_CHAMPIONS_TO_MAIN",
-  "authorization_context": "User explicitly approved increasing forecast confidence while preserving central D1/W1/Q1 predictive power.",
-  "iteration": "joint-conformal-risk-v3-temporal"
+  "authorization_context": "User explicitly approved improving forecast confidence and comparing serving forecasts against dummy baselines while preserving central predictive power.",
+  "iteration": "joint-conformal-risk-v3-dummy-benchmark"
 }
