@@ -149,40 +149,6 @@ strategies:
     liquidity:
       min_avg_dollar_volume: 10000000
 
-  floor_ceiling_reclaim:
-    research_enabled: true
-    capital_allocator_enabled: false
-    canonical_serving_enabled: false
-    paper_enabled: false
-    live_enabled: false
-    promotion_eligible: false
-    readiness: research_diagnostic_needs_intraday_oos_alpha
-    priority: 4
-    horizon: d1
-    universe:
-      min_price: 5
-      max_price: 2000
-      excluded_sectors:
-    entry:
-      touch_tolerance_pct: 0.002
-      confirmation_buffer_pct: 0.001
-      min_relative_volume: 0.80
-      min_reward_risk: 1.25
-      min_net_alpha_pct: 0.003
-      min_alpha_to_cost_multiple: 1.50
-    position_sizing:
-      risk_budget_pct_nav: 0.005
-      max_weight_pct_nav: 0.08
-      max_notional_usd: 50000
-    risk:
-      stop_buffer_pct: 0.002
-    exits:
-      temporal_exit_business_days: 1
-    cooldown_cycles: 1
-    max_rotation_per_cycle: 3
-    liquidity:
-      min_avg_dollar_volume: 9000000
-
   weekly_opportunity_ridge:
     research_enabled: true
     capital_allocator_enabled: true
