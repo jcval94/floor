@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import logging
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -23,7 +24,13 @@ from models.robust_range_v3 import (
 
 logger = logging.getLogger(__name__)
 
-RISK_TARGET_MARGINAL_COVERAGE = 0.80
+# Central floor/ceiling remain sharp point/range forecasts.  Risk geometry is
+# calibrated independently to a JOINT coverage target so uncertainty can improve
+# without widening or otherwise changing the central predictor.
+RISK_TARGET_JOINT_COVERAGE = 0.80
+# Compatibility alias for downstream readers of pre-v2 artifacts.  New artifacts
+# must use target_joint_coverage for semantics.
+RISK_TARGET_MARGINAL_COVERAGE = RISK_TARGET_JOINT_COVERAGE
 
 HORIZON_TARGETS = {
     "d1": ("floor_d1", "ceiling_d1"),
@@ -218,6 +225,26 @@ def _quantile(values: list[float], q: float) -> float:
 
 def _clamp(value: float) -> float:
     return max(0.0001, min(0.7, value))
+
+
+def _conformal_quantile(values: list[float], coverage: float) -> float:
+    """Finite-sample split-conformal quantile for nonconformity scores.
+
+    The ceil((n + 1) * coverage) order statistic is deliberately conservative
+    for small calibration blocks.  Scores are expected to be non-negative.
+    """
+
+    clean = sorted(
+        max(0.0, float(value))
+        for value in values
+        if math.isfinite(float(value))
+    )
+    if not clean:
+        return 0.0
+    level = max(0.0, min(1.0, float(coverage)))
+    rank = int(math.ceil((len(clean) + 1) * level))
+    index = max(0, min(len(clean) - 1, rank - 1))
+    return clean[index]
 
 
 def _float_dict(value: object) -> dict[str, float]:
@@ -529,39 +556,41 @@ def _fit_risk_geometry(
     floor_predictions: list[float],
     ceiling_predictions: list[float],
 ) -> dict[str, Any]:
-    """Calibrate wider one-sided risk bounds without changing central forecasts.
+    """Jointly conformalize risk bounds while preserving central forecasts.
 
-    Central floor/ceiling remain conditional typical geometry.  Risk geometry
-    widens each side by an out-of-time residual quantile so strategies no longer
-    treat a median-like boundary as a conservative stop.
+    One nonconformity score per row measures the larger miss across floor and
+    ceiling.  A single split-conformal addon therefore calibrates the event that
+    BOTH realized extremes are contained by the risk range.  Central predictions
+    are never changed, so central MAE/sharpness remain exactly as selected.
     """
 
-    floor_residuals = [
-        item.floor_delta - prediction
-        for item, prediction in zip(rows, floor_predictions)
-    ]
-    ceiling_residuals = [
-        item.ceiling_delta - prediction
-        for item, prediction in zip(rows, ceiling_predictions)
-    ]
-    floor_addon = max(
-        0.0,
-        _quantile(floor_residuals, RISK_TARGET_MARGINAL_COVERAGE),
-    )
-    ceiling_addon = max(
-        0.0,
-        _quantile(ceiling_residuals, RISK_TARGET_MARGINAL_COVERAGE),
+    joint_scores: list[float] = []
+    for item, floor_prediction, ceiling_prediction in zip(
+        rows, floor_predictions, ceiling_predictions
+    ):
+        floor_miss = max(0.0, item.floor_delta - floor_prediction)
+        ceiling_miss = max(0.0, item.ceiling_delta - ceiling_prediction)
+        joint_scores.append(max(floor_miss, ceiling_miss))
+
+    joint_addon = _conformal_quantile(
+        joint_scores,
+        RISK_TARGET_JOINT_COVERAGE,
     )
     return {
-        "schema_version": 1,
-        "method": "validation_residual_quantile",
-        "target_marginal_coverage": RISK_TARGET_MARGINAL_COVERAGE,
-        "floor_delta_addon": floor_addon,
-        "ceiling_delta_addon": ceiling_addon,
+        "schema_version": 2,
+        "method": "joint_validation_conformal_max_residual",
+        "target_joint_coverage": RISK_TARGET_JOINT_COVERAGE,
+        # Kept only so legacy consumers fail soft during the rollout.  It no
+        # longer describes the calibration objective.
+        "target_marginal_coverage": None,
+        "floor_delta_addon": joint_addon,
+        "ceiling_delta_addon": joint_addon,
+        "joint_score_quantile": joint_addon,
         "calibration_rows": len(rows),
         "semantics": {
             "central_geometry": "typical conditional floor/ceiling",
-            "risk_geometry": "wider one-sided residual-quantile boundaries",
+            "risk_geometry": "joint split-conformal range for both realized extremes",
+            "coverage_objective": "joint_floor_and_ceiling",
             "strategy_stop_source": "risk_geometry",
             "strategy_target_source": "central_geometry",
         },
@@ -578,9 +607,13 @@ def _risk_geometry_metrics(
     ceiling_addon = max(
         0.0, float(risk_geometry.get("ceiling_delta_addon") or 0.0)
     )
+    target_joint = float(
+        risk_geometry.get("target_joint_coverage") or RISK_TARGET_JOINT_COVERAGE
+    )
     floor_hits: list[float] = []
     ceiling_hits: list[float] = []
     interval_hits: list[float] = []
+    widths: list[float] = []
     for item, floor_prediction, ceiling_prediction in zip(
         rows, floor_predictions, ceiling_predictions
     ):
@@ -591,11 +624,81 @@ def _risk_geometry_metrics(
         floor_hits.append(1.0 if floor_ok else 0.0)
         ceiling_hits.append(1.0 if ceiling_ok else 0.0)
         interval_hits.append(1.0 if floor_ok and ceiling_ok else 0.0)
+        widths.append(risk_floor_delta + risk_ceiling_delta)
+    joint_coverage = _mean(interval_hits)
     return {
-        "risk_target_marginal_coverage": RISK_TARGET_MARGINAL_COVERAGE,
+        "risk_target_joint_coverage": target_joint,
         "risk_floor_coverage": _mean(floor_hits),
         "risk_ceiling_coverage": _mean(ceiling_hits),
-        "risk_interval_coverage": _mean(interval_hits),
+        "risk_interval_coverage": joint_coverage,
+        "risk_joint_coverage_error": abs(joint_coverage - target_joint),
+        "risk_mean_width_pct": _mean(widths),
+    }
+
+
+def _dummy_benchmark(
+    train: list[_PreparedRow],
+    evaluation: list[_PreparedRow],
+) -> dict[str, Any]:
+    """Leakage-safe null models used to prove that features add central skill."""
+
+    floor_median = _quantile([item.floor_delta for item in train], 0.5)
+    ceiling_median = _quantile([item.ceiling_delta for item in train], 0.5)
+    median_metrics = _metrics(
+        evaluation,
+        [_clamp(floor_median) for _ in evaluation],
+        [_clamp(ceiling_median) for _ in evaluation],
+    )
+
+    floor_ratios = [
+        item.floor_delta / abs(item.features.get("atr_14", 0.0))
+        for item in train
+        if abs(item.features.get("atr_14", 0.0)) > 1e-8
+    ]
+    ceiling_ratios = [
+        item.ceiling_delta / abs(item.features.get("atr_14", 0.0))
+        for item in train
+        if abs(item.features.get("atr_14", 0.0)) > 1e-8
+    ]
+    floor_k = _quantile(floor_ratios, 0.5) if floor_ratios else 0.0
+    ceiling_k = _quantile(ceiling_ratios, 0.5) if ceiling_ratios else 0.0
+    atr_floor = [
+        _clamp(
+            floor_k * abs(item.features.get("atr_14", 0.0))
+            if floor_k > 0.0
+            else floor_median
+        )
+        for item in evaluation
+    ]
+    atr_ceiling = [
+        _clamp(
+            ceiling_k * abs(item.features.get("atr_14", 0.0))
+            if ceiling_k > 0.0
+            else ceiling_median
+        )
+        for item in evaluation
+    ]
+    atr_metrics = _metrics(evaluation, atr_floor, atr_ceiling)
+
+    baselines = {
+        "global_median": median_metrics,
+        "atr_only": atr_metrics,
+    }
+    best_name = min(
+        baselines,
+        key=lambda name: float(baselines[name]["mae_spread_pct"]),
+    )
+    best_loss = float(baselines[best_name]["mae_spread_pct"])
+    return {
+        "selection_split": "validation",
+        "best_name": best_name,
+        "best_mae_spread_pct": best_loss,
+        "global_median_mae_spread_pct": float(
+            median_metrics["mae_spread_pct"]
+        ),
+        "atr_only_mae_spread_pct": float(atr_metrics["mae_spread_pct"]),
+        "atr_floor_multiplier": floor_k,
+        "atr_ceiling_multiplier": ceiling_k,
     }
 
 
@@ -643,6 +746,7 @@ def train_horizon_competition(
         )
 
     timing = fit_horizon_timing(train_raw, horizon)
+    dummy_benchmark = _dummy_benchmark(train, selection_evaluation)
     candidates: list[HorizonCompetitionCandidate] = []
     allowed_families = set(model_families or ())
     specs = [
@@ -686,6 +790,13 @@ def train_horizon_competition(
             floor_predictions,
             ceiling_predictions,
         )
+        dummy_loss = float(dummy_benchmark["best_mae_spread_pct"])
+        candidate_loss = float(candidate_metrics["mae_spread_pct"])
+        candidate_metrics["central_skill_vs_best_dummy"] = (
+            1.0 - (candidate_loss / dummy_loss)
+            if dummy_loss > 0.0
+            else 0.0
+        )
 
         risk_floor_predictions = [
             floor_fn(item) for item in risk_evaluation
@@ -724,6 +835,7 @@ def train_horizon_competition(
                         "evaluation_rows": len(selection_evaluation),
                     },
                     "risk_geometry": risk_geometry,
+                    "dummy_benchmark": dummy_benchmark,
                     "split_integrity": {
                         "eligibility_field": f"split_eligible_{horizon}",
                         "selection_split": "validation",
@@ -831,6 +943,11 @@ def run(
             "test_ceiling_coverage",
             "test_interval_coverage",
             "empirical_breach_rate",
+            "central_skill_vs_best_dummy",
+            "risk_target_joint_coverage",
+            "risk_interval_coverage",
+            "risk_joint_coverage_error",
+            "risk_mean_width_pct",
             "timing_status",
         ]
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -867,6 +984,21 @@ def run(
                     ),
                     "empirical_breach_rate": round(
                         artifact.metrics["empirical_breach_rate"], 8
+                    ),
+                    "central_skill_vs_best_dummy": round(
+                        artifact.metrics.get("central_skill_vs_best_dummy", 0.0), 8
+                    ),
+                    "risk_target_joint_coverage": round(
+                        artifact.metrics.get("risk_target_joint_coverage", 0.0), 8
+                    ),
+                    "risk_interval_coverage": round(
+                        artifact.metrics.get("risk_interval_coverage", 0.0), 8
+                    ),
+                    "risk_joint_coverage_error": round(
+                        artifact.metrics.get("risk_joint_coverage_error", 0.0), 8
+                    ),
+                    "risk_mean_width_pct": round(
+                        artifact.metrics.get("risk_mean_width_pct", 0.0), 8
                     ),
                     "timing_status": timing_status,
                 }
