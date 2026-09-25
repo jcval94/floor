@@ -215,8 +215,16 @@ def generate_forecasts(
             "expected_return_q1": None,
             "range_midpoint_return_q1": round(midpoint_q1, 6),
             "expected_range_q1": q1.expected_range,
+            # Compatibility aliases retained for downstream payloads.  This
+            # value is range/risk-envelope coverage, not directional confidence.
             "confidence_score": round(model_conf, 4),
             "model_confidence_score": round(model_conf, 4),
+            "range_coverage_score": round(model_conf, 4),
+            "range_coverage_semantics": (
+                "mean_oos_joint_risk_interval_coverage"
+                if joint_risk_available
+                else "mean_validation_central_interval_non_breach_rate_fallback"
+            ),
             "confidence_semantics": (
                 "mean_oos_joint_risk_interval_coverage"
                 if joint_risk_available
