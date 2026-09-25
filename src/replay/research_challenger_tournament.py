@@ -223,13 +223,20 @@ def _evidence_readiness(
     evaluated: dict[str, Any] = {}
     for member_id in RESEARCH_MEMBERS:
         row = rows.get(member_id)
+        coverage_ratio = (
+            feature_coverage.get(member_id, 0) / coverage_denominator
+        )
+        is_evaluable = row is not None and coverage_ratio >= 0.95
         evaluated[member_id] = {
-            "status": "EVALUATED_RETROSPECTIVE_PIT" if row is not None else "NOT_EVALUATED",
-            "evaluated": row is not None,
+            "status": (
+                "EVALUATED_RETROSPECTIVE_PIT"
+                if is_evaluable
+                else "INSUFFICIENT_FEATURE_COVERAGE"
+            ),
+            "evaluated": is_evaluable,
             "prospective_evidence": False,
             "historical_model_out_of_sample": False,
-            "feature_coverage_ratio": feature_coverage.get(member_id, 0)
-            / coverage_denominator,
+            "feature_coverage_ratio": coverage_ratio,
             "action_counts": dict(action_totals.get(member_id, Counter())),
             "promotion_eligible": False,
         }
