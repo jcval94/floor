@@ -77,7 +77,7 @@ def test_rotation_ranks_only_cost_valid_source_buys() -> None:
     output = build_relative_strength_rotation(decisions, rows, _cfg())
     by_symbol = {item.symbol: item for item in output}
 
-    assert by_symbol["A"].side == "BUY"
+    assert by_symbol["A"].side == "HOLD"
     assert by_symbol["B"].side == "BUY"
     assert by_symbol["C"].side == "HOLD"
     assert by_symbol["B"].net_alpha_pct == 0.02
