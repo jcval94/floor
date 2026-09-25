@@ -1,6 +1,6 @@
 {
   "requested_at": "2026-09-25",
-  "reason": "refresh_serving_champion_dummy_benchmarks",
+  "reason": "refresh_serving_champion_dummy_benchmarks_after_writer_lock",
   "force": true,
   "approve_recommended": false,
   "tasks": [
@@ -10,5 +10,5 @@
   ],
   "confirm_publish": "PUBLISH_CHAMPIONS_TO_MAIN",
   "authorization_context": "User explicitly approved improving forecast confidence and comparing serving forecasts against dummy baselines while preserving central predictive power.",
-  "iteration": "joint-conformal-risk-v3-dummy-benchmark"
+  "iteration": "joint-conformal-risk-v4-dummy-benchmark-retry"
 }
