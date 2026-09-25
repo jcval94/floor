@@ -52,6 +52,8 @@ def test_joint_conformal_calibrates_pair_not_each_side_independently() -> None:
     )
 
     assert risk["method"] == "joint_validation_conformal_max_residual"
+    assert risk["schema_version"] == 3
+    assert risk["nominal_conformal_coverage"] >= RISK_TARGET_JOINT_COVERAGE
     assert risk["target_joint_coverage"] == pytest.approx(
         RISK_TARGET_JOINT_COVERAGE
     )
@@ -66,6 +68,44 @@ def test_joint_conformal_calibrates_pair_not_each_side_independently() -> None:
             - RISK_TARGET_JOINT_COVERAGE
         )
     )
+
+
+def test_temporal_tuning_can_raise_nominal_without_using_external_evaluation() -> None:
+    rows: list[_PreparedRow] = []
+    scores: list[float] = []
+    # Earlier fit block: 85% of misses fit inside 1pp, then a mild tail.
+    fit_scores = [0.01] * 119 + [0.02] * 14 + [0.03] * 7
+    # Later internal tuning block is harder: 80% need a 2pp addon.
+    tune_scores = [0.01] * 24 + [0.02] * 24 + [0.03] * 12
+    for idx, score in enumerate(fit_scores + tune_scores):
+        day = f"2026-{idx:04d}"
+        rows.append(
+            _PreparedRow(
+                row={
+                    "timestamp": f"{day}T20:00:00+00:00",
+                    "symbol": "AAA",
+                    "target_end_date_d1": day,
+                },
+                close=100.0,
+                floor_delta=0.02 + score,
+                ceiling_delta=0.02 + score,
+                features={"atr_14": 0.02},
+            )
+        )
+        scores.append(score)
+
+    predictions = [0.02] * len(rows)
+    risk = _fit_risk_geometry(
+        rows,
+        predictions,
+        predictions,
+        horizon="d1",
+    )
+
+    assert risk["selection_method"] == "nested_temporal_nominal_grid"
+    assert risk["nominal_conformal_coverage"] > RISK_TARGET_JOINT_COVERAGE
+    assert risk["tuning_coverage"] >= RISK_TARGET_JOINT_COVERAGE
+    assert risk["semantics"]["external_risk_evaluation_used_for_selection"] is False
 
 
 def test_joint_risk_calibration_does_not_modify_central_predictions() -> None:
