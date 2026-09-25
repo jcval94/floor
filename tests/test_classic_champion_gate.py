@@ -196,6 +196,7 @@ def test_classic_gate_upgrades_risk_contract_without_replacing_central_model(
         "schema_version": 3,
         "method": "joint_validation_conformal_max_residual",
         "calibration_policy_version": "nested-temporal-v1",
+        "selection_method": "nested_temporal_nominal_grid",
         "target_joint_coverage": 0.80,
         "nominal_conformal_coverage": 0.90,
         "target_marginal_coverage": None,
