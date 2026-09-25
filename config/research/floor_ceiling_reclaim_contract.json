@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "strategy_id": "floor_ceiling_reclaim",
+  "evidence_role": "diagnostic_only",
+  "promotion_eligible": false,
+  "active_registry_member": false,
+  "strategy_league_member": false,
+  "action_space": [
+    "BUY",
+    "SELL",
+    "HOLD"
+  ],
+  "required_point_in_time_fields": [
+    "intraday_prev_price",
+    "intraday_low",
+    "intraday_high"
+  ],
+  "directional_alpha_fields": {
+    "BUY": "floor_reclaim_alpha_pct",
+    "SELL": "ceiling_rejection_alpha_pct"
+  },
+  "semantics": {
+    "floor_ceiling_geometry": "payoff_and_risk_space_only",
+    "directional_alpha": "must_be_supplied_explicitly_and_point_in_time",
+    "missing_intraday_context": "HOLD",
+    "missing_directional_alpha": "HOLD"
+  }
+}

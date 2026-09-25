@@ -17,6 +17,10 @@ class RiskPolicy:
     max_sector_weight: float
     daily_loss_limit_bps: float
     kill_switch_enabled: bool
+    intraday_drawdown_limit_bps: float = 250.0
+    position_loss_add_block_bps: float = 150.0
+    position_profit_add_block_bps: float = 300.0
+    min_drawdown_risk_scale: float = 0.50
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,18 @@ def load_risk_policy(
         max_sector_weight=float(risk_cfg.get("max_sector_weight", 0.0)),
         daily_loss_limit_bps=float(risk_cfg.get("daily_loss_limit_bps", 0.0)),
         kill_switch_enabled=bool(risk_cfg.get("kill_switch", {}).get("enabled", True)),
+        intraday_drawdown_limit_bps=float(
+            risk_cfg.get("intraday_drawdown_limit_bps", 250.0)
+        ),
+        position_loss_add_block_bps=float(
+            risk_cfg.get("position_loss_add_block_bps", 150.0)
+        ),
+        position_profit_add_block_bps=float(
+            risk_cfg.get("position_profit_add_block_bps", 300.0)
+        ),
+        min_drawdown_risk_scale=float(
+            risk_cfg.get("min_drawdown_risk_scale", 0.50)
+        ),
     )
     _validate_policy(policy)
     return policy
@@ -59,6 +75,10 @@ def approve_signal_batch(
     existing_symbol_notional_usd: dict[str, float] | None = None,
     existing_sector_notional_usd: dict[str, float] | None = None,
     existing_symbol_quantity: dict[str, int] | None = None,
+    existing_symbol_return_bps: dict[str, float] | None = None,
+    unrealized_pnl_usd: float = 0.0,
+    current_equity_usd: float | None = None,
+    intraday_peak_equity_usd: float | None = None,
 ) -> RiskApprovalResult:
     """Convert model signals into executor-compatible order intents after risk approval.
 
@@ -79,6 +99,10 @@ def approve_signal_batch(
     existing_symbol = {str(k).upper(): float(v) for k, v in (existing_symbol_notional_usd or {}).items()}
     existing_sector = {str(k): float(v) for k, v in (existing_sector_notional_usd or {}).items()}
     existing_qty = {str(k).upper(): int(v) for k, v in (existing_symbol_quantity or {}).items()}
+    existing_returns = {
+        str(k).upper(): float(v)
+        for k, v in (existing_symbol_return_bps or {}).items()
+    }
 
     normalized = [_normalize_signal(signal) for signal in signals]
     normalized = [signal for signal in normalized if signal["action"] in {"BUY", "SELL"}]
@@ -134,6 +158,36 @@ def approve_signal_batch(
     daily_loss_limit = policy.nav_usd * policy.daily_loss_limit_bps / 10_000.0
     daily_loss_hit = policy.kill_switch_enabled and realized_pnl_usd <= -daily_loss_limit
 
+    marked_equity = float(
+        current_equity_usd
+        if current_equity_usd is not None
+        else policy.nav_usd + realized_pnl_usd + unrealized_pnl_usd
+    )
+    peak_equity = max(
+        marked_equity,
+        float(
+            intraday_peak_equity_usd
+            if intraday_peak_equity_usd is not None
+            else marked_equity
+        ),
+    )
+    intraday_drawdown_bps = (
+        max(0.0, (peak_equity - marked_equity) / peak_equity * 10_000.0)
+        if peak_equity > 0
+        else 0.0
+    )
+    drawdown_limit = max(policy.intraday_drawdown_limit_bps, 1e-9)
+    drawdown_ratio = min(1.0, intraday_drawdown_bps / drawdown_limit)
+    state_risk_scale = max(
+        policy.min_drawdown_risk_scale,
+        1.0
+        - (1.0 - policy.min_drawdown_risk_scale) * drawdown_ratio,
+    )
+    intraday_drawdown_hit = (
+        policy.kill_switch_enabled
+        and intraday_drawdown_bps >= policy.intraday_drawdown_limit_bps
+    )
+
     for signal in sorted(selected, key=lambda item: (-float(item["confidence"]), item["symbol"])):
         symbol = signal["symbol"]
         row = rows_by_symbol.get(symbol)
@@ -152,6 +206,28 @@ def approve_signal_batch(
         reducing = (current_quantity > 0 and signal["action"] == "SELL") or (
             current_quantity < 0 and signal["action"] == "BUY"
         )
+        same_direction_existing = (
+            (current_quantity > 0 and signal["action"] == "BUY")
+            or (current_quantity < 0 and signal["action"] == "SELL")
+        )
+        position_return_bps = existing_returns.get(symbol)
+        state_context = {
+            "realized_pnl_usd": round(float(realized_pnl_usd), 2),
+            "unrealized_pnl_usd": round(float(unrealized_pnl_usd), 2),
+            "marked_pnl_usd": round(
+                float(realized_pnl_usd) + float(unrealized_pnl_usd),
+                2,
+            ),
+            "current_equity_usd": round(marked_equity, 2),
+            "intraday_peak_equity_usd": round(peak_equity, 2),
+            "intraday_drawdown_bps": round(intraday_drawdown_bps, 2),
+            "position_return_bps": (
+                round(position_return_bps, 2)
+                if position_return_bps is not None
+                else None
+            ),
+            "risk_scale": round(state_risk_scale, 6),
+        }
 
         if reducing:
             quantity = abs(current_quantity)
@@ -164,6 +240,7 @@ def approve_signal_batch(
                 approved_notional=approved_notional,
                 policy=policy,
                 risk_action="decrease_exposure",
+                state_context=state_context,
             )
             orders.append(order)
             gross = max(0.0, gross - current_symbol)
@@ -172,8 +249,52 @@ def approve_signal_batch(
             projected_qty[symbol] = 0
             continue
 
+        if intraday_drawdown_hit:
+            rejected.append(
+                {
+                    **signal,
+                    "reason": "kill_switch: intraday_drawdown_limit",
+                    "state_context": state_context,
+                }
+            )
+            continue
+
         if daily_loss_hit:
-            rejected.append({**signal, "reason": "kill_switch: daily_loss_limit"})
+            rejected.append(
+                {
+                    **signal,
+                    "reason": "kill_switch: daily_loss_limit",
+                    "state_context": state_context,
+                }
+            )
+            continue
+
+        if (
+            same_direction_existing
+            and position_return_bps is not None
+            and position_return_bps <= -policy.position_loss_add_block_bps
+        ):
+            rejected.append(
+                {
+                    **signal,
+                    "reason": "state_aware: do_not_average_down",
+                    "state_context": state_context,
+                }
+            )
+            continue
+
+        if (
+            same_direction_existing
+            and position_return_bps is not None
+            and position_return_bps >= policy.position_profit_add_block_bps
+        ):
+            rejected.append(
+                {
+                    **signal,
+                    "reason": "state_aware: do_not_chase_extended_position",
+                    "state_context": state_context,
+                }
+            )
             continue
 
         global_position_cap = min(
@@ -183,7 +304,7 @@ def approve_signal_batch(
         symbol_room = max(0.0, global_position_cap - current_symbol)
         gross_room = max(0.0, policy.max_gross_exposure_usd - gross)
         sector_room = max(0.0, policy.nav_usd * policy.max_sector_weight - current_sector)
-        allowed_notional = min(symbol_room, gross_room, sector_room)
+        allowed_notional = min(symbol_room, gross_room, sector_room) * state_risk_scale
         quantity = floor(allowed_notional / risk_price)
 
         if quantity <= 0:
@@ -199,6 +320,7 @@ def approve_signal_batch(
             approved_notional=approved_notional,
             policy=policy,
             risk_action="increase_exposure",
+            state_context=state_context,
         )
         orders.append(order)
         gross += approved_notional
@@ -219,6 +341,7 @@ def _build_order(
     approved_notional: float,
     policy: RiskPolicy,
     risk_action: str,
+    state_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "strategy_id": "canonical_model_signal",
@@ -233,6 +356,7 @@ def _build_order(
             "risk_reference_price": price,
             "approved_notional_usd": round(approved_notional, 2),
             "risk_action": risk_action,
+            "state_context": state_context or {},
             "risk_policy": {
                 "max_position_notional_usd": policy.max_position_notional_usd,
                 "max_gross_exposure_usd": policy.max_gross_exposure_usd,
@@ -274,6 +398,14 @@ def _validate_policy(policy: RiskPolicy) -> None:
         raise ValueError("max_sector_weight must be in (0, 1]")
     if policy.daily_loss_limit_bps <= 0:
         raise ValueError("daily_loss_limit_bps must be > 0")
+    if policy.intraday_drawdown_limit_bps <= 0:
+        raise ValueError("intraday_drawdown_limit_bps must be > 0")
+    if policy.position_loss_add_block_bps <= 0:
+        raise ValueError("position_loss_add_block_bps must be > 0")
+    if policy.position_profit_add_block_bps <= 0:
+        raise ValueError("position_profit_add_block_bps must be > 0")
+    if not 0 < policy.min_drawdown_risk_scale <= 1:
+        raise ValueError("min_drawdown_risk_scale must be in (0, 1]")
 
 
 def _risk_reference_price(row: dict[str, Any]) -> float | None:
