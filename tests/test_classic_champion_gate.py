@@ -228,6 +228,11 @@ def test_classic_gate_upgrades_risk_contract_without_replacing_central_model(
         active["params"]["risk_geometry"]["method"]
         == "joint_validation_conformal_max_residual"
     )
+    assert active["params"]["dummy_benchmark"]["best_name"] in {
+        "global_median",
+        "atr_only",
+    }
+    assert "central_skill_vs_best_dummy" in active["metrics"]
 
 
 def test_classic_gate_rejects_spread_win_when_one_boundary_regresses(
