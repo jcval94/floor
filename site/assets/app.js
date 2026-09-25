@@ -193,11 +193,14 @@ function m3TimingText(m3) {
 function renderForecastCard(symbol, row, data, rowsForSymbol) {
   const ref = referencePrice(data, symbol, row);
   const range = forecastRange(row, ref.value);
-  const confidence = confidenceFromForecast(row);
   const m3 = extractM3(rowsForSymbol);
   const horizon = String(row?.horizon || '').toLowerCase();
   const timingFloor = row?.floor_time_bucket || '—';
   const timingCeiling = row?.ceiling_time_bucket || '—';
+  const skillVsDummy = Number(row?.central_skill_vs_best_dummy);
+  const skillText = Number.isFinite(skillVsDummy)
+    ? `${skillVsDummy >= 0 ? '+' : ''}${(skillVsDummy * 100).toFixed(1)}%`
+    : '—';
   return `<article class="forecast-card">
     <div class="card-head">
       <div>
@@ -217,6 +220,7 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
       <div><span>Techo esperado</span><strong>${escapeHTML(String(timingCeiling))}</strong></div>
       <div><span>3M downside</span><strong>${fmt(m3.floor)}</strong></div>
       <div><span>Timing 3M</span><strong>${escapeHTML(m3TimingText(m3))}</strong></div>
+      <div title="Reducción de MAE de spread frente al mejor baseline global-median/ATR-only"><span>Skill vs dummy</span><strong class="${Number.isFinite(skillVsDummy) && skillVsDummy < 0 ? 'negative' : 'positive'}">${escapeHTML(skillText)}</strong></div>
     </div>
     <div class="card-actions"><a href="tickers.html?ticker=${encodeURIComponent(symbol)}">Ver detalle</a></div>
   </article>`;
@@ -468,10 +472,14 @@ async function tickers() {
       }
       const ref = referencePrice(data, symbol, row);
       const range = forecastRange(row, ref.value);
+      const skill = Number(row?.central_skill_vs_best_dummy);
+      const skillLabel = Number.isFinite(skill)
+        ? `${skill >= 0 ? '+' : ''}${(skill * 100).toFixed(1)}%`
+        : '—';
       return `<article class="detail-horizon">
         <div class="detail-title"><strong>${escapeHTML(horizonLabel(key))}</strong><span class="code-label">${escapeHTML(key)}</span>${forecastCoverageChip(row)}</div>
         ${rangeSvg(range.floor, ref.value, range.ceiling, `${symbol} ${horizonLabel(key)}`)}
-        <div class="detail-metrics"><span>Piso <strong>${fmt(range.floor)}</strong></span><span>Techo <strong>${fmt(range.ceiling)}</strong></span><span>Timing piso <strong>${escapeHTML(row.floor_time_bucket || '—')}</strong></span><span>Timing techo <strong>${escapeHTML(row.ceiling_time_bucket || '—')}</strong></span></div>
+        <div class="detail-metrics"><span>Piso <strong>${fmt(range.floor)}</strong></span><span>Techo <strong>${fmt(range.ceiling)}</strong></span><span>Timing piso <strong>${escapeHTML(row.floor_time_bucket || '—')}</strong></span><span>Timing techo <strong>${escapeHTML(row.ceiling_time_bucket || '—')}</strong></span><span>Skill vs dummy <strong>${escapeHTML(skillLabel)}</strong></span></div>
       </article>`;
     }).join('');
     detail.innerHTML = `<section class="ticker-detail-card">
