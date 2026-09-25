@@ -57,66 +57,6 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
         spy_closes[index] / max(spy_closes[index - 1], 1e-9) - 1.0
         for index in range(1, len(spy_closes))
     ]
-    rolling_vol_5 = pstdev(asset_returns[-5:]) if len(asset_returns) >= 5 else None
-    rolling_vol_20 = pstdev(asset_returns[-20:]) if len(asset_returns) >= 20 else None
-    vol_regime_score = (
-        rolling_vol_5 / rolling_vol_20
-        if rolling_vol_5 is not None
-        and rolling_vol_20 not in (None, 0.0)
-        else None
-    )
-    if vol_regime_score is None:
-        vol_regime = None
-    elif vol_regime_score < 0.8:
-        vol_regime = "LOW"
-    elif vol_regime_score > 1.2:
-        vol_regime = "HIGH"
-    else:
-        vol_regime = "NORMAL"
-
-    beta_20 = None
-    if len(asset_returns) >= 20 and len(spy_returns) >= 20:
-        a_rets = asset_returns[-20:]
-        b_rets = spy_returns[-20:]
-        mean_a = _mean(a_rets)
-        mean_b = _mean(b_rets)
-        covariance = _mean(
-            [
-                (asset_ret - mean_a) * (spy_ret - mean_b)
-                for asset_ret, spy_ret in zip(a_rets, b_rets)
-            ]
-        )
-        benchmark_variance = _mean(
-            [(spy_ret - mean_b) ** 2 for spy_ret in b_rets]
-        )
-        beta_20 = (
-            covariance / benchmark_variance
-            if benchmark_variance > 1e-12
-            else None
-        )
-
-    rel_strength_4w = momentum_20 - spy_momentum_20
-    rel_strength_8w = None
-    rel_strength_13w = None
-    if len(closes) >= 41 and len(spy_closes) >= 41:
-        rel_strength_8w = (
-            close / max(closes[-41], 1e-9) - 1.0
-            - (spy_closes[-1] / max(spy_closes[-41], 1e-9) - 1.0)
-        )
-    if len(closes) >= 66 and len(spy_closes) >= 66:
-        rel_strength_13w = (
-            close / max(closes[-66], 1e-9) - 1.0
-            - (spy_closes[-1] / max(spy_closes[-66], 1e-9) - 1.0)
-        )
-
-    asset_returns = [
-        closes[index] / max(closes[index - 1], 1e-9) - 1.0
-        for index in range(1, len(closes))
-    ]
-    spy_returns = [
-        spy_closes[index] / max(spy_closes[index - 1], 1e-9) - 1.0
-        for index in range(1, len(spy_closes))
-    ]
     vol5 = pstdev(asset_returns[-5:]) if len(asset_returns) >= 5 else None
     vol20 = pstdev(asset_returns[-20:]) if len(asset_returns) >= 20 else None
     vol_regime_score = (
@@ -185,14 +125,6 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
         "momentum_10": momentum_10,
         "momentum_20": momentum_20,
         "rel_strength_20": momentum_20 - spy_momentum_20,
-        "rel_strength_4w": rel_strength_4w,
-        "rel_strength_8w": rel_strength_8w,
-        "rel_strength_13w": rel_strength_13w,
-        "beta_20": beta_20,
-        "rolling_vol_5": rolling_vol_5,
-        "rolling_vol_20": rolling_vol_20,
-        "vol_regime_score": vol_regime_score,
-        "vol_regime": vol_regime,
         "rel_strength_4w": relative_strength(20),
         "rel_strength_8w": relative_strength(40),
         "rel_strength_13w": relative_strength(65),
