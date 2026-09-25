@@ -23,11 +23,23 @@
     <div class="filter-field search"><label for="forecastSearch">Buscar ticker</label><input id="forecastSearch" type="search" placeholder="AAPL, MSFT, NVDA…" autocomplete="off" /></div>
     <div class="filter-field"><label for="forecastHorizon">Horizonte</label><select id="forecastHorizon"><option value="d1">1 sesión</option><option value="w1" selected>5 sesiones</option><option value="q1">10 sesiones</option></select></div>
     <div class="filter-field"><label for="forecastConfidence">Cobertura mínima</label><select id="forecastConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
+    <div class="filter-field"><label for="forecastSort">Ordenar por</label><select id="forecastSort">
+      <option value="coverage" selected>Mayor cobertura</option>
+      <option value="right_skew">Más cargado a la derecha</option>
+      <option value="left_skew">Más cargado a la izquierda</option>
+      <option value="balanced">Más balanceado</option>
+      <option value="upside">Mayor upside</option>
+      <option value="downside">Mayor downside</option>
+      <option value="wide">Rango más amplio</option>
+      <option value="narrow">Rango más estrecho</option>
+      <option value="skill">Mayor skill vs dummy</option>
+      <option value="ticker">Ticker A–Z</option>
+    </select></div>
     <div id="forecastSummary" class="result-summary" aria-live="polite"></div>
   </section>
 
   <section class="section">
-    <div class="section-heading"><div><span class="eyebrow">Highlighted ranges</span><h2>Vista rápida</h2><p>Ordenada por cobertura observada del rango, no por supuesto potencial de compra.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Highlighted ranges</span><h2>Vista rápida</h2><p>Explora la geometría del rango con distintos criterios. “Cargado” compara upside contra downside alrededor de la referencia. El orden ayuda a leer el rango, no por supuesto potencial de compra, y no implica una recomendación de compra o venta.</p></div></div>
     <div id="forecastCards" class="forecast-grid"><div class="empty-state">Cargando pronósticos…</div></div>
   </section>
 
