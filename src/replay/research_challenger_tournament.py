@@ -152,7 +152,7 @@ def _research_targets(
     )
     rows_by_symbol = {str(row.get("symbol")): row for row in scored}
     targets: dict[str, dict[str, dict]] = {}
-    action_counts = {
+    action_counts: dict[str, Counter[str]] = {
         "volatility_regime_switch": Counter(),
         "relative_strength_rotation": Counter(),
     }
@@ -300,7 +300,7 @@ def _render_closeout(payload: dict[str, Any]) -> str:
             f"| {member_id} | {100*float(row.get('return', 0.0)):.2f}% | "
             f"{sharpe_text} | {100*float(row.get('max_drawdown', 0.0)):.2f}% | "
             f"{int(row.get('trades', 0))} | USD {float(row.get('costs_paid', 0.0)):.2f} | "
-            f"{float(row.get('turnover_review_window', row.get('turnover', 0.0))):.2f} |"
+            f"{float(row.get('turnover_review_window') or row.get('turnover') or 0.0):.2f} |"
         )
 
     lines.extend(
@@ -418,7 +418,7 @@ def run_research_challenger_tournament(
     state: dict[str, Any] | None = None
     spy_rows = daily_by_symbol["SPY"]
     audits: list[dict[str, Any]] = []
-    action_totals = {
+    action_totals: dict[str, Counter[str]] = {
         member_id: Counter()
         for member_id in RESEARCH_MEMBERS
     }
