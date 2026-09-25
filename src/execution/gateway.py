@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from backtest.cost_model import CostModelConfig
 from contracts.trading import paper_cost_contract
@@ -156,8 +156,8 @@ def _current_exposure(
         "sector_notional_usd": by_sector,
         "symbol_quantity": by_quantity,
         "symbol_return_bps": by_return_bps,
-        "unrealized_pnl_usd": float(marks["unrealized_pnl"]),
-        "current_equity_usd": float(marks["equity"]),
+        "unrealized_pnl_usd": cast(float, marks["unrealized_pnl"]),
+        "current_equity_usd": cast(float, marks["equity"]),
     }
 
 
