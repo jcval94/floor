@@ -1,0 +1,53 @@
+{
+  "experiment_id": "central_skill_d1_w1_v1",
+  "purpose": "Improve central D1/W1 floor-ceiling predictive skill versus ATR-only without changing champions, conformal risk geometry, or strategy alpha.",
+  "source": {
+    "workflow_run_id": 36192729343,
+    "artifact_id": 10888488674,
+    "artifact_name": "retrain-execute-36192729343",
+    "head_sha": "adf658be448d1788fbd2f3d8341d020261fcf1b3",
+    "dataset": "training/modelable_dataset.json",
+    "rows": 62750,
+    "split_policy": {
+      "strategy": "fixed_tail_sessions",
+      "validation_days": 140,
+      "test_days": 141
+    }
+  },
+  "horizons": ["d1", "w1"],
+  "outer_cv": {
+    "scheme": "expanding_time",
+    "folds": 5,
+    "validation_sessions": 126,
+    "purge": "target_end_date_<horizon> < validation_start",
+    "embargo_sessions": {"d1": 1, "w1": 5}
+  },
+  "locked_test": {
+    "used_for_selection": false,
+    "purpose": "confirmatory diagnostic only"
+  },
+  "uncertainty": {
+    "method": "moving_block_bootstrap_on_date_level_mean_spread_loss",
+    "reps": 2000,
+    "block_length_sessions": {"d1": 5, "w1": 10},
+    "seed": 102
+  },
+  "boundary_guard": {
+    "max_relative_mae_regression_vs_atr": 0.02,
+    "qualified_fold_requires_positive_spread_skill": true
+  },
+  "families": [
+    "atr_only",
+    "adaptive_atr",
+    "current_model",
+    "residual_ridge",
+    "residual_huber",
+    "residual_boosted",
+    "ratio_ridge",
+    "spread_asymmetry",
+    "atr_model_shrinkage",
+    "conservative_ensemble"
+  ],
+  "search_policy": "small fixed configurations only; lambda and ensemble weights selected exclusively on inner temporal validation",
+  "production_mutation": false
+}

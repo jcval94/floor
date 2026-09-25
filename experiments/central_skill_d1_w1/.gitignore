@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.log
+*.pid
+results/*_oos_losses.csv
+results/*_test_losses.csv

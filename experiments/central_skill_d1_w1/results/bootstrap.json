@@ -1,0 +1,162 @@
+{
+  "d1:adaptive_atr": {
+    "block_length": 5,
+    "ci_high": 0.005604166947207889,
+    "ci_low": 0.0019087983900968996,
+    "dates": 630,
+    "estimate": 0.0036890775347063753,
+    "prob_gt_zero": 1.0
+  },
+  "d1:atr_model_shrinkage": {
+    "block_length": 5,
+    "ci_high": 0.03470098539356309,
+    "ci_low": 0.020114354850395515,
+    "dates": 630,
+    "estimate": 0.027809767576683297,
+    "prob_gt_zero": 1.0
+  },
+  "d1:atr_only": {
+    "block_length": 5,
+    "ci_high": 0.0,
+    "ci_low": 0.0,
+    "dates": 630,
+    "estimate": 0.0,
+    "prob_gt_zero": 0.0
+  },
+  "d1:conservative_ensemble": {
+    "block_length": 5,
+    "ci_high": 0.0703862839498454,
+    "ci_low": 0.050714495187962075,
+    "dates": 630,
+    "estimate": 0.06087901174118737,
+    "prob_gt_zero": 1.0
+  },
+  "d1:current_model": {
+    "block_length": 5,
+    "ci_high": -0.038518452285360244,
+    "ci_low": -0.09240838936684702,
+    "dates": 630,
+    "estimate": -0.0640350919523025,
+    "prob_gt_zero": 0.0
+  },
+  "d1:ratio_ridge": {
+    "block_length": 5,
+    "ci_high": -0.6086946708187102,
+    "ci_low": -0.6979509523150549,
+    "dates": 630,
+    "estimate": -0.6556010945924835,
+    "prob_gt_zero": 0.0
+  },
+  "d1:residual_boosted": {
+    "block_length": 5,
+    "ci_high": 0.03709162879315482,
+    "ci_low": 0.02475403142369066,
+    "dates": 630,
+    "estimate": 0.030205119679315162,
+    "prob_gt_zero": 1.0
+  },
+  "d1:residual_huber": {
+    "block_length": 5,
+    "ci_high": 0.07647229286137425,
+    "ci_low": 0.055299924342488406,
+    "dates": 630,
+    "estimate": 0.0656360918682356,
+    "prob_gt_zero": 1.0
+  },
+  "d1:residual_ridge": {
+    "block_length": 5,
+    "ci_high": 0.0506588063089774,
+    "ci_low": -0.0006820234428630829,
+    "dates": 630,
+    "estimate": 0.025551404525869792,
+    "prob_gt_zero": 0.972
+  },
+  "d1:spread_asymmetry": {
+    "block_length": 5,
+    "ci_high": 0.0867026920804071,
+    "ci_low": 0.050549908198396686,
+    "dates": 630,
+    "estimate": 0.06886883368452656,
+    "prob_gt_zero": 1.0
+  },
+  "w1:adaptive_atr": {
+    "block_length": 10,
+    "ci_high": 0.002614997247229641,
+    "ci_low": 0.000214957673613414,
+    "dates": 630,
+    "estimate": 0.0013319146410836202,
+    "prob_gt_zero": 0.992
+  },
+  "w1:atr_model_shrinkage": {
+    "block_length": 10,
+    "ci_high": 0.04756430708242837,
+    "ci_low": 0.027587047235987865,
+    "dates": 630,
+    "estimate": 0.037409177511405045,
+    "prob_gt_zero": 1.0
+  },
+  "w1:atr_only": {
+    "block_length": 10,
+    "ci_high": 0.0,
+    "ci_low": 0.0,
+    "dates": 630,
+    "estimate": 0.0,
+    "prob_gt_zero": 0.0
+  },
+  "w1:conservative_ensemble": {
+    "block_length": 10,
+    "ci_high": 0.07306036322377449,
+    "ci_low": 0.04526366653140485,
+    "dates": 630,
+    "estimate": 0.05861683166682641,
+    "prob_gt_zero": 1.0
+  },
+  "w1:current_model": {
+    "block_length": 10,
+    "ci_high": -0.007768512823063625,
+    "ci_low": -0.07345952165745472,
+    "dates": 630,
+    "estimate": -0.03940254578227087,
+    "prob_gt_zero": 0.007
+  },
+  "w1:ratio_ridge": {
+    "block_length": 10,
+    "ci_high": -0.38374509451808664,
+    "ci_low": -0.4566045041517894,
+    "dates": 630,
+    "estimate": -0.42293140885369196,
+    "prob_gt_zero": 0.0
+  },
+  "w1:residual_boosted": {
+    "block_length": 10,
+    "ci_high": 0.04547324271692097,
+    "ci_low": 0.018447781384738026,
+    "dates": 630,
+    "estimate": 0.03055265955216757,
+    "prob_gt_zero": 1.0
+  },
+  "w1:residual_huber": {
+    "block_length": 10,
+    "ci_high": 0.09398725877189226,
+    "ci_low": 0.05972209942415063,
+    "dates": 630,
+    "estimate": 0.07580895208936966,
+    "prob_gt_zero": 1.0
+  },
+  "w1:residual_ridge": {
+    "block_length": 10,
+    "ci_high": 0.06981018898940225,
+    "ci_low": -0.0032344147616619853,
+    "dates": 630,
+    "estimate": 0.03560502922157793,
+    "prob_gt_zero": 0.9675
+  },
+  "w1:spread_asymmetry": {
+    "block_length": 10,
+    "ci_high": 0.09666145995626552,
+    "ci_low": 0.05407589065726243,
+    "dates": 630,
+    "estimate": 0.07567293523812113,
+    "prob_gt_zero": 1.0
+  }
+}
