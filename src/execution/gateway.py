@@ -37,6 +37,9 @@ class PaperExecutionGateway:
             cost_config=cost_config,
             initial_cash=policy.nav_usd,
         )
+        self._session_key: str | None = None
+        self._session_realized_pnl_start = 0.0
+        self._intraday_peak_equity_usd = policy.nav_usd
 
     def run_cycle(
         self,
@@ -53,17 +56,26 @@ class PaperExecutionGateway:
             if str(row.get("symbol") or "").strip()
         }
         exposure = _current_exposure(self.executor, market_data)
+        self._sync_session_state(timestamp, float(exposure["current_equity_usd"]))
+        session_realized_pnl = (
+            self.executor.portfolio.realized_pnl
+            - self._session_realized_pnl_start
+        )
         approval = approve_signal_batch(
             signals,
             market_rows,
             policy=self.policy,
             live_trading_enabled=False,
             market_data_fresh=market_data_fresh,
-            realized_pnl_usd=self.executor.portfolio.realized_pnl,
+            realized_pnl_usd=session_realized_pnl,
+            unrealized_pnl_usd=exposure["unrealized_pnl_usd"],
+            current_equity_usd=exposure["current_equity_usd"],
+            intraday_peak_equity_usd=self._intraday_peak_equity_usd,
             existing_gross_notional_usd=exposure["gross_notional_usd"],
             existing_symbol_notional_usd=exposure["symbol_notional_usd"],
             existing_sector_notional_usd=exposure["sector_notional_usd"],
             existing_symbol_quantity=exposure["symbol_quantity"],
+            existing_symbol_return_bps=exposure["symbol_return_bps"],
         )
         execution = self.executor.run_cycle(
             cycle_id=cycle_id,
@@ -71,10 +83,27 @@ class PaperExecutionGateway:
             signals=approval.orders,
             market_data=market_data,
         )
+        snapshot_equity = float(execution["snapshot"]["equity"])
+        self._intraday_peak_equity_usd = max(
+            self._intraday_peak_equity_usd,
+            snapshot_equity,
+        )
         return {
             "approval": _approval_to_dict(approval),
             "execution": execution,
         }
+
+    def _sync_session_state(self, timestamp: str, current_equity_usd: float) -> None:
+        session_key = str(timestamp)[:10]
+        if self._session_key != session_key:
+            self._session_key = session_key
+            self._session_realized_pnl_start = self.executor.portfolio.realized_pnl
+            self._intraday_peak_equity_usd = current_equity_usd
+            return
+        self._intraday_peak_equity_usd = max(
+            self._intraday_peak_equity_usd,
+            current_equity_usd,
+        )
 
 
 def load_paper_execution_gateway(
@@ -98,6 +127,7 @@ def _current_exposure(
     by_symbol: dict[str, float] = {}
     by_sector: dict[str, float] = {}
     by_quantity: dict[str, int] = {}
+    by_return_bps: dict[str, float] = {}
     for symbol, position in executor.portfolio.positions.items():
         row = market_data.get(symbol, {})
         price = float(row.get("close") or position.avg_cost)
@@ -107,11 +137,27 @@ def _current_exposure(
         by_symbol[symbol] = notional
         by_sector[sector] = by_sector.get(sector, 0.0) + notional
         by_quantity[symbol] = int(position.quantity)
+        if position.avg_cost > 0:
+            direction = 1.0 if position.quantity > 0 else -1.0
+            by_return_bps[symbol] = (
+                direction * (price / position.avg_cost - 1.0) * 10_000.0
+            )
+
+    marks = executor.portfolio.mark_to_market(
+        {
+            symbol: float(row.get("close") or executor.portfolio.positions[symbol].avg_cost)
+            for symbol, row in market_data.items()
+            if symbol in executor.portfolio.positions
+        }
+    )
     return {
         "gross_notional_usd": gross,
         "symbol_notional_usd": by_symbol,
         "sector_notional_usd": by_sector,
         "symbol_quantity": by_quantity,
+        "symbol_return_bps": by_return_bps,
+        "unrealized_pnl_usd": float(marks["unrealized_pnl"]),
+        "current_equity_usd": float(marks["equity"]),
     }
 
 
