@@ -17,23 +17,23 @@
   </nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Forecast explorer</span><h1>Rangos esperados, sin convertirlos en “alpha”.</h1><p class="lead">Explora pisos y techos por 1, 5 y 10 sesiones, además del floor de 3 meses. La confianza representa calidad del intervalo cuando existe una calibración válida.</p></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Forecast explorer</span><h1>Rangos esperados, sin convertirlos en “alpha”.</h1><p class="lead">Explora pisos y techos por 1, 5 y 10 sesiones, además del floor de 3 meses. La cobertura muestra el porcentaje OOS en que el rango de riesgo contuvo simultáneamente piso y techo. En batches legacy se identifica explícitamente la cobertura del rango central.</p></div></section>
 
   <section class="filters" aria-label="Filtros de pronósticos">
     <div class="filter-field search"><label for="forecastSearch">Buscar ticker</label><input id="forecastSearch" type="search" placeholder="AAPL, MSFT, NVDA…" autocomplete="off" /></div>
     <div class="filter-field"><label for="forecastHorizon">Horizonte</label><select id="forecastHorizon"><option value="d1">1 sesión</option><option value="w1" selected>5 sesiones</option><option value="q1">10 sesiones</option></select></div>
-    <div class="filter-field"><label for="forecastConfidence">Confianza mínima</label><select id="forecastConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
+    <div class="filter-field"><label for="forecastConfidence">Cobertura mínima</label><select id="forecastConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
     <div id="forecastSummary" class="result-summary" aria-live="polite"></div>
   </section>
 
   <section class="section">
-    <div class="section-heading"><div><span class="eyebrow">Highlighted ranges</span><h2>Vista rápida</h2><p>Ordenada por confianza del intervalo, no por supuesto potencial de compra.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Highlighted ranges</span><h2>Vista rápida</h2><p>Ordenada por cobertura observada del rango, no por supuesto potencial de compra.</p></div></div>
     <div id="forecastCards" class="forecast-grid"><div class="empty-state">Cargando pronósticos…</div></div>
   </section>
 
   <section class="section">
     <div class="section-heading"><div><span class="eyebrow">Comparison table</span><h2>Comparar activos</h2><p>Downside y upside se calculan contra la mejor referencia de precio disponible.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Referencia</th><th>Piso</th><th>Downside</th><th>Techo</th><th>Upside</th><th>Confianza</th></tr></thead><tbody id="forecastTable"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Referencia</th><th>Piso</th><th>Downside</th><th>Techo</th><th>Upside</th><th>Cobertura</th></tr></thead><tbody id="forecastTable"></tbody></table></div>
   </section>
 
   <section class="section">
