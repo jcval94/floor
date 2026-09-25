@@ -52,6 +52,15 @@ def build_risk_geometry_report(registry_dir: Path) -> dict[str, Any]:
             "risk_geometry_available": risk_available,
             "risk_geometry_method": risk.get("method"),
             "target_joint_coverage": risk.get("target_joint_coverage"),
+            "nominal_conformal_coverage": risk.get(
+                "nominal_conformal_coverage"
+            ),
+            "calibration_policy_version": risk.get(
+                "calibration_policy_version"
+            ),
+            "selection_method": risk.get("selection_method"),
+            "tuning_coverage": risk.get("tuning_coverage"),
+            "tuning_rows": risk.get("tuning_rows"),
             "target_marginal_coverage": risk.get("target_marginal_coverage"),
             "calibration_rows": risk.get("calibration_rows"),
             "floor_stop_widening_pct_points": 100.0 * floor_addon,
