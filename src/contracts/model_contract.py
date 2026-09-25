@@ -172,6 +172,36 @@ def validate_model_artifact_contract(
                 errors.append(
                     f"risk_geometry {target_key} must be in (0.5, 1)"
                 )
+        if (
+            risk_method == "joint_validation_conformal_max_residual"
+            and int(risk.get("schema_version") or 0) >= 3
+        ):
+            try:
+                nominal_coverage = float(
+                    str(risk.get("nominal_conformal_coverage"))
+                )
+            except (TypeError, ValueError):
+                nominal_coverage = -1.0
+            if not target_coverage <= nominal_coverage < 1.0:
+                errors.append(
+                    "risk_geometry nominal_conformal_coverage must be "
+                    ">= target_joint_coverage and < 1"
+                )
+            if not str(risk.get("calibration_policy_version") or "").strip():
+                errors.append(
+                    "risk_geometry calibration_policy_version is required "
+                    "for schema_version >= 3"
+                )
+            selection_method = str(risk.get("selection_method") or "")
+            if selection_method not in {
+                "nested_temporal_nominal_grid",
+                "fixed_nominal_small_sample",
+                "fixed_nominal_insufficient_temporal_tuning",
+            }:
+                errors.append(
+                    "risk_geometry selection_method is invalid for "
+                    "schema_version >= 3"
+                )
         for key in ("floor_delta_addon", "ceiling_delta_addon"):
             try:
                 value = float(str(risk.get(key)))

@@ -233,19 +233,19 @@ def _artifact_boundary_predictions(
     return floor_predictions, ceiling_predictions
 
 
-def _migrate_legacy_incumbent_contract(
+def _migrate_incumbent_risk_contract(
     artifact: dict[str, Any],
     *,
     dataset_path: Path,
     horizon: str,
     version: str,
 ) -> dict[str, Any]:
-    """Attach risk geometry to the incumbent without changing its central model.
+    """Recalibrate only risk geometry while preserving the central predictor.
 
-    This is the safe bridge from a pre-contract champion to the new serving
-    contract. Risk bounds are calibrated specifically against the incumbent's
-    unchanged floor/ceiling parameters on an earlier OOT validation block and
-    evaluated on the later block.
+    This supports both first-time contract migration and later risk-calibration
+    upgrades. Bounds are calibrated against the incumbent's unchanged central
+    floor/ceiling parameters on an earlier OOT validation block and evaluated
+    on the later block.
     """
 
     calibration, evaluation = _validation_calibration_and_evaluation_rows(
@@ -256,6 +256,7 @@ def _migrate_legacy_incumbent_contract(
         calibration,
         cal_floor,
         cal_ceiling,
+        horizon=horizon,
     )
     eval_floor, eval_ceiling = _artifact_boundary_predictions(artifact, evaluation)
     risk_metrics = _risk_geometry_metrics(
@@ -278,6 +279,11 @@ def _migrate_legacy_incumbent_contract(
         "from_version": previous_version,
         "central_model_preserved": True,
         "central_params_preserved": True,
+        "risk_only_migration": True,
+        "risk_schema_version": risk_geometry.get("schema_version"),
+        "risk_calibration_policy_version": risk_geometry.get(
+            "calibration_policy_version"
+        ),
         "calibration_rows": len(calibration),
         "evaluation_rows": len(evaluation),
         "test_used_for_selection": False,
@@ -293,6 +299,21 @@ def _migrate_legacy_incumbent_contract(
             + ",".join(check["errors"])
         )
     return migrated
+
+
+def _migrate_legacy_incumbent_contract(
+    artifact: dict[str, Any],
+    *,
+    dataset_path: Path,
+    horizon: str,
+    version: str,
+) -> dict[str, Any]:
+    return _migrate_incumbent_risk_contract(
+        artifact,
+        dataset_path=dataset_path,
+        horizon=horizon,
+        version=version,
+    )
 
 
 def _score(metrics: dict[str, float]) -> tuple[float, float]:
@@ -435,6 +456,24 @@ def gate_one_horizon(
             candidate_contract["status"] == "declared_valid"
             and previous_contract["status"] == "legacy_compatible"
         )
+        candidate_risk = _mapping(
+            _mapping(candidate.get("params")).get("risk_geometry")
+        )
+        previous_risk = _mapping(
+            _mapping(previous.get("params")).get("risk_geometry")
+        )
+        candidate_risk_schema = int(candidate_risk.get("schema_version") or 0)
+        previous_risk_schema = int(previous_risk.get("schema_version") or 0)
+        risk_contract_upgrade = (
+            candidate_contract["status"] == "declared_valid"
+            and candidate_risk.get("method")
+            == "joint_validation_conformal_max_residual"
+            and (
+                previous_risk.get("method")
+                != "joint_validation_conformal_max_residual"
+                or candidate_risk_schema > previous_risk_schema
+            )
+        )
         if strict_error_dominance and coverage_guard_pass:
             decision = "promote"
             reason = (
@@ -452,7 +491,21 @@ def gate_one_horizon(
                 "and calibrate risk geometry on leakage-safe validation data so the "
                 "serving registry can migrate without accepting a central-MAE regression."
             )
-            active = _migrate_legacy_incumbent_contract(
+            active = _migrate_incumbent_risk_contract(
+                previous,
+                dataset_path=dataset_path,
+                horizon=horizon,
+                version=version,
+            )
+        elif risk_contract_upgrade:
+            decision = "promote_risk_calibration_migration"
+            reason = (
+                "Central challenger did not earn promotion, but it carries a newer "
+                "risk-calibration contract. Preserve the incumbent central predictor "
+                "exactly and recalibrate only its risk geometry on leakage-safe "
+                "temporal calibration data."
+            )
+            active = _migrate_incumbent_risk_contract(
                 previous,
                 dataset_path=dataset_path,
                 horizon=horizon,
@@ -499,14 +552,17 @@ def gate_one_horizon(
             if not archived_path.exists():
                 _write_json_atomic(archived_path, previous)
 
-        if decision == "promote_contract_migration":
+        if decision in {
+            "promote_contract_migration",
+            "promote_risk_calibration_migration",
+        }:
             challenger_path = registry_dir / f"{horizon}_challenger_{_slug(version)}.json"
             challenger_selection = {
                 **selection,
                 "decision": "challenger_only_central_model",
                 "reason": (
                     "Central challenger did not strictly dominate; incumbent central "
-                    "predictor was preserved while only its semantic/risk contract migrated."
+                    "predictor was preserved while only its risk calibration migrated."
                 ),
             }
             candidate["selection"] = challenger_selection
