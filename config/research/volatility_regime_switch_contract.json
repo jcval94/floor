@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "strategy_id": "volatility_regime_switch",
+  "evidence_role": "diagnostic_only",
+  "promotion_eligible": false,
+  "active_registry_member": false,
+  "strategy_league_member": false,
+  "strategy_kind": "meta_router",
+  "required_point_in_time_fields": [
+    "vol_regime",
+    "vol_regime_score"
+  ],
+  "source_strategies": [
+    "breakout_protected_by_floor",
+    "mean_reversion_floor_w1"
+  ],
+  "semantics": {
+    "directional_alpha": "preserved_from_source_strategy",
+    "low_volatility": "route_mean_reversion",
+    "high_volatility": "route_breakout",
+    "normal_volatility": "allow_compatible_sources_conflicts_hold",
+    "missing_regime": "HOLD"
+  }
+}
