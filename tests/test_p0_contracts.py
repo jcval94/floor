@@ -78,10 +78,43 @@ def test_declared_classic_model_rejects_malformed_risk_geometry() -> None:
     result = validate_model_artifact_contract("d1", artifact, allow_legacy=True)
 
     assert result["valid"] is False
-    assert "risk_geometry method must be validation_residual_quantile" in result["errors"]
+    assert any(
+        error.startswith("risk_geometry method must be")
+        for error in result["errors"]
+    )
     assert "risk_geometry target_marginal_coverage must be in (0.5, 1)" in result["errors"]
     assert "risk_geometry floor_delta_addon must be non-negative" in result["errors"]
     assert "risk_geometry calibration_rows must be positive" in result["errors"]
+
+
+def test_declared_classic_model_accepts_joint_conformal_risk_geometry() -> None:
+    artifact = {
+        "model_name": "regime_median_d1",
+        "version": "v3",
+        "params": {
+            "schema_version": 2,
+            "floor": {},
+            "ceiling": {},
+            "timing": {},
+            "confidence_calibration": {},
+            "risk_geometry": {
+                "schema_version": 2,
+                "method": "joint_validation_conformal_max_residual",
+                "target_joint_coverage": 0.80,
+                "target_marginal_coverage": None,
+                "floor_delta_addon": 0.02,
+                "ceiling_delta_addon": 0.02,
+                "calibration_rows": 100,
+            },
+        },
+        "metrics": {},
+        "model_contract": build_model_contract("d1"),
+    }
+
+    result = validate_model_artifact_contract("d1", artifact, allow_legacy=True)
+
+    assert result["valid"] is True
+    assert result["status"] == "declared_valid"
 
 
 def test_strategy_contract_registry_covers_registry_and_all_league_strategies() -> None:
