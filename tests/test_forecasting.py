@@ -136,6 +136,8 @@ def test_run_forecast_pipeline_outputs_required_shapes_and_m3(monkeypatch, tmp_p
         "expected_return_q1",
         "expected_range_q1",
         "confidence_score",
+        "range_coverage_score",
+        "range_coverage_semantics",
         "ai_alignment_score",
         "composite_signal_score",
         "reward_risk_ratio",
