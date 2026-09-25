@@ -42,6 +42,20 @@ def test_frontend_never_invents_healthy_state_or_half_confidence() -> None:
     assert "status: 'UNKNOWN'" in app
 
 
+def test_forecast_ui_distinguishes_central_from_joint_risk_coverage() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    forecasts = (SITE / "forecasts.html").read_text(encoding="utf-8")
+    tickers = (SITE / "tickers.html").read_text(encoding="utf-8")
+
+    assert "risk_empirical_joint_coverage" in app
+    assert "Riesgo OOS" in app
+    assert "Central ·" in app
+    assert "Cobertura mínima" in forecasts
+    assert "Cobertura mínima" in tickers
+    assert "Confianza mínima" not in forecasts
+    assert "Confianza mínima" not in tickers
+
+
 def test_horizon_names_are_human_readable() -> None:
     utils = (SITE / "assets" / "utils.js").read_text(encoding="utf-8")
     assert "d1: '1 sesión'" in utils
