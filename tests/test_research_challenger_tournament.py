@@ -201,3 +201,35 @@ def test_research_targets_route_existing_cost_valid_sources(monkeypatch) -> None
     assert counts["relative_strength_rotation"]["BUY"] == 1
     assert coverage["volatility_regime_switch"] == 2
     assert coverage["relative_strength_rotation"] == 2
+
+
+def test_evidence_readiness_fails_closed_when_features_are_missing() -> None:
+    leaderboard = {
+        "rows": [
+            {"strategy": "volatility_regime_switch"},
+            {"strategy": "relative_strength_rotation"},
+        ]
+    }
+    readiness = _evidence_readiness(
+        leaderboard,
+        {
+            "volatility_regime_switch": Counter({"HOLD": 10}),
+            "relative_strength_rotation": Counter({"HOLD": 10}),
+        },
+        {
+            "volatility_regime_switch": 0,
+            "relative_strength_rotation": 0,
+        },
+        10,
+    )
+
+    assert (
+        readiness["volatility_regime_switch"]["status"]
+        == "INSUFFICIENT_FEATURE_COVERAGE"
+    )
+    assert readiness["volatility_regime_switch"]["evaluated"] is False
+    assert (
+        readiness["relative_strength_rotation"]["status"]
+        == "INSUFFICIENT_FEATURE_COVERAGE"
+    )
+    assert readiness["relative_strength_rotation"]["evaluated"] is False
