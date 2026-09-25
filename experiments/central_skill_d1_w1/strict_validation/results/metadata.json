@@ -1,0 +1,88 @@
+{
+  "date_ranges": {
+    "d1": {
+      "dev_end": "2026-03-04",
+      "dev_rows": 55650,
+      "dev_start": "2021-09-27",
+      "test_end": "2026-09-24",
+      "test_rows": 7000,
+      "test_sessions": 140,
+      "test_start": "2026-03-06"
+    },
+    "w1": {
+      "dev_end": "2026-02-26",
+      "dev_rows": 55450,
+      "dev_start": "2021-09-27",
+      "test_end": "2026-09-18",
+      "test_rows": 6800,
+      "test_sessions": 136,
+      "test_start": "2026-03-06"
+    }
+  },
+  "generated_at_utc": "2026-09-25T23:04:18.111988+00:00",
+  "model_meta": {
+    "d1": {
+      "atr_model_shrinkage": {
+        "lambda": 0.4
+      }
+    },
+    "w1": {
+      "atr_model_shrinkage": {
+        "lambda": 0.4
+      }
+    }
+  },
+  "protocol": {
+    "ablation": [
+      "direct_hgb_no_atr",
+      "atr_only",
+      "residual_boosted",
+      "adaptive_residual_boosted",
+      "ensemble_top3_equal"
+    ],
+    "block_bootstrap_reps": 5000,
+    "block_length": {
+      "d1": 5,
+      "w1": 10
+    },
+    "boundary_guard": 0.02,
+    "candidate_fit_data": "source train + validation only; no test rows",
+    "ensemble_weights": {
+      "spread_shrink_equal": {
+        "atr_model_shrinkage": 0.5,
+        "spread_asymmetry": 0.5
+      },
+      "top3_equal": {
+        "atr_model_shrinkage": 0.3333333333333333,
+        "residual_boosted": 0.3333333333333333,
+        "spread_asymmetry": 0.3333333333333333
+      }
+    },
+    "final_set": "original source split=test only",
+    "fixed_window_sessions": 20,
+    "hac_lag": {
+      "d1": 5,
+      "w1": 10
+    },
+    "main_candidates": [
+      "spread_asymmetry",
+      "residual_boosted",
+      "atr_model_shrinkage",
+      "ensemble_top3_equal"
+    ],
+    "no_final_hyperparameter_tuning": true,
+    "selection_frozen_from_phase1": true
+  },
+  "provenance": {
+    "artifact_id": 10888488674,
+    "artifact_name": "retrain-execute-36192729343",
+    "head_sha": "adf658be448d1788fbd2f3d8341d020261fcf1b3",
+    "source_split_policy": {
+      "strategy": "fixed_tail_sessions",
+      "test_days": 141,
+      "validation_days": 140
+    },
+    "workflow_run_id": 36192729343
+  },
+  "seed": 260925
+}

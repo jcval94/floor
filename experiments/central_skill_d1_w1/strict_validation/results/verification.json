@@ -1,0 +1,35 @@
+{
+  "incumbent_parity": {
+    "d1": {
+      "absolute_delta": 4.1297347486146663e-13,
+      "competition_existing_score": 0.010160046834,
+      "computed_mae_spread_pct": 0.010160046834412973,
+      "pass": true,
+      "validation_rows": 6950
+    },
+    "w1": {
+      "absolute_delta": 1.225963774942329e-13,
+      "competition_existing_score": 0.022750222278,
+      "computed_mae_spread_pct": 0.022750222277877402,
+      "pass": true,
+      "validation_rows": 6750
+    }
+  },
+  "overall_pass": true,
+  "split_integrity": {
+    "d1": {
+      "development_rows": 55650,
+      "max_development_target_end": "2026-03-05",
+      "strictly_before_test": true,
+      "test_rows": 7000,
+      "test_start": "2026-03-06"
+    },
+    "w1": {
+      "development_rows": 55450,
+      "max_development_target_end": "2026-03-05",
+      "strictly_before_test": true,
+      "test_rows": 6800,
+      "test_start": "2026-03-06"
+    }
+  }
+}

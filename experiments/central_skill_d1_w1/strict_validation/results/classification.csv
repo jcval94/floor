@@ -1,0 +1,6 @@
+<PARSED TEXT FOR SHEET: 1 / 1 TABS
+TAB NAME: classification.csv>index,family,label,classification
+0,spread_asymmetry,Spread + asymmetry Ridge,merece promoción
+1,residual_boosted,ATR + residual HGB,prometedor pero necesita más observaciones
+2,atr_model_shrinkage,ATR/current shrinkage,merece promoción
+3,ensemble_top3_equal,Ensemble top-3 1/3 cada uno,merece promoción

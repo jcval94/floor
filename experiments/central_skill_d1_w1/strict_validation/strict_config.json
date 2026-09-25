@@ -1,0 +1,35 @@
+{
+  "phase": "strict_promotion_validation",
+  "horizons": ["d1", "w1"],
+  "final_split": "source_test_only",
+  "candidate_fit_data": "train_plus_validation_with_target_end_strictly_before_test_start",
+  "no_final_hyperparameter_tuning": true,
+  "main_candidates": [
+    "spread_asymmetry",
+    "residual_boosted",
+    "atr_model_shrinkage",
+    "ensemble_top3_equal"
+  ],
+  "ensemble_top3_equal_weights": {
+    "spread_asymmetry": 0.3333333333333333,
+    "residual_boosted": 0.3333333333333333,
+    "atr_model_shrinkage": 0.3333333333333333
+  },
+  "auxiliary_ensemble_weights": {
+    "spread_asymmetry": 0.5,
+    "atr_model_shrinkage": 0.5
+  },
+  "ablation": [
+    "direct_hgb_no_atr",
+    "atr_only",
+    "residual_boosted",
+    "adaptive_residual_boosted",
+    "ensemble_top3_equal"
+  ],
+  "boundary_guard": 0.02,
+  "bootstrap_reps": 5000,
+  "bootstrap_block_sessions": {"d1": 5, "w1": 10},
+  "hac_lag_sessions": {"d1": 5, "w1": 10},
+  "stability_window_sessions": 20,
+  "seed": 260925
+}
