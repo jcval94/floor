@@ -116,6 +116,11 @@ def _time_text(value: object) -> str:
 
 
 def _horizon_confidence(row: dict, horizon: StandardHorizon, default: float) -> float:
+    joint_risk_coverage = _to_optional_float(
+        row.get(f"risk_empirical_joint_coverage_{horizon}")
+    )
+    if joint_risk_coverage is not None:
+        return max(0.0, min(1.0, joint_risk_coverage))
     breach_prob = _to_optional_float(row.get(f"breach_prob_{horizon}"))
     if breach_prob is None:
         return max(0.0, min(1.0, default))
@@ -368,6 +373,21 @@ def _prediction_payloads(row: dict, event_type: str) -> list[tuple[Horizon, dict
             "risk_target_marginal_coverage": _to_optional_float(
                 row.get(f"risk_target_marginal_coverage_{horizon}")
             ),
+            "risk_target_joint_coverage": _to_optional_float(
+                row.get(f"risk_target_joint_coverage_{horizon}")
+            ),
+            "risk_empirical_joint_coverage": _to_optional_float(
+                row.get(f"risk_empirical_joint_coverage_{horizon}")
+            ),
+            "central_interval_coverage": (
+                1.0 - _to_float(row.get(f"breach_prob_{horizon}"), 1.0)
+            ),
+            "central_skill_vs_best_dummy": _to_optional_float(
+                row.get(f"central_skill_vs_best_dummy_{horizon}")
+            ),
+            "confidence_semantics": str(
+                row.get("confidence_semantics") or "unspecified"
+            ),
             "geometry_semantics": (
                 "central_typical_plus_calibrated_risk"
                 if risk_available
@@ -414,6 +434,13 @@ def build_prediction_record(
         risk_ceiling_value=payload.get("risk_ceiling_value"),
         risk_geometry_available=bool(payload.get("risk_geometry_available", False)),
         risk_target_marginal_coverage=payload.get("risk_target_marginal_coverage"),
+        risk_target_joint_coverage=payload.get("risk_target_joint_coverage"),
+        risk_empirical_joint_coverage=payload.get(
+            "risk_empirical_joint_coverage"
+        ),
+        central_interval_coverage=payload.get("central_interval_coverage"),
+        central_skill_vs_best_dummy=payload.get("central_skill_vs_best_dummy"),
+        confidence_semantics=str(payload.get("confidence_semantics") or "unspecified"),
         geometry_semantics=str(
             payload.get("geometry_semantics") or "central_typical_boundary"
         ),

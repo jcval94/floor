@@ -78,10 +78,43 @@ def test_declared_classic_model_rejects_malformed_risk_geometry() -> None:
     result = validate_model_artifact_contract("d1", artifact, allow_legacy=True)
 
     assert result["valid"] is False
-    assert "risk_geometry method must be validation_residual_quantile" in result["errors"]
+    assert any(
+        error.startswith("risk_geometry method must be")
+        for error in result["errors"]
+    )
     assert "risk_geometry target_marginal_coverage must be in (0.5, 1)" in result["errors"]
     assert "risk_geometry floor_delta_addon must be non-negative" in result["errors"]
     assert "risk_geometry calibration_rows must be positive" in result["errors"]
+
+
+def test_declared_classic_model_accepts_joint_conformal_risk_geometry() -> None:
+    artifact = {
+        "model_name": "regime_median_d1",
+        "version": "v3",
+        "params": {
+            "schema_version": 2,
+            "floor": {},
+            "ceiling": {},
+            "timing": {},
+            "confidence_calibration": {},
+            "risk_geometry": {
+                "schema_version": 2,
+                "method": "joint_validation_conformal_max_residual",
+                "target_joint_coverage": 0.80,
+                "target_marginal_coverage": None,
+                "floor_delta_addon": 0.02,
+                "ceiling_delta_addon": 0.02,
+                "calibration_rows": 100,
+            },
+        },
+        "metrics": {},
+        "model_contract": build_model_contract("d1"),
+    }
+
+    result = validate_model_artifact_contract("d1", artifact, allow_legacy=True)
+
+    assert result["valid"] is True
+    assert result["status"] == "declared_valid"
 
 
 def test_strategy_contract_registry_covers_registry_and_all_league_strategies() -> None:
@@ -251,8 +284,9 @@ def test_new_classic_training_emits_risk_geometry_and_model_contract(
     assert artifact["model_contract"]["contract_id"] == "classic_range_geometry_v1"
     assert artifact["model_contract"]["directional"] is False
     risk = artifact["params"]["risk_geometry"]
-    assert risk["method"] == "validation_residual_quantile"
-    assert risk["target_marginal_coverage"] == pytest.approx(0.80)
+    assert risk["method"] == "joint_validation_conformal_max_residual"
+    assert risk["target_joint_coverage"] == pytest.approx(0.80)
+    assert risk["target_marginal_coverage"] is None
     assert risk["calibration_rows"] > 0
     assert "risk_floor_coverage" in artifact["metrics"]
 

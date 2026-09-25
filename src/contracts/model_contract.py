@@ -148,14 +148,30 @@ def validate_model_artifact_contract(
         risk = {}
 
     if risk:
-        if risk.get("method") != "validation_residual_quantile":
-            errors.append("risk_geometry method must be validation_residual_quantile")
-        try:
-            target_coverage = float(str(risk.get("target_marginal_coverage")))
-        except (TypeError, ValueError):
-            target_coverage = -1.0
-        if not 0.5 < target_coverage < 1.0:
-            errors.append("risk_geometry target_marginal_coverage must be in (0.5, 1)")
+        risk_method = str(risk.get("method") or "")
+        if risk_method == "validation_residual_quantile":
+            target_key = "target_marginal_coverage"
+        elif risk_method == "joint_validation_conformal_max_residual":
+            target_key = "target_joint_coverage"
+        else:
+            target_key = (
+                "target_joint_coverage"
+                if "target_joint_coverage" in risk
+                else "target_marginal_coverage"
+            )
+            errors.append(
+                "risk_geometry method must be validation_residual_quantile "
+                "or joint_validation_conformal_max_residual"
+            )
+        if target_key:
+            try:
+                target_coverage = float(str(risk.get(target_key)))
+            except (TypeError, ValueError):
+                target_coverage = -1.0
+            if not 0.5 < target_coverage < 1.0:
+                errors.append(
+                    f"risk_geometry {target_key} must be in (0.5, 1)"
+                )
         for key in ("floor_delta_addon", "ceiling_delta_addon"):
             try:
                 value = float(str(risk.get(key)))

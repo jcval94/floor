@@ -112,10 +112,17 @@ class ParityChampionModelSet(ChampionModelSet):
         risk_available = False
         risk_floor: float | None = None
         risk_ceiling: float | None = None
-        risk_target_coverage: float | None = None
+        risk_target_marginal: float | None = None
+        risk_target_joint: float | None = None
+        risk_empirical_joint: float | None = None
+        central_skill_vs_dummy: float | None = None
+        supported_risk_methods = {
+            "validation_residual_quantile",
+            "joint_validation_conformal_max_residual",
+        }
         if (
             isinstance(risk_geometry, dict)
-            and risk_geometry.get("method") == "validation_residual_quantile"
+            and risk_geometry.get("method") in supported_risk_methods
         ):
             risk_available = True
             floor_addon = max(
@@ -130,9 +137,35 @@ class ParityChampionModelSet(ChampionModelSet):
             )
             risk_floor = close * (1.0 - risk_floor_delta)
             risk_ceiling = close * (1.0 + risk_ceiling_delta)
-            risk_target_coverage = float(
-                risk_geometry.get("target_marginal_coverage") or 0.0
-            )
+
+            raw_marginal = risk_geometry.get("target_marginal_coverage")
+            if isinstance(raw_marginal, (int, float, str, bytes, bytearray)):
+                try:
+                    risk_target_marginal = float(raw_marginal)
+                except (TypeError, ValueError):
+                    risk_target_marginal = None
+
+            raw_joint = risk_geometry.get("target_joint_coverage")
+            if isinstance(raw_joint, (int, float, str, bytes, bytearray)):
+                try:
+                    risk_target_joint = float(raw_joint)
+                except (TypeError, ValueError):
+                    risk_target_joint = None
+
+            artifact_metrics = artifact.get("metrics")
+            if isinstance(artifact_metrics, dict):
+                raw_empirical = artifact_metrics.get("risk_interval_coverage")
+                if isinstance(raw_empirical, (int, float, str, bytes, bytearray)):
+                    try:
+                        risk_empirical_joint = float(raw_empirical)
+                    except (TypeError, ValueError):
+                        risk_empirical_joint = None
+                raw_skill = artifact_metrics.get("central_skill_vs_best_dummy")
+                if isinstance(raw_skill, (int, float, str, bytes, bytearray)):
+                    try:
+                        central_skill_vs_dummy = float(raw_skill)
+                    except (TypeError, ValueError):
+                        central_skill_vs_dummy = None
 
         timing = params.get("timing")
         floor_time = ""
@@ -208,8 +241,23 @@ class ParityChampionModelSet(ChampionModelSet):
             risk_ceiling=round(risk_ceiling, 4) if risk_ceiling is not None else None,
             risk_geometry_available=risk_available,
             risk_target_marginal_coverage=(
-                round(risk_target_coverage, 4)
-                if risk_target_coverage is not None
+                round(risk_target_marginal, 4)
+                if risk_target_marginal is not None
+                else None
+            ),
+            risk_target_joint_coverage=(
+                round(risk_target_joint, 4)
+                if risk_target_joint is not None
+                else None
+            ),
+            risk_empirical_joint_coverage=(
+                round(risk_empirical_joint, 4)
+                if risk_empirical_joint is not None
+                else None
+            ),
+            central_skill_vs_best_dummy=(
+                round(central_skill_vs_dummy, 6)
+                if central_skill_vs_dummy is not None
                 else None
             ),
         )

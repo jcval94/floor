@@ -15,12 +15,12 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Universe explorer</span><h1>Compara activos sin perderte entre 13 columnas.</h1><p class="lead">La vista principal se concentra en precio, rango, downside, upside y confianza. Los detalles técnicos quedan disponibles bajo demanda.</p></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Universe explorer</span><h1>Compara activos sin perderte entre 13 columnas.</h1><p class="lead">La vista principal se concentra en precio, rango, downside, upside y cobertura observada. Los detalles técnicos quedan disponibles bajo demanda.</p></div></section>
 
   <section class="filters" aria-label="Filtros del universo">
     <div class="filter-field search"><label for="tickerSearch">Buscar ticker</label><input id="tickerSearch" type="search" placeholder="Escribe un símbolo…" autocomplete="off" /></div>
     <div class="filter-field"><label for="horizonFilter">Horizonte</label><select id="horizonFilter"><option value="d1">1 sesión</option><option value="w1" selected>5 sesiones</option><option value="q1">10 sesiones</option></select></div>
-    <div class="filter-field"><label for="tickerConfidence">Confianza mínima</label><select id="tickerConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
+    <div class="filter-field"><label for="tickerConfidence">Cobertura mínima</label><select id="tickerConfidence"><option value="0">Todas</option><option value="0.6">≥ 60%</option><option value="0.8">≥ 80%</option></select></div>
     <div id="tickerCount" class="result-summary" aria-live="polite"></div>
   </section>
 
@@ -32,7 +32,7 @@
         <th>Rango esperado</th>
         <th aria-sort="none"><button class="sort-button" type="button" data-sort="downside">Downside</button></th>
         <th aria-sort="none"><button class="sort-button" type="button" data-sort="upside">Upside</button></th>
-        <th aria-sort="none"><button class="sort-button" type="button" data-sort="confidence">Confianza</button></th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="confidence">Cobertura</button></th>
       </tr></thead>
       <tbody id="tickersTable"><tr><td colspan="6"><div class="empty-state">Cargando universo…</div></td></tr></tbody>
     </table></div>
