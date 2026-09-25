@@ -127,3 +127,20 @@ def test_ceiling_gap_can_emit_cost_valid_sell() -> None:
     assert decision.expected_return < 0
     assert decision.take_profit_price == 100.0
     assert decision.stop_price > 110.5
+
+
+def test_gap_score_is_invariant_to_range_coverage() -> None:
+    low = _floor_row()
+    high = _floor_row()
+    low.update({"gap_floor_alpha_pct": 0.02, "confidence_score": 0.05})
+    high.update({"gap_floor_alpha_pct": 0.02, "confidence_score": 0.95})
+
+    low_decision = generate_gap_to_floor_ceiling_orders(
+        [low], _global_cfg(), _strategy_cfg(), "OPEN"
+    )[0]
+    high_decision = generate_gap_to_floor_ceiling_orders(
+        [high], _global_cfg(), _strategy_cfg(), "OPEN"
+    )[0]
+
+    assert low_decision.side == high_decision.side == "BUY"
+    assert low_decision.score == high_decision.score
