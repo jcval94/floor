@@ -183,8 +183,8 @@ def build_relative_strength_rotation(
     output: list[StrategyDecision] = []
     for symbol in sorted(rows_by_symbol):
         row = rows_by_symbol[symbol]
-        item = candidate_by_symbol.get(symbol)
-        if item is None or symbol not in selected_symbols:
+        candidate = candidate_by_symbol.get(symbol)
+        if candidate is None or symbol not in selected_symbols:
             output.append(
                 hold_decision(
                     STRATEGY_ID,
@@ -198,29 +198,29 @@ def build_relative_strength_rotation(
             )
             continue
 
-        source: StrategyDecision = item["decision"]
+        source_decision: StrategyDecision = candidate["decision"]
         retained = symbol in held_symbols and symbol not in {
             str(entry["symbol"]) for entry in candidates[:entry_cut]
         }
         output.append(
             replace(
-                source,
+                source_decision,
                 strategy_id=STRATEGY_ID,
-                score=float(item["adjusted_rs"]),
+                score=float(candidate["adjusted_rs"]),
                 entry_reason=(
                     f"BUY: relative-strength rotation score="
-                    f"{float(item['adjusted_rs']):.4f}, "
-                    f"horizons={int(item['horizons'])}, "
-                    f"source={item['source']}; {source.entry_reason}"
+                    f"{float(candidate['adjusted_rs']):.4f}, "
+                    f"horizons={int(candidate['horizons'])}, "
+                    f"source={candidate['source']}; {source_decision.entry_reason}"
                     + (" · retained_by_hysteresis" if retained else "")
                 ),
                 exit_reason=(
                     "Leaves rotation set or source exit fires. "
-                    f"Source semantics preserved from {item['source']}."
+                    f"Source semantics preserved from {candidate['source']}."
                 ),
                 alpha_source=(
-                    f"rotation_preserves:{item['source']}:"
-                    f"{source.alpha_source or 'source_alpha'}"
+                    f"rotation_preserves:{candidate['source']}:"
+                    f"{source_decision.alpha_source or 'source_alpha'}"
                 ),
             )
         )
