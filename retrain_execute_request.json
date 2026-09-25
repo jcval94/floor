@@ -1,6 +1,6 @@
 {
-  "requested_at": "2026-09-24",
-  "reason": "p0_classic_risk_geometry_contract_retrain",
+  "requested_at": "2026-09-25",
+  "reason": "joint_conformal_risk_geometry_recalibration",
   "force": true,
   "approve_recommended": false,
   "tasks": [
@@ -9,6 +9,6 @@
     "q1"
   ],
   "confirm_publish": "PUBLISH_CHAMPIONS_TO_MAIN",
-  "authorization_context": "User explicitly approved governed D1/W1/Q1 retraining after P0 risk-geometry contracts were merged.",
-  "iteration": "p0-risk-geometry-v1"
+  "authorization_context": "User explicitly approved improving forecast confidence with joint risk calibration while preserving central predictive power.",
+  "iteration": "joint-conformal-risk-v2"
 }
