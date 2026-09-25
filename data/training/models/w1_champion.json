@@ -1,7 +1,7 @@
 {
   "horizon": "w1",
   "model_name": "robust_range_v3_w1",
-  "version": "20260925T195326Z-risk-contract",
+  "version": "20260925T214133Z-risk-contract",
   "floor_delta": 0.03596582758435288,
   "ceiling_delta": 0.03946902976837086,
   "train_rows": 54950,
@@ -23,7 +23,9 @@
     "risk_interval_coverage": 0.8555882352941176,
     "risk_mean_width_pct": 0.16546383260686448,
     "risk_target_joint_coverage": 0.8,
-    "risk_joint_coverage_error": 0.055588235294117605
+    "risk_joint_coverage_error": 0.055588235294117605,
+    "central_skill_vs_best_dummy": -0.0018112166318051681,
+    "dummy_comparison_mae_spread_pct": 0.02378974908717158
   },
   "params": {
     "schema_version": 2,
@@ -8878,11 +8880,21 @@
         "strategy_stop_source": "risk_geometry",
         "strategy_target_source": "central_geometry"
       }
+    },
+    "dummy_benchmark": {
+      "selection_split": "validation",
+      "best_name": "atr_only",
+      "best_mae_spread_pct": 0.023746738599269457,
+      "global_median_mae_spread_pct": 0.02836901351506913,
+      "atr_only_mae_spread_pct": 0.023746738599269457,
+      "atr_floor_multiplier": 0.9092321959408688,
+      "atr_ceiling_multiplier": 1.0444974228339128,
+      "comparison_split": "late_validation_risk_evaluation"
     }
   },
   "selection": {
     "decision": "promote_risk_calibration_migration",
-    "reason": "Central challenger did not earn promotion, but it carries a newer risk-calibration contract. Preserve the incumbent central predictor exactly and recalibrate only its risk geometry on leakage-safe temporal calibration data.",
+    "reason": "Central challenger did not earn promotion, but risk calibration or benchmark diagnostics need an upgrade. Preserve the incumbent central predictor exactly, recalibrate only risk geometry, and refresh leakage-safe dummy comparisons.",
     "scoring_version": "classic-boundary-pareto-v3",
     "selection_split": "validation",
     "test_used_for_selection": false,
@@ -8899,7 +8911,7 @@
     "candidate_interval_coverage_delta": 0.0007407407407407363
   },
   "contract_migration": {
-    "from_version": "20260924T192816Z-risk-contract",
+    "from_version": "20260925T195326Z-risk-contract",
     "central_model_preserved": true,
     "central_params_preserved": true,
     "risk_only_migration": true,
