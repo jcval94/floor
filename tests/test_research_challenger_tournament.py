@@ -106,7 +106,7 @@ def test_evidence_readiness_refuses_to_fake_gap_or_reclaim_alpha() -> None:
         },
         {
             "volatility_regime_switch": 10,
-            "relative_strength_rotation": 9,
+            "relative_strength_rotation": 10,
         },
         10,
     )
