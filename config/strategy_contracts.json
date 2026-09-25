@@ -65,26 +65,6 @@
       "sell_semantics_in_league": "rebalance_or_exit",
       "canonical_variant": "long_only_meta_allocator",
       "league_evidence_can_promote_canonical_variant": true
-    },
-    "floor_ceiling_reclaim": {
-      "research_action_space": [
-        "BUY",
-        "SELL",
-        "HOLD"
-      ],
-      "league_evaluation_variant": "not_in_strategy_league",
-      "sell_semantics_in_league": "not_applicable",
-      "canonical_variant": "intraday_bidirectional",
-      "league_evidence_can_promote_canonical_variant": false,
-      "registry_scope": "strategy_registry",
-      "evidence_role": "diagnostic_only",
-      "promotion_eligible": false,
-      "required_point_in_time_fields": [
-        "intraday_prev_price",
-        "intraday_low",
-        "intraday_high"
-      ],
-      "alpha_contract": "requires_explicit_floor_reclaim_alpha_pct_or_ceiling_rejection_alpha_pct"
     }
   }
 }
