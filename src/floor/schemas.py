@@ -52,6 +52,11 @@ class PredictionRecord:
     risk_ceiling_value: float | None = None
     risk_geometry_available: bool = False
     risk_target_marginal_coverage: float | None = None
+    risk_target_joint_coverage: float | None = None
+    risk_empirical_joint_coverage: float | None = None
+    central_interval_coverage: float | None = None
+    central_skill_vs_best_dummy: float | None = None
+    confidence_semantics: str = "unspecified"
     geometry_semantics: str = "central_typical_boundary"
     floor_time_bucket: str = ""
     ceiling_time_bucket: str = ""
