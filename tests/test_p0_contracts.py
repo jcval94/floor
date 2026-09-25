@@ -284,8 +284,9 @@ def test_new_classic_training_emits_risk_geometry_and_model_contract(
     assert artifact["model_contract"]["contract_id"] == "classic_range_geometry_v1"
     assert artifact["model_contract"]["directional"] is False
     risk = artifact["params"]["risk_geometry"]
-    assert risk["method"] == "validation_residual_quantile"
-    assert risk["target_marginal_coverage"] == pytest.approx(0.80)
+    assert risk["method"] == "joint_validation_conformal_max_residual"
+    assert risk["target_joint_coverage"] == pytest.approx(0.80)
+    assert risk["target_marginal_coverage"] is None
     assert risk["calibration_rows"] > 0
     assert "risk_floor_coverage" in artifact["metrics"]
 
