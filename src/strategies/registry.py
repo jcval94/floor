@@ -12,6 +12,10 @@ from strategies.cross_horizon_asymmetry import (
     STRATEGY_ID as CROSS_HORIZON_ID,
     generate_orders as generate_cross_horizon_orders,
 )
+from strategies.floor_ceiling_reclaim import (
+    STRATEGY_ID as RECLAIM_ID,
+    generate_orders as generate_reclaim_orders,
+)
 from strategies.mean_reversion_floor_w1 import (
     STRATEGY_ID as MEAN_REVERSION_ID,
     generate_orders as generate_mean_reversion_orders,
@@ -28,6 +32,7 @@ STRATEGY_GENERATORS: dict[str, StrategyGenerator] = {
     BREAKOUT_ID: generate_breakout_orders,
     MEAN_REVERSION_ID: generate_mean_reversion_orders,
     CROSS_HORIZON_ID: generate_cross_horizon_orders,
+    RECLAIM_ID: generate_reclaim_orders,
 }
 
 ACTIVE_STRATEGY_IDS = tuple(STRATEGY_GENERATORS)
@@ -35,7 +40,7 @@ ACTIVE_STRATEGY_IDS = tuple(STRATEGY_GENERATORS)
 
 def validate_registry() -> None:
     """Fail fast if package IDs ever drift from the central registry contract."""
-    ids = [WEEKLY_ID, BREAKOUT_ID, MEAN_REVERSION_ID, CROSS_HORIZON_ID]
+    ids = [WEEKLY_ID, BREAKOUT_ID, MEAN_REVERSION_ID, CROSS_HORIZON_ID, RECLAIM_ID]
     if len(ids) != len(set(ids)):
         raise RuntimeError(f"Duplicate strategy ids in registry: {ids}")
     if set(ids) != set(STRATEGY_GENERATORS):
