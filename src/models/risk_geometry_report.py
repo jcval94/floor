@@ -51,6 +51,7 @@ def build_risk_geometry_report(registry_dir: Path) -> dict[str, Any]:
             "contract_id": contract.get("contract_id"),
             "risk_geometry_available": risk_available,
             "risk_geometry_method": risk.get("method"),
+            "target_joint_coverage": risk.get("target_joint_coverage"),
             "target_marginal_coverage": risk.get("target_marginal_coverage"),
             "calibration_rows": risk.get("calibration_rows"),
             "floor_stop_widening_pct_points": 100.0 * floor_addon,
@@ -58,6 +59,12 @@ def build_risk_geometry_report(registry_dir: Path) -> dict[str, Any]:
             "risk_floor_coverage": metrics.get("risk_floor_coverage"),
             "risk_ceiling_coverage": metrics.get("risk_ceiling_coverage"),
             "risk_interval_coverage": metrics.get("risk_interval_coverage"),
+            "risk_joint_coverage_error": metrics.get("risk_joint_coverage_error"),
+            "risk_mean_width_pct": metrics.get("risk_mean_width_pct"),
+            "central_skill_vs_best_dummy": metrics.get(
+                "central_skill_vs_best_dummy"
+            ),
+            "dummy_benchmark": params.get("dummy_benchmark"),
             "central_mae_floor_pct": metrics.get("mae_floor_pct"),
             "central_mae_ceiling_pct": metrics.get("mae_ceiling_pct"),
             "central_mae_spread_pct": metrics.get("mae_spread_pct"),
@@ -66,7 +73,7 @@ def build_risk_geometry_report(registry_dir: Path) -> dict[str, Any]:
         }
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "OK" if complete else "INCOMPLETE",
         "classic_contract_complete": complete,
         "tasks": tasks,
