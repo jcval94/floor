@@ -159,7 +159,8 @@ def test_classic_gate_migrates_legacy_contract_without_replacing_central_model(
     assert active["params"]["ceiling"] == old["params"]["ceiling"]
     assert active["contract_migration"]["central_params_preserved"] is True
     assert active["model_contract"]["contract_id"] == "classic_range_geometry_v1"
-    assert active["params"]["risk_geometry"]["method"] == "validation_residual_quantile"
+    assert active["params"]["risk_geometry"]["method"] == "joint_validation_conformal_max_residual"
+    assert active["params"]["risk_geometry"]["target_joint_coverage"] == pytest.approx(0.80)
     assert active["version"] == "risk-v1-risk-contract"
 
     challenger = json.loads(
