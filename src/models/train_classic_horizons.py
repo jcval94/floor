@@ -648,6 +648,7 @@ def _risk_nominal_coverage(
 
     selected = RISK_NOMINAL_COVERAGE_GRID[-1]
     selected_coverage = 0.0
+    selected_fit_addon = 0.0
     diagnostics: list[dict[str, float]] = []
     for nominal in RISK_NOMINAL_COVERAGE_GRID:
         addon = _conformal_quantile(fit_scores, nominal)
@@ -663,6 +664,7 @@ def _risk_nominal_coverage(
         )
         selected = nominal
         selected_coverage = tune_coverage
+        selected_fit_addon = addon
         if tune_coverage >= RISK_TARGET_JOINT_COVERAGE:
             break
 
@@ -672,6 +674,7 @@ def _risk_nominal_coverage(
         "tuning_rows": len(tune_scores),
         "tuning_start": tune_start,
         "tuning_coverage": selected_coverage,
+        "selected_fit_addon": selected_fit_addon,
         "nominal_grid_results": diagnostics,
     }
 
@@ -702,10 +705,16 @@ def _fit_risk_geometry(
         joint_scores,
         horizon=horizon,
     )
-    joint_addon = _conformal_quantile(
+    full_calibration_addon = _conformal_quantile(
         joint_scores,
         nominal_coverage,
     )
+    selected_fit_addon = float(tuning.get("selected_fit_addon") or 0.0)
+    # Never let the final refit shrink below the exact addon that already met
+    # the service target on the later internal tuning slice. This matters most
+    # for longer horizons where purge geometry can make the earlier fit block
+    # smaller than the tuning block.
+    joint_addon = max(full_calibration_addon, selected_fit_addon)
     return {
         "schema_version": 3,
         "method": "joint_validation_conformal_max_residual",
@@ -718,6 +727,8 @@ def _fit_risk_geometry(
         "floor_delta_addon": joint_addon,
         "ceiling_delta_addon": joint_addon,
         "joint_score_quantile": joint_addon,
+        "full_calibration_addon": full_calibration_addon,
+        "anti_shrinkage_applied": joint_addon > full_calibration_addon + 1e-12,
         "calibration_rows": len(rows),
         **tuning,
         "semantics": {
