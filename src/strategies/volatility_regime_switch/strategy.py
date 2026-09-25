@@ -53,8 +53,10 @@ def route_volatility_regime_decisions(
     HOLD instead of pretending the source scores are directly comparable.
     """
 
-    breakout = _by_symbol(decisions_by_strategy.get(_BREAKOUT, []))
-    mean_reversion = _by_symbol(decisions_by_strategy.get(_MEAN_REVERSION, []))
+    low_source = str(strategy_cfg.get("low_source") or _MEAN_REVERSION)
+    high_source = str(strategy_cfg.get("high_source") or _BREAKOUT)
+    breakout = _by_symbol(decisions_by_strategy.get(high_source, []))
+    mean_reversion = _by_symbol(decisions_by_strategy.get(low_source, []))
 
     output: list[StrategyDecision] = []
     for symbol in sorted(rows_by_symbol):
@@ -69,11 +71,11 @@ def route_volatility_regime_decisions(
         if regime == "LOW":
             if _actionable(mean_decision):
                 selected = mean_decision
-                source = _MEAN_REVERSION
+                source = low_source
         elif regime == "HIGH":
             if _actionable(breakout_decision):
                 selected = breakout_decision
-                source = _BREAKOUT
+                source = high_source
         elif regime == "NORMAL":
             candidates = [
                 item
