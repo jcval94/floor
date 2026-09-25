@@ -228,6 +228,74 @@ def test_classic_gate_upgrades_risk_contract_without_replacing_central_model(
         active["params"]["risk_geometry"]["method"]
         == "joint_validation_conformal_max_residual"
     )
+    assert active["params"]["dummy_benchmark"]["best_name"] in {
+        "global_median",
+        "atr_only",
+    }
+    assert "central_skill_vs_best_dummy" in active["metrics"]
+
+
+def test_classic_gate_refreshes_missing_dummy_diagnostics_on_v3_champion(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset.json"
+    registry = tmp_path / "registry"
+    previous = tmp_path / "previous"
+    _dataset(dataset)
+
+    old = _artifact(version="old-v3", floor_delta=0.02, ceiling_delta=0.03)
+    old["params"]["risk_geometry"] = {
+        "schema_version": 3,
+        "method": "joint_validation_conformal_max_residual",
+        "calibration_policy_version": "nested-temporal-v1",
+        "target_joint_coverage": 0.80,
+        "nominal_conformal_coverage": 0.85,
+        "target_marginal_coverage": None,
+        "floor_delta_addon": 0.02,
+        "ceiling_delta_addon": 0.02,
+        "calibration_rows": 2,
+    }
+    old = attach_model_contract(old, "d1")
+
+    candidate = _artifact(version="new", floor_delta=0.20, ceiling_delta=0.20)
+    candidate["params"]["risk_geometry"] = {
+        "schema_version": 3,
+        "method": "joint_validation_conformal_max_residual",
+        "calibration_policy_version": "nested-temporal-v1",
+        "target_joint_coverage": 0.80,
+        "nominal_conformal_coverage": 0.85,
+        "target_marginal_coverage": None,
+        "floor_delta_addon": 0.02,
+        "ceiling_delta_addon": 0.02,
+        "calibration_rows": 2,
+    }
+    candidate["params"]["dummy_benchmark"] = {
+        "best_name": "global_median",
+        "best_mae_spread_pct": 0.01,
+    }
+    candidate["metrics"]["central_skill_vs_best_dummy"] = 0.01
+    candidate = attach_model_contract(candidate, "d1")
+
+    _write(previous / "d1_champion.json", old)
+    _write(registry / "d1_champion.json", candidate)
+
+    result = gate_one_horizon(
+        dataset_path=dataset,
+        registry_dir=registry,
+        previous_dir=previous,
+        horizon="d1",
+        version="risk-v3-dummy",
+    )
+
+    assert result["decision"] == "promote_risk_calibration_migration"
+    active = json.loads((registry / "d1_champion.json").read_text(encoding="utf-8"))
+    assert active["params"]["floor"] == old["params"]["floor"]
+    assert active["params"]["ceiling"] == old["params"]["ceiling"]
+    assert active["params"]["dummy_benchmark"]["best_name"] in {
+        "global_median",
+        "atr_only",
+    }
+    assert "central_skill_vs_best_dummy" in active["metrics"]
 
 
 def test_classic_gate_rejects_spread_win_when_one_boundary_regresses(
