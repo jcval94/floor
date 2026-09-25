@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "strategy_id": "gap_to_floor_ceiling",
+  "evidence_role": "diagnostic_only",
+  "promotion_eligible": false,
+  "active_registry_member": false,
+  "strategy_league_member": false,
+  "strategy_kind": "directional_event_challenger",
+  "valid_session": "OPEN",
+  "required_point_in_time_fields": [
+    "open",
+    "gap_open_to_prev_close",
+    "floor_d1",
+    "ceiling_d1",
+    "risk_floor_d1",
+    "risk_ceiling_d1"
+  ],
+  "directional_alpha_fields": {
+    "BUY": "gap_floor_alpha_pct",
+    "SELL": "gap_ceiling_alpha_pct"
+  },
+  "semantics": {
+    "entry_reference_price": "open",
+    "floor_ceiling_geometry": "payoff_and_risk_space_only",
+    "calibrated_risk_geometry_required": true,
+    "missing_directional_alpha": "HOLD",
+    "risk_boundary_gap_through": "HOLD",
+    "non_open_session": "HOLD"
+  }
+}
