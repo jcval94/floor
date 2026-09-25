@@ -54,12 +54,53 @@ function safeJSON(value) {
   return escapeHTML(JSON.stringify(value ?? {}, null, 2));
 }
 
-function confidenceFromForecast(row) {
-  const breach = Number(row?.breach_probability ?? row?.breach_prob);
-  if (Number.isFinite(breach) && breach >= 0 && breach <= 1) return 1 - breach;
+function coverageInfoFromForecast(row) {
+  const jointRisk = Number(row?.risk_empirical_joint_coverage);
+  if (Number.isFinite(jointRisk) && jointRisk >= 0 && jointRisk <= 1) {
+    return { value: jointRisk, kind: 'risk' };
+  }
+
   const explicit = Number(row?.confidence_score ?? row?.confidence);
-  if (Number.isFinite(explicit) && explicit >= 0 && explicit <= 1) return explicit;
-  return null;
+  const semantics = String(row?.confidence_semantics || '').toLowerCase();
+  if (
+    semantics.includes('joint_risk')
+    && Number.isFinite(explicit)
+    && explicit >= 0
+    && explicit <= 1
+  ) {
+    return { value: explicit, kind: 'risk' };
+  }
+
+  const central = Number(row?.central_interval_coverage);
+  if (Number.isFinite(central) && central >= 0 && central <= 1) {
+    return { value: central, kind: 'central' };
+  }
+  const breach = Number(row?.breach_probability ?? row?.breach_prob);
+  if (Number.isFinite(breach) && breach >= 0 && breach <= 1) {
+    return { value: 1 - breach, kind: 'central' };
+  }
+  if (Number.isFinite(explicit) && explicit >= 0 && explicit <= 1) {
+    // Legacy batches stored central interval coverage in confidence_score.
+    return { value: explicit, kind: 'central' };
+  }
+  return { value: null, kind: 'unknown' };
+}
+
+function confidenceFromForecast(row) {
+  return coverageInfoFromForecast(row).value;
+}
+
+function forecastCoverageChip(row) {
+  const coverage = coverageInfoFromForecast(row);
+  const numeric = Number(coverage.value);
+  if (!Number.isFinite(numeric)) {
+    return '<span class="confidence-chip neutral">No disponible</span>';
+  }
+  if (coverage.kind === 'central') {
+    return `<span class="confidence-chip neutral" title="Cobertura histórica del rango central; no es una probabilidad de acierto">Central · ${(numeric * 100).toFixed(0)}%</span>`;
+  }
+  const info = confidenceLabel(numeric);
+  return `<span class="confidence-chip ${info.tone}" title="Cobertura conjunta OOS del rango de riesgo">Riesgo OOS · ${(numeric * 100).toFixed(0)}%</span>`;
 }
 
 function confidenceChip(value) {
@@ -163,7 +204,7 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
         <a class="ticker-link" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a>
         <div class="eyebrow">${escapeHTML(horizonLabel(horizon))} <span class="code-label">${escapeHTML(horizonCode(horizon))}</span></div>
       </div>
-      ${confidenceChip(confidence)}
+      ${forecastCoverageChip(row)}
     </div>
     <div class="forecast-price-row">
       <div><span class="metric-label">Referencia</span><strong>${fmt(ref.value)}</strong><small>${escapeHTML(ref.source)}</small></div>
@@ -239,7 +280,7 @@ async function home() {
         <td><span class="range-text">${fmt(range.floor)} <span aria-hidden="true">→</span> ${fmt(range.ceiling)}</span></td>
         <td class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</td>
         <td class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</td>
-        <td>${confidenceChip(confidence)}</td>
+        <td>${forecastCoverageChip(row)}</td>
       </tr>`;
     }).filter(Boolean).join('');
     snapshot.innerHTML = preferred || emptyRow('No hay forecasts publicables para mostrar.', 7);
@@ -310,7 +351,7 @@ async function forecasts() {
     });
 
     if (summary) {
-      summary.innerHTML = `<strong>${items.length}</strong> activos · ${escapeHTML(horizonLabel(selectedHorizon))} · ordenados por confianza del intervalo`;
+      summary.innerHTML = `<strong>${items.length}</strong> activos · ${escapeHTML(horizonLabel(selectedHorizon))} · ordenados por cobertura observada`;
     }
     if (root) {
       root.innerHTML = items.length
@@ -328,7 +369,7 @@ async function forecasts() {
           <td class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</td>
           <td>${fmt(range.ceiling)}</td>
           <td class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</td>
-          <td>${confidenceChip(conf)}</td>
+          <td>${forecastCoverageChip(row)}</td>
         </tr>`;
       }).join('') || emptyRow('No hay datos que coincidan con los filtros.', 7);
     }
@@ -428,7 +469,7 @@ async function tickers() {
       const ref = referencePrice(data, symbol, row);
       const range = forecastRange(row, ref.value);
       return `<article class="detail-horizon">
-        <div class="detail-title"><strong>${escapeHTML(horizonLabel(key))}</strong><span class="code-label">${escapeHTML(key)}</span>${confidenceChip(confidenceFromForecast(row))}</div>
+        <div class="detail-title"><strong>${escapeHTML(horizonLabel(key))}</strong><span class="code-label">${escapeHTML(key)}</span>${forecastCoverageChip(row)}</div>
         ${rangeSvg(range.floor, ref.value, range.ceiling, `${symbol} ${horizonLabel(key)}`)}
         <div class="detail-metrics"><span>Piso <strong>${fmt(range.floor)}</strong></span><span>Techo <strong>${fmt(range.ceiling)}</strong></span><span>Timing piso <strong>${escapeHTML(row.floor_time_bucket || '—')}</strong></span><span>Timing techo <strong>${escapeHTML(row.ceiling_time_bucket || '—')}</strong></span></div>
       </article>`;
@@ -450,7 +491,7 @@ async function tickers() {
         <td><span class="range-text">${fmt(item.range.floor)} → ${fmt(item.range.ceiling)}</span></td>
         <td class="negative">${item.range.downside == null ? '—' : fmtPct(item.range.downside)}</td>
         <td class="positive">${item.range.upside == null ? '—' : fmtPct(item.range.upside)}</td>
-        <td>${confidenceChip(item.confidence)}</td>
+        <td>${forecastCoverageChip(item.row)}</td>
       </tr>`).join('') || emptyRow(forecastsR.ok ? 'No hay activos que coincidan con los filtros.' : 'No se pudieron cargar los forecasts.', 6);
     }
     document.querySelectorAll('[data-sort]').forEach((button) => {
