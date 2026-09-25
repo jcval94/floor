@@ -77,11 +77,10 @@ def route_volatility_regime_decisions(
                 selected = breakout_decision
                 source = high_source
         elif regime == "NORMAL":
-            candidates = [
-                item
-                for item in (breakout_decision, mean_decision)
-                if _actionable(item)
-            ]
+            candidates: list[StrategyDecision] = []
+            for candidate in (breakout_decision, mean_decision):
+                if candidate is not None and _actionable(candidate):
+                    candidates.append(candidate)
             if len(candidates) == 1:
                 selected = candidates[0]
                 source = str(selected.strategy_id)
@@ -104,6 +103,8 @@ def route_volatility_regime_decisions(
             )
             if (
                 regime == "NORMAL"
+                and breakout_decision is not None
+                and mean_decision is not None
                 and _actionable(breakout_decision)
                 and _actionable(mean_decision)
                 and str(breakout_decision.side).upper()
