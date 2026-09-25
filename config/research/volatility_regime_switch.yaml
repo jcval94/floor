@@ -1,0 +1,7 @@
+strategy:
+  id: volatility_regime_switch
+  readiness: research_diagnostic_needs_oos
+  low_regime_max_score: 0.80
+  high_regime_min_score: 1.20
+  low_source: mean_reversion_floor_w1
+  high_source: breakout_protected_by_floor
