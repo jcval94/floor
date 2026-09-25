@@ -154,7 +154,11 @@ def validate_model_artifact_contract(
         elif risk_method == "joint_validation_conformal_max_residual":
             target_key = "target_joint_coverage"
         else:
-            target_key = ""
+            target_key = (
+                "target_joint_coverage"
+                if "target_joint_coverage" in risk
+                else "target_marginal_coverage"
+            )
             errors.append(
                 "risk_geometry method must be validation_residual_quantile "
                 "or joint_validation_conformal_max_residual"
