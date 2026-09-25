@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "strategy_id": "relative_strength_rotation",
+  "evidence_role": "diagnostic_only",
+  "promotion_eligible": false,
+  "active_registry_member": false,
+  "strategy_league_member": false,
+  "strategy_kind": "cross_sectional_meta_allocator",
+  "required_point_in_time_fields": [
+    "rel_strength_4w",
+    "rel_strength_8w",
+    "rel_strength_13w",
+    "beta_20"
+  ],
+  "source_strategies": [
+    "weekly_opportunity_ridge",
+    "breakout_protected_by_floor",
+    "mean_reversion_floor_w1"
+  ],
+  "semantics": {
+    "directional_alpha": "preserved_from_cost_valid_source_strategy",
+    "relative_strength": "ranking_only_not_expected_return",
+    "beta": "ranking_penalty_and_eligibility_only",
+    "turnover_control": "top_set_hysteresis",
+    "action_space": "long_only_rotation"
+  }
+}
