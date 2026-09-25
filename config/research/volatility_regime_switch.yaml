@@ -1,6 +1,8 @@
 strategy:
   id: volatility_regime_switch
   readiness: research_diagnostic_needs_oos
+  review_frequency_sessions: 1
+  max_holding_sessions: 5
   low_regime_max_score: 0.80
   high_regime_min_score: 1.20
   low_source: mean_reversion_floor_w1

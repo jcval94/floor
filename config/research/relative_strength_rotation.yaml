@@ -1,6 +1,8 @@
 strategy:
   id: relative_strength_rotation
   readiness: research_diagnostic_needs_cross_sectional_oos
+  review_frequency_sessions: 5
+  max_holding_sessions: 10
   source_priority: weekly_opportunity_ridge,breakout_protected_by_floor,mean_reversion_floor_w1
   weight_4w: 0.50
   weight_8w: 0.30

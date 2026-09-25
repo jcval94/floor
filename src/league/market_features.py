@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from statistics import pstdev
 from typing import Any
 
 from floor.persistence_db import latest_predictions
@@ -47,6 +48,59 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
     momentum_10 = close / max(closes[-11], 1e-9) - 1.0
     momentum_20 = close / max(closes[-21], 1e-9) - 1.0
     spy_momentum_20 = spy_closes[-1] / max(spy_closes[-21], 1e-9) - 1.0
+
+    asset_returns = [
+        closes[index] / max(closes[index - 1], 1e-9) - 1.0
+        for index in range(1, len(closes))
+    ]
+    spy_returns = [
+        spy_closes[index] / max(spy_closes[index - 1], 1e-9) - 1.0
+        for index in range(1, len(spy_closes))
+    ]
+    vol5 = pstdev(asset_returns[-5:]) if len(asset_returns) >= 5 else None
+    vol20 = pstdev(asset_returns[-20:]) if len(asset_returns) >= 20 else None
+    vol_regime_score = (
+        vol5 / vol20
+        if vol5 is not None and vol20 not in (None, 0.0)
+        else None
+    )
+    if vol_regime_score is None:
+        vol_regime = None
+    elif vol_regime_score < 0.8:
+        vol_regime = "LOW"
+    elif vol_regime_score > 1.2:
+        vol_regime = "HIGH"
+    else:
+        vol_regime = "NORMAL"
+
+    def relative_strength(window: int) -> float | None:
+        if len(closes) <= window or len(spy_closes) <= window:
+            return None
+        asset = close / max(closes[-window - 1], 1e-9) - 1.0
+        benchmark = spy_closes[-1] / max(spy_closes[-window - 1], 1e-9) - 1.0
+        return asset - benchmark
+
+    beta_20: float | None = None
+    if len(asset_returns) >= 20 and len(spy_returns) >= 20:
+        a_rets = asset_returns[-20:]
+        b_rets = spy_returns[-20:]
+        mean_a = _mean(a_rets)
+        mean_b = _mean(b_rets)
+        covariance = _mean(
+            [
+                (asset_ret - mean_a) * (bench_ret - mean_b)
+                for asset_ret, bench_ret in zip(a_rets, b_rets)
+            ]
+        )
+        benchmark_variance = _mean(
+            [(bench_ret - mean_b) ** 2 for bench_ret in b_rets]
+        )
+        beta_20 = (
+            covariance / benchmark_variance
+            if benchmark_variance > 1e-18
+            else None
+        )
+
     sma_65 = _mean(closes[-65:])
     peak_65 = max(closes[-65:])
     low_20 = min(lows[-20:])
@@ -71,6 +125,14 @@ def _feature_row(symbol: str, bars: list[dict], spy_bars: list[dict]) -> dict[st
         "momentum_10": momentum_10,
         "momentum_20": momentum_20,
         "rel_strength_20": momentum_20 - spy_momentum_20,
+        "rel_strength_4w": relative_strength(20),
+        "rel_strength_8w": relative_strength(40),
+        "rel_strength_13w": relative_strength(65),
+        "beta_20": beta_20,
+        "rolling_vol_5": vol5,
+        "rolling_vol_20": vol20,
+        "vol_regime_score": vol_regime_score,
+        "vol_regime": vol_regime,
         "trend_context_m3": close / max(sma_65, 1e-9) - 1.0,
         "drawdown_13w": close / max(peak_65, 1e-9) - 1.0,
         "atr_14": _mean(true_ranges),

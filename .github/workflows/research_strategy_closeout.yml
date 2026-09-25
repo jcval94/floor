@@ -1,0 +1,160 @@
+name: research-strategy-closeout
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First replay session (YYYY-MM-DD)"
+        required: true
+        default: "2026-06-22"
+      end:
+        description: "Last replay session (YYYY-MM-DD)"
+        required: true
+        default: "2026-09-23"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/replay/research_challenger_tournament.py"
+      - "src/strategies/volatility_regime_switch/**"
+      - "src/strategies/relative_strength_rotation/**"
+      - "config/research/volatility_regime_switch.yaml"
+      - "config/research/relative_strength_rotation.yaml"
+      - "tests/test_research_challenger_tournament.py"
+      - ".github/workflows/research_strategy_closeout.yml"
+      - "research_strategy_closeout_request.json"
+  push:
+    branches: [main]
+    paths:
+      - "research_strategy_closeout_request.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-strategy-closeout-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+
+      - name: Restore frozen runtime artifacts locally
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+
+      - name: Verify frozen Strategy League v9 contract
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m league.freeze \
+            --league-config config/strategy_league.json \
+            --freeze config/frozen/capital_challenger_v1_v9.json
+
+      - name: Preflight model and weekly artifacts
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m utils.model_artifact_guard \
+            --registry data/training/models
+          weekly="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))
+          print(cfg["weekly_model_path"])
+          PY
+          )"
+          test -s "$weekly" || { echo "::error::Missing weekly artifact: $weekly"; exit 1; }
+
+      - name: Resolve closeout window
+        id: window
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "start=${{ github.event.inputs.start }}" >> "$GITHUB_OUTPUT"
+            echo "end=${{ github.event.inputs.end }}" >> "$GITHUB_OUTPUT"
+          else
+            python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          payload = json.load(open("research_strategy_closeout_request.json", encoding="utf-8"))
+          print(f"start={payload['start']}")
+          print(f"end={payload['end']}")
+          PY
+          fi
+
+      - name: Run research strategy closeout tournament
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/research_strategy_closeout"
+          PYTHONPATH=src python -m replay.research_challenger_tournament \
+            --start "${{ steps.window.outputs.start }}" \
+            --end "${{ steps.window.outputs.end }}" \
+            --output "$out" | tee "$RUNNER_TEMP/research_closeout_stdout.json"
+
+      - name: Assert evidence contract
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/research_strategy_closeout/research_challenger_tournament.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert payload["status"] == "RESEARCH_STRATEGY_CLOSEOUT"
+          assert payload["prospective_evidence"] is False
+          assert payload["historical_model_out_of_sample"] is False
+          assert payload["portfolio_continuity"] is True
+          assert payload["future_data_used"] is False
+          assert payload["mutates_strategy_league_v9"] is False
+          assert payload["live_execution_enabled"] is False
+          assert abs(float(payload["round_trip_cost_bps"]) - 61.0) < 1e-9
+
+          rows = {
+              row["strategy"]: row
+              for row in payload["leaderboard"]["rows"]
+          }
+          for member in ("volatility_regime_switch", "relative_strength_rotation"):
+              assert member in rows, member
+              assert payload["evidence_readiness"][member]["status"] == "EVALUATED_RETROSPECTIVE_PIT"
+              assert payload["evidence_readiness"][member]["promotion_eligible"] is False
+
+          for member in ("floor_ceiling_reclaim", "gap_to_floor_ceiling"):
+              assert payload["evidence_readiness"][member]["status"] == "INSUFFICIENT_EVIDENCE"
+              assert payload["evidence_readiness"][member]["promotion_eligible"] is False
+
+          print(json.dumps({
+              "sessions": payload["sessions"],
+              "round_trip_cost_bps": payload["round_trip_cost_bps"],
+              "research_rows": {
+                  key: {
+                      "return": rows[key]["return"],
+                      "sharpe": rows[key]["sharpe"],
+                      "max_drawdown": rows[key]["max_drawdown"],
+                      "trades": rows[key]["trades"],
+                      "costs_paid": rows[key]["costs_paid"],
+                      "turnover_review_window": rows[key]["turnover_review_window"],
+                  }
+                  for key in ("volatility_regime_switch", "relative_strength_rotation")
+              },
+              "evidence_readiness": payload["evidence_readiness"],
+          }, indent=2))
+          PY
+
+      - name: Upload closeout evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: research-strategy-closeout-${{ steps.window.outputs.start }}-${{ steps.window.outputs.end }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/research_strategy_closeout
+            ${{ runner.temp }}/research_closeout_stdout.json
+          if-no-files-found: error
+          retention-days: 30
