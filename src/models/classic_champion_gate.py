@@ -22,6 +22,7 @@ from models.train_classic_horizons import (
     FEATURES_BY_FAMILY,
     HORIZON_TARGETS,
     _load_rows,
+    _dummy_benchmark,
     _fit_risk_geometry,
     _metrics,
     _prepare_rows,
@@ -266,14 +267,40 @@ def _migrate_incumbent_risk_contract(
         risk_geometry,
     )
 
+    # Benchmark the unchanged incumbent central predictor against simple nulls
+    # on the same late validation block. This metric is diagnostic only and can
+    # never cause risk-calibration migration to replace the central model.
+    rows = _load_rows(dataset_path)
+    train_raw, _validation_raw = _split(rows, horizon)
+    floor_col, ceiling_col = HORIZON_TARGETS[horizon]
+    feature_names = tuple(
+        sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
+    )
+    train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
+    dummy_benchmark = _dummy_benchmark(train, evaluation)
+    central_metrics = _metrics(evaluation, eval_floor, eval_ceiling)
+    dummy_loss = float(dummy_benchmark["best_mae_spread_pct"])
+    central_loss = float(central_metrics["mae_spread_pct"])
+    central_skill_vs_dummy = (
+        1.0 - (central_loss / dummy_loss)
+        if dummy_loss > 0.0
+        else 0.0
+    )
+
     migrated = deepcopy(artifact)
     previous_version = str(migrated.get("version") or "")
     migrated["version"] = f"{version}-risk-contract"
     params = deepcopy(_mapping(migrated.get("params")))
     params["risk_geometry"] = risk_geometry
+    params["dummy_benchmark"] = {
+        **dummy_benchmark,
+        "comparison_split": "late_validation_risk_evaluation",
+    }
     migrated["params"] = params
     metrics = deepcopy(_mapping(migrated.get("metrics")))
     metrics.update(risk_metrics)
+    metrics["central_skill_vs_best_dummy"] = central_skill_vs_dummy
+    metrics["dummy_comparison_mae_spread_pct"] = central_loss
     migrated["metrics"] = metrics
     migrated["contract_migration"] = {
         "from_version": previous_version,
