@@ -332,6 +332,7 @@ async function forecasts() {
   const search = document.getElementById('forecastSearch');
   const horizon = document.getElementById('forecastHorizon');
   const confidence = document.getElementById('forecastConfidence');
+  const sort = document.getElementById('forecastSort');
   const root = document.getElementById('forecastCards');
   const summary = document.getElementById('forecastSummary');
   const tableRoot = document.getElementById('forecastTable');
@@ -341,21 +342,54 @@ async function forecasts() {
     const query = String(search?.value || '').trim().toUpperCase();
     const selectedHorizon = String(horizon?.value || 'w1').toLowerCase();
     const minConfidence = Number(confidence?.value || 0);
+    const selectedSort = String(sort?.value || 'coverage');
     const items = Object.entries(grouped).map(([symbol, rows]) => {
       const row = selectForecast(rows, selectedHorizon);
       if (!row) return null;
       const conf = confidenceFromForecast(row);
       if (query && !symbol.toUpperCase().includes(query)) return null;
       if (minConfidence > 0 && (!Number.isFinite(conf) || conf < minConfidence)) return null;
-      return { symbol, rows, row, conf };
-    }).filter(Boolean).sort((a, b) => {
-      const ca = Number.isFinite(a.conf) ? a.conf : -1;
-      const cb = Number.isFinite(b.conf) ? b.conf : -1;
-      return cb - ca || a.symbol.localeCompare(b.symbol);
+
+      const ref = referencePrice(data, symbol, row);
+      const range = forecastRange(row, ref.value);
+      const downside = Number.isFinite(range.downside) ? Math.abs(range.downside) : NaN;
+      const upside = Number.isFinite(range.upside) ? range.upside : NaN;
+      const skew = Number.isFinite(upside) && Number.isFinite(downside) ? upside - downside : NaN;
+      const width = Number.isFinite(upside) && Number.isFinite(downside) ? upside + downside : NaN;
+      const rawSkill = row?.central_skill_vs_best_dummy;
+      const skill = rawSkill == null || rawSkill === '' ? NaN : Number(rawSkill);
+
+      return { symbol, rows, row, conf, ref, range, downside, upside, skew, width, skill };
+    }).filter(Boolean);
+
+    const finiteCompare = (a, b, direction = 'desc') => {
+      const af = Number.isFinite(a);
+      const bf = Number.isFinite(b);
+      if (af && !bf) return -1;
+      if (!af && bf) return 1;
+      if (!af && !bf) return 0;
+      return direction === 'asc' ? a - b : b - a;
+    };
+
+    items.sort((a, b) => {
+      let cmp = 0;
+      if (selectedSort === 'right_skew') cmp = finiteCompare(a.skew, b.skew, 'desc');
+      else if (selectedSort === 'left_skew') cmp = finiteCompare(a.skew, b.skew, 'asc');
+      else if (selectedSort === 'balanced') cmp = finiteCompare(Math.abs(a.skew), Math.abs(b.skew), 'asc');
+      else if (selectedSort === 'upside') cmp = finiteCompare(a.upside, b.upside, 'desc');
+      else if (selectedSort === 'downside') cmp = finiteCompare(a.downside, b.downside, 'desc');
+      else if (selectedSort === 'wide') cmp = finiteCompare(a.width, b.width, 'desc');
+      else if (selectedSort === 'narrow') cmp = finiteCompare(a.width, b.width, 'asc');
+      else if (selectedSort === 'skill') cmp = finiteCompare(a.skill, b.skill, 'desc');
+      else if (selectedSort === 'ticker') cmp = a.symbol.localeCompare(b.symbol);
+      else cmp = finiteCompare(a.conf, b.conf, 'desc');
+
+      return cmp || a.symbol.localeCompare(b.symbol);
     });
 
     if (summary) {
-      summary.innerHTML = `<strong>${items.length}</strong> activos · ${escapeHTML(horizonLabel(selectedHorizon))} · ordenados por cobertura observada`;
+      const orderLabel = sort?.selectedOptions?.[0]?.textContent || 'Mayor cobertura';
+      summary.innerHTML = `<strong>${items.length}</strong> activos · ${escapeHTML(horizonLabel(selectedHorizon))} · orden: ${escapeHTML(orderLabel)}`;
     }
     if (root) {
       root.innerHTML = items.length
@@ -363,9 +397,7 @@ async function forecasts() {
         : emptyState(dataResult.ok ? 'Sin resultados' : 'No se pudieron cargar los forecasts', dataResult.ok ? 'Prueba con otros filtros.' : dataResult.error);
     }
     if (tableRoot) {
-      tableRoot.innerHTML = items.map(({ symbol, row, conf }) => {
-        const ref = referencePrice(data, symbol, row);
-        const range = forecastRange(row, ref.value);
+      tableRoot.innerHTML = items.map(({ symbol, row, conf, ref, range }) => {
         return `<tr>
           <td><a class="ticker-link compact" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a></td>
           <td>${fmt(ref.value)}</td>
@@ -379,7 +411,7 @@ async function forecasts() {
     }
   }
 
-  [search, horizon, confidence].forEach((control) => {
+  [search, horizon, confidence, sort].forEach((control) => {
     control?.addEventListener(control === search ? 'input' : 'change', render);
   });
   render();
