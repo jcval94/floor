@@ -7,7 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from contracts.trading import shadow_execution_contract
+from contracts.trading import round_trip_cost_bps_from_contract, shadow_execution_contract
 from floor.universe import parse_universe_yaml
 from forecasting.run_forecast import run_forecast_pipeline
 from league.engine import advance_league, initialize_league, sha256_file, write_leaderboard
@@ -569,11 +569,7 @@ def run_research_challenger_tournament(
         "end_session": sessions[-1].isoformat(),
         "sessions": len(sessions),
         "initial_nav_usd": float(league_cfg["initial_nav_usd"]),
-        "round_trip_cost_bps": float(
-            contract["commission_bps"] * 2
-            + contract["slippage_bps"] * 2
-            + contract["sell_fee_bps"]
-        ),
+        "round_trip_cost_bps": round_trip_cost_bps_from_contract(contract),
         "market_source": {
             **market_summary,
             "session_selection": session_selection,
