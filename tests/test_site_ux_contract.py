@@ -101,7 +101,7 @@ def test_models_page_shows_atr_only_central_skill_and_temporal_stability() -> No
     assert "<th>Skill por horizonte</th>" in page
     assert "<th>Estabilidad temporal</th>" in page
     assert "centralSkillTable" in page
-    assert "coverage conformal/risk geometry" in page.lower()
+    assert "cobertura conformal/risk geometry" in page.lower()
     assert "directional confidence" in page.lower()
     assert "ATR-only sigue siendo superior" in page
     assert "ATR-only sigue siendo superior" in app
