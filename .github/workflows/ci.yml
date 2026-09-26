@@ -81,6 +81,7 @@ jobs:
           PYTHONPATH=src python -m utils.pages_security \
             --site-dir "$RUNNER_TEMP/pages-site" \
             --validate-only
+          node --check site/assets/app.js
           node --check site/assets/league.js
           node --check site/assets/charts.js
           node --check site/assets/research.js

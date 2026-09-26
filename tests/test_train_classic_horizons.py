@@ -22,6 +22,7 @@ def _row(i: int, split: str) -> dict:
         "split_eligible_d1": True,
         "split_eligible_w1": True,
         "split_eligible_q1": True,
+        "atr_14": 2.0,
         "floor_day_w1": (i % 5) + 1,
         "ceiling_day_w1": ((i + 1) % 5) + 1,
         "floor_day_q1": (i % 10) + 1,
@@ -51,11 +52,17 @@ def test_train_classic_horizons_outputs_json_and_csv(tmp_path: Path) -> None:
         assert payload["horizon"] == horizon
         assert payload["train_rows"] > 0
         assert payload["test_rows"] == 5  # legacy field name; these are validation rows
-        assert len(competition["candidates"]) == 5
+        expected_candidates = 6 if horizon in {"d1", "w1"} else 5
+        assert len(competition["candidates"]) == expected_candidates
         assert payload["model_name"] in {c["model_id"] for c in competition["candidates"]}
         assert competition["selection_split"] == "validation"
         assert competition["test_used_for_selection"] is False
         assert payload["params"]["split_integrity"]["test_used_for_selection"] is False
+        assert payload["params"]["dummy_benchmark"]["atr_only_mae_spread_pct"] >= 0.0
+        if horizon in {"d1", "w1"}:
+            assert "central_skill_ensemble_v1" in {
+                candidate["model_family"] for candidate in competition["candidates"]
+            }
 
     with csv_path.open("r", encoding="utf-8", newline="") as fh:
         rows_csv = list(csv.DictReader(fh))

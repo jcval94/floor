@@ -26,6 +26,23 @@ class ModelSpec:
 def build_model_specs() -> list[ModelSpec]:
     specs: list[ModelSpec] = []
     for horizon in HORIZONS:
+        if horizon in {"d1", "w1"}:
+            specs.append(
+                ModelSpec(
+                    model_id=f"central_skill_ensemble_v1_{horizon}",
+                    model_family="central_skill_ensemble_v1",
+                    horizon=horizon,
+                    predicts=(f"floor_{horizon}", f"ceiling_{horizon}"),
+                    objective="atr_anchored_oos_central_skill",
+                    notes=(
+                        "Frozen strict-validation ensemble: equal-weight "
+                        "spread+asymmetry Ridge, ATR+residual HGB, and "
+                        "60% ATR / 40% current-model shrinkage. Hyperparameters "
+                        "are frozen from the D1/W1 OOS experiment; production "
+                        "training does not tune on test."
+                    ),
+                )
+            )
         specs.extend(
             [
                 ModelSpec(
@@ -114,6 +131,10 @@ def competition_protocol() -> dict:
             "purge_contract": "split_eligible_<horizon> / target_end_date_<horizon>",
         },
         "implementation_traceability": {
+            "central_skill_ensemble_v1": (
+                "frozen ATR-anchored ensemble validated OOS for D1/W1: "
+                "spread+asymmetry Ridge + ATR residual HGB + ATR/current shrinkage"
+            ),
             "robust_range_v3": (
                 "80/20 anchored ensemble: boosted-stumps + ATR-normalized median "
                 "floor / serialized shallow histogram gradient booster ceiling"
@@ -122,6 +143,13 @@ def competition_protocol() -> dict:
             "boosted_stumps": "in-repo additive decision stumps",
             "sequence_linear": "L2-regularized linear baseline on temporal-context features",
             "regularized_linear": "L2-regularized linear baseline",
+        },
+        "atr_benchmark_gate": {
+            "required_for_promotion": True,
+            "minimum_spread_skill": 0.005,
+            "max_boundary_regression": 0.02,
+            "minimum_temporal_win_rate": 0.60,
+            "test_used_for_selection": False,
         },
         "tie_break": "lowest_total_boundary_mae",
     }

@@ -20,6 +20,9 @@ def _artifact(task: str, *, with_risk: bool) -> dict:
             "mae_floor_pct": 0.01,
             "mae_ceiling_pct": 0.02,
             "mae_spread_pct": 0.015,
+            "central_skill_vs_atr": 0.04,
+            "central_skill_floor_vs_atr": -0.002,
+            "central_skill_ceiling_vs_atr": 0.006,
         },
         "params": {
             "schema_version": 2,
@@ -27,6 +30,18 @@ def _artifact(task: str, *, with_risk: bool) -> dict:
             "ceiling": {},
             "timing": {},
             "confidence_calibration": {},
+            "central_benchmark": {
+                "benchmark": "atr_only",
+                "skill_vs_atr": {
+                    "spread": 0.04,
+                    "floor": -0.002,
+                    "ceiling": 0.006,
+                },
+                "temporal_stability": {
+                    "periods": 7,
+                    "periods_won_vs_atr": 7,
+                },
+            },
         },
     }
     if with_risk:
@@ -70,6 +85,8 @@ def test_risk_geometry_report_summarizes_declared_contracts(tmp_path: Path) -> N
     assert report["tasks"]["d1"]["contract_status"] == "declared_valid"
     assert report["tasks"]["d1"]["floor_stop_widening_pct_points"] == pytest.approx(1.2)
     assert report["tasks"]["d1"]["ceiling_stop_widening_pct_points"] == pytest.approx(1.8)
+    assert report["tasks"]["d1"]["central_skill_vs_atr"] == pytest.approx(0.04)
+    assert report["tasks"]["d1"]["central_benchmark"]["benchmark"] == "atr_only"
 
 
 def test_risk_geometry_report_fails_closed_when_required(tmp_path: Path) -> None:

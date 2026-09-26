@@ -19,6 +19,15 @@
   <section class="section"><div class="section-heading"><div><span class="eyebrow">Model suite</span><h2>Detalle por modelo</h2></div><a class="text-link" href="system.html">Volver a salud del sistema</a></div><div id="modelCards" class="model-grid"></div></section>
 
   <section class="section">
+    <div class="section-heading"><div><span class="eyebrow">Central forecast benchmark</span><h2>Skill central vs ATR-only</h2><p class="lead">D1 y W1 comparan el champion central con ATR-only sobre validación temporal purgada. ATR-only es un benchmark permanente. La cobertura conformal/risk geometry se reporta por separado y no participa como directional confidence ni como evidencia de skill central.</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Horizonte</th><th>Model</th><th>ATR-only</th><th>Skill vs ATR</th><th>Skill por horizonte</th><th>Estabilidad temporal</th></tr></thead>
+      <tbody id="centralSkillTable"></tbody>
+    </table></div>
+    <p class="small">Si el skill no supera el gate gobernado, FLOOR conserva el incumbent y muestra explícitamente: “ATR-only sigue siendo superior”. El test final nunca participa en selección.</p>
+  </section>
+
+  <section class="section">
     <div class="section-heading"><div><span class="eyebrow">Prospective evidence</span><h2>Desempeño fuera de muestra desde la génesis</h2><p class="lead">Las predicciones se reconcilian contra barras observadas cuando madura cada horizonte. El reporte conserva la versión del modelo para no mezclar champions distintos.</p></div></div>
     <div id="experimentModelStatus"></div>
     <div class="table-wrap" style="margin-top:16px"><table>

@@ -591,3 +591,102 @@ def test_retrain_assessment_has_auditable_push_refresh_trigger() -> None:
 
     assert "push:" in workflow
     assert "retrain_assessment_request.json" in workflow
+
+
+def test_build_pages_data_exposes_d1_w1_atr_central_skill(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    models_dir = data_dir / "training" / "models"
+    (data_dir / "reports").mkdir(parents=True)
+    models_dir.mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    for horizon, skill in (("d1", 0.045), ("w1", 0.038)):
+        artifact = {
+            "model_name": f"central_skill_ensemble_v1_{horizon}",
+            "version": "v-central",
+            "metrics": {
+                "mae_floor_pct": 0.01,
+                "mae_ceiling_pct": 0.012,
+                "mae_spread_pct": 0.011,
+                "central_skill_vs_atr": skill,
+                "central_skill_floor_vs_atr": -0.002,
+                "central_skill_ceiling_vs_atr": 0.006,
+            },
+            "params": {
+                "central_benchmark": {
+                    "skill_vs_atr": {
+                        "spread": skill,
+                        "floor": -0.002,
+                        "ceiling": 0.006,
+                    },
+                    "temporal_stability": {
+                        "periods": 7,
+                        "periods_won_vs_atr": 7,
+                        "period_win_rate_vs_atr": 1.0,
+                        "recent_period_skill_vs_atr": 0.03,
+                        "worst_period_skill_vs_atr": 0.01,
+                    },
+                },
+                "dummy_benchmark": {
+                    "atr_only_mae_spread_pct": 0.012,
+                },
+            },
+        }
+        competition = {
+            "horizon": horizon,
+            "central_benchmark": {
+                "benchmark": "atr_only",
+                "atr_only_metrics": {
+                    "mae_floor_pct": 0.0105,
+                    "mae_ceiling_pct": 0.0125,
+                    "mae_spread_pct": 0.012,
+                },
+                "active_skill_vs_atr": {
+                    "spread": skill,
+                    "floor": -0.002,
+                    "ceiling": 0.006,
+                },
+                "active_temporal_stability": {
+                    "periods": 7,
+                    "periods_won_vs_atr": 7,
+                    "period_win_rate_vs_atr": 1.0,
+                    "recent_period_skill_vs_atr": 0.03,
+                    "worst_period_skill_vs_atr": 0.01,
+                },
+                "coverage_used_for_selection": False,
+                "test_used_for_selection": False,
+            },
+        }
+        (models_dir / f"{horizon}_champion.json").write_text(
+            json.dumps(artifact),
+            encoding="utf-8",
+        )
+        (models_dir / f"{horizon}_competition.json").write_text(
+            json.dumps(competition),
+            encoding="utf-8",
+        )
+
+    build_pages_data(
+        data_dir=data_dir,
+        site_data_dir=site_data,
+        universe_path=universe,
+    )
+
+    payload = json.loads(
+        (site_data / "models.json").read_text(encoding="utf-8")
+    )
+    for horizon in ("d1", "w1"):
+        benchmark = payload["details"][horizon]["central_benchmark"]
+        assert benchmark["benchmark"] == "atr_only"
+        assert benchmark["skill_vs_atr"] > 0
+        assert benchmark["atr_only_mae_spread_pct"] == 0.012
+        assert benchmark["temporal_stability"]["periods_won_vs_atr"] == 7
+        assert benchmark["coverage_used_for_selection"] is False
+        assert benchmark["test_used_for_selection"] is False

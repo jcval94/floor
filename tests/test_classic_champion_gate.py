@@ -328,7 +328,9 @@ def test_classic_gate_rejects_spread_win_when_one_boundary_regresses(
     assert active["version"] == "old"
 
 
-def test_classic_gate_migrates_incompatible_legacy_champion(tmp_path: Path) -> None:
+def test_classic_gate_refuses_schema_migration_when_candidate_cannot_beat_atr(
+    tmp_path: Path,
+) -> None:
     dataset = tmp_path / "dataset.json"
     registry = tmp_path / "registry"
     previous = tmp_path / "previous"
@@ -344,6 +346,32 @@ def test_classic_gate_migrates_incompatible_legacy_champion(tmp_path: Path) -> N
     _write(previous / "d1_champion.json", legacy)
     _write(registry / "d1_champion.json", candidate)
 
+    with pytest.raises(RuntimeError, match="ATR-only"):
+        gate_one_horizon(
+            dataset_path=dataset,
+            registry_dir=registry,
+            previous_dir=previous,
+            horizon="d1",
+            version="new",
+        )
+
+
+def test_candidate_cannot_promote_by_beating_incumbent_if_atr_is_better(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset.json"
+    registry = tmp_path / "registry"
+    previous = tmp_path / "previous"
+    _dataset(dataset)
+
+    # Actual deltas are floor=.02, ceiling=.03 and ATR-only is exact on this
+    # fixture. The candidate strictly improves every central error versus the
+    # incumbent but is still worse than ATR, so promotion must be refused.
+    old = _artifact(version="old", floor_delta=0.04, ceiling_delta=0.06)
+    candidate = _artifact(version="new", floor_delta=0.03, ceiling_delta=0.04)
+    _write(previous / "d1_champion.json", old)
+    _write(registry / "d1_champion.json", candidate)
+
     result = gate_one_horizon(
         dataset_path=dataset,
         registry_dir=registry,
@@ -352,12 +380,27 @@ def test_classic_gate_migrates_incompatible_legacy_champion(tmp_path: Path) -> N
         version="new",
     )
 
-    assert result["decision"] == "promote_schema_migration"
+    assert result["decision"] == "challenger_only"
+    assert "ATR-only sigue siendo superior" in result["reason"]
+
     active = json.loads((registry / "d1_champion.json").read_text(encoding="utf-8"))
-    assert active["version"] == "new"
-    assert active["selection"]["test_used_for_selection"] is False
-    archived = list(registry.glob("d1_champion_archived_legacy.json"))
-    assert len(archived) == 1
+    assert active["version"] == "old"
+
+    challenger = json.loads(
+        (registry / "d1_challenger_new.json").read_text(encoding="utf-8")
+    )
+    selection = challenger["selection"]
+    assert selection["atr_gate_required"] is True
+    assert selection["atr_gate_pass"] is False
+    assert selection["coverage_used_for_selection"] is False
+    assert selection["test_used_for_selection"] is False
+
+    competition = json.loads(
+        (registry / "d1_competition.json").read_text(encoding="utf-8")
+    )
+    assert competition["central_benchmark"]["benchmark"] == "atr_only"
+    assert competition["central_benchmark"]["candidate_atr_gate_pass"] is False
+    assert competition["central_benchmark"]["test_used_for_selection"] is False
 
 
 def test_all_commit_capable_classic_training_routes_through_historical_gate() -> None:

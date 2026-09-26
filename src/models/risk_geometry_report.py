@@ -76,6 +76,14 @@ def build_risk_geometry_report(registry_dir: Path) -> dict[str, Any]:
             "central_skill_vs_best_dummy": metrics.get(
                 "central_skill_vs_best_dummy"
             ),
+            "central_skill_vs_atr": metrics.get("central_skill_vs_atr"),
+            "central_skill_floor_vs_atr": metrics.get(
+                "central_skill_floor_vs_atr"
+            ),
+            "central_skill_ceiling_vs_atr": metrics.get(
+                "central_skill_ceiling_vs_atr"
+            ),
+            "central_benchmark": params.get("central_benchmark"),
             "dummy_benchmark": params.get("dummy_benchmark"),
             "central_mae_floor_pct": metrics.get("mae_floor_pct"),
             "central_mae_ceiling_pct": metrics.get("mae_ceiling_pct"),

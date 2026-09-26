@@ -351,9 +351,15 @@ def _compute_retraining_schedule(
     }
 
 
-def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dict[str, Any]:
+def _build_model_detail(
+    model_key: str,
+    review_model: Any,
+    artifact: Any,
+    competition: Any = None,
+) -> dict[str, Any]:
     review_model = review_model if isinstance(review_model, dict) else {}
     artifact = artifact if isinstance(artifact, dict) else {}
+    competition = competition if isinstance(competition, dict) else {}
     summary = review_model.get("summary", {}) if isinstance(review_model.get("summary"), dict) else {}
     performance = summary.get("performance", {}) if isinstance(summary.get("performance"), dict) else {}
     shared_data = summary.get("shared_data", {}) if isinstance(summary.get("shared_data"), dict) else {}
@@ -367,6 +373,86 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
     validation_metrics = artifact.get("metrics", {})
     if not isinstance(validation_metrics, dict):
         validation_metrics = {}
+
+    competition_benchmark = competition.get("central_benchmark", {})
+    competition_benchmark = (
+        competition_benchmark
+        if isinstance(competition_benchmark, dict)
+        else {}
+    )
+    active_skill = competition_benchmark.get("active_skill_vs_atr", {})
+    active_skill = active_skill if isinstance(active_skill, dict) else {}
+    stability = competition_benchmark.get("active_temporal_stability", {})
+    stability = stability if isinstance(stability, dict) else {}
+    atr_metrics = competition_benchmark.get("atr_only_metrics", {})
+    atr_metrics = atr_metrics if isinstance(atr_metrics, dict) else {}
+
+    artifact_params = artifact.get("params", {})
+    artifact_params = artifact_params if isinstance(artifact_params, dict) else {}
+    artifact_benchmark = artifact_params.get("central_benchmark", {})
+    artifact_benchmark = (
+        artifact_benchmark if isinstance(artifact_benchmark, dict) else {}
+    )
+    artifact_skill = artifact_benchmark.get("skill_vs_atr", {})
+    artifact_skill = artifact_skill if isinstance(artifact_skill, dict) else {}
+    artifact_stability = artifact_benchmark.get("temporal_stability", {})
+    artifact_stability = (
+        artifact_stability
+        if isinstance(artifact_stability, dict)
+        else {}
+    )
+    dummy = artifact_params.get("dummy_benchmark", {})
+    dummy = dummy if isinstance(dummy, dict) else {}
+
+    spread_skill = active_skill.get(
+        "spread",
+        validation_metrics.get(
+            "central_skill_vs_atr",
+            artifact_skill.get("spread"),
+        ),
+    )
+    floor_skill = active_skill.get(
+        "floor",
+        validation_metrics.get(
+            "central_skill_floor_vs_atr",
+            artifact_skill.get("floor"),
+        ),
+    )
+    ceiling_skill = active_skill.get(
+        "ceiling",
+        validation_metrics.get(
+            "central_skill_ceiling_vs_atr",
+            artifact_skill.get("ceiling"),
+        ),
+    )
+    atr_spread = atr_metrics.get(
+        "mae_spread_pct",
+        dummy.get("atr_only_mae_spread_pct"),
+    )
+    model_spread = validation_metrics.get("mae_spread_pct")
+    if atr_spread is not None and spread_skill is not None:
+        try:
+            model_spread = float(atr_spread) * (1.0 - float(spread_skill))
+        except (TypeError, ValueError):
+            pass
+    central_benchmark = {
+        "benchmark": "atr_only",
+        "model_mae_spread_pct": model_spread,
+        "atr_only_mae_spread_pct": atr_spread,
+        "skill_vs_atr": spread_skill,
+        "floor_skill_vs_atr": floor_skill,
+        "ceiling_skill_vs_atr": ceiling_skill,
+        "status": (
+            "MODEL_SUPERIOR"
+            if isinstance(spread_skill, (int, float)) and spread_skill > 0
+            else "ATR_ONLY_SUPERIOR"
+            if isinstance(spread_skill, (int, float))
+            else "UNKNOWN"
+        ),
+        "temporal_stability": stability or artifact_stability,
+        "test_used_for_selection": False,
+        "coverage_used_for_selection": False,
+    }
 
     return {
         "model_key": model_key,
@@ -389,6 +475,7 @@ def _build_model_detail(model_key: str, review_model: Any, artifact: Any) -> dic
         "monitoring_metrics": monitoring_metrics,
         "validation_metrics": validation_metrics,
         "validation_source": "champion_artifact" if validation_metrics else None,
+        "central_benchmark": central_benchmark,
         "drift_components": {
             "shared_data": {"state": shared_data.get("state"), "score": shared_data.get("score")},
             "target": {"state": target.get("state"), "score": target.get("score")},
@@ -862,6 +949,13 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         "value": _read_json(data_dir / "training" / "models" / "value_champion.json", {}),
         "timing": _read_json(data_dir / "training" / "models" / "timing_champion.json", {}),
     }
+    competitions = {
+        task: _read_json(
+            data_dir / "training" / "models" / f"{task}_competition.json",
+            {},
+        )
+        for task in ("d1", "w1", "q1")
+    }
     fallback_champions = _champion_versions_from_artifacts(artifacts)
     fallback_suite_version = _fallback_suite_version_from_artifacts(artifacts)
     review_summary_stale = _review_summary_is_stale(review_models, artifacts)
@@ -875,6 +969,7 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
             model_key,
             effective_review_models.get(model_key),
             artifacts.get(model_key),
+            competitions.get(model_key),
         )
         for model_key in ("d1", "w1", "q1", "value", "timing")
     }

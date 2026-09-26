@@ -19,27 +19,35 @@ from models.classic_horizon_predictor import (
 )
 from models.horizon_timing import ALLOWED_CLASSES
 from models.train_classic_horizons import (
+    ATR_MAX_BOUNDARY_REGRESSION,
+    ATR_MIN_TEMPORAL_WIN_RATE,
+    ATR_PROMOTION_MIN_SPREAD_SKILL,
     FEATURES_BY_FAMILY,
     HORIZON_TARGETS,
-    _load_rows,
+    _atr_gate_passes,
+    _atr_only_predictions,
+    _central_skill_payload,
     _dummy_benchmark,
     _fit_risk_geometry,
+    _load_rows,
     _metrics,
     _prepare_rows,
     _risk_geometry_metrics,
     _split,
+    _temporal_skill_stability,
 )
 from models.temporal_cv import purged_chronological_calibration_split
 
 
 TRUTHFUL_PREFIXES = {
+    "central_skill_ensemble_v1": "central_skill_ensemble_v1_",
     "robust_range_v3": "robust_range_v3_",
     "regime_median": "regime_median_",
     "boosted_stumps": "boosted_stumps_",
     "sequence_linear": "sequence_linear_",
     "regularized_linear": "regularized_linear_",
 }
-SCORING_VERSION = "classic-boundary-pareto-v3"
+SCORING_VERSION = "classic-boundary-atr-gated-v4"
 MAX_INTERVAL_COVERAGE_REGRESSION = 0.05
 
 
@@ -283,6 +291,10 @@ def _migrate_incumbent_risk_contract(
         if dummy_loss > 0.0
         else 0.0
     )
+    central_skill_vs_atr = _central_skill_payload(
+        central_metrics,
+        dummy_benchmark,
+    )
 
     migrated = deepcopy(artifact)
     previous_version = str(migrated.get("version") or "")
@@ -297,6 +309,9 @@ def _migrate_incumbent_risk_contract(
     metrics = deepcopy(_mapping(migrated.get("metrics")))
     metrics.update(risk_metrics)
     metrics["central_skill_vs_best_dummy"] = central_skill_vs_dummy
+    metrics["central_skill_vs_atr"] = central_skill_vs_atr["spread"]
+    metrics["central_skill_floor_vs_atr"] = central_skill_vs_atr["floor"]
+    metrics["central_skill_ceiling_vs_atr"] = central_skill_vs_atr["ceiling"]
     metrics["dummy_comparison_mae_spread_pct"] = central_loss
     migrated["metrics"] = metrics
     migrated["contract_migration"] = {
@@ -374,6 +389,7 @@ def _update_competition(
     candidate_score: tuple[float, float],
     existing_score: tuple[float, float] | None,
     reason: str,
+    central_benchmark: dict[str, Any] | None = None,
 ) -> None:
     path = registry_dir / f"{horizon}_competition.json"
     payload = _load_json(path) or {"horizon": horizon}
@@ -388,6 +404,7 @@ def _update_competition(
     payload["promotion_scoring_version"] = SCORING_VERSION
     payload["promotion_validation_split"] = "validation"
     payload["test_used_for_promotion"] = False
+    payload["central_benchmark"] = central_benchmark or {}
     _write_json_atomic(path, payload)
 
 
@@ -448,28 +465,91 @@ def gate_one_horizon(
         )
 
     evaluation = _evaluation_rows(dataset_path, horizon)
+    rows = _load_rows(dataset_path)
+    train_raw, _validation_raw = _split(rows, horizon)
+    floor_col, ceiling_col = HORIZON_TARGETS[horizon]
+    feature_names = tuple(
+        sorted({name for values in FEATURES_BY_FAMILY.values() for name in values})
+    )
+    train = _prepare_rows(train_raw, floor_col, ceiling_col, feature_names)
+    dummy_benchmark = _dummy_benchmark(train, evaluation)
+    (
+        _atr_params,
+        atr_floor_predictions,
+        atr_ceiling_predictions,
+        atr_metrics,
+    ) = _atr_only_predictions(train, evaluation)
+
     candidate_metrics = _evaluate_artifact(candidate, horizon, evaluation)
     candidate_score = _score(candidate_metrics)
+    candidate_floor, candidate_ceiling = _artifact_boundary_predictions(
+        candidate,
+        evaluation,
+    )
+    candidate_skill_vs_atr = _central_skill_payload(
+        candidate_metrics,
+        dummy_benchmark,
+    )
+    candidate_stability = _temporal_skill_stability(
+        evaluation,
+        candidate_floor,
+        candidate_ceiling,
+        atr_floor_predictions,
+        atr_ceiling_predictions,
+    )
+    candidate_atr_gate_pass = _atr_gate_passes(
+        candidate_skill_vs_atr,
+        candidate_stability,
+    )
     existing_score: tuple[float, float] | None = None
+    existing_skill_vs_atr: dict[str, float] | None = None
+    existing_stability: dict[str, Any] | None = None
 
     if previous is None:
+        if not candidate_atr_gate_pass:
+            raise RuntimeError(
+                f"{horizon} candidate cannot become first champion because ATR-only "
+                "remains superior on leakage-safe validation."
+            )
         decision = "promote_first"
-        reason = "No previous classic champion exists."
+        reason = "No previous champion exists and candidate passed the ATR-only gate."
         active = candidate
     elif not previous_ok:
+        if not candidate_atr_gate_pass:
+            raise RuntimeError(
+                f"{horizon} schema migration candidate failed ATR-only promotion gate: "
+                f"{previous_reason}."
+            )
         decision = "promote_schema_migration"
-        reason = f"Previous champion is statistically/structurally incompatible: {previous_reason}."
+        reason = (
+            "Previous champion is structurally incompatible and candidate passed "
+            f"the ATR-only promotion gate: {previous_reason}."
+        )
         active = candidate
     else:
         existing_metrics = _evaluate_artifact(previous, horizon, evaluation)
         existing_score = _score(existing_metrics)
+        existing_floor, existing_ceiling = _artifact_boundary_predictions(
+            previous,
+            evaluation,
+        )
+        existing_skill_vs_atr = _central_skill_payload(
+            existing_metrics,
+            dummy_benchmark,
+        )
+        existing_stability = _temporal_skill_stability(
+            evaluation,
+            existing_floor,
+            existing_ceiling,
+            atr_floor_predictions,
+            atr_ceiling_predictions,
+        )
         coverage_delta = float(candidate_metrics["test_interval_coverage"]) - float(
             existing_metrics["test_interval_coverage"]
         )
         strict_error_dominance = _strictly_dominates_boundaries_and_spread(
             candidate_metrics, existing_metrics
         )
-        coverage_guard_pass = coverage_delta >= -MAX_INTERVAL_COVERAGE_REGRESSION
         candidate_contract = validate_model_artifact_contract(
             horizon, candidate, allow_legacy=True
         )
@@ -506,13 +586,15 @@ def gate_one_horizon(
                 or dummy_diagnostics_missing
             )
         )
-        if strict_error_dominance and coverage_guard_pass:
+        if strict_error_dominance and candidate_atr_gate_pass:
             decision = "promote"
             reason = (
                 "Candidate strictly improved floor MAE, ceiling MAE, and spread MAE "
-                "while keeping interval-coverage regression within five percentage "
-                "points on the same current leakage-safe validation split: "
-                f"existing={existing_score} candidate={candidate_score}."
+                "versus the incumbent and independently passed the permanent ATR-only "
+                "gate on the same leakage-safe validation split. Coverage is diagnostic "
+                "only and did not participate in central-model selection: "
+                f"existing={existing_score} candidate={candidate_score} "
+                f"skill_vs_atr={candidate_skill_vs_atr['spread']:.6f}."
             )
             active = candidate
         elif legacy_contract_migration:
@@ -545,12 +627,22 @@ def gate_one_horizon(
             )
         else:
             decision = "challenger_only"
-            reason = (
-                "Candidate did not strictly improve all of floor MAE, ceiling MAE, and "
-                "spread MAE with the five-point coverage guard on the same current "
-                "leakage-safe validation split: "
-                f"existing={existing_score} candidate={candidate_score}."
-            )
+            if not candidate_atr_gate_pass:
+                reason = (
+                    "ATR-only sigue siendo superior o la mejora no es suficientemente "
+                    "robusta para promoción. Candidate must achieve positive spread skill "
+                    "above the minimum margin, bounded floor/ceiling regression, and "
+                    "temporal repeatability on leakage-safe validation. "
+                    f"skill_vs_atr={candidate_skill_vs_atr['spread']:.6f} "
+                    f"period_win_rate={candidate_stability.get('period_win_rate_vs_atr')}."
+                )
+            else:
+                reason = (
+                    "Candidate passed the ATR-only gate but did not strictly improve "
+                    "floor MAE, ceiling MAE, and spread MAE versus the incumbent on the "
+                    "same leakage-safe validation split: "
+                    f"existing={existing_score} candidate={candidate_score}."
+                )
             active = previous
 
     selection = {
@@ -562,7 +654,14 @@ def gate_one_horizon(
         "candidate_current_validation_score": _score_json(candidate_score),
         "existing_current_validation_score": _score_json(existing_score),
         "candidate_current_validation_rows": len(evaluation),
-        "max_interval_coverage_regression": MAX_INTERVAL_COVERAGE_REGRESSION,
+        "coverage_used_for_selection": False,
+        "atr_gate_required": True,
+        "atr_gate_pass": candidate_atr_gate_pass,
+        "atr_promotion_min_spread_skill": ATR_PROMOTION_MIN_SPREAD_SKILL,
+        "atr_max_boundary_regression": ATR_MAX_BOUNDARY_REGRESSION,
+        "atr_min_temporal_win_rate": ATR_MIN_TEMPORAL_WIN_RATE,
+        "candidate_skill_vs_atr": candidate_skill_vs_atr,
+        "candidate_temporal_stability": candidate_stability,
     }
     if previous is not None and previous_ok:
         selection["candidate_interval_coverage_delta"] = (
@@ -607,6 +706,30 @@ def gate_one_horizon(
             _write_json_atomic(candidate_path, candidate)
             active = candidate
 
+    if active is candidate:
+        active_skill_vs_atr = candidate_skill_vs_atr
+        active_stability = candidate_stability
+    else:
+        active_skill_vs_atr = existing_skill_vs_atr
+        active_stability = existing_stability
+
+    central_benchmark = {
+        "benchmark": "atr_only",
+        "atr_only_metrics": {
+            "mae_floor_pct": float(atr_metrics["mae_floor_pct"]),
+            "mae_ceiling_pct": float(atr_metrics["mae_ceiling_pct"]),
+            "mae_spread_pct": float(atr_metrics["mae_spread_pct"]),
+        },
+        "candidate_skill_vs_atr": candidate_skill_vs_atr,
+        "candidate_temporal_stability": candidate_stability,
+        "candidate_atr_gate_pass": candidate_atr_gate_pass,
+        "existing_skill_vs_atr": existing_skill_vs_atr,
+        "existing_temporal_stability": existing_stability,
+        "active_skill_vs_atr": active_skill_vs_atr,
+        "active_temporal_stability": active_stability,
+        "coverage_used_for_selection": False,
+        "test_used_for_selection": False,
+    }
     _update_competition(
         registry_dir,
         horizon,
@@ -616,6 +739,7 @@ def gate_one_horizon(
         candidate_score=candidate_score,
         existing_score=existing_score,
         reason=reason,
+        central_benchmark=central_benchmark,
     )
     return {
         "horizon": horizon,

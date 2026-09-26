@@ -88,3 +88,22 @@ def test_chart_design_defines_neutral_track_and_directional_sides() -> None:
     assert "range-downside" in charts
     assert "range-upside" in charts
     assert "role=\"img\"" in charts
+
+
+def test_models_page_shows_atr_only_central_skill_and_temporal_stability() -> None:
+    page = (SITE / "models.html").read_text(encoding="utf-8")
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+
+    assert "Skill central vs ATR-only" in page
+    assert "<th>Model</th>" in page
+    assert "<th>ATR-only</th>" in page
+    assert "<th>Skill vs ATR</th>" in page
+    assert "<th>Skill por horizonte</th>" in page
+    assert "<th>Estabilidad temporal</th>" in page
+    assert "centralSkillTable" in page
+    assert "coverage conformal/risk geometry" in page.lower()
+    assert "directional confidence" in page.lower()
+    assert "ATR-only sigue siendo superior" in page
+    assert "ATR-only sigue siendo superior" in app
+    assert "periods_won_vs_atr" in app
+    assert "recent_period_skill_vs_atr" in app

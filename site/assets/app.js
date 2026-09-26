@@ -694,6 +694,47 @@ async function models() {
   }
   const cards = document.getElementById('modelCards');
   if (cards) cards.innerHTML = modelCards(models) || emptyState('Sin modelos publicables');
+
+  const centralSkill = document.getElementById('centralSkillTable');
+  if (centralSkill) {
+    centralSkill.innerHTML = ['d1', 'w1'].map((horizon) => {
+      const detail = models?.details?.[horizon] || {};
+      const benchmark = detail?.central_benchmark || {};
+      const stability = benchmark?.temporal_stability || {};
+      const modelMae = Number(benchmark?.model_mae_spread_pct);
+      const atrMae = Number(benchmark?.atr_only_mae_spread_pct);
+      const skill = Number(benchmark?.skill_vs_atr);
+      const floorSkill = Number(benchmark?.floor_skill_vs_atr);
+      const ceilingSkill = Number(benchmark?.ceiling_skill_vs_atr);
+      const periods = Number(stability?.periods);
+      const wins = Number(stability?.periods_won_vs_atr);
+      const recent = Number(stability?.recent_period_skill_vs_atr);
+      const worst = Number(stability?.worst_period_skill_vs_atr);
+      const modelLabel = Number.isFinite(modelMae) ? fmtPct(modelMae) : '—';
+      const atrLabel = Number.isFinite(atrMae) ? fmtPct(atrMae) : '—';
+      const skillLabel = Number.isFinite(skill) ? fmtPct(skill) : '—';
+      const boundaryText = Number.isFinite(floorSkill) && Number.isFinite(ceilingSkill)
+        ? `Piso ${fmtPct(floorSkill)} · Techo ${fmtPct(ceilingSkill)}`
+        : 'Fronteras no disponibles';
+      const stabilityText = Number.isFinite(periods) && periods > 0
+        ? `${Number.isFinite(wins) ? wins : 0}/${periods} periodos · reciente ${Number.isFinite(recent) ? fmtPct(recent) : '—'} · peor ${Number.isFinite(worst) ? fmtPct(worst) : '—'}`
+        : 'Estabilidad temporal no disponible';
+      const verdict = Number.isFinite(skill) && skill > 0
+        ? badge('OK', 'Model > ATR')
+        : Number.isFinite(skill)
+          ? badge('WARN', 'ATR-only sigue siendo superior')
+          : badge('UNKNOWN', 'Sin evidencia');
+      return `<tr>
+        <td><strong>${escapeHTML(horizonLabel(horizon))}</strong><div class="small">${escapeHTML(horizon.toUpperCase())}</div></td>
+        <td>${escapeHTML(modelLabel)}<div class="small">${escapeHTML(detail.model_name || '—')}</div></td>
+        <td>${escapeHTML(atrLabel)}</td>
+        <td><strong class="${Number.isFinite(skill) && skill < 0 ? 'negative' : 'positive'}">${escapeHTML(skillLabel)}</strong><div style="margin-top:6px">${verdict}</div></td>
+        <td>${escapeHTML(boundaryText)}</td>
+        <td>${escapeHTML(stabilityText)}</td>
+      </tr>`;
+    }).join('');
+  }
+
   const timeline = document.getElementById('timeline');
   if (timeline) timeline.innerHTML = (models.timeline || []).map((x) => `<tr><td>${escapeHTML(x.as_of || '—')}</td><td>${escapeHTML(x.model_name || '—')}</td><td>${escapeHTML(x.action || '—')}</td><td>${badge(x.drift_level || 'UNKNOWN')}</td></tr>`).join('') || emptyRow('Sin eventos de modelos.', 4);
 }

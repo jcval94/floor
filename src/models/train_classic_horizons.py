@@ -11,6 +11,12 @@ from typing import Any, Callable
 
 from contracts.model_contract import attach_model_contract
 from features.model_competition import HORIZONS, build_model_specs
+from models.central_skill_ensemble import (
+    CENTRAL_SKILL_FEATURES,
+    fit_central_skill_pair,
+    predict_central_skill_head,
+    training_feature_payload,
+)
 from models.horizon_timing import fit_horizon_timing
 from models.temporal_cv import purged_chronological_calibration_split
 from models.robust_range_v3 import (
@@ -40,6 +46,13 @@ RISK_CALIBRATION_POLICY_VERSION = "nested-temporal-v1"
 # use target_joint_coverage for semantics.
 RISK_TARGET_MARGINAL_COVERAGE = RISK_TARGET_JOINT_COVERAGE
 
+# Central-model promotion guardrails. They are evaluated only on the dedicated
+# leakage-safe validation split; the final test split is never consulted.
+ATR_PROMOTION_MIN_SPREAD_SKILL = 0.005
+ATR_MAX_BOUNDARY_REGRESSION = 0.02
+ATR_MIN_TEMPORAL_WIN_RATE = 0.60
+CENTRAL_STABILITY_BLOCK_SESSIONS = 20
+
 HORIZON_TARGETS = {
     "d1": ("floor_d1", "ceiling_d1"),
     "w1": ("floor_w1", "ceiling_w1"),
@@ -47,6 +60,7 @@ HORIZON_TARGETS = {
 }
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "central_skill_ensemble_v1": CENTRAL_SKILL_FEATURES,
     "robust_range_v3": ROBUST_RANGE_FEATURES,
     "regularized_linear": (
         "atr_14",
@@ -497,6 +511,53 @@ def _family_model(
     return linear_params, lambda item: _predict_linear(item, weights, bias, names)
 
 
+def _family_pair_model(
+    family: str,
+    rows: list[_PreparedRow],
+    horizon: str,
+    training_mode: str,
+) -> tuple[
+    dict[str, Any],
+    Callable[[_PreparedRow], float],
+    dict[str, Any],
+    Callable[[_PreparedRow], float],
+]:
+    if family == "central_skill_ensemble_v1":
+        floor_params, ceiling_params = fit_central_skill_pair(rows, horizon)
+        return (
+            floor_params,
+            lambda item: _clamp(
+                predict_central_skill_head(
+                    floor_params,
+                    training_feature_payload(item),
+                    validate=False,
+                )
+            ),
+            ceiling_params,
+            lambda item: _clamp(
+                predict_central_skill_head(
+                    ceiling_params,
+                    training_feature_payload(item),
+                    validate=False,
+                )
+            ),
+        )
+
+    floor_params, floor_fn = _family_model(
+        family,
+        rows,
+        "floor_delta",
+        training_mode,
+    )
+    ceiling_params, ceiling_fn = _family_model(
+        family,
+        rows,
+        "ceiling_delta",
+        training_mode,
+    )
+    return floor_params, floor_fn, ceiling_params, ceiling_fn
+
+
 def _metrics(
     rows: list[_PreparedRow],
     floor_predictions: list[float],
@@ -795,20 +856,12 @@ def _risk_geometry_metrics(
     return metrics
 
 
-def _dummy_benchmark(
+def _atr_only_predictions(
     train: list[_PreparedRow],
     evaluation: list[_PreparedRow],
-) -> dict[str, Any]:
-    """Leakage-safe null models used to prove that features add central skill."""
-
+) -> tuple[dict[str, float], list[float], list[float], dict[str, float]]:
     floor_median = _quantile([item.floor_delta for item in train], 0.5)
     ceiling_median = _quantile([item.ceiling_delta for item in train], 0.5)
-    median_metrics = _metrics(
-        evaluation,
-        [_clamp(floor_median) for _ in evaluation],
-        [_clamp(ceiling_median) for _ in evaluation],
-    )
-
     floor_ratios = [
         item.floor_delta / abs(item.features.get("atr_14", 0.0))
         for item in train
@@ -837,7 +890,34 @@ def _dummy_benchmark(
         )
         for item in evaluation
     ]
-    atr_metrics = _metrics(evaluation, atr_floor, atr_ceiling)
+    return (
+        {
+            "atr_floor_multiplier": floor_k,
+            "atr_ceiling_multiplier": ceiling_k,
+        },
+        atr_floor,
+        atr_ceiling,
+        _metrics(evaluation, atr_floor, atr_ceiling),
+    )
+
+
+def _dummy_benchmark(
+    train: list[_PreparedRow],
+    evaluation: list[_PreparedRow],
+) -> dict[str, Any]:
+    """Leakage-safe null models; ATR-only remains a permanent benchmark."""
+
+    floor_median = _quantile([item.floor_delta for item in train], 0.5)
+    ceiling_median = _quantile([item.ceiling_delta for item in train], 0.5)
+    median_metrics = _metrics(
+        evaluation,
+        [_clamp(floor_median) for _ in evaluation],
+        [_clamp(ceiling_median) for _ in evaluation],
+    )
+    atr_params, _atr_floor, _atr_ceiling, atr_metrics = _atr_only_predictions(
+        train,
+        evaluation,
+    )
 
     baselines = {
         "global_median": median_metrics,
@@ -852,13 +932,122 @@ def _dummy_benchmark(
         "selection_split": "validation",
         "best_name": best_name,
         "best_mae_spread_pct": best_loss,
-        "global_median_mae_spread_pct": float(
-            median_metrics["mae_spread_pct"]
-        ),
+        "global_median_mae_floor_pct": float(median_metrics["mae_floor_pct"]),
+        "global_median_mae_ceiling_pct": float(median_metrics["mae_ceiling_pct"]),
+        "global_median_mae_spread_pct": float(median_metrics["mae_spread_pct"]),
+        "atr_only_mae_floor_pct": float(atr_metrics["mae_floor_pct"]),
+        "atr_only_mae_ceiling_pct": float(atr_metrics["mae_ceiling_pct"]),
         "atr_only_mae_spread_pct": float(atr_metrics["mae_spread_pct"]),
-        "atr_floor_multiplier": floor_k,
-        "atr_ceiling_multiplier": ceiling_k,
+        **atr_params,
     }
+
+
+def _skill(candidate_loss: float, baseline_loss: float) -> float:
+    if baseline_loss <= 0.0:
+        return 0.0
+    return 1.0 - (candidate_loss / baseline_loss)
+
+
+def _central_skill_payload(
+    metrics: dict[str, float],
+    dummy_benchmark: dict[str, Any],
+) -> dict[str, float]:
+    return {
+        "spread": _skill(
+            float(metrics["mae_spread_pct"]),
+            float(dummy_benchmark["atr_only_mae_spread_pct"]),
+        ),
+        "floor": _skill(
+            float(metrics["mae_floor_pct"]),
+            float(dummy_benchmark["atr_only_mae_floor_pct"]),
+        ),
+        "ceiling": _skill(
+            float(metrics["mae_ceiling_pct"]),
+            float(dummy_benchmark["atr_only_mae_ceiling_pct"]),
+        ),
+        "spread_vs_global_median": _skill(
+            float(metrics["mae_spread_pct"]),
+            float(dummy_benchmark["global_median_mae_spread_pct"]),
+        ),
+    }
+
+
+def _temporal_skill_stability(
+    rows: list[_PreparedRow],
+    floor_predictions: list[float],
+    ceiling_predictions: list[float],
+    atr_floor_predictions: list[float],
+    atr_ceiling_predictions: list[float],
+    *,
+    block_sessions: int = CENTRAL_STABILITY_BLOCK_SESSIONS,
+) -> dict[str, Any]:
+    by_day: dict[str, list[int]] = {}
+    for idx, item in enumerate(rows):
+        day = str(item.row.get("timestamp") or "")[:10]
+        by_day.setdefault(day, []).append(idx)
+    days = sorted(day for day in by_day if day)
+    periods: list[dict[str, Any]] = []
+    for start in range(0, len(days), block_sessions):
+        block_days = days[start : start + block_sessions]
+        if len(block_days) < max(5, block_sessions // 2):
+            continue
+        indices = [
+            idx
+            for day in block_days
+            for idx in by_day.get(day, [])
+        ]
+        block_rows = [rows[idx] for idx in indices]
+        candidate_metrics = _metrics(
+            block_rows,
+            [floor_predictions[idx] for idx in indices],
+            [ceiling_predictions[idx] for idx in indices],
+        )
+        atr_metrics = _metrics(
+            block_rows,
+            [atr_floor_predictions[idx] for idx in indices],
+            [atr_ceiling_predictions[idx] for idx in indices],
+        )
+        period_skill = _skill(
+            float(candidate_metrics["mae_spread_pct"]),
+            float(atr_metrics["mae_spread_pct"]),
+        )
+        periods.append(
+            {
+                "start": block_days[0],
+                "end": block_days[-1],
+                "sessions": len(block_days),
+                "skill_vs_atr": period_skill,
+            }
+        )
+    skills = [float(item["skill_vs_atr"]) for item in periods]
+    won = sum(1 for value in skills if value > 0.0)
+    return {
+        "block_sessions": block_sessions,
+        "periods": len(periods),
+        "periods_won_vs_atr": won,
+        "period_win_rate_vs_atr": (
+            won / len(periods) if periods else 0.0
+        ),
+        "worst_period_skill_vs_atr": min(skills) if skills else None,
+        "recent_period_skill_vs_atr": skills[-1] if skills else None,
+        "period_results": periods,
+    }
+
+
+def _atr_gate_passes(
+    skill: dict[str, float],
+    stability: dict[str, Any],
+) -> bool:
+    recent = stability.get("recent_period_skill_vs_atr")
+    return bool(
+        skill["spread"] >= ATR_PROMOTION_MIN_SPREAD_SKILL
+        and skill["floor"] >= -ATR_MAX_BOUNDARY_REGRESSION
+        and skill["ceiling"] >= -ATR_MAX_BOUNDARY_REGRESSION
+        and float(stability.get("period_win_rate_vs_atr") or 0.0)
+        >= ATR_MIN_TEMPORAL_WIN_RATE
+        and recent is not None
+        and float(recent) > 0.0
+    )
 
 
 def train_horizon_competition(
@@ -906,6 +1095,12 @@ def train_horizon_competition(
 
     timing = fit_horizon_timing(train_raw, horizon)
     dummy_benchmark = _dummy_benchmark(train, selection_evaluation)
+    (
+        _atr_params,
+        atr_floor_predictions,
+        atr_ceiling_predictions,
+        _atr_metrics,
+    ) = _atr_only_predictions(train, selection_evaluation)
     candidates: list[HorizonCompetitionCandidate] = []
     allowed_families = set(model_families or ())
     specs = [
@@ -917,11 +1112,16 @@ def train_horizon_competition(
     if not specs:
         raise ValueError(f"No model families selected for horizon={horizon}")
     for spec in specs:
-        floor_params, floor_fn = _family_model(
-            spec.model_family, train, "floor_delta", training_mode
-        )
-        ceiling_params, ceiling_fn = _family_model(
-            spec.model_family, train, "ceiling_delta", training_mode
+        (
+            floor_params,
+            floor_fn,
+            ceiling_params,
+            ceiling_fn,
+        ) = _family_pair_model(
+            spec.model_family,
+            train,
+            horizon,
+            training_mode,
         )
         calibration_floor_predictions = [
             floor_fn(item) for item in risk_calibration
@@ -956,6 +1156,27 @@ def train_horizon_competition(
             1.0 - (candidate_loss / dummy_loss)
             if dummy_loss > 0.0
             else 0.0
+        )
+        skill_vs_atr = _central_skill_payload(
+            candidate_metrics,
+            dummy_benchmark,
+        )
+        candidate_metrics["central_skill_vs_atr"] = skill_vs_atr["spread"]
+        candidate_metrics["central_skill_floor_vs_atr"] = skill_vs_atr["floor"]
+        candidate_metrics["central_skill_ceiling_vs_atr"] = skill_vs_atr["ceiling"]
+        candidate_metrics["central_skill_vs_global_median"] = skill_vs_atr[
+            "spread_vs_global_median"
+        ]
+        temporal_stability = _temporal_skill_stability(
+            selection_evaluation,
+            floor_predictions,
+            ceiling_predictions,
+            atr_floor_predictions,
+            atr_ceiling_predictions,
+        )
+        atr_gate_pass = _atr_gate_passes(
+            skill_vs_atr,
+            temporal_stability,
         )
 
         risk_floor_predictions = [
@@ -996,6 +1217,17 @@ def train_horizon_competition(
                     },
                     "risk_geometry": risk_geometry,
                     "dummy_benchmark": dummy_benchmark,
+                    "central_benchmark": {
+                        "benchmark": "atr_only",
+                        "skill_vs_atr": skill_vs_atr,
+                        "temporal_stability": temporal_stability,
+                        "atr_gate_pass": atr_gate_pass,
+                        "promotion_guardrails": {
+                            "minimum_spread_skill": ATR_PROMOTION_MIN_SPREAD_SKILL,
+                            "max_boundary_regression": ATR_MAX_BOUNDARY_REGRESSION,
+                            "minimum_temporal_win_rate": ATR_MIN_TEMPORAL_WIN_RATE,
+                        },
+                    },
                     "split_integrity": {
                         "eligibility_field": f"split_eligible_{horizon}",
                         "selection_split": "validation",
@@ -1009,8 +1241,19 @@ def train_horizon_competition(
             )
         )
 
+    atr_qualified = [
+        candidate
+        for candidate in candidates
+        if bool(
+            candidate.params.get("central_benchmark", {}).get(
+                "atr_gate_pass",
+                False,
+            )
+        )
+    ]
+    champion_pool = atr_qualified or candidates
     champion = min(
-        candidates,
+        champion_pool,
         key=lambda item: (
             item.metrics["mae_spread_pct"],
             item.metrics["mae_floor_pct"] + item.metrics["mae_ceiling_pct"],
@@ -1068,7 +1311,7 @@ def run(
                 {
                     "horizon": horizon,
                     "version": version,
-                    "selection_metric": "mae_spread_pct_then_total_boundary_mae_pct",
+                    "selection_metric": "atr_gated_mae_spread_pct_then_total_boundary_mae_pct",
                     "selection_split": "validation",
                     "test_used_for_selection": False,
                     "training_mode": training_mode,
@@ -1104,6 +1347,9 @@ def run(
             "test_interval_coverage",
             "empirical_breach_rate",
             "central_skill_vs_best_dummy",
+            "central_skill_vs_atr",
+            "central_skill_floor_vs_atr",
+            "central_skill_ceiling_vs_atr",
             "risk_target_joint_coverage",
             "risk_interval_coverage",
             "risk_joint_coverage_error",
@@ -1147,6 +1393,15 @@ def run(
                     ),
                     "central_skill_vs_best_dummy": round(
                         artifact.metrics.get("central_skill_vs_best_dummy", 0.0), 8
+                    ),
+                    "central_skill_vs_atr": round(
+                        artifact.metrics.get("central_skill_vs_atr", 0.0), 8
+                    ),
+                    "central_skill_floor_vs_atr": round(
+                        artifact.metrics.get("central_skill_floor_vs_atr", 0.0), 8
+                    ),
+                    "central_skill_ceiling_vs_atr": round(
+                        artifact.metrics.get("central_skill_ceiling_vs_atr", 0.0), 8
                     ),
                     "risk_target_joint_coverage": round(
                         artifact.metrics.get("risk_target_joint_coverage", 0.0), 8

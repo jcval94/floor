@@ -180,6 +180,13 @@ jobs:
             --models-dir data/training/models \
             --db data/persistence/app.sqlite 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
 
+      - name: Audit central D1/W1 skill vs ATR-only
+        run: |
+          PYTHONPATH=src python -m models.central_skill_report \
+            --registry data/training/models \
+            --output data/training/metrics/central_skill_report_latest.json \
+            --require-complete 2>&1 | tee -a "${{ steps.runmeta.outputs.log_file }}"
+
       - name: Sync champion JSON to binary run artifacts
         run: |
           set -euo pipefail

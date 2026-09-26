@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from models.central_skill_ensemble import (
+    CENTRAL_SKILL_FEATURES,
+    predict_central_skill_head,
+    runtime_feature_value as central_runtime_feature_value,
+    validate_central_skill_head,
+)
 from models.robust_range_v3 import (
     ROBUST_RANGE_FEATURES,
     feature_value as robust_feature_value,
@@ -11,6 +17,7 @@ from models.robust_range_v3 import (
 
 
 FEATURES_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "central_skill_ensemble_v1": CENTRAL_SKILL_FEATURES,
     "robust_range_v3": ROBUST_RANGE_FEATURES,
     "regularized_linear": (
         "atr_14",
@@ -49,6 +56,8 @@ def model_family(model_name: str) -> str:
     """
 
     name = str(model_name or "").lower()
+    if name.startswith("central_skill_ensemble_v1_"):
+        return "central_skill_ensemble_v1"
     if name.startswith("robust_range_v3_"):
         return "robust_range_v3"
     if name.startswith("regime_median_") or name.startswith("evt_cp_"):
@@ -75,11 +84,22 @@ def build_runtime_features(row: dict[str, Any]) -> dict[str, float]:
             else _to_float(row.get(name), 0.0)
         )
         features[name] = value
+    for name in CENTRAL_SKILL_FEATURES:
+        features[f"central__{name}"] = central_runtime_feature_value(
+            row,
+            name,
+            close,
+            features,
+        )
     return features
 
 
 def validate_family_params(family: str, params: dict[str, Any]) -> None:
     """Validate a serialized trained model contract before serving it."""
+
+    if family == "central_skill_ensemble_v1":
+        validate_central_skill_head(params)
+        return
 
     if family == "robust_range_v3":
         validate_robust_head(params)
@@ -147,6 +167,10 @@ def predict_family_delta(
 
     if validate:
         validate_family_params(family, params)
+    if family == "central_skill_ensemble_v1":
+        return clamp_delta(
+            predict_central_skill_head(params, features, validate=False)
+        )
     if family == "robust_range_v3":
         return clamp_delta(predict_robust_head(params, features, validate=False))
     if family == "regime_median":

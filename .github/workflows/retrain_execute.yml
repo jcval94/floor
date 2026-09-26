@@ -281,13 +281,22 @@ jobs:
             --output data/training/metrics/risk_geometry_report_latest.json \
             --require-complete
 
-      - name: Commit lightweight model registry only
+      - name: Audit central D1/W1 skill vs ATR-only
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m models.central_skill_report \
+            --registry data/training/models \
+            --output data/training/metrics/central_skill_report_latest.json \
+            --require-complete
+
+      - name: Commit lightweight model registry and central benchmark report
         if: steps.gate.outputs.run == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/training/models/*.json
+          git add -f data/training/metrics/central_skill_report_latest.json
           if git diff --cached --quiet; then
             echo "No lightweight model registry changes."
           else

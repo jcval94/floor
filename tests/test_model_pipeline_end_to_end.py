@@ -60,6 +60,7 @@ def test_end_to_end_etl_training_and_prediction_for_all_model_pipelines(tmp_path
     # d1/w1/q1 pipeline: classic-horizon competition
     run_classic_horizons(dataset_path=modelable_path, output_dir=models_dir, version=version)
     truthful_prefixes = (
+        "central_skill_ensemble_v1_",
         "regime_median_",
         "boosted_stumps_",
         "sequence_linear_",
