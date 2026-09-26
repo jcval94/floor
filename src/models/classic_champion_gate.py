@@ -703,6 +703,8 @@ def gate_one_horizon(
             _write_json_atomic(candidate_path, candidate)
             active = candidate
 
+    active_skill_vs_atr: dict[str, float] | None
+    active_stability: dict[str, Any] | None
     if active is candidate:
         active_skill_vs_atr = candidate_skill_vs_atr
         active_stability = candidate_stability
