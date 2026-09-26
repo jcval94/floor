@@ -1,0 +1,152 @@
+{
+  "status": "OK",
+  "benchmark": "atr_only",
+  "selection_contract": {
+    "central_forecast_only": true,
+    "risk_geometry_separate": true,
+    "coverage_used_for_selection": false,
+    "coverage_used_for_directional_confidence": false,
+    "test_used_for_selection": false,
+    "atr_comparison_required_for_promotion": true
+  },
+  "horizons": {
+    "d1": {
+      "horizon": "d1",
+      "model_name": "central_skill_ensemble_v1_d1",
+      "model_version": "20260926T023828Z",
+      "benchmark": "atr_only",
+      "model_mae_spread_pct": 0.009171066998380254,
+      "atr_only_mae_spread_pct": 0.009840985473675805,
+      "skill_vs_atr": 0.06807432823547532,
+      "floor_skill_vs_atr": 0.001097258400470258,
+      "ceiling_skill_vs_atr": 0.004663317419750124,
+      "temporal_stability": {
+        "block_sessions": 20,
+        "periods": 7,
+        "periods_won_vs_atr": 7,
+        "period_win_rate_vs_atr": 1.0,
+        "worst_period_skill_vs_atr": 0.048648155121849834,
+        "recent_period_skill_vs_atr": 0.06763185721771192,
+        "period_results": [
+          {
+            "start": "2025-08-14",
+            "end": "2025-09-11",
+            "sessions": 20,
+            "skill_vs_atr": 0.05625887399953122
+          },
+          {
+            "start": "2025-09-12",
+            "end": "2025-10-09",
+            "sessions": 20,
+            "skill_vs_atr": 0.0749857439617595
+          },
+          {
+            "start": "2025-10-10",
+            "end": "2025-11-06",
+            "sessions": 20,
+            "skill_vs_atr": 0.06655808427597043
+          },
+          {
+            "start": "2025-11-07",
+            "end": "2025-12-05",
+            "sessions": 20,
+            "skill_vs_atr": 0.05868528294052844
+          },
+          {
+            "start": "2025-12-08",
+            "end": "2026-01-06",
+            "sessions": 20,
+            "skill_vs_atr": 0.048648155121849834
+          },
+          {
+            "start": "2026-01-07",
+            "end": "2026-02-04",
+            "sessions": 20,
+            "skill_vs_atr": 0.09423755811123824
+          },
+          {
+            "start": "2026-02-05",
+            "end": "2026-03-04",
+            "sessions": 19,
+            "skill_vs_atr": 0.06763185721771192
+          }
+        ]
+      },
+      "verdict": "MODEL_SUPERIOR",
+      "message": "Model shows positive central skill versus ATR-only.",
+      "promotion_decision": "promote",
+      "promotion_reason": "Candidate strictly improved floor MAE, ceiling MAE, and spread MAE versus the incumbent and independently passed the permanent ATR-only gate on the same leakage-safe validation split. Coverage is diagnostic only and did not participate in central-model selection: existing=(0.01016004683441297, 0.020264913868865697) candidate=(0.009171066998380254, 0.01955658259231126) skill_vs_atr=0.068074.",
+      "coverage_used_for_selection": false,
+      "test_used_for_selection": false
+    },
+    "w1": {
+      "horizon": "w1",
+      "model_name": "central_skill_ensemble_v1_w1",
+      "model_version": "20260926T023828Z",
+      "benchmark": "atr_only",
+      "model_mae_spread_pct": 0.020638676934978756,
+      "atr_only_mae_spread_pct": 0.022258594511097848,
+      "skill_vs_atr": 0.07277717266970396,
+      "floor_skill_vs_atr": 0.006269669195328009,
+      "ceiling_skill_vs_atr": 0.0053713773072138205,
+      "temporal_stability": {
+        "block_sessions": 20,
+        "periods": 7,
+        "periods_won_vs_atr": 7,
+        "period_win_rate_vs_atr": 1.0,
+        "worst_period_skill_vs_atr": 0.04002809213927783,
+        "recent_period_skill_vs_atr": 0.08017954835536323,
+        "period_results": [
+          {
+            "start": "2025-08-14",
+            "end": "2025-09-11",
+            "sessions": 20,
+            "skill_vs_atr": 0.08332065602307182
+          },
+          {
+            "start": "2025-09-12",
+            "end": "2025-10-09",
+            "sessions": 20,
+            "skill_vs_atr": 0.07216499020151856
+          },
+          {
+            "start": "2025-10-10",
+            "end": "2025-11-06",
+            "sessions": 20,
+            "skill_vs_atr": 0.05027099121133427
+          },
+          {
+            "start": "2025-11-07",
+            "end": "2025-12-05",
+            "sessions": 20,
+            "skill_vs_atr": 0.06810893597227663
+          },
+          {
+            "start": "2025-12-08",
+            "end": "2026-01-06",
+            "sessions": 20,
+            "skill_vs_atr": 0.04002809213927783
+          },
+          {
+            "start": "2026-01-07",
+            "end": "2026-02-04",
+            "sessions": 20,
+            "skill_vs_atr": 0.10308185757949906
+          },
+          {
+            "start": "2026-02-05",
+            "end": "2026-02-26",
+            "sessions": 15,
+            "skill_vs_atr": 0.08017954835536323
+          }
+        ]
+      },
+      "verdict": "MODEL_SUPERIOR",
+      "message": "Model shows positive central skill versus ATR-only.",
+      "promotion_decision": "promote",
+      "promotion_reason": "Candidate strictly improved floor MAE, ceiling MAE, and spread MAE versus the incumbent and independently passed the permanent ATR-only gate on the same leakage-safe validation split. Coverage is diagnostic only and did not participate in central-model selection: existing=(0.02275022227787736, 0.043601490351735495) candidate=(0.020638676934978756, 0.04202383923108112) skill_vs_atr=0.072777.",
+      "coverage_used_for_selection": false,
+      "test_used_for_selection": false
+    }
+  }
+}
