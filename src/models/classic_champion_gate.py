@@ -544,9 +544,6 @@ def gate_one_horizon(
             atr_floor_predictions,
             atr_ceiling_predictions,
         )
-        coverage_delta = float(candidate_metrics["test_interval_coverage"]) - float(
-            existing_metrics["test_interval_coverage"]
-        )
         strict_error_dominance = _strictly_dominates_boundaries_and_spread(
             candidate_metrics, existing_metrics
         )
