@@ -126,10 +126,10 @@ def test_fixed_tail_split_keeps_stable_validation_and_test_windows() -> None:
     }
 
 
-def test_model_competition_has_five_truthfully_named_models_per_horizon() -> None:
+def test_model_competition_has_truthfully_named_models_per_horizon() -> None:
     artifact = build_modelable_dataset(_synthetic_rows())
     competition = artifact["model_competition"]["models_by_horizon"]
-    expected = {
+    base_expected = {
         "robust_range_v3",
         "regime_median",
         "boosted_stumps",
@@ -138,7 +138,10 @@ def test_model_competition_has_five_truthfully_named_models_per_horizon() -> Non
     }
     for horizon in ("d1", "w1", "q1"):
         models = competition[horizon]
-        assert len(models) == 5
+        expected = set(base_expected)
+        if horizon in {"d1", "w1"}:
+            expected.add("central_skill_ensemble_v1")
+        assert len(models) == len(expected)
         assert {m["model_family"] for m in models} == expected
         assert not any(
             token in m["model_id"]
@@ -151,7 +154,7 @@ def test_model_competition_exposes_flat_models_list_for_workflow_guards() -> Non
     artifact = build_modelable_dataset(_synthetic_rows())
     models = artifact["model_competition"]["models"]
 
-    assert len(models) == 15
+    assert len(models) == 17
     assert {m["horizon"] for m in models} == {"d1", "w1", "q1"}
 
 
