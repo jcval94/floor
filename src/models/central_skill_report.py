@@ -26,6 +26,8 @@ def _mapping(value: object) -> dict[str, Any]:
 def _number(value: object) -> float | None:
     if isinstance(value, bool) or value is None:
         return None
+    if not isinstance(value, (str, int, float, bytes, bytearray)):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
