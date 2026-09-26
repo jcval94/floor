@@ -24,6 +24,9 @@ def test_generated_runtime_paths_are_ignored_but_model_json_is_allowed() -> None
     assert "data/*" in ignore
     assert "!data/training/models/" in ignore
     assert "!data/training/models/*.json" in ignore
+    assert "!data/training/metrics/" in ignore
+    assert "data/training/metrics/*" in ignore
+    assert "!data/training/metrics/central_skill_report_latest.json" in ignore
     assert "*.sqlite" in ignore
 
 
@@ -44,6 +47,7 @@ def test_git_tracks_only_lightweight_data_contract() -> None:
         path
         for path in tracked
         if path != "data/.gitkeep"
+        and path != "data/training/metrics/central_skill_report_latest.json"
         and not (
             path.startswith("data/training/models/")
             and path.endswith(".json")
@@ -118,6 +122,7 @@ def test_monitoring_isolated_from_authoritative_runtime_writer() -> None:
 def test_retrain_execute_commits_only_lightweight_model_registry() -> None:
     workflow = _text(WORKFLOWS / "retrain_execute.yml")
     assert "git add -f data/training/models/*.json" in workflow
+    assert "git add -f data/training/metrics/central_skill_report_latest.json" in workflow
     for forbidden in (
         "git add data/training data/market data/persistence",
         "git add data/market",
