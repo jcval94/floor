@@ -1,14 +1,13 @@
 {
   "requested_at": "2026-09-25",
-  "reason": "refresh_serving_champion_dummy_benchmarks_after_writer_lock",
+  "reason": "productionize_only_strictly_validated_d1_w1_central_skill_vs_atr",
   "force": true,
   "approve_recommended": false,
   "tasks": [
     "d1",
-    "w1",
-    "q1"
+    "w1"
   ],
   "confirm_publish": "PUBLISH_CHAMPIONS_TO_MAIN",
-  "authorization_context": "User explicitly approved improving forecast confidence and comparing serving forecasts against dummy baselines while preserving central predictive power.",
-  "iteration": "joint-conformal-risk-v4-dummy-benchmark-retry"
+  "authorization_context": "User explicitly requested direct implementation of only D1/W1 central-forecast improvements with robust OOS skill versus ATR-only, permanent ATR benchmarking, ATR-gated champion selection, preserved purged temporal splits, and no use of final test for selection.",
+  "iteration": "central-skill-atr-gated-v1"
 }
