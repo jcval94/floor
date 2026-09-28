@@ -249,7 +249,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="liveCompetitionChart"' in page
     assert 'id="liveChartMetrics"' in page
     assert 'id="liveTable"' in page
-    assert "actualización ~15 min" in page
+    assert "actualización ~30 min" in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
     assert 'id="leagueOperations"' in page
