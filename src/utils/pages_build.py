@@ -454,6 +454,28 @@ def _build_model_detail(
         "coverage_used_for_selection": False,
     }
 
+    serving_status = "ACTIVE_CHAMPION" if has_artifact else "UNKNOWN"
+    selection_status = str(central_benchmark.get("status") or "UNKNOWN")
+    selection_has_evidence = (
+        central_benchmark.get("skill_vs_atr") is not None
+        and central_benchmark.get("atr_only_mae_spread_pct") is not None
+    )
+    monitoring_status = (
+        str(review_model.get("status") or "UNKNOWN")
+        if has_review
+        else "NOT_COVERED"
+    )
+    monitoring_drift = (
+        str(review_model.get("drift_level") or "UNKNOWN")
+        if has_review
+        else None
+    )
+    monitoring_recommendation = (
+        review_model.get("recommendation", review_model.get("action"))
+        if has_review
+        else None
+    )
+
     return {
         "model_key": model_key,
         "model_name": review_model.get("model_name", artifact.get("model_name", "unknown")),
@@ -464,6 +486,26 @@ def _build_model_detail(
             "recommendation",
             review_model.get("action", "REVIEW_PENDING" if has_artifact else "PENDING"),
         ),
+        "serving": {
+            "status": serving_status,
+            "source": "champion_artifact" if has_artifact else None,
+            "active": bool(has_artifact),
+        },
+        "selection": {
+            "status": selection_status,
+            "benchmark": "atr_only" if selection_has_evidence else None,
+            "has_evidence": bool(selection_has_evidence),
+            "skill_vs_atr": central_benchmark.get("skill_vs_atr"),
+            "test_used_for_selection": False,
+            "coverage_used_for_selection": False,
+        },
+        "monitoring": {
+            "covered": bool(has_review),
+            "status": monitoring_status,
+            "drift_level": monitoring_drift,
+            "recommendation": monitoring_recommendation,
+            "source": "governed_training_review" if has_review else None,
+        },
         "auto_retrain": bool(review_model.get("auto_retrain", False)),
         "as_of": review_model.get("as_of"),
         "reason": review_model.get("reason", ""),
@@ -517,6 +559,12 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
         timing_status if value_status == "UNKNOWN" else value_status
     )
 
+    value_serving = value_detail.get("serving", {}) if isinstance(value_detail.get("serving"), dict) else {}
+    timing_serving = timing_detail.get("serving", {}) if isinstance(timing_detail.get("serving"), dict) else {}
+    value_monitoring = value_detail.get("monitoring", {}) if isinstance(value_detail.get("monitoring"), dict) else {}
+    timing_monitoring = timing_detail.get("monitoring", {}) if isinstance(timing_detail.get("monitoring"), dict) else {}
+    monitoring_covered = bool(value_monitoring.get("covered") or timing_monitoring.get("covered"))
+
     return {
         "model_key": "m3",
         "model_name": "m3_value_linear + m3_timing_multiclass",
@@ -524,6 +572,40 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
         "status": combined_status,
         "drift_level": value_detail.get("drift_level", timing_detail.get("drift_level", "UNKNOWN")),
         "recommendation": value_detail.get("recommendation", timing_detail.get("recommendation", "PENDING")),
+        "serving": {
+            "status": (
+                "ACTIVE_CHAMPION"
+                if value_serving.get("active") and timing_serving.get("active")
+                else "PARTIAL"
+                if value_serving.get("active") or timing_serving.get("active")
+                else "UNKNOWN"
+            ),
+            "source": "champion_artifacts",
+            "active": bool(value_serving.get("active") and timing_serving.get("active")),
+        },
+        "selection": {
+            "status": "NOT_APPLICABLE",
+            "benchmark": None,
+            "has_evidence": False,
+            "skill_vs_atr": None,
+            "test_used_for_selection": False,
+            "coverage_used_for_selection": False,
+        },
+        "monitoring": {
+            "covered": monitoring_covered,
+            "status": combined_status if monitoring_covered else "NOT_COVERED",
+            "drift_level": (
+                value_detail.get("drift_level", timing_detail.get("drift_level", "UNKNOWN"))
+                if monitoring_covered
+                else None
+            ),
+            "recommendation": (
+                value_detail.get("recommendation", timing_detail.get("recommendation", "PENDING"))
+                if monitoring_covered
+                else None
+            ),
+            "source": "governed_training_review" if monitoring_covered else None,
+        },
         "auto_retrain": bool(value_detail.get("auto_retrain", False) or timing_detail.get("auto_retrain", False)),
         "as_of": value_detail.get("as_of") or timing_detail.get("as_of"),
         "reason": value_detail.get("reason") or timing_detail.get("reason") or "",
@@ -1000,8 +1082,27 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         suite_status = "UNREVIEWED"
         suite_recommendation = "REVIEW_PENDING"
 
+    active_artifact_tasks = [
+        task for task, artifact in artifacts.items() if isinstance(artifact, dict) and artifact
+    ]
+    suite_review_covered = bool(has_review_evidence and not review_summary_stale)
+
     models = {
         "champion": champion,
+        "serving": {
+            "status": "ACTIVE" if active_artifact_tasks else "UNKNOWN",
+            "source": "champion_artifacts",
+            "active_champion_count": len(active_artifact_tasks),
+            "active_champion_tasks": active_artifact_tasks,
+        },
+        "suite_review": {
+            "covered": suite_review_covered,
+            "status": suite_status if suite_review_covered else (
+                "STALE" if review_summary_stale else "NOT_COVERED"
+            ),
+            "recommendation": suite_recommendation if suite_review_covered else None,
+            "source": "governed_training_review" if suite_review_covered else None,
+        },
         "timeline": model_timeline,
         "health": metrics_payload,
         "champions": {
