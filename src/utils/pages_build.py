@@ -559,6 +559,12 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
         timing_status if value_status == "UNKNOWN" else value_status
     )
 
+    value_serving = value_detail.get("serving", {}) if isinstance(value_detail.get("serving"), dict) else {}
+    timing_serving = timing_detail.get("serving", {}) if isinstance(timing_detail.get("serving"), dict) else {}
+    value_monitoring = value_detail.get("monitoring", {}) if isinstance(value_detail.get("monitoring"), dict) else {}
+    timing_monitoring = timing_detail.get("monitoring", {}) if isinstance(timing_detail.get("monitoring"), dict) else {}
+    monitoring_covered = bool(value_monitoring.get("covered") or timing_monitoring.get("covered"))
+
     return {
         "model_key": "m3",
         "model_name": "m3_value_linear + m3_timing_multiclass",
@@ -566,6 +572,40 @@ def _build_m3_detail(value_detail: dict[str, Any], timing_detail: dict[str, Any]
         "status": combined_status,
         "drift_level": value_detail.get("drift_level", timing_detail.get("drift_level", "UNKNOWN")),
         "recommendation": value_detail.get("recommendation", timing_detail.get("recommendation", "PENDING")),
+        "serving": {
+            "status": (
+                "ACTIVE_CHAMPION"
+                if value_serving.get("active") and timing_serving.get("active")
+                else "PARTIAL"
+                if value_serving.get("active") or timing_serving.get("active")
+                else "UNKNOWN"
+            ),
+            "source": "champion_artifacts",
+            "active": bool(value_serving.get("active") and timing_serving.get("active")),
+        },
+        "selection": {
+            "status": "NOT_APPLICABLE",
+            "benchmark": None,
+            "has_evidence": False,
+            "skill_vs_atr": None,
+            "test_used_for_selection": False,
+            "coverage_used_for_selection": False,
+        },
+        "monitoring": {
+            "covered": monitoring_covered,
+            "status": combined_status if monitoring_covered else "NOT_COVERED",
+            "drift_level": (
+                value_detail.get("drift_level", timing_detail.get("drift_level", "UNKNOWN"))
+                if monitoring_covered
+                else None
+            ),
+            "recommendation": (
+                value_detail.get("recommendation", timing_detail.get("recommendation", "PENDING"))
+                if monitoring_covered
+                else None
+            ),
+            "source": "governed_training_review" if monitoring_covered else None,
+        },
         "auto_retrain": bool(value_detail.get("auto_retrain", False) or timing_detail.get("auto_retrain", False)),
         "as_of": value_detail.get("as_of") or timing_detail.get("as_of"),
         "reason": value_detail.get("reason") or timing_detail.get("reason") or "",
