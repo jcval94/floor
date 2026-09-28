@@ -946,11 +946,32 @@ async function models() {
   if (champion) champion.textContent = models.champion || 'No disponible';
   const suite = document.getElementById('suiteStatus');
   if (suite) {
+    const serving = models.serving || {};
+    const review = models.suite_review || {};
     const schedule = models.retraining_schedule || {};
-    const scheduleText = schedule.human_eta
-      ? `<div class="small" style="margin-top:8px">${escapeHTML(schedule.human_eta)}</div>`
-      : '';
-    suite.innerHTML = `${badge(models.suite_status || 'UNKNOWN')} ${badge(models.suite_recommendation || 'PENDING')}${scheduleText}`;
+    const servingBadge = serving.status === 'ACTIVE'
+      ? badge('OK', `Serving activo · ${Number(serving.active_champion_count || 0)} champions`)
+      : badge(serving.status || 'UNKNOWN', 'Serving no confirmado');
+    let reviewBadge = '';
+    let reviewAction = '';
+    let scheduleText = '';
+    if (review.covered) {
+      reviewBadge = badge(review.status || 'UNKNOWN', `Review ${review.status || 'UNKNOWN'}`);
+      reviewAction = review.recommendation
+        ? badge(review.recommendation, review.recommendation)
+        : '';
+      scheduleText = schedule.human_eta
+        ? `<div class="small" style="margin-top:8px">${escapeHTML(schedule.human_eta)}</div>`
+        : '';
+    } else {
+      reviewBadge = badge(
+        review.status === 'STALE' ? 'STALE' : 'NOT_COVERED',
+        review.status === 'STALE'
+          ? 'Review de retraining desactualizado'
+          : 'Review de retraining no disponible',
+      );
+    }
+    suite.innerHTML = `${servingBadge} ${reviewBadge} ${reviewAction}${scheduleText}`;
   }
   const cards = document.getElementById('modelCards');
   if (cards) cards.innerHTML = modelCards(models) || emptyState('Sin modelos publicables');
