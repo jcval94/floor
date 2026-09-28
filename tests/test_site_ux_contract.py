@@ -162,3 +162,39 @@ def test_models_page_shows_atr_only_central_skill_and_temporal_stability() -> No
     assert "ATR-only sigue siendo superior" in app
     assert "periods_won_vs_atr" in app
     assert "recent_period_skill_vs_atr" in app
+
+
+
+def test_models_page_separates_serving_selection_and_monitoring_semantics() -> None:
+    page = (SITE / "models.html").read_text(encoding="utf-8")
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    styles = (SITE / "assets" / "styles.css").read_text(encoding="utf-8")
+
+    assert "<strong>Serving</strong>" in page
+    assert "<strong>Selección</strong>" in page
+    assert "<strong>Monitoring</strong>" in page
+    assert "No tener monitoring no invalida por sí solo un champion ya promovido." in page
+
+    assert "function modelGovernanceRows" in app
+    assert "Champion activo" in app
+    assert "Gate ATR validado" in app
+    assert "ATR-only superior" in app
+    assert "No cubierto por retraining review" in app
+    assert "Esto no invalida el champion ni su gate de selección." in app
+    assert "serving.active ? badge('OK', 'Champion activo')" in app
+
+    assert ".model-governance" in styles
+
+
+def test_models_hero_separates_suite_serving_from_retraining_review() -> None:
+    page = (SITE / "models.html").read_text(encoding="utf-8")
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+
+    assert "Suite M3 servida" in page
+    assert "Serving activo" in app
+    assert "models.serving" in app
+    assert "models.suite_review" in app
+    assert "Review de retraining no disponible" in app
+    assert "Review de retraining desactualizado" in app
+    assert "badge(models.suite_status" not in app
+    assert "badge(models.suite_recommendation" not in app
