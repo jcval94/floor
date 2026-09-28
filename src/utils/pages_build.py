@@ -454,6 +454,28 @@ def _build_model_detail(
         "coverage_used_for_selection": False,
     }
 
+    serving_status = "ACTIVE_CHAMPION" if has_artifact else "UNKNOWN"
+    selection_status = str(central_benchmark.get("status") or "UNKNOWN")
+    selection_has_evidence = (
+        central_benchmark.get("skill_vs_atr") is not None
+        and central_benchmark.get("atr_only_mae_spread_pct") is not None
+    )
+    monitoring_status = (
+        str(review_model.get("status") or "UNKNOWN")
+        if has_review
+        else "NOT_COVERED"
+    )
+    monitoring_drift = (
+        str(review_model.get("drift_level") or "UNKNOWN")
+        if has_review
+        else None
+    )
+    monitoring_recommendation = (
+        review_model.get("recommendation", review_model.get("action"))
+        if has_review
+        else None
+    )
+
     return {
         "model_key": model_key,
         "model_name": review_model.get("model_name", artifact.get("model_name", "unknown")),
@@ -464,6 +486,26 @@ def _build_model_detail(
             "recommendation",
             review_model.get("action", "REVIEW_PENDING" if has_artifact else "PENDING"),
         ),
+        "serving": {
+            "status": serving_status,
+            "source": "champion_artifact" if has_artifact else None,
+            "active": bool(has_artifact),
+        },
+        "selection": {
+            "status": selection_status,
+            "benchmark": "atr_only" if selection_has_evidence else None,
+            "has_evidence": bool(selection_has_evidence),
+            "skill_vs_atr": central_benchmark.get("skill_vs_atr"),
+            "test_used_for_selection": False,
+            "coverage_used_for_selection": False,
+        },
+        "monitoring": {
+            "covered": bool(has_review),
+            "status": monitoring_status,
+            "drift_level": monitoring_drift,
+            "recommendation": monitoring_recommendation,
+            "source": "governed_training_review" if has_review else None,
+        },
         "auto_retrain": bool(review_model.get("auto_retrain", False)),
         "as_of": review_model.get("as_of"),
         "reason": review_model.get("reason", ""),
