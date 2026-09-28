@@ -259,6 +259,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "EOD → Strategy League → runtime state → Pages" in page
     assert 'href="assets/league.css"' in page
     assert 'href="strategies.html#strategy-league"' in home
+    assert 'id="homeOperations"' in home
+    assert "Top y bottom operaciones realizadas" in home
 
     assert "capital_allocation_challenger: 'Capital Allocation Challenger'" in script
     assert "mean_reversion_floor_w1: 'Mean Reversion + Floor'" in script
@@ -316,6 +318,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "setInterval(renderOOS, 300_000)" in research
     assert "setInterval(renderAttribution, 300_000)" in research
     assert "setInterval(home, 300_000)" in app
+    assert "data/strategy_league_operations.json" in app
+    assert "Top operaciones" in app
+    assert "Bottom operaciones" in app
     assert "session_continuity" in experiment
     assert "continuidad sin huecos" in experiment
     assert "Continuidad incompleta" in experiment
