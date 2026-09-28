@@ -15,7 +15,7 @@
   <nav id="primaryNav" class="primary-nav" data-primary-nav aria-label="Navegación principal"><a data-nav="home" href="index.html">Resumen</a><a data-nav="forecasts" href="forecasts.html">Pronósticos</a><a data-nav="tickers" href="tickers.html">Tickers</a><a data-nav="strategies" href="strategies.html">Analítica</a><a data-nav="system" href="system.html">Salud del sistema</a></nav>
 </div></header>
 <main id="main-content" class="container">
-  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Universe explorer</span><h1>Compara activos sin perderte entre 13 columnas.</h1><p class="lead">La vista principal se concentra en precio, rango, downside, upside y cobertura observada. Los detalles técnicos quedan disponibles bajo demanda.</p></div></section>
+  <section class="page-hero"><div class="page-hero-copy"><span class="eyebrow">Universe explorer</span><h1>Compara el forecast central y el risk envelope sin mezclar sus significados.</h1><p class="lead">La vista principal se concentra en precio, rango, downside, upside y cobertura observada. Los detalles técnicos quedan disponibles bajo demanda.</p></div></section>
 
   <section class="filters" aria-label="Filtros del universo">
     <div class="filter-field search"><label for="tickerSearch">Buscar ticker</label><input id="tickerSearch" type="search" placeholder="Escribe un símbolo…" autocomplete="off" /></div>
@@ -29,12 +29,11 @@
       <thead><tr>
         <th aria-sort="none"><button class="sort-button" type="button" data-sort="symbol">Ticker</button></th>
         <th aria-sort="none"><button class="sort-button" type="button" data-sort="price">Precio</button></th>
-        <th>Rango esperado</th>
-        <th aria-sort="none"><button class="sort-button" type="button" data-sort="downside">Downside</button></th>
-        <th aria-sort="none"><button class="sort-button" type="button" data-sort="upside">Upside</button></th>
-        <th aria-sort="none"><button class="sort-button" type="button" data-sort="confidence">Cobertura</button></th>
+        <th>Forecast central</th>
+        <th>Risk envelope</th>
+        <th aria-sort="none"><button class="sort-button" type="button" data-sort="confidence">Cobertura risk OOS</button></th>
       </tr></thead>
-      <tbody id="tickersTable"><tr><td colspan="6"><div class="empty-state">Cargando universo…</div></td></tr></tbody>
+      <tbody id="tickersTable"><tr><td colspan="5"><div class="empty-state">Cargando universo…</div></td></tr></tbody>
     </table></div>
   </section>
   <div id="tickerDetail" aria-live="polite"></div>
