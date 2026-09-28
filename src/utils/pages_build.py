@@ -1082,8 +1082,27 @@ def build_pages_data(data_dir: Path, site_data_dir: Path, universe_path: Path) -
         suite_status = "UNREVIEWED"
         suite_recommendation = "REVIEW_PENDING"
 
+    active_artifact_tasks = [
+        task for task, artifact in artifacts.items() if isinstance(artifact, dict) and artifact
+    ]
+    suite_review_covered = bool(has_review_evidence and not review_summary_stale)
+
     models = {
         "champion": champion,
+        "serving": {
+            "status": "ACTIVE" if active_artifact_tasks else "UNKNOWN",
+            "source": "champion_artifacts",
+            "active_champion_count": len(active_artifact_tasks),
+            "active_champion_tasks": active_artifact_tasks,
+        },
+        "suite_review": {
+            "covered": suite_review_covered,
+            "status": suite_status if suite_review_covered else (
+                "STALE" if review_summary_stale else "NOT_COVERED"
+            ),
+            "recommendation": suite_recommendation if suite_review_covered else None,
+            "source": "governed_training_review" if suite_review_covered else None,
+        },
         "timeline": model_timeline,
         "health": metrics_payload,
         "champions": {
