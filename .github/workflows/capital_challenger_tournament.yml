@@ -112,6 +112,16 @@ jobs:
           payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
           assert payload["prospective_evidence"] is False
           assert payload["future_data_used"] is False
+
+          market = payload.get("market_source") or {}
+          selection = market.get("session_selection") or {}
+          repair = market.get("daily_gap_repair") or {}
+          assert selection.get("effective_sessions") == selection.get("requested_sessions"), selection
+          assert selection.get("effective_start_session") == selection.get("requested_start_session"), selection
+          assert selection.get("effective_end_session") == selection.get("requested_end_session"), selection
+          assert not selection.get("incomplete_sessions"), selection
+          assert not selection.get("trimmed_complete_sessions"), selection
+
           rows = payload["leaderboard"]["rows"]
           by_id = {row["strategy"]: row for row in rows}
           expected = {
@@ -138,6 +148,8 @@ jobs:
               "challenger_best_existing_strategy": (
                   challenger["return"] > max(row["return"] for row in bases)
               ),
+              "session_selection": selection,
+              "daily_gap_repair": repair,
           }, indent=2))
           PY
 

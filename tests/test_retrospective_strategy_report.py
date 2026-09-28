@@ -155,3 +155,24 @@ def test_tournament_workflow_uses_effective_league_id_for_attribution() -> None:
     assert 'print(payload["league_id"])' in workflow
     assert '--history "$out/runs/$league_id/history.jsonl"' in workflow
     assert 'capital_tournament_$(echo' not in workflow
+
+
+
+def test_capital_tournament_workflow_refuses_truncated_requested_window() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "capital_challenger_tournament.yml"
+    ).read_text(encoding="utf-8")
+
+    assert 'selection.get("effective_sessions") == selection.get("requested_sessions")' in workflow
+    assert 'selection.get("effective_end_session") == selection.get("requested_end_session")' in workflow
+    assert 'not selection.get("incomplete_sessions")' in workflow
+    assert 'not selection.get("trimmed_complete_sessions")' in workflow
+    assert '"daily_gap_repair": repair' in workflow
+
+
+def test_replay_request_targets_last_closed_session_for_gap_repair() -> None:
+    request = json.loads((ROOT / "capital_tournament_request.json").read_text(encoding="utf-8"))
+
+    assert request["start"] == "2026-06-22"
+    assert request["end"] == "2026-09-25"
+    assert request["iteration"] == "strategy_league_v9_replay_gap_repair_20260928"
