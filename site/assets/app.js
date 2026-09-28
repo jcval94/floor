@@ -251,6 +251,9 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
   const timingFloor = row?.floor_time_bucket || '—';
   const timingCeiling = row?.ceiling_time_bucket || '—';
   const skillVsDummy = Number(row?.central_skill_vs_best_dummy);
+  const floorGap = ref.source === 'Último cierre diario' && Number.isFinite(range.downside)
+    ? Math.abs(range.downside)
+    : NaN;
   const skillText = Number.isFinite(skillVsDummy)
     ? `${skillVsDummy >= 0 ? '+' : ''}${(skillVsDummy * 100).toFixed(1)}%`
     : '—';
@@ -272,6 +275,7 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
       <div><span>Techo esperado</span><strong>${escapeHTML(String(timingCeiling))}</strong></div>
       <div><span>3M downside</span><strong>${fmt(m3.floor)}</strong></div>
       <div><span>Timing 3M</span><strong>${escapeHTML(m3TimingText(m3))}</strong></div>
+      <div title="Distancia absoluta entre el último cierre diario y el piso central"><span>Dist. al piso</span><strong>${Number.isFinite(floorGap) ? fmtPct(floorGap) : '—'}</strong></div>
       <div title="Reducción de MAE de spread frente al mejor baseline global-median/ATR-only"><span>Skill vs dummy</span><strong class="${Number.isFinite(skillVsDummy) && skillVsDummy < 0 ? 'negative' : 'positive'}">${escapeHTML(skillText)}</strong></div>
     </div>
     <div class="card-actions"><a href="tickers.html?ticker=${encodeURIComponent(symbol)}">Ver detalle</a></div>
@@ -557,7 +561,7 @@ async function forecasts() {
     const query = String(search?.value || '').trim().toUpperCase();
     const selectedHorizon = String(horizon?.value || 'w1').toLowerCase();
     const minConfidence = Number(confidence?.value || 0);
-    const selectedSort = String(sort?.value || 'coverage');
+    const selectedSort = String(sort?.value || 'floor_proximity');
     const items = Object.entries(grouped).map(([symbol, rows]) => {
       const row = selectForecast(rows, selectedHorizon);
       if (!row) return null;
@@ -568,13 +572,14 @@ async function forecasts() {
       const ref = referencePrice(data, symbol, row);
       const range = forecastRange(row, ref.value);
       const downside = Number.isFinite(range.downside) ? Math.abs(range.downside) : NaN;
+      const floorGap = ref.source === 'Último cierre diario' && Number.isFinite(downside) ? downside : NaN;
       const upside = Number.isFinite(range.upside) ? range.upside : NaN;
       const skew = Number.isFinite(upside) && Number.isFinite(downside) ? upside - downside : NaN;
       const width = Number.isFinite(upside) && Number.isFinite(downside) ? upside + downside : NaN;
       const rawSkill = row?.central_skill_vs_best_dummy;
       const skill = rawSkill == null || rawSkill === '' ? NaN : Number(rawSkill);
 
-      return { symbol, rows, row, conf, ref, range, downside, upside, skew, width, skill };
+      return { symbol, rows, row, conf, ref, range, downside, floorGap, upside, skew, width, skill };
     }).filter(Boolean);
 
     const finiteCompare = (a, b, direction = 'desc') => {
@@ -588,15 +593,23 @@ async function forecasts() {
 
     items.sort((a, b) => {
       let cmp = 0;
-      if (selectedSort === 'right_skew') cmp = finiteCompare(a.skew, b.skew, 'desc');
+      if (selectedSort === 'floor_proximity') {
+        cmp = finiteCompare(a.floorGap, b.floorGap, 'asc');
+        if (!cmp) cmp = finiteCompare(a.skill, b.skill, 'desc');
+        if (!cmp) cmp = finiteCompare(a.conf, b.conf, 'desc');
+      } else if (selectedSort === 'floor_distance') cmp = finiteCompare(a.floorGap, b.floorGap, 'desc');
+      else if (selectedSort === 'right_skew') cmp = finiteCompare(a.skew, b.skew, 'desc');
       else if (selectedSort === 'left_skew') cmp = finiteCompare(a.skew, b.skew, 'asc');
       else if (selectedSort === 'balanced') cmp = finiteCompare(Math.abs(a.skew), Math.abs(b.skew), 'asc');
       else if (selectedSort === 'upside') cmp = finiteCompare(a.upside, b.upside, 'desc');
-      else if (selectedSort === 'downside') cmp = finiteCompare(a.downside, b.downside, 'desc');
+      else if (selectedSort === 'upside_asc') cmp = finiteCompare(a.upside, b.upside, 'asc');
       else if (selectedSort === 'wide') cmp = finiteCompare(a.width, b.width, 'desc');
       else if (selectedSort === 'narrow') cmp = finiteCompare(a.width, b.width, 'asc');
       else if (selectedSort === 'skill') cmp = finiteCompare(a.skill, b.skill, 'desc');
+      else if (selectedSort === 'skill_asc') cmp = finiteCompare(a.skill, b.skill, 'asc');
+      else if (selectedSort === 'coverage_asc') cmp = finiteCompare(a.conf, b.conf, 'asc');
       else if (selectedSort === 'ticker') cmp = a.symbol.localeCompare(b.symbol);
+      else if (selectedSort === 'ticker_desc') cmp = b.symbol.localeCompare(a.symbol);
       else cmp = finiteCompare(a.conf, b.conf, 'desc');
 
       return cmp || a.symbol.localeCompare(b.symbol);
@@ -612,15 +625,16 @@ async function forecasts() {
         : emptyState(dataResult.ok ? 'Sin resultados' : 'No se pudieron cargar los forecasts', dataResult.ok ? 'Prueba con otros filtros.' : dataResult.error);
     }
     if (tableRoot) {
-      tableRoot.innerHTML = items.map(({ symbol, row, ref, range }) => {
+      tableRoot.innerHTML = items.map(({ symbol, row, ref, range, floorGap }) => {
         const risk = riskRange(row, ref.value);
         return `<tr>
           <td><a class="ticker-link compact" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a></td>
-          <td>${fmt(ref.value)}</td>
+          <td>${fmt(ref.value)}<div class="table-subtext">${escapeHTML(ref.source)}</div></td>
+          <td><strong>${Number.isFinite(floorGap) ? fmtPct(floorGap) : '—'}</strong><div class="table-subtext">abs. vs referencia</div></td>
           <td><strong class="range-text">${compactRange(range)}</strong>${rangeDeltas(range)}<div class="table-subtext">Forecast central</div>${centralCoverageChip(row)}</td>
           <td><strong class="range-text">${risk.available ? compactRange(risk) : '—'}</strong>${risk.available ? rangeDeltas(risk) : ''}<div class="table-subtext">Risk envelope</div>${riskCoverageChip(row)}</td>
         </tr>`;
-      }).join('') || emptyRow('No hay datos que coincidan con los filtros.', 4);
+      }).join('') || emptyRow('No hay datos que coincidan con los filtros.', 5);
     }
   }
 
