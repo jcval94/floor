@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "current_league_id": "strategy_league_v9_net_target_reversal_10k",
+  "current_league_id": "strategy_league_v10_d1_w1_champions_10k",
   "epochs": [
     {
       "league_id": "strategy_league_v6_all_strategies_10k",
@@ -34,12 +34,23 @@
     },
     {
       "league_id": "strategy_league_v9_net_target_reversal_10k",
-      "status": "DECLARED_CLEAN_EPOCH",
+      "status": "CLOSED_SERVING_MODEL_SUITE_CHANGE",
       "declared_on": "2026-09-24",
       "freeze_id": "capital_challenger_v1_refrozen_20260924_v9",
       "strategy_parameters_changed": true,
       "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v9. No v8 sessions are inherited.",
-      "change_summary": "Weekly learns net directional opportunity after exact 61 bps round-trip costs; Mean Reversion uses 10d-vs-20d reversal confirmation with lighter gates; Cross-Horizon remains measurable but contributes zero capital-allocation weight pending new evidence."
+      "change_summary": "Weekly learns net directional opportunity after exact 61 bps round-trip costs; Mean Reversion uses 10d-vs-20d reversal confirmation with lighter gates; Cross-Horizon remains measurable but contributes zero capital-allocation weight pending new evidence.",
+      "closed_on": "2026-09-28",
+      "close_reason": "Serving D1/W1 champions changed after v9 genesis: D1 1de63e70f8df16bfbc149a44655beebd74d8f99c0b83bfee674109406882bf17 -> 5cf1a25159836d67871df94219625f14e33e7cd5ae084af9e03deb8445f942f1; W1 dba9e17e36e1a221082b62dc2db7a0400bdfee7f63da7acf766a5c5224bf19fa -> e7861da4bcfbdb531d8d2d1cc01b1db8ab603827388f98c870eb2088c32ff4c9. League/strategy/cost/model-contract files and Q1/value/timing champions remained unchanged. Do not stitch v9 evidence into v10."
+    },
+    {
+      "league_id": "strategy_league_v10_d1_w1_champions_10k",
+      "status": "DECLARED_CLEAN_EPOCH",
+      "declared_on": "2026-09-28",
+      "freeze_id": "capital_challenger_v1_refrozen_20260928_v10",
+      "strategy_parameters_changed": false,
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v10. No v9 sessions are inherited; v7/v8/v9 remain separate historical evidence.",
+      "change_summary": "Serving D1 and W1 champions were explicitly promoted from robust_range_v3 to central_skill_ensemble_v1 after passing the permanent ATR-only gate. Strategy parameters, costs, model/strategy contracts, Q1/value/timing champions and allocator weights remain unchanged."
     }
   ]
 }
