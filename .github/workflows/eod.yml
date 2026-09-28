@@ -3,7 +3,8 @@ name: eod
 on:
   schedule:
     # Avoid top-of-hour scheduler congestion while retaining four close backstops/hour.
-    - cron: "7,37 20-23 * * 1-5"\n    - cron: "22,52 20-23 * * 1-5"
+    - cron: "7,37 20-23 * * 1-5"
+    - cron: "22,52 20-23 * * 1-5"
   workflow_dispatch:
 
 permissions:
