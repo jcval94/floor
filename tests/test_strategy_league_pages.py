@@ -332,8 +332,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "F${fold.fold}" in research
     assert "setInterval(renderOOS, 300_000)" in research
     assert "setInterval(renderAttribution, 300_000)" in research
-    assert "setInterval(home, 300_000)" in app
-    assert "setInterval(strategies, 300_000)" in app
+    assert "const AUTO_REFRESH_PAGES = new Set([" in app
+    assert "'home'" in app
+    assert "'strategies'" in app
+    assert "setInterval(pageHandler, PAGE_REFRESH_MS)" in app
     assert "EOD prospectivo" in app
     assert "Backtest histórico" in app
     assert "data/strategy_live.json" in app
@@ -349,6 +351,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "session_continuity" in experiment
     assert "continuidad sin huecos" in experiment
     assert "Continuidad incompleta" in experiment
+    assert "setInterval(main, EXPERIMENT_REFRESH_MS)" in experiment
 
 def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
