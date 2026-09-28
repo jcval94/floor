@@ -23,15 +23,12 @@ The holding limit is read from `config/strategies.yaml` (`temporal_exit_business
 
 ## Unattended scheduler resilience
 
-The Strategy League keeps its normal four intraday observations per hour. The `:20` UTC-minute poll is isolated as a dedicated schedule entry and, after completing or failing its own observation work, attempts to dispatch `scheduler_watchdog.yml`.
+The autonomous market workflows use layered recovery without changing model, signal, cost, or promotion semantics.
 
-This creates two independent workflow-level paths inside GitHub Actions:
+- `scheduler_watchdog` keeps its own hourly cron.
+- The watchdog also listens to completed `strategy_live`, `intraday_engine`, `eod`, and `monitoring` runs. If any autonomous path survives, its completion wakes the watchdog so stale siblings can be recovered.
+- GitHub run inspection and workflow dispatch both retry transient API failures three times. A recovery failure makes the watchdog fail visibly instead of silently claiming health.
+- The watchdog dispatches only workflows with no recent or active run; existing intraday/EOD guards remain the authoritative idempotency boundary.
+- Critical cron expressions are split into semantically equivalent entries for this merge so GitHub re-registers the schedules without increasing polling frequency.
 
-- the watchdog's own hourly cron;
-- an hourly cross-wake from `strategy_live`.
-
-The watchdog still dispatches only workflows with no recent or active run, so the cross-wake cannot create duplicate market checkpoints. Intraday and EOD guards remain authoritative and idempotent.
-
-The cross-wake is deliberately non-fatal for the Strategy League observation. It retries three times and emits a warning if GitHub refuses the dispatch, but it never invalidates already-produced strategy evidence merely because the recovery helper failed. A separate external silence monitor is expected to detect the rarer case where GitHub's scheduler stops creating runs altogether.
-
-The critical scheduled workflows also use semantically equivalent split cron entries. This intentionally changes the stored cron definitions without changing cadence, so merging the hardening commit re-registers the schedules and refreshes the scheduled-workflow actor on GitHub. This is a one-time reactivation pulse, not an increase in polling frequency.
+This removes the previous single dependency on a watchdog cron watching other crons. It still cannot self-heal a total GitHub Actions scheduler outage in which no repository event runs at all; that final failure mode requires an observer outside GitHub. The external silence watch is therefore an alarm, while the repository remains responsible for recovery whenever at least one autonomous workflow event is alive.
