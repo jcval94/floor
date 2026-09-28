@@ -895,14 +895,46 @@ function publicModelMetricSet(detail) {
   return { source: 'Sin métricas públicas', rows: [] };
 }
 
+function modelGovernanceRows(detail) {
+  const serving = detail?.serving || {};
+  const selection = detail?.selection || {};
+  const monitoring = detail?.monitoring || {};
+  const rows = [];
+
+  rows.push(`<div><span>Serving</span><strong>${serving.active ? badge('OK', 'Champion activo') : badge(serving.status || 'UNKNOWN')}</strong></div>`);
+
+  if (selection.has_evidence) {
+    const skill = Number(selection.skill_vs_atr);
+    const label = selection.status === 'MODEL_SUPERIOR'
+      ? 'Gate ATR validado'
+      : selection.status === 'ATR_ONLY_SUPERIOR'
+        ? 'ATR-only superior'
+        : 'Gate ATR';
+    const tone = selection.status === 'MODEL_SUPERIOR' ? 'OK' : selection.status === 'ATR_ONLY_SUPERIOR' ? 'WARN' : 'UNKNOWN';
+    const suffix = Number.isFinite(skill) ? ` · ${fmtRatioPct(skill)}` : '';
+    rows.push(`<div><span>Selección</span><strong>${badge(tone, label)}<small>${escapeHTML(suffix)}</small></strong></div>`);
+  } else {
+    rows.push(`<div><span>Selección</span><strong>${badge('NOT_APPLICABLE', 'Sin gate ATR publicado')}</strong></div>`);
+  }
+
+  if (monitoring.covered) {
+    rows.push(`<div><span>Monitoring</span><strong>${badge(monitoring.status || 'UNKNOWN')} ${monitoring.drift_level ? badge(monitoring.drift_level, `Drift ${monitoring.drift_level}`) : ''}</strong><small>${escapeHTML(monitoring.recommendation || 'Sin acción')}</small></div>`);
+  } else {
+    rows.push(`<div><span>Monitoring</span><strong>${badge('NOT_COVERED', 'No cubierto por retraining review')}</strong><small>Esto no invalida el champion ni su gate de selección.</small></div>`);
+  }
+
+  return rows.join('');
+}
+
 function modelCards(models) {
   return Object.values(models?.details || {}).map((detail) => {
     const metricSet = publicModelMetricSet(detail);
+    const serving = detail?.serving || {};
     return `<article class="model-card">
-      <div class="card-head"><div><span class="eyebrow">${escapeHTML(detail.model_key || 'Modelo')}</span><h3>${escapeHTML(detail.model_name || 'Sin nombre')}</h3></div>${badge(detail.status || 'UNKNOWN')}</div>
+      <div class="card-head"><div><span class="eyebrow">${escapeHTML(detail.model_key || 'Modelo')}</span><h3>${escapeHTML(detail.model_name || 'Sin nombre')}</h3></div>${serving.active ? badge('OK', 'Champion activo') : badge(serving.status || detail.status || 'UNKNOWN')}</div>
       <div class="model-version">Versión ${escapeHTML(detail.current_version || '—')} · <span class="muted">${escapeHTML(metricSet.source)}</span></div>
       <div class="model-metrics">${metricSet.rows.length ? metricSet.rows.map(([key, value]) => `<div><span>${escapeHTML(key)}</span><strong>${fmt(value, 3)}</strong></div>`).join('') : '<span class="muted">Sin métricas públicas disponibles.</span>'}</div>
-      <div class="model-footer"><span>Drift ${badge(detail.drift_level || 'UNKNOWN')}</span><span>${escapeHTML(detail.recommendation || 'Sin recomendación')}</span></div>
+      <div class="model-governance">${modelGovernanceRows(detail)}</div>
       <details class="advanced-details"><summary>Detalles técnicos</summary><pre>${safeJSON(detail.artifact?.params || {})}</pre><p>${escapeHTML(detail.reason || '')}</p></details>
     </article>`;
   }).join('');
