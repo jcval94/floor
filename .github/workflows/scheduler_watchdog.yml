@@ -3,7 +3,14 @@ name: scheduler_watchdog
 on:
   schedule:
     # One hourly backstop is enough because primary market workflows already poll every ~15 minutes.
-    - cron: "35 13-23 * * 1-5"
+    - cron: "35 13-18 * * 1-5"
+    - cron: "35 19-23 * * 1-5"
+  workflow_run:
+    # Event-driven recovery: if any autonomous market workflow survives,
+    # its completion wakes the watchdog to inspect stale siblings.
+    workflows: ["strategy_live", "intraday_engine", "eod", "monitoring"]
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -42,17 +49,33 @@ jobs:
           repo="${GITHUB_REPOSITORY}"
           now_epoch="$(date -u +%s)"
 
+          list_runs_with_retry() {
+            local workflow="$1"
+            local attempt runs
+            for attempt in 1 2 3; do
+              if runs="$(gh run list \
+                --repo "$repo" \
+                --workflow "$workflow" \
+                --branch main \
+                --limit 20 \
+                --json createdAt,status 2>/dev/null)"; then
+                printf '%s' "$runs"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "::error::Unable to inspect recent runs for $workflow after 3 attempts." >&2
+            return 2
+          }
+
           has_recent_or_active_run() {
             local workflow="$1"
             local max_age_seconds="$2"
             local runs cutoff
             cutoff=$((now_epoch - max_age_seconds))
-            runs="$(gh run list \
-              --repo "$repo" \
-              --workflow "$workflow" \
-              --branch main \
-              --limit 20 \
-              --json createdAt,status)"
+            if ! runs="$(list_runs_with_retry "$workflow")"; then
+              return 2
+            fi
 
             jq -e --argjson cutoff "$cutoff" '
               any(.[];
@@ -62,32 +85,60 @@ jobs:
             ' <<<"$runs" >/dev/null
           }
 
+          dispatch_with_retry() {
+            local workflow="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              if gh workflow run "$workflow" --repo "$repo" --ref main; then
+                return 0
+              fi
+              sleep $((attempt * 3))
+            done
+            echo "::error::Unable to dispatch $workflow after 3 attempts." >&2
+            return 1
+          }
+
           dispatch_if_stale() {
             local workflow="$1"
             local max_age_seconds="$2"
             local output_name="$3"
+            local rc
             if has_recent_or_active_run "$workflow" "$max_age_seconds"; then
               echo "$output_name=skipped_recent_or_active" >> "$GITHUB_OUTPUT"
               echo "$workflow: recent/active run exists; no duplicate dispatch."
+              return 0
             else
-              gh workflow run "$workflow" --repo "$repo" --ref main
+              rc=$?
+            fi
+
+            if [ "$rc" -eq 2 ]; then
+              echo "$output_name=inspection_failed" >> "$GITHUB_OUTPUT"
+              return 1
+            fi
+
+            if dispatch_with_retry "$workflow"; then
               echo "$output_name=dispatched" >> "$GITHUB_OUTPUT"
               echo "$workflow: watchdog dispatched missing poll."
+              return 0
             fi
+
+            echo "$output_name=dispatch_failed" >> "$GITHUB_OUTPUT"
+            return 1
           }
 
           # Primary market workflows poll every 15 minutes. Twenty minutes
           # distinguishes a dropped poll from a healthy scheduler without
           # creating duplicate gate-only runs.
-          dispatch_if_stale intraday_engine.yml 1200 intraday
+          failures=0
+          dispatch_if_stale intraday_engine.yml 1200 intraday || failures=$((failures + 1))
 
           # Strategy League intraday monitor has the same cadence. Its own
           # market-hours gate makes a watchdog dispatch safe outside the session.
-          dispatch_if_stale strategy_live.yml 1200 strategy_live
+          dispatch_if_stale strategy_live.yml 1200 strategy_live || failures=$((failures + 1))
 
           utc_hour="$(date -u +%H)"
           if [ "$((10#$utc_hour))" -ge 20 ]; then
-            dispatch_if_stale eod.yml 1200 eod
+            dispatch_if_stale eod.yml 1200 eod || failures=$((failures + 1))
           else
             echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
@@ -95,17 +146,25 @@ jobs:
           # Monitoring has its own hourly schedule plus workflow_run triggers.
           # Dispatch only if neither path produced a run in the past 50 minutes.
           if [ "$((10#$utc_hour))" -ge 14 ]; then
-            dispatch_if_stale monitoring.yml 3000 monitoring
+            dispatch_if_stale monitoring.yml 3000 monitoring || failures=$((failures + 1))
           else
             echo "monitoring=outside_monitoring_window" >> "$GITHUB_OUTPUT"
           fi
 
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::Scheduler watchdog finished with $failures recovery failure(s)."
+            exit 1
+          fi
+
       - name: Summary
+        if: always()
         run: |
           {
             echo "## Floor scheduler watchdog"
             echo "- trigger: ${{ github.event_name }}"
             echo "- schedule: ${{ github.event.schedule || 'n/a' }}"
+            echo "- upstream workflow: ${{ github.event.workflow_run.name || 'n/a' }}"
+            echo "- upstream conclusion: ${{ github.event.workflow_run.conclusion || 'n/a' }}"
             echo "- intraday: ${{ steps.dispatch.outputs.intraday }}"
             echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"
