@@ -168,3 +168,18 @@ def test_models_page_separates_serving_selection_and_monitoring_semantics() -> N
     assert "serving.active ? badge('OK', 'Champion activo')" in app
 
     assert ".model-governance" in styles
+
+
+
+def test_models_hero_separates_suite_serving_from_retraining_review() -> None:
+    page = (SITE / "models.html").read_text(encoding="utf-8")
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+
+    assert "Suite M3 servida" in page
+    assert "Serving activo" in app
+    assert "models.serving" in app
+    assert "models.suite_review" in app
+    assert "Review de retraining no disponible" in app
+    assert "Review de retraining desactualizado" in app
+    assert "badge(models.suite_status" not in app
+    assert "badge(models.suite_recommendation" not in app
