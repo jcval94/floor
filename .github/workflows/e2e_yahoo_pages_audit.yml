@@ -334,11 +334,51 @@ jobs:
           from playwright.sync_api import sync_playwright
 
           views = {
-              'home': 'index.html',
-              'forecasts': 'forecasts.html',
-              'tickers': 'tickers.html',
-              'strategies': 'strategies.html',
-              'system': 'system.html',
+              'home': {
+                  'path': 'index.html',
+                  'critical_selector': '#heroStatus',
+                  'expected_text': 'Pronósticos destacados',
+              },
+              'forecasts': {
+                  'path': 'forecasts.html',
+                  'critical_selector': '#forecastCards',
+                  'expected_text': 'Rangos esperados',
+              },
+              'tickers': {
+                  'path': 'tickers.html',
+                  'critical_selector': '#tickersTable',
+                  'expected_text': 'Forecast central',
+              },
+              'strategies': {
+                  'path': 'strategies.html',
+                  'critical_selector': '#leagueStatus',
+                  'expected_text': 'Strategy League',
+              },
+              'models': {
+                  'path': 'models.html',
+                  'critical_selector': '#centralSkillTable',
+                  'expected_text': 'Skill central vs ATR-only',
+              },
+              'drift': {
+                  'path': 'drift.html',
+                  'critical_selector': '#driftLight',
+                  'expected_text': 'Deriva y decisión de retraining',
+              },
+              'incidents': {
+                  'path': 'incidents.html',
+                  'critical_selector': '#status',
+                  'expected_text': 'Incidentes y afectación operativa',
+              },
+              'system': {
+                  'path': 'system.html',
+                  'critical_selector': '#systemOverview',
+                  'expected_text': '¿Se puede confiar en lo que está publicado?',
+              },
+              'about': {
+                  'path': 'about.html',
+                  'critical_selector': '#main-content',
+                  'expected_text': 'Qué estima Floor y qué no pretende estimar',
+              },
           }
           results = {}
           all_console_errors = []
@@ -347,7 +387,8 @@ jobs:
 
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
-              for name, path in views.items():
+              for name, spec in views.items():
+                  path = spec['path']
                   page = browser.new_page(viewport={'width': 1440, 'height': 1200})
                   console_errors = []
                   failed_requests = []
@@ -361,13 +402,38 @@ jobs:
                   assert response is not None and response.ok, response.status if response else None
                   page.wait_for_timeout(1000)
                   title = page.title()
-                  body = page.locator('body').inner_text()
+                  body_locator = page.locator('body')
+                  body = body_locator.inner_text()
+                  h1 = page.locator('h1').first
+                  critical = page.locator(spec['critical_selector']).first
+
                   assert title.strip(), f'{name}: empty document title'
                   assert len(body.strip()) > 200, f'{name}: page rendered nearly empty body'
                   assert 'Floor' in body or 'floor' in body.lower(), f'{name}: expected product identity not visible'
+                  assert body_locator.get_attribute('data-page') == name, (
+                      name,
+                      body_locator.get_attribute('data-page'),
+                  )
+                  assert h1.count() == 1 and h1.is_visible(), f'{name}: primary H1 is missing or hidden'
+                  assert h1.inner_text().strip(), f'{name}: primary H1 is empty'
+                  assert spec['expected_text'].lower() in body.lower(), (
+                      name,
+                      spec['expected_text'],
+                  )
+                  assert critical.count() == 1 and critical.is_visible(), (
+                      f"{name}: critical selector {spec['critical_selector']} is missing or hidden"
+                  )
+                  assert critical.inner_text().strip(), (
+                      f"{name}: critical selector {spec['critical_selector']} rendered empty"
+                  )
+
                   page.screenshot(path=f'artifacts/e2e/pages_{name}.png', full_page=True)
                   results[name] = {
+                      'path': path,
                       'title': title,
+                      'h1': h1.inner_text().strip(),
+                      'critical_selector': spec['critical_selector'],
+                      'critical_chars': len(critical.inner_text().strip()),
                       'body_chars': len(body),
                       'links': page.locator('a').count(),
                       'scripts': page.locator('script').count(),
@@ -381,7 +447,14 @@ jobs:
                   page.close()
               browser.close()
 
+          expected_views = list(views)
+          assert list(results) == expected_views, (list(results), expected_views)
+          assert len(results) == 9, results
+
           result = {
+              'audited_view_count': len(results),
+              'expected_view_count': len(expected_views),
+              'expected_views': expected_views,
               'views': results,
               'console_errors': all_console_errors,
               'failed_requests': all_failed_requests,
