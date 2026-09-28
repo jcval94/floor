@@ -261,8 +261,17 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'href="assets/league.css"' in page
     assert 'href="strategies.html#strategy-league"' in home
     assert 'id="homeOperations"' in home
+    assert 'id="homeOperationsHistoryChart"' in home
+    assert 'id="homeOperationsWindow"' in home
+    assert '<option value="2w" selected>2 semanas</option>' in home
+    assert 'id="homeOperationsGranularity"' in home
+    assert 'id="homeOpenLosses"' in home
     assert "Top 10 y Bottom 10 operaciones realizadas" in home
     assert 'aria-label="Top 10 y Bottom 10 operaciones realizadas"' in page
+    assert 'id="leagueOperationsHistoryChart"' in page
+    assert 'id="leagueOperationsWindow"' in page
+    assert 'id="leagueOperationsGranularity"' in page
+    assert 'id="leagueOpenLosses"' in page
 
     assert "capital_allocation_challenger: 'Capital Allocation Challenger'" in script
     assert "mean_reversion_floor_w1: 'Mean Reversion + Floor'" in script
@@ -284,6 +293,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "Top 10 operaciones" in script
     assert "Bottom 10 operaciones" in script
     assert "P&L / sesión" in script
+    assert "P&L neto realizado por periodo" in script
+    assert "Posiciones todavía abiertas en pérdida" in script
+    assert "operations.operations_history" in script
+    assert "open_losing_positions" in script
     assert "setInterval(renderLeague, 300_000)" in script
     assert "setInterval(renderRetrospective, 300_000)" in script
 
@@ -327,6 +340,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "data/strategy_league_operations.json" in app
     assert "Top 10 operaciones" in app
     assert "Bottom 10 operaciones" in app
+    assert "P&L neto realizado por periodo" in app
+    assert "Pérdidas no realizadas" in app
+    assert "operations_history" in app
+    assert "open_losing_positions" in app
     assert "OPERATIONS_RANKING_LIMIT = 10" in publisher
     assert "top_n=OPERATIONS_RANKING_LIMIT" in publisher
     assert "session_continuity" in experiment
