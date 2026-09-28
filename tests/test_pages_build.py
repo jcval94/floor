@@ -5,7 +5,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from utils.pages_build import build_pages_data
+from utils.pages_build import _build_model_detail, build_pages_data
 
 
 def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
@@ -690,3 +690,80 @@ def test_build_pages_data_exposes_d1_w1_atr_central_skill(tmp_path: Path) -> Non
         assert benchmark["temporal_stability"]["periods_won_vs_atr"] == 7
         assert benchmark["coverage_used_for_selection"] is False
         assert benchmark["test_used_for_selection"] is False
+
+
+
+def test_model_detail_separates_active_champion_selection_and_monitoring_scope() -> None:
+    artifact = {
+        "model_name": "central_skill_ensemble_v1_d1",
+        "version": "v-central",
+        "metrics": {
+            "mae_spread_pct": 0.009,
+            "central_skill_vs_atr": 0.07,
+            "central_skill_floor_vs_atr": 0.01,
+            "central_skill_ceiling_vs_atr": 0.02,
+        },
+        "params": {
+            "dummy_benchmark": {
+                "atr_only_mae_spread_pct": 0.00967741935483871,
+            }
+        },
+    }
+
+    detail = _build_model_detail("d1", None, artifact, None)
+
+    # Legacy fields remain available for compatibility, but UI should use the
+    # explicit governance dimensions below.
+    assert detail["status"] == "UNREVIEWED"
+    assert detail["drift_level"] == "UNKNOWN"
+    assert detail["recommendation"] == "REVIEW_PENDING"
+
+    assert detail["serving"] == {
+        "status": "ACTIVE_CHAMPION",
+        "source": "champion_artifact",
+        "active": True,
+    }
+    assert detail["selection"]["has_evidence"] is True
+    assert detail["selection"]["benchmark"] == "atr_only"
+    assert detail["selection"]["status"] == "MODEL_SUPERIOR"
+    assert detail["selection"]["skill_vs_atr"] == 0.07
+    assert detail["selection"]["test_used_for_selection"] is False
+    assert detail["selection"]["coverage_used_for_selection"] is False
+
+    assert detail["monitoring"] == {
+        "covered": False,
+        "status": "NOT_COVERED",
+        "drift_level": None,
+        "recommendation": None,
+        "source": None,
+    }
+
+
+def test_model_detail_uses_governed_review_only_for_monitoring_state() -> None:
+    review = {
+        "model_name": "m3_value_linear",
+        "current_version": "v2",
+        "status": "WARN",
+        "drift_level": "YELLOW",
+        "recommendation": "RETRAIN_SOON",
+        "summary": {
+            "performance": {
+                "current_metrics": {"mae": 1.2},
+            }
+        },
+    }
+    artifact = {
+        "model_name": "m3_value_linear",
+        "version": "v2",
+        "metrics": {"mae": 1.0},
+    }
+
+    detail = _build_model_detail("value", review, artifact, None)
+
+    assert detail["serving"]["active"] is True
+    assert detail["serving"]["status"] == "ACTIVE_CHAMPION"
+    assert detail["monitoring"]["covered"] is True
+    assert detail["monitoring"]["status"] == "WARN"
+    assert detail["monitoring"]["drift_level"] == "YELLOW"
+    assert detail["monitoring"]["recommendation"] == "RETRAIN_SOON"
+    assert detail["selection"]["has_evidence"] is False
