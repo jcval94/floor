@@ -68,12 +68,16 @@ def test_strategy_live_uses_half_hour_cadence_without_embedded_cross_wake() -> N
     assert "gh workflow run scheduler_watchdog.yml" not in workflow
 
 
-def test_watchdog_counts_only_active_or_successful_recent_runs() -> None:
+def test_watchdog_counts_only_recent_active_or_successful_runs() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
     assert "--json createdAt,status,conclusion,event" in workflow
+    assert 'active_cutoff=$((cutoff - 1800))' in workflow
+    assert '--argjson active_cutoff "$active_cutoff"' in workflow
     assert '.conclusion == "success"' in workflow
-    assert '(.status != "completed")' in workflow
+    assert '.status != "completed"' in workflow
+    assert '>= $active_cutoff' in workflow
+    assert '>= $cutoff' in workflow
 
 
 def test_split_crons_never_contain_literal_newline_escape() -> None:

@@ -72,15 +72,22 @@ jobs:
           has_recent_or_active_run() {
             local workflow="$1"
             local max_age_seconds="$2"
-            local runs cutoff
+            local runs cutoff active_cutoff
             cutoff=$((now_epoch - max_age_seconds))
+            # Active jobs get one extra 30-minute grace window so legitimate
+            # long-running EOD/intraday jobs are not duplicated. After that,
+            # a stuck queued/in-progress run must not suppress recovery forever.
+            active_cutoff=$((cutoff - 1800))
             if ! runs="$(list_runs_with_retry "$workflow")"; then
               return 2
             fi
 
-            jq -e --argjson cutoff "$cutoff" '
+            jq -e --argjson cutoff "$cutoff" --argjson active_cutoff "$active_cutoff" '
               any(.[];
-                (.status != "completed")
+                (
+                  .status != "completed"
+                  and ((.createdAt | fromdateiso8601) >= $active_cutoff)
+                )
                 or (
                   .conclusion == "success"
                   and ((.createdAt | fromdateiso8601) >= $cutoff)
