@@ -335,46 +335,55 @@ jobs:
 
           views = {
               'home': {
+                  'dynamic': True,
                   'path': 'index.html',
                   'critical_selector': '#heroStatus',
                   'expected_text': 'Pronósticos destacados',
               },
               'forecasts': {
+                  'dynamic': True,
                   'path': 'forecasts.html',
                   'critical_selector': '#forecastCards',
                   'expected_text': 'Rangos esperados',
               },
               'tickers': {
+                  'dynamic': True,
                   'path': 'tickers.html',
                   'critical_selector': '#tickersTable',
                   'expected_text': 'Forecast central',
               },
               'strategies': {
+                  'dynamic': True,
                   'path': 'strategies.html',
                   'critical_selector': '#leagueStatus',
                   'expected_text': 'Strategy League',
               },
               'models': {
+                  'dynamic': True,
                   'path': 'models.html',
                   'critical_selector': '#centralSkillTable',
                   'expected_text': 'Skill central vs ATR-only',
               },
               'drift': {
+                  'dynamic': True,
                   'path': 'drift.html',
                   'critical_selector': '#driftLight',
                   'expected_text': 'Deriva y decisión de retraining',
               },
               'incidents': {
+                  'dynamic': True,
                   'path': 'incidents.html',
                   'critical_selector': '#status',
                   'expected_text': 'Incidentes y afectación operativa',
               },
               'system': {
+                  'dynamic': True,
                   'path': 'system.html',
                   'critical_selector': '#systemOverview',
                   'expected_text': '¿Se puede confiar en lo que está publicado?',
               },
               'about': {
+                  'dynamic': False,
                   'path': 'about.html',
                   'critical_selector': '#main-content',
                   'expected_text': 'Qué estima Floor y qué no pretende estimar',
@@ -393,10 +402,12 @@ jobs:
                   console_errors = []
                   failed_requests = []
                   http_errors = []
+                  data_requests = []
                   page.on('console', lambda msg, target=console_errors: target.append(f'{msg.type}:{msg.text}') if msg.type == 'error' else None)
                   page.on('pageerror', lambda exc, target=console_errors: target.append(f'pageerror:{exc}'))
                   page.on('requestfailed', lambda req, target=failed_requests: target.append(f'{req.method} {req.url}: {req.failure}'))
                   page.on('response', lambda response, target=http_errors: target.append(f'{response.status} {response.url}') if response.status >= 400 else None)
+                  page.on('request', lambda req, target=data_requests: target.append(req.url) if '/data/' in req.url and req.url.endswith('.json') else None)
 
                   response = page.goto(f'http://127.0.0.1:8765/{path}', wait_until='networkidle', timeout=30000)
                   assert response is not None and response.ok, response.status if response else None
@@ -427,6 +438,17 @@ jobs:
                       f"{name}: critical selector {spec['critical_selector']} rendered empty"
                   )
 
+                  initial_data_requests = len(data_requests)
+                  if spec['dynamic']:
+                      assert initial_data_requests > 0, f'{name}: dynamic view loaded no JSON data'
+                      page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+                      page.wait_for_timeout(1000)
+                      assert len(data_requests) > initial_data_requests, (
+                          f'{name}: returning to a visible tab did not refresh JSON data',
+                          initial_data_requests,
+                          len(data_requests),
+                      )
+
                   page.screenshot(path=f'artifacts/e2e/pages_{name}.png', full_page=True)
                   results[name] = {
                       'path': path,
@@ -437,6 +459,9 @@ jobs:
                       'body_chars': len(body),
                       'links': page.locator('a').count(),
                       'scripts': page.locator('script').count(),
+                      'dynamic': spec['dynamic'],
+                      'initial_data_requests': initial_data_requests,
+                      'data_requests_after_visibility_refresh': len(data_requests),
                       'console_errors': console_errors,
                       'failed_requests': failed_requests,
                       'http_errors': http_errors,
