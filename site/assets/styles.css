@@ -658,3 +658,123 @@ td .confidence-chip {
     align-self: start;
   }
 }
+
+
+.operations-history-panel {
+  margin: 14px 0;
+}
+
+.operations-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.operations-history-head h3 {
+  margin: 3px 0 5px;
+}
+
+.operations-history-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 760px;
+}
+
+.operations-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.operations-controls label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.operations-select {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.operations-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.operations-kpi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.operations-kpi strong {
+  color: var(--text-strong);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operations-open-losses {
+  margin: 14px 0 18px;
+}
+
+.operations-open-losses .table-wrap {
+  box-shadow: none;
+}
+
+.operations-open-losses table {
+  min-width: 760px;
+}
+
+.operations-open-losses .loss-note {
+  margin-top: 8px;
+}
+
+.chart-baseline {
+  stroke: var(--text-strong);
+  stroke-width: .7;
+  stroke-dasharray: 2 2;
+  opacity: .45;
+}
+
+.chart-reference-label {
+  fill: var(--muted);
+  font-size: 3.6px;
+  font-family: inherit;
+}
+
+@media (max-width: 620px) {
+  .operations-controls {
+    justify-content: flex-start;
+  }
+
+  .operations-history-head {
+    align-items: flex-start;
+  }
+
+  .operations-kpi {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: space-between;
+  }
+}

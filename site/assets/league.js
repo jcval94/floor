@@ -1,5 +1,5 @@
 import { escapeHTML, fmtPct, loadJSONState } from './utils.js';
-import { filterPointsByWindow, multiLineSvg } from './charts.js';
+import { filterPointsByWindow, lineSvg, multiLineSvg } from './charts.js';
 
 const LABELS = {
   capital_allocation_challenger: 'Capital Allocation Challenger',
@@ -628,6 +628,90 @@ const note = document.getElementById('replayNote');
 }
 
 
+function operationBucketKey(session, granularity) {
+  const raw = String(session || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || granularity === 'daily') return raw;
+  const date = new Date(`${raw}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return raw;
+  if (granularity === 'monthly') {
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  }
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function aggregateOperationHistory(rows, windowKey, granularity) {
+  const visible = filterPointsByWindow(Array.isArray(rows) ? rows : [], windowKey);
+  const buckets = new Map();
+  visible.forEach((row) => {
+    const key = operationBucketKey(row?.session, granularity);
+    if (!key) return;
+    const bucket = buckets.get(key) || {
+      session: key,
+      net_pnl: 0,
+      closed_operations: 0,
+      wins: 0,
+      losses: 0,
+    };
+    bucket.net_pnl += Number(row?.net_pnl || 0);
+    bucket.closed_operations += Number(row?.closed_operations || 0);
+    bucket.wins += Number(row?.wins || 0);
+    bucket.losses += Number(row?.losses || 0);
+    buckets.set(key, bucket);
+  });
+  return [...buckets.values()].sort((a, b) => String(a.session).localeCompare(String(b.session)));
+}
+
+function operationsHistoryKpis(rows) {
+  const pnl = rows.reduce((total, row) => total + Number(row?.net_pnl || 0), 0);
+  const closed = rows.reduce((total, row) => total + Number(row?.closed_operations || 0), 0);
+  const wins = rows.reduce((total, row) => total + Number(row?.wins || 0), 0);
+  const losses = rows.reduce((total, row) => total + Number(row?.losses || 0), 0);
+  const chip = (label, value) => `<span class="operations-kpi"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></span>`;
+  return [
+    chip('P&L visible', money(pnl, 2)),
+    chip('Cierres', String(closed)),
+    chip('Ganadoras', String(wins)),
+    chip('Perdedoras', String(losses)),
+  ].join('');
+}
+
+function openLossRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return '<tr><td colspan="8"><div class="empty-state"><strong>No hay posiciones abiertas en pérdida.</strong><p>Las posiciones con mark-to-market negativo aparecerán aquí mientras sigan abiertas.</p></div></td></tr>';
+  }
+  return rows.map((row) => {
+    const pnl = Number(row?.unrealized_pnl);
+    const efficiency = Number(row?.unrealized_pnl_per_session);
+    const ret = Number(row?.unrealized_return);
+    return `<tr>
+      <td><strong>${escapeHTML(row?.symbol || '—')}</strong><div class="small">${escapeHTML(shortLabelFor(row?.strategy))}</div></td>
+      <td class="negative">${money(pnl, 2)}</td>
+      <td class="negative">${money(efficiency, 2)}/ses.</td>
+      <td class="negative">${pct(ret)}</td>
+      <td>${money(row?.avg_entry_fill, 2)}</td>
+      <td>${money(row?.last_price, 2)}</td>
+      <td>${escapeHTML(String(row?.holding_sessions ?? '—'))}</td>
+      <td>${row?.stop_price == null ? '—' : money(row.stop_price, 2)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openLossPanel(data) {
+  const rows = Array.isArray(data?.open_losing_positions) ? data.open_losing_positions : [];
+  const total = Number(data?.open_losing_unrealized_pnl || 0);
+  return `<article class="panel operations-open-losses">
+    <div class="section-heading"><div><span class="eyebrow">Open mark-to-market</span><h3>Posiciones todavía abiertas en pérdida</h3><p>${rows.length} posición${rows.length === 1 ? '' : 'es'} en rojo · pérdida flotante combinada ${money(total, 2)}.</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Posición</th><th>Pérdida flotante</th><th>Pérdida / sesión</th><th>Retorno</th><th>Entrada</th><th>Último</th><th>Ses.</th><th>Stop</th></tr></thead>
+      <tbody>${openLossRows(rows)}</tbody>
+    </table></div>
+    <p class="small loss-note">Mark-to-market del último EOD oficial. Incluye costos de entrada ya pagados y excluye costos futuros de salida. No se mezcla con el ranking de operaciones cerradas.</p>
+  </article>`;
+}
+
+
 function operationRows(rows, tone) {
   if (!Array.isArray(rows) || !rows.length) {
     return '<tr><td colspan="6"><div class="empty-state"><strong>Aún no hay operaciones cerradas en esta categoría.</strong><p>Se poblará automáticamente conforme la liga cierre posiciones.</p></div></td></tr>';
@@ -677,23 +761,56 @@ async function renderLeague() {
   const statusRoot = document.getElementById('leagueStatus');
   const summaryRoot = document.getElementById('leagueSummary');
   const operationsRoot = document.getElementById('leagueOperations');
+  const operationsHistoryRoot = document.getElementById('leagueOperationsHistoryChart');
+  const operationsHistoryMetrics = document.getElementById('leagueOperationsHistoryMetrics');
+  const operationsWindow = document.getElementById('leagueOperationsWindow');
+  const operationsGranularity = document.getElementById('leagueOperationsGranularity');
+  const openLossesRoot = document.getElementById('leagueOpenLosses');
   const table = document.getElementById('leagueTable');
   const chartRoot = document.getElementById('leagueCompetitionChart');
   const chartMetrics = document.getElementById('leagueChartMetrics');
   const windowControl = document.getElementById('leagueWindow');
-  if (!statusRoot && !summaryRoot && !operationsRoot && !table && !chartRoot) return;
+  if (!statusRoot && !summaryRoot && !operationsRoot && !operationsHistoryRoot && !openLossesRoot && !table && !chartRoot) return;
 
   const [result, operationsResult] = await Promise.all([
     loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] }),
-    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] }),
+    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [], operations_history: [], open_losing_positions: [] }),
   ]);
   const data = result.data || { status: 'UNKNOWN', rows: [] };
-  const operations = operationsResult.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] };
+  const operations = operationsResult.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [], operations_history: [], open_losing_positions: [] };
   const rows = Array.isArray(data.rows) ? data.rows : [];
   if (statusRoot) statusRoot.innerHTML = statusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = summaryCards(data, rows);
   if (operationsRoot) operationsRoot.innerHTML = operationsPanels(operations);
+  if (openLossesRoot) openLossesRoot.innerHTML = openLossPanel(operations);
   if (table) table.innerHTML = tableRows(rows);
+
+  function renderOperationsHistory() {
+    const windowKey = String(operationsWindow?.value || '2w');
+    const granularity = String(operationsGranularity?.value || 'daily');
+    const history = aggregateOperationHistory(
+      operations.operations_history || [],
+      windowKey,
+      granularity,
+    );
+    if (operationsHistoryMetrics) operationsHistoryMetrics.innerHTML = operationsHistoryKpis(history);
+    if (operationsHistoryRoot) {
+      operationsHistoryRoot.innerHTML = lineSvg(
+        history.map((row) => ({ session: row.session, value: row.net_pnl })),
+        {
+          title: 'P&L neto realizado por periodo',
+          valueFormat: 'money',
+          valueDigits: 0,
+          baseline: 0,
+          baselineLabel: 'Break-even',
+        },
+      );
+    }
+  }
+
+  if (operationsWindow) operationsWindow.onchange = renderOperationsHistory;
+  if (operationsGranularity) operationsGranularity.onchange = renderOperationsHistory;
+  renderOperationsHistory();
 
   function renderWindow() {
     const windowKey = String(windowControl?.value || 'all');

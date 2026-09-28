@@ -315,14 +315,127 @@ function homeOperationsPanel(title, eyebrow, rows, tone) {
   </article>`;
 }
 
+function operationBucketKey(session, granularity) {
+  const raw = String(session || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || granularity === 'daily') return raw;
+  const date = new Date(`${raw}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return raw;
+  if (granularity === 'monthly') {
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  }
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function aggregateOperationHistory(rows, windowKey, granularity) {
+  const visible = filterPointsByWindow(Array.isArray(rows) ? rows : [], windowKey);
+  const buckets = new Map();
+  visible.forEach((row) => {
+    const key = operationBucketKey(row?.session, granularity);
+    if (!key) return;
+    const bucket = buckets.get(key) || {
+      session: key,
+      net_pnl: 0,
+      closed_operations: 0,
+      wins: 0,
+      losses: 0,
+    };
+    bucket.net_pnl += Number(row?.net_pnl || 0);
+    bucket.closed_operations += Number(row?.closed_operations || 0);
+    bucket.wins += Number(row?.wins || 0);
+    bucket.losses += Number(row?.losses || 0);
+    buckets.set(key, bucket);
+  });
+  return [...buckets.values()].sort((a, b) => String(a.session).localeCompare(String(b.session)));
+}
+
+function homeOperationsKpis(rows) {
+  const pnl = rows.reduce((total, row) => total + Number(row?.net_pnl || 0), 0);
+  const closed = rows.reduce((total, row) => total + Number(row?.closed_operations || 0), 0);
+  const wins = rows.reduce((total, row) => total + Number(row?.wins || 0), 0);
+  const losses = rows.reduce((total, row) => total + Number(row?.losses || 0), 0);
+  const chip = (label, value) => `<span class="operations-kpi"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></span>`;
+  return [
+    chip('P&L visible', `$ ${fmt(pnl, 2)}`),
+    chip('Cierres', String(closed)),
+    chip('Ganadoras', String(wins)),
+    chip('Perdedoras', String(losses)),
+  ].join('');
+}
+
+function homeOpenLossRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return '<tr><td colspan="7"><div class="empty-state"><strong>No hay posiciones abiertas en pérdida.</strong><p>Cuando una estrategia mantenga una posición con mark-to-market negativo aparecerá aquí.</p></div></td></tr>';
+  }
+  return rows.map((row) => {
+    const strategy = HOME_STRATEGY_LABELS[row?.strategy] || row?.strategy || '—';
+    const pnl = Number(row?.unrealized_pnl);
+    const ret = Number(row?.unrealized_return);
+    return `<tr>
+      <td><strong>${escapeHTML(row?.symbol || '—')}</strong><div class="table-subtext">${escapeHTML(strategy)}</div></td>
+      <td class="negative">$ ${fmt(pnl, 2)}</td>
+      <td class="negative">${Number.isFinite(ret) ? fmtPct(ret * 100, 2) : '—'}</td>
+      <td>$ ${fmt(Number(row?.avg_entry_fill), 2)}</td>
+      <td>$ ${fmt(Number(row?.last_price), 2)}</td>
+      <td>${escapeHTML(String(row?.holding_sessions ?? '—'))}</td>
+      <td>${row?.stop_price == null ? '—' : `$ ${fmt(Number(row.stop_price), 2)}`}</td>
+    </tr>`;
+  }).join('');
+}
+
+function homeOpenLossPanel(data) {
+  const rows = Array.isArray(data?.open_losing_positions) ? data.open_losing_positions : [];
+  const total = Number(data?.open_losing_unrealized_pnl || 0);
+  return `<article class="panel operations-open-losses">
+    <div class="section-heading"><div><span class="eyebrow">Posiciones aún abiertas</span><h3>Pérdidas no realizadas</h3><p>${rows.length} posición${rows.length === 1 ? '' : 'es'} actualmente en rojo · pérdida flotante combinada $ ${fmt(total, 2)}.</p></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Posición</th><th>Pérdida flotante</th><th>Retorno</th><th>Entrada</th><th>Último</th><th>Ses.</th><th>Stop</th></tr></thead>
+      <tbody>${homeOpenLossRows(rows)}</tbody>
+    </table></div>
+    <p class="small loss-note">Mark-to-market del último EOD. Incluye costos de entrada ya pagados; no descuenta costos futuros de salida porque la posición sigue abierta.</p>
+  </article>`;
+}
+
 function renderHomeOperations(payload) {
   const root = document.getElementById('homeOperations');
-  if (!root) return;
+  const historyRoot = document.getElementById('homeOperationsHistoryChart');
+  const historyMetrics = document.getElementById('homeOperationsHistoryMetrics');
+  const openLossesRoot = document.getElementById('homeOpenLosses');
+  const windowControl = document.getElementById('homeOperationsWindow');
+  const granularityControl = document.getElementById('homeOperationsGranularity');
+  if (!root && !historyRoot && !openLossesRoot) return;
   const data = payload || {};
-  root.innerHTML = [
-    homeOperationsPanel('Más ganancia en menos tiempo', 'Top 10 operaciones', data.top_operations || [], 'positive'),
-    homeOperationsPanel('Peor pérdida por tiempo expuesto', 'Bottom 10 operaciones', data.bottom_operations || [], 'negative'),
-  ].join('');
+  if (root) {
+    root.innerHTML = [
+      homeOperationsPanel('Más ganancia en menos tiempo', 'Top 10 operaciones', data.top_operations || [], 'positive'),
+      homeOperationsPanel('Peor pérdida por tiempo expuesto', 'Bottom 10 operaciones', data.bottom_operations || [], 'negative'),
+    ].join('');
+  }
+  if (openLossesRoot) openLossesRoot.innerHTML = homeOpenLossPanel(data);
+
+  function renderHistory() {
+    const windowKey = String(windowControl?.value || '2w');
+    const granularity = String(granularityControl?.value || 'daily');
+    const history = aggregateOperationHistory(data.operations_history || [], windowKey, granularity);
+    if (historyMetrics) historyMetrics.innerHTML = homeOperationsKpis(history);
+    if (historyRoot) {
+      historyRoot.innerHTML = lineSvg(
+        history.map((row) => ({ session: row.session, value: row.net_pnl })),
+        {
+          title: 'P&L neto realizado por periodo',
+          valueFormat: 'money',
+          valueDigits: 0,
+          baseline: 0,
+          baselineLabel: 'Break-even',
+        },
+      );
+    }
+  }
+
+  if (windowControl) windowControl.onchange = renderHistory;
+  if (granularityControl) granularityControl.onchange = renderHistory;
+  renderHistory();
 }
 
 async function home() {
@@ -333,7 +446,7 @@ async function home() {
     loadJSONState('data/forecasts.json', { rows: [] }),
     loadJSONState('data/audit.json', {}),
     loadJSONState('data/models.json', {}),
-    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] }),
+    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [], operations_history: [], open_losing_positions: [] }),
   ]);
   const dashboard = dashboardR.data || {};
   const drift = driftR.data || {};
@@ -341,7 +454,7 @@ async function home() {
   const forecasts = forecastsR.data || { rows: [] };
   const audit = auditR.data || {};
   const models = modelsR.data || {};
-  const operations = operationsR.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] };
+  const operations = operationsR.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [], operations_history: [], open_losing_positions: [] };
   const grouped = bySymbol(forecasts.rows || []);
   const symbols = Object.keys(grouped);
   const expected = Number(audit?.expected_prediction_rows || audit?.batch?.expected_rows || 0);
