@@ -8,6 +8,9 @@ from typing import Any
 from league.attribution import build_attribution_report, build_operations_ranking
 
 
+OPERATIONS_RANKING_LIMIT = 10
+
+
 def _load(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -114,7 +117,7 @@ def publish_research_payloads(
     operations = build_operations_ranking(
         prospective_history,
         strategy_members,
-        top_n=5,
+        top_n=OPERATIONS_RANKING_LIMIT,
     )
     operations["evidence_type"] = "prospective_shadow_paper_realized_operations"
     operations["prospective_evidence"] = True
