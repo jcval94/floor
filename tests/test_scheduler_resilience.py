@@ -17,11 +17,14 @@ def test_market_crons_avoid_top_of_hour_without_main_push_fanout() -> None:
     eod = _text("eod.yml")
     monitoring = _text("monitoring.yml")
 
-    assert 'cron: "7,22,37,52 13-22 * * 1-5"' in intraday
+    assert 'cron: "7,37 13-22 * * 1-5"' in intraday
+    assert 'cron: "22,52 13-22 * * 1-5"' in intraday
     assert 'cron: "5,35,50 13-22 * * 1-5"' in strategy_live
     assert 'cron: "20 13-22 * * 1-5"' in strategy_live
-    assert 'cron: "7,22,37,52 20-23 * * 1-5"' in eod
-    assert 'cron: "11 14-23 * * 1-5"' in monitoring
+    assert 'cron: "7,37 20-23 * * 1-5"' in eod
+    assert 'cron: "22,52 20-23 * * 1-5"' in eod
+    assert 'cron: "11 14-18 * * 1-5"' in monitoring
+    assert 'cron: "11 19-23 * * 1-5"' in monitoring
     assert "push:\n    branches: [main]" not in intraday
     assert "push:\n    branches: [main]" not in eod
 
@@ -29,7 +32,8 @@ def test_market_crons_avoid_top_of_hour_without_main_push_fanout() -> None:
 def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    assert 'cron: "35 13-23 * * 1-5"' in workflow
+    assert 'cron: "35 13-18 * * 1-5"' in workflow
+    assert 'cron: "35 19-23 * * 1-5"' in workflow
     assert 'cron: "5 13-23 * * 1-5"' not in workflow
     assert "actions: write" in workflow
     assert "has_recent_or_active_run" in workflow
