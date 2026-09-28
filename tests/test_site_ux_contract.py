@@ -20,16 +20,16 @@ def test_primary_navigation_is_product_oriented_and_consistent() -> None:
         assert 'class="skip-link"' in text
 
 
-def test_forecast_default_sort_is_market_distance_to_central_floor() -> None:
+def test_forecast_default_sort_is_right_skew() -> None:
     forecasts = (SITE / "forecasts.html").read_text(encoding="utf-8")
     app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
 
-    assert 'value="floor_proximity" selected' in forecasts
-    assert "Más cerca del piso central" in forecasts
+    assert 'value="right_skew" selected' in forecasts
+    assert "Más cargado a la derecha" in forecasts
     assert "Ticker A–Z" in forecasts
     assert "Ticker Z–A" in forecasts
     assert "Dist. al piso" in forecasts
-    assert "sort?.value || 'floor_proximity'" in app
+    assert "sort?.value || 'right_skew'" in app
     assert "ref.source === 'Último cierre diario'" in app
     assert "finiteCompare(a.floorGap, b.floorGap, 'asc')" in app
     assert "finiteCompare(a.skill, b.skill, 'desc')" in app
