@@ -3,7 +3,7 @@ name: scheduler_watchdog
 on:
   schedule:
     # One hourly backstop is enough because primary market workflows already poll every ~15 minutes.
-    - cron: "35 13-23 * * 1-5"
+    - cron: "35 13-18 * * 1-5"\n    - cron: "35 19-23 * * 1-5"
   push:
     branches: [main]
     paths:
