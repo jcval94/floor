@@ -561,7 +561,7 @@ async function forecasts() {
     const query = String(search?.value || '').trim().toUpperCase();
     const selectedHorizon = String(horizon?.value || 'w1').toLowerCase();
     const minConfidence = Number(confidence?.value || 0);
-    const selectedSort = String(sort?.value || 'floor_proximity');
+    const selectedSort = String(sort?.value || 'right_skew');
     const items = Object.entries(grouped).map(([symbol, rows]) => {
       const row = selectForecast(rows, selectedHorizon);
       if (!row) return null;
