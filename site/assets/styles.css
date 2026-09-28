@@ -592,3 +592,69 @@ input::placeholder { color: color-mix(in srgb, var(--muted) 74%, transparent); }
   .audit-grid { grid-template-columns: 1fr; }
   .site-footer { align-items: start; flex-direction: column; }
 }
+
+
+/* Central forecast vs risk envelope: intentionally distinct semantics. */
+.geometry-stack {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.geometry-block {
+  min-width: 0;
+  padding: 10px 11px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.central-geometry {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+}
+.risk-geometry {
+  background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
+  border-left: 3px solid var(--warning);
+}
+.geometry-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.geometry-heading > div {
+  display: grid;
+  gap: 1px;
+}
+.geometry-kicker {
+  color: var(--text-strong);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.geometry-heading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.geometry-block .range-chart {
+  height: 56px;
+}
+.geometry-deltas {
+  display: flex;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+td .confidence-chip {
+  margin-top: 4px;
+}
+@media (max-width: 720px) {
+  .geometry-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .geometry-heading .confidence-chip {
+    align-self: start;
+  }
+}
