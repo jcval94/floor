@@ -827,4 +827,6 @@ async function system() {
 const page = document.body.dataset.page;
 setNav(page);
 initNavigation();
-({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}))();
+const pageHandler = ({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}));
+pageHandler();
+if (page === 'home') setInterval(home, 300_000);
