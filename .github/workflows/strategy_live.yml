@@ -2,8 +2,10 @@ name: strategy_live
 
 on:
   schedule:
-    # Four observations per hour. The market-hours gate handles DST and early closes.
-    - cron: "5,20,35,50 13-22 * * 1-5"
+    # Four observations per hour. Split entries preserve cadence while forcing
+    # GitHub to re-register the scheduled workflow during this hardening merge.
+    - cron: "5,35,50 13-22 * * 1-5"
+    - cron: "20 13-22 * * 1-5"
   workflow_dispatch:
 
 permissions:
