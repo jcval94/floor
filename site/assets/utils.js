@@ -69,6 +69,11 @@ export function fmtPct(value, digits = 1) {
   return Number.isFinite(n) ? `${n.toFixed(digits)}%` : '—';
 }
 
+export function fmtRatioPct(value, digits = 2) {
+  const n = Number(value);
+  return Number.isFinite(n) ? fmtPct(n * 100, digits) : '—';
+}
+
 export function fmtDateTime(value) {
   if (!value) return 'No disponible';
   const date = new Date(value);
