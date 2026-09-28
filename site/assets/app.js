@@ -6,6 +6,7 @@ import {
   fmt,
   fmtDateTime,
   fmtPct,
+  fmtRatioPct,
   horizonCode,
   horizonLabel,
   loadJSON,
@@ -937,14 +938,14 @@ async function models() {
       const wins = Number(stability?.periods_won_vs_atr);
       const recent = Number(stability?.recent_period_skill_vs_atr);
       const worst = Number(stability?.worst_period_skill_vs_atr);
-      const modelLabel = Number.isFinite(modelMae) ? fmtPct(modelMae) : '—';
-      const atrLabel = Number.isFinite(atrMae) ? fmtPct(atrMae) : '—';
-      const skillLabel = Number.isFinite(skill) ? fmtPct(skill) : '—';
+      const modelLabel = Number.isFinite(modelMae) ? fmtRatioPct(modelMae) : '—';
+      const atrLabel = Number.isFinite(atrMae) ? fmtRatioPct(atrMae) : '—';
+      const skillLabel = Number.isFinite(skill) ? fmtRatioPct(skill) : '—';
       const boundaryText = Number.isFinite(floorSkill) && Number.isFinite(ceilingSkill)
-        ? `Piso ${fmtPct(floorSkill)} · Techo ${fmtPct(ceilingSkill)}`
+        ? `Piso ${fmtRatioPct(floorSkill)} · Techo ${fmtRatioPct(ceilingSkill)}`
         : 'Fronteras no disponibles';
       const stabilityText = Number.isFinite(periods) && periods > 0
-        ? `${Number.isFinite(wins) ? wins : 0}/${periods} periodos · reciente ${Number.isFinite(recent) ? fmtPct(recent) : '—'} · peor ${Number.isFinite(worst) ? fmtPct(worst) : '—'}`
+        ? `${Number.isFinite(wins) ? wins : 0}/${periods} periodos · reciente ${Number.isFinite(recent) ? fmtRatioPct(recent) : '—'} · peor ${Number.isFinite(worst) ? fmtRatioPct(worst) : '—'}`
         : 'Estabilidad temporal no disponible';
       const verdict = Number.isFinite(skill) && skill > 0
         ? badge('OK', 'Model > ATR')
