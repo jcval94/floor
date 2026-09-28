@@ -28,5 +28,8 @@ This soak-test hardening changes scheduling resilience only. It does not change 
 - The critical scheduled workflows keep the same effective cadence, but their cron expressions are split into semantically equivalent entries. Merging this change re-registers GitHub's schedules and refreshes the scheduled-workflow actor without increasing polling frequency.
 - `scheduler_watchdog` keeps its own hourly cron and retries both run inspection and recovery dispatch three times. Inspection failures and dispatch failures are visible failures rather than false greens.
 - The `:20` Strategy League poll cross-wakes the watchdog once per hour from a separate workflow path. The cross-wake has an isolated `actions: write` permission; the Strategy League observation job does not.
+- A completed `monitoring` workflow also wakes `scheduler_watchdog` through `workflow_run`. Because monitoring is already triggered by intraday/EOD completions, any surviving operational path can recover stale sibling workflows without waiting for the watchdog's own cron.
 - The watchdog still dispatches only workflows with no recent or active run, so intraday/EOD idempotency guards remain authoritative and duplicate market checkpoints are not created.
-- If GitHub stops creating every scheduled run, the repository cannot self-heal from inside GitHub. The external two-week silence monitor is the final alerting backstop for that failure mode.
+- The prospective Strategy League report audits the hash-chain EOD sessions against the market sessions expected since genesis. Missing sessions are surfaced as `GAP_DETECTED`; they are never backfilled or silently hidden.
+- Pages exposes that continuity state next to the prospective evidence.
+- If GitHub stops creating every scheduled or workflow-run event, the repository cannot self-heal from inside GitHub. The external two-week silence monitor is the final alerting backstop for that failure mode.
