@@ -242,6 +242,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     research = (ROOT / "site" / "assets" / "research.js").read_text(encoding="utf-8")
     app = (ROOT / "site" / "assets" / "app.js").read_text(encoding="utf-8")
     experiment = (ROOT / "site" / "assets" / "experiment.js").read_text(encoding="utf-8")
+    publisher = (ROOT / "src" / "replay" / "publish_research_site.py").read_text(encoding="utf-8")
 
     assert 'id="strategy-live"' in page
     assert 'id="liveSummary"' in page
@@ -260,7 +261,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'href="assets/league.css"' in page
     assert 'href="strategies.html#strategy-league"' in home
     assert 'id="homeOperations"' in home
-    assert "Top y bottom operaciones realizadas" in home
+    assert "Top 10 y Bottom 10 operaciones realizadas" in home
+    assert 'aria-label="Top 10 y Bottom 10 operaciones realizadas"' in page
 
     assert "capital_allocation_challenger: 'Capital Allocation Challenger'" in script
     assert "mean_reversion_floor_w1: 'Mean Reversion + Floor'" in script
@@ -279,8 +281,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "intraday_curve" in script
     assert "setInterval(renderLive, 60_000)" in script
     assert "data/strategy_league_operations.json" in script
-    assert "Top operaciones" in script
-    assert "Bottom operaciones" in script
+    assert "Top 10 operaciones" in script
+    assert "Bottom 10 operaciones" in script
     assert "P&L / sesión" in script
     assert "setInterval(renderLeague, 300_000)" in script
     assert "setInterval(renderRetrospective, 300_000)" in script
@@ -323,8 +325,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "Backtest histórico" in app
     assert "data/strategy_live.json" in app
     assert "data/strategy_league_operations.json" in app
-    assert "Top operaciones" in app
-    assert "Bottom operaciones" in app
+    assert "Top 10 operaciones" in app
+    assert "Bottom 10 operaciones" in app
+    assert "OPERATIONS_RANKING_LIMIT = 10" in publisher
+    assert "top_n=OPERATIONS_RANKING_LIMIT" in publisher
     assert "session_continuity" in experiment
     assert "continuidad sin huecos" in experiment
     assert "Continuidad incompleta" in experiment
