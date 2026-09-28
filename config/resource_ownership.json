@@ -65,7 +65,7 @@
       ]
     },
     "workflow_dispatch": {
-      "description": "Workflows allowed to dispatch other workflows. EOD may dispatch Pages only after durable runtime/checkpoint publication.",
+      "description": "Workflows allowed to dispatch other workflows. EOD may dispatch Pages only after durable runtime/checkpoint publication; Strategy Live may dispatch the scheduler watchdog only from its isolated hourly recovery job.",
       "markers": [
         "gh workflow run"
       ],
@@ -73,7 +73,8 @@
         "eod.yml",
         "pages_source_guard.yml",
         "runtime_checkpoint_repair.yml",
-        "scheduler_watchdog.yml"
+        "scheduler_watchdog.yml",
+        "strategy_live.yml"
       ]
     },
     "destructive_history_rewrite": {

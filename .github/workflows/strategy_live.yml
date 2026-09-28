@@ -2,12 +2,15 @@ name: strategy_live
 
 on:
   schedule:
-    # Four observations per hour. The market-hours gate handles DST and early closes.
-    - cron: "5,20,35,50 13-22 * * 1-5"
+    # Four observations per hour. Split entries preserve cadence while forcing
+    # GitHub to re-register the scheduled workflow during this hardening merge.
+    # The :20 poll also wakes the scheduler watchdog once per hour.
+    - cron: "5,35,50 13-22 * * 1-5"
+    - cron: "20 13-22 * * 1-5"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: floor-strategy-live-state-writer
@@ -18,6 +21,8 @@ jobs:
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -119,3 +124,30 @@ jobs:
           echo "Strategy live mark skipped outside US market hours."
           echo "now_et=${{ steps.market.outputs.now_et }}"
           echo "session=${{ steps.market.outputs.session }}"
+
+  watchdog_cross_wake:
+    needs: live_mark
+    if: always() && github.event_name == 'schedule' && github.event.schedule == '20 13-22 * * 1-5'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Cross-wake scheduler watchdog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          dispatched=false
+          for attempt in 1 2 3; do
+            if gh workflow run scheduler_watchdog.yml --repo "${GITHUB_REPOSITORY}" --ref main; then
+              dispatched=true
+              echo "Scheduler watchdog cross-wake dispatched from Strategy League anchor."
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [ "$dispatched" != "true" ]; then
+            echo "::warning::Unable to cross-wake scheduler watchdog after 3 attempts; primary Strategy League evidence remains valid and the external silence monitor is the final backstop."
+          fi
