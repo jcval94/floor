@@ -324,6 +324,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "min-height: 330px" not in styles
     assert ".operations-history-warmup" in base_styles
     assert ".enhanced-chart .chart-end-label" in base_styles
+    assert "#homeOperationsHistoryChart .line-chart" in base_styles
+    assert "#leagueOperationsHistoryChart .line-chart" in base_styles
     assert "LIVE_MIN_POINTS = 3" in script
     assert "LEAGUE_MIN_SESSIONS = 5" in script
     assert "warmupChartState" in script
