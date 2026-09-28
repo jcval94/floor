@@ -240,6 +240,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
     research = (ROOT / "site" / "assets" / "research.js").read_text(encoding="utf-8")
+    app = (ROOT / "site" / "assets" / "app.js").read_text(encoding="utf-8")
     experiment = (ROOT / "site" / "assets" / "experiment.js").read_text(encoding="utf-8")
 
     assert 'id="strategy-live"' in page
@@ -250,6 +251,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "actualización ~15 min" in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
+    assert 'id="leagueOperations"' in page
     assert 'id="leagueCompetitionChart"' in page
     assert 'id="leagueChartMetrics"' in page
     assert 'id="leagueWindow"' in page
@@ -274,6 +276,12 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "data/strategy_live.json" in script
     assert "intraday_curve" in script
     assert "setInterval(renderLive, 60_000)" in script
+    assert "data/strategy_league_operations.json" in script
+    assert "Top operaciones" in script
+    assert "Bottom operaciones" in script
+    assert "P&L / sesión" in script
+    assert "setInterval(renderLeague, 300_000)" in script
+    assert "setInterval(renderRetrospective, 300_000)" in script
 
     assert "export function multiLineSvg" in charts
     assert "export function filterPointsByWindow" in charts
@@ -305,6 +313,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="oosWindow"' in page
     assert 'id="oosChartMetrics"' in page
     assert "F${fold.fold}" in research
+    assert "setInterval(renderOOS, 300_000)" in research
+    assert "setInterval(renderAttribution, 300_000)" in research
+    assert "setInterval(home, 300_000)" in app
     assert "session_continuity" in experiment
     assert "continuidad sin huecos" in experiment
     assert "Continuidad incompleta" in experiment
