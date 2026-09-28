@@ -161,3 +161,73 @@ def test_operations_ranking_uses_net_pnl_per_session_across_strategies(tmp_path:
     assert ranking["top_operations"][0]["net_pnl_per_session"] > ranking["top_operations"][1]["net_pnl_per_session"]
     assert ranking["bottom_operations"][0]["strategy"] == "loss_strategy"
     assert all(row["strategy"] != "benchmark_spy" for row in ranking["top_operations"])
+
+
+def test_operations_ranking_tracks_history_and_open_losing_positions(tmp_path: Path) -> None:
+    history = tmp_path / "history.jsonl"
+    records = [
+        {
+            "session": "2026-01-05",
+            "trades": [],
+            "decisions_for_next_open": {},
+            "state_after": {
+                "members": {
+                    "test_strategy": {"cash": 10000.0, "positions": {}},
+                }
+            },
+        },
+        {
+            "session": "2026-01-06",
+            "trades": [
+                {"member": "test_strategy", "symbol": "OPEN", "side": "BUY", "qty": 10, "fill_price": 100.0, "costs": 1.0},
+                {"member": "test_strategy", "symbol": "CLOSED", "side": "BUY", "qty": 5, "fill_price": 50.0, "costs": 0.5},
+            ],
+            "decisions_for_next_open": {},
+            "state_after": {
+                "members": {
+                    "test_strategy": {
+                        "cash": 8748.5,
+                        "positions": {
+                            "OPEN": {"qty": 10, "cost_basis": 100.0, "last_price": 95.0, "stop_price": 85.0},
+                            "CLOSED": {"qty": 5, "cost_basis": 50.0, "last_price": 50.0},
+                        },
+                    }
+                }
+            },
+        },
+        {
+            "session": "2026-01-07",
+            "trades": [
+                {"member": "test_strategy", "symbol": "CLOSED", "side": "SELL", "qty": 5, "fill_price": 60.0, "costs": 0.5},
+            ],
+            "decisions_for_next_open": {},
+            "state_after": {
+                "members": {
+                    "test_strategy": {
+                        "cash": 9048.0,
+                        "positions": {
+                            "OPEN": {"qty": 10, "cost_basis": 100.0, "last_price": 90.0, "stop_price": 85.0},
+                        },
+                    }
+                }
+            },
+        },
+    ]
+    history.write_text("\n".join(json.dumps(row) for row in records) + "\n", encoding="utf-8")
+
+    ranking = build_operations_ranking(history, ["test_strategy"], top_n=10)
+
+    assert ranking["status"] == "OK"
+    assert len(ranking["operations_history"]) == 3
+    assert ranking["operations_history"][-1]["session"] == "2026-01-07"
+    assert ranking["operations_history"][-1]["net_pnl"] == pytest.approx(49.0)
+    assert ranking["operations_history"][-1]["cumulative_net_pnl"] == pytest.approx(49.0)
+
+    assert ranking["open_losing_positions_count"] == 1
+    assert ranking["open_losing_unrealized_pnl"] == pytest.approx(-101.0)
+    open_loss = ranking["open_losing_positions"][0]
+    assert open_loss["strategy"] == "test_strategy"
+    assert open_loss["symbol"] == "OPEN"
+    assert open_loss["holding_sessions"] == 2
+    assert open_loss["unrealized_pnl"] == pytest.approx(-101.0)
+    assert open_loss["unrealized_return"] == pytest.approx(-101.0 / 1001.0)
