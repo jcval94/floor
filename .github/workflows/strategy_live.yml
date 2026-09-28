@@ -2,12 +2,15 @@ name: strategy_live
 
 on:
   schedule:
-    # Four observations per hour. The market-hours gate handles DST and early closes.
-    - cron: "5,20,35,50 13-22 * * 1-5"
+    # Four observations per hour. The dedicated :20 poll also cross-wakes the
+    # scheduler watchdog, giving unattended operation a second recovery path.
+    - cron: "5,35,50 13-22 * * 1-5"
+    - cron: "20 13-22 * * 1-5"
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: floor-strategy-live-state-writer
@@ -119,3 +122,22 @@ jobs:
           echo "Strategy live mark skipped outside US market hours."
           echo "now_et=${{ steps.market.outputs.now_et }}"
           echo "session=${{ steps.market.outputs.session }}"
+
+      - name: Cross-wake scheduler watchdog
+        if: always() && github.event_name == 'schedule' && github.event.schedule == '20 13-22 * * 1-5'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          dispatched=false
+          for attempt in 1 2 3; do
+            if gh workflow run scheduler_watchdog.yml --repo "${GITHUB_REPOSITORY}" --ref main; then
+              dispatched=true
+              echo "Scheduler watchdog cross-wake dispatched from Strategy League anchor."
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [ "$dispatched" != "true" ]; then
+            echo "::warning::Unable to cross-wake scheduler watchdog after 3 attempts; primary Strategy League evidence remains valid and the external silence monitor is the final backstop."
+          fi
