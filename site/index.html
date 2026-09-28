@@ -49,7 +49,21 @@
       <div><span class="eyebrow">Resumen de operaciones · Strategy League</span><h2>Top 10 y Bottom 10 operaciones realizadas</h2><p>Top 10 prioriza mayor P&L neto por sesión mantenida; Bottom 10 muestra la peor eficiencia realizada. Sólo posiciones cerradas de estrategias, netas de costos y sin benchmarks.</p></div>
       <a class="text-link" href="strategies.html#strategy-league">Ver contexto completo</a>
     </div>
+    <article class="panel operations-history-panel">
+      <div class="operations-history-head">
+        <div><span class="eyebrow">Historia reciente</span><h3>P&L realizado por periodo</h3><p>Por defecto muestra las últimas 10 sesiones (~2 semanas). La agrupación cambia la lectura visual, no el cálculo de cada operación.</p></div>
+        <div class="operations-controls" aria-label="Filtros del historial de operaciones">
+          <label for="homeOperationsWindow">Ventana</label>
+          <select id="homeOperationsWindow" class="operations-select"><option value="2w" selected>2 semanas</option><option value="1m">1 mes</option><option value="3m">3 meses</option><option value="all">Todo</option></select>
+          <label for="homeOperationsGranularity">Agrupar</label>
+          <select id="homeOperationsGranularity" class="operations-select"><option value="daily" selected>Diario</option><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select>
+        </div>
+      </div>
+      <div id="homeOperationsHistoryMetrics" class="operations-kpis" aria-label="Indicadores del historial visible"></div>
+      <div id="homeOperationsHistoryChart" aria-live="polite"></div>
+    </article>
     <div id="homeOperations" class="two-column" aria-live="polite"></div>
+    <div id="homeOpenLosses" aria-live="polite"></div>
   </section>
 
   <section class="section">
