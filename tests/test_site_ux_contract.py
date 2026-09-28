@@ -110,6 +110,25 @@ def test_chart_design_defines_neutral_track_and_directional_sides() -> None:
     assert "role=\"img\"" in charts
 
 
+def test_model_benchmark_percentages_convert_ratios_to_percent_units() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    utils = (SITE / "assets" / "utils.js").read_text(encoding="utf-8")
+    page = (SITE / "models.html").read_text(encoding="utf-8")
+
+    assert "export function fmtRatioPct" in utils
+    assert "fmtPct(n * 100, digits)" in utils
+    assert "fmtRatioPct(modelMae)" in app
+    assert "fmtRatioPct(atrMae)" in app
+    assert "fmtRatioPct(skill)" in app
+    assert "fmtRatioPct(floorSkill)" in app
+    assert "fmtRatioPct(ceilingSkill)" in app
+    assert "fmtRatioPct(recent)" in app
+    assert "fmtRatioPct(worst)" in app
+    assert "fmtPct(modelMae)" not in app
+    assert "fmtPct(atrMae)" not in app
+    assert "MAE de spread como porcentaje del precio" in page
+
+
 def test_models_page_shows_atr_only_central_skill_and_temporal_stability() -> None:
     page = (SITE / "models.html").read_text(encoding="utf-8")
     app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
