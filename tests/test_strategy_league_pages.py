@@ -318,6 +318,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "setInterval(renderOOS, 300_000)" in research
     assert "setInterval(renderAttribution, 300_000)" in research
     assert "setInterval(home, 300_000)" in app
+    assert "setInterval(strategies, 300_000)" in app
+    assert "EOD prospectivo" in app
+    assert "Backtest histórico" in app
+    assert "data/strategy_live.json" in app
     assert "data/strategy_league_operations.json" in app
     assert "Top operaciones" in app
     assert "Bottom operaciones" in app
