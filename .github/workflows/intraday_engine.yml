@@ -2,10 +2,9 @@ name: intraday_engine
 
 on:
   schedule:
-    # Avoid top-of-hour scheduler congestion while retaining four polls/hour.
-    # The gate restores only checkpoint markers, not the ~120 MB runtime state.
+    # Half-hour polling is sufficient because the checkpoint guard tolerates
+    # scheduler delay and restores only lightweight marker state before gating.
     - cron: "7,37 13-22 * * 1-5"
-    - cron: "22,52 13-22 * * 1-5"
   workflow_dispatch:
     inputs:
       force_run:
