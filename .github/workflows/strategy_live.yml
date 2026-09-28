@@ -123,13 +123,3 @@ jobs:
           echo "Strategy live mark skipped outside US market hours."
           echo "now_et=${{ steps.market.outputs.now_et }}"
           echo "session=${{ steps.market.outputs.session }}"
-
-  watchdog_cross_wake:
-    needs: live_mark
-    if: always() && github.event_name == 'schedule' && github.event.schedule == '20 13-22 * * 1-5'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions:
-      contents: read
-      actions: write
-    steps:
