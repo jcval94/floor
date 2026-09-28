@@ -35,12 +35,21 @@ function renderModels(payload) {
   const models = payload.models || {};
   const horizons = Array.isArray(models.horizons) ? models.horizons : [];
   const evidence = payload.evidence || {};
+  const continuity = evidence.session_continuity || {};
 
   if (status) {
     const start = payload.start_session || "sin génesis";
     const last = payload.last_session || "—";
     const sessions = payload.sessions ?? 0;
-    status.innerHTML = `<span class="status-pill">${payload.status || "WAITING"}</span> <span class="small">Inicio ${start} · última sesión ${last} · ${sessions} sesiones</span>`;
+    const continuityStatus = continuity.status || "UNKNOWN";
+    const continuityLabel = continuityStatus === "OK"
+      ? "continuidad sin huecos"
+      : continuityStatus === "GAP_DETECTED"
+        ? `huecos: ${(continuity.missing_sessions || []).join(", ") || "detectados"}`
+        : continuityStatus === "INVALID_HISTORY"
+          ? "historial inválido"
+          : "continuidad pendiente";
+    status.innerHTML = `<span class="status-pill">${payload.status || "WAITING"}</span> <span class="small">Inicio ${start} · última sesión ${last} · ${sessions} sesiones · ${continuityLabel}</span>`;
   }
 
   if (table) {
@@ -65,7 +74,16 @@ function renderModels(payload) {
   }
 
   if (note) {
-    note.textContent = `${evidence.prediction_count_since_genesis ?? 0} predicciones desde génesis · ${evidence.reconciled_count_since_genesis ?? 0} reconciliadas. ${evidence.note || ""}`;
+    const expected = continuity.expected_sessions;
+    const observed = continuity.observed_sessions;
+    const continuityText = continuity.status === "OK"
+      ? `Continuidad prospectiva OK: ${observed}/${expected} sesiones esperadas.`
+      : continuity.status === "GAP_DETECTED"
+        ? `Continuidad incompleta: faltan ${(continuity.missing_sessions || []).join(", ") || "sesiones no identificadas"}.`
+        : continuity.status === "INVALID_HISTORY"
+          ? "Continuidad no verificable: historial inválido."
+          : "Continuidad prospectiva aún no verificable.";
+    note.textContent = `${evidence.prediction_count_since_genesis ?? 0} predicciones desde génesis · ${evidence.reconciled_count_since_genesis ?? 0} reconciliadas. ${continuityText} ${evidence.note || ""}`;
   }
 
   if (weekly) {
