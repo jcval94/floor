@@ -540,6 +540,13 @@ input::placeholder { color: color-mix(in srgb, var(--muted) 74%, transparent); }
   background: var(--surface-2);
 }
 
+#homeOperationsHistoryChart .line-chart,
+#leagueOperationsHistoryChart .line-chart {
+  display: block;
+  height: 220px;
+  min-height: 0;
+}
+
 .methodology-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .methodology-card { padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
 .methodology-card h2 { font-size: 18px; }
