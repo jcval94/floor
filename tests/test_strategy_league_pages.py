@@ -201,8 +201,8 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
     )
     member_ids = {str(member["id"]) for member in config["members"]}
-    assert config["league_id"] == "strategy_league_v9_net_target_reversal_10k"
-    assert "strategy_league_v9_net_target_reversal_10k" in config["weekly_model_path"]
+    assert config["league_id"] == "strategy_league_v10_d1_w1_champions_10k"
+    assert "strategy_league_v10_d1_w1_champions_10k" in config["weekly_model_path"]
     assert int(config["weekly_review_frequency_sessions"]) == 10
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
