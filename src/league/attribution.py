@@ -84,6 +84,65 @@ def _exposure_snapshot(state: dict[str, Any], member_id: str) -> dict[str, Any]:
     }
 
 
+def _open_positions_with_pnl(
+    books: dict[str, dict[str, dict[str, Any]]],
+    final_state: dict[str, Any],
+    member_id: str,
+    session_ordinals: dict[str, int],
+) -> list[dict[str, Any]]:
+    """Mark current open positions against their weighted-average entry basis.
+
+    Unrealized P&L includes entry transaction costs already paid, but deliberately
+    excludes future exit costs because the position has not been sold yet.
+    """
+
+    member = (final_state.get("members") or {}).get(member_id) or {}
+    positions = member.get("positions") or {}
+    member_books = books.get(member_id) or {}
+    current_session_number = max(session_ordinals.values(), default=1)
+    rows: list[dict[str, Any]] = []
+    for symbol, position in positions.items():
+        qty = int(position.get("qty", 0) or 0)
+        last_price = _number(position.get("last_price"))
+        if qty <= 0 or last_price <= 0:
+            continue
+        book = member_books.get(symbol) or {}
+        avg_fill = _number(book.get("avg_fill")) or _number(position.get("cost_basis"))
+        if avg_fill <= 0:
+            continue
+        entry_costs = _number(book.get("unallocated_buy_costs"))
+        entry_notional = qty * avg_fill + entry_costs
+        unrealized_pnl = qty * (last_price - avg_fill) - entry_costs
+        entry_number = int(
+            book.get("entry_session_number")
+            or position.get("entry_session_number")
+            or current_session_number
+        )
+        holding_sessions = max(1, current_session_number - entry_number + 1)
+        rows.append(
+            {
+                "member": member_id,
+                "symbol": str(symbol),
+                "qty": qty,
+                "entry_session": book.get("entry_session") or position.get("entry_session"),
+                "avg_entry_fill": avg_fill,
+                "entry_costs_paid": entry_costs,
+                "last_price": last_price,
+                "entry_notional": entry_notional,
+                "unrealized_pnl": unrealized_pnl,
+                "unrealized_return": unrealized_pnl / entry_notional if entry_notional > 0 else None,
+                "holding_sessions": holding_sessions,
+                "unrealized_pnl_per_session": unrealized_pnl / holding_sessions,
+                "stop_price": position.get("stop_price"),
+                "take_profit_price": position.get("take_profit_price"),
+                "source_strategy": book.get("source_strategy"),
+                "source_strategies": list(book.get("source_strategies") or []),
+            }
+        )
+    rows.sort(key=lambda row: _number(row.get("unrealized_pnl")))
+    return rows
+
+
 def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_ID) -> dict[str, Any]:
     history = _load_history(history_path)
     if not history:
@@ -92,6 +151,7 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
             "status": "WAITING",
             "member": member_id,
             "realized_trades": [],
+            "open_positions": [],
             "source_attribution": [],
             "exposure": {},
         }
@@ -230,6 +290,13 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
     ]
     total_net = sum(_number(row.get("net_pnl")) for row in member_realized)
     wins = sum(_number(row.get("net_pnl")) > 0 for row in member_realized)
+    open_positions = _open_positions_with_pnl(
+        books,
+        final_state,
+        member_id,
+        session_ordinals,
+    )
+    open_losers = [row for row in open_positions if _number(row.get("unrealized_pnl")) < 0]
     return {
         "schema_version": 1,
         "status": "OK",
@@ -246,9 +313,14 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
             "losses": len(member_realized) - wins,
             "win_rate": wins / len(member_realized) if member_realized else None,
             "unattributed_net_pnl": unattributed_pnl,
+            "open_positions": len(open_positions),
+            "open_losing_positions": len(open_losers),
+            "open_unrealized_pnl": sum(_number(row.get("unrealized_pnl")) for row in open_positions),
+            "open_losing_unrealized_pnl": sum(_number(row.get("unrealized_pnl")) for row in open_losers),
         },
         "source_attribution": attribution,
         "realized_trades": member_realized,
+        "open_positions": open_positions,
         "exposure": _exposure_snapshot(final_state, member_id),
     }
 
@@ -262,7 +334,16 @@ def build_operations_ranking(
 ) -> dict[str, Any]:
     """Rank realized strategy operations without mixing in benchmarks or open P&L."""
 
+    history = _load_history(history_path)
+    sessions = [
+        str(record.get("session") or "")
+        for record in history
+        if str(record.get("session") or "")
+    ]
+    sessions = list(dict.fromkeys(sessions))
+
     realized: list[dict[str, Any]] = []
+    open_positions: list[dict[str, Any]] = []
     for member_id in member_ids:
         report = build_attribution_report(history_path, member_id=member_id)
         for raw in report.get("realized_trades", []) or []:
@@ -271,6 +352,12 @@ def build_operations_ranking(
             row = dict(raw)
             row["strategy"] = member_id
             realized.append(row)
+        for raw in report.get("open_positions", []) or []:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            row["strategy"] = member_id
+            open_positions.append(row)
 
     positive = [
         row for row in realized
@@ -293,6 +380,59 @@ def build_operations_ranking(
             _number(row.get("net_pnl")),
         ),
     )
+    open_losing = [
+        row for row in open_positions
+        if _number(row.get("unrealized_pnl")) < 0
+    ]
+    open_losing.sort(
+        key=lambda row: (
+            _number(row.get("unrealized_pnl")),
+            _number(row.get("unrealized_pnl_per_session")),
+        )
+    )
+
+    by_session: dict[str, dict[str, Any]] = {
+        session: {
+            "session": session,
+            "net_pnl": 0.0,
+            "closed_operations": 0,
+            "wins": 0,
+            "losses": 0,
+        }
+        for session in sessions
+    }
+    for row in realized:
+        session = str(row.get("exit_session") or "")
+        if not session:
+            continue
+        bucket = by_session.setdefault(
+            session,
+            {
+                "session": session,
+                "net_pnl": 0.0,
+                "closed_operations": 0,
+                "wins": 0,
+                "losses": 0,
+            },
+        )
+        pnl = _number(row.get("net_pnl"))
+        bucket["net_pnl"] += pnl
+        bucket["closed_operations"] += 1
+        bucket["wins"] += int(pnl > 0)
+        bucket["losses"] += int(pnl < 0)
+
+    cumulative = 0.0
+    operations_history: list[dict[str, Any]] = []
+    for session in sorted(by_session):
+        bucket = by_session[session]
+        cumulative += _number(bucket.get("net_pnl"))
+        operations_history.append(
+            {
+                **bucket,
+                "cumulative_net_pnl": cumulative,
+            }
+        )
+
     return {
         "schema_version": 1,
         "status": "OK" if realized else "WAITING_FOR_CLOSED_TRADES",
@@ -303,9 +443,16 @@ def build_operations_ranking(
             "top": "highest net P&L per held market session, then highest net P&L",
             "bottom": "lowest net P&L per held market session, then lowest net P&L",
             "costs": "entry and exit transaction costs are included in net P&L",
+            "open_losses": "current mark-to-market P&L includes entry costs already paid and excludes future exit costs",
+            "history": "daily realized net P&L is built from immutable exit sessions and can be aggregated client-side",
         },
         "top_operations": positive[: max(0, int(top_n))],
         "bottom_operations": negative[: max(0, int(top_n))],
+        "operations_history": operations_history,
+        "open_positions": len(open_positions),
+        "open_losing_positions_count": len(open_losing),
+        "open_losing_unrealized_pnl": sum(_number(row.get("unrealized_pnl")) for row in open_losing),
+        "open_losing_positions": open_losing[: max(0, int(top_n))],
     }
 
 
