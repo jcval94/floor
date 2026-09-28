@@ -23,6 +23,7 @@ import { initRouter } from './router.js';
 const HORIZON_ORDER = ['d1', 'w1', 'q1', 'm3'];
 const PAGE_REFRESH_MS = 300_000;
 let tickerSortState = { key: 'confidence', direction: 'desc' };
+let tickerRouteApplied = false;
 
 function setNav(page) {
   const primary = ['models', 'drift', 'incidents'].includes(page) ? 'system' : page;
@@ -677,7 +678,10 @@ async function tickers() {
   const count = document.getElementById('tickerCount');
   const route = initRouter();
 
-  if (route.ticker && search) search.value = route.ticker;
+  if (route.ticker && search && !tickerRouteApplied) {
+    search.value = route.ticker;
+    tickerRouteApplied = true;
+  }
 
   function buildRows() {
     const selected = String(horizon?.value || 'w1').toLowerCase();
