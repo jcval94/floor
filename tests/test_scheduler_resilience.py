@@ -44,10 +44,13 @@ def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
     assert "unconditional main-push execution: disabled" in workflow
 
 
-def test_watchdog_retries_transient_api_failures_without_event_fanout() -> None:
+def test_watchdog_retries_transient_api_failures_with_monitoring_event_wake() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    assert "workflow_run:" not in workflow
+    assert "workflow_run:" in workflow
+    assert 'workflows: ["monitoring"]' in workflow
+    assert "types: [completed]" in workflow
+    assert "branches: [main]" in workflow
     assert "list_runs_with_retry" in workflow
     assert "dispatch_with_retry" in workflow
     assert "for attempt in 1 2 3" in workflow
@@ -66,3 +69,15 @@ def test_strategy_live_cross_wake_is_hourly_and_least_privilege() -> None:
     assert "github.event.schedule == '20 13-22 * * 1-5'" in cross_wake
     assert "gh workflow run scheduler_watchdog.yml" in cross_wake
     assert "::warning::Unable to cross-wake scheduler watchdog" in cross_wake
+
+
+
+def test_split_crons_never_contain_literal_newline_escape() -> None:
+    for name in (
+        "intraday_engine.yml",
+        "eod.yml",
+        "monitoring.yml",
+        "scheduler_watchdog.yml",
+        "strategy_live.yml",
+    ):
+        assert "\\n    - cron:" not in _text(name)

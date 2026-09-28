@@ -5,6 +5,13 @@ on:
     # One hourly backstop is enough because primary market workflows already poll every ~15 minutes.
     - cron: "35 13-18 * * 1-5"
     - cron: "35 19-23 * * 1-5"
+  workflow_run:
+    # Independent event-driven recovery path. Monitoring is already awakened
+    # by intraday/EOD completions, so a surviving operational path can wake
+    # the watchdog even when the watchdog's own cron is delayed.
+    workflows: ["monitoring"]
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -157,6 +164,8 @@ jobs:
             echo "## Floor scheduler watchdog"
             echo "- trigger: ${{ github.event_name }}"
             echo "- schedule: ${{ github.event.schedule || 'n/a' }}"
+            echo "- upstream workflow: ${{ github.event.workflow_run.name || 'n/a' }}"
+            echo "- upstream conclusion: ${{ github.event.workflow_run.conclusion || 'n/a' }}"
             echo "- intraday: ${{ steps.dispatch.outputs.intraday }}"
             echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"

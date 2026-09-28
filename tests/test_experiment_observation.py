@@ -207,3 +207,95 @@ def test_observation_history_keeps_epochs_distinct(tmp_path: Path) -> None:
         "strategy_league_v1",
         "strategy_league_v2",
     ]
+
+
+def _write_league_history(
+    data: Path,
+    league_id: str,
+    sessions: list[tuple[str, str]],
+) -> None:
+    _write_jsonl(
+        data
+        / "metrics"
+        / "strategy_league"
+        / "runs"
+        / league_id
+        / "history.jsonl",
+        [
+            {
+                "event": event,
+                "state_after": {
+                    "league_id": league_id,
+                    "last_session": session,
+                },
+            }
+            for event, session in sessions
+        ],
+    )
+
+
+def test_observation_marks_missing_market_session_as_evidence_gap(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    league_id = "strategy_league_gap_test"
+    _write_json(
+        data / "metrics" / "strategy_league" / "leaderboard.json",
+        _leaderboard(
+            "2026-09-28",
+            2,
+            league_id=league_id,
+            start_session="2026-09-24",
+        ),
+    )
+    _write_league_history(
+        data,
+        league_id,
+        [
+            ("GENESIS", "2026-09-24"),
+            ("EOD", "2026-09-28"),
+        ],
+    )
+
+    payload = build_experiment_observation(data)
+    continuity = payload["evidence"]["session_continuity"]
+
+    assert continuity["status"] == "GAP_DETECTED"
+    assert continuity["expected_sessions"] == 3
+    assert continuity["observed_sessions"] == 2
+    assert continuity["reported_sessions"] == 2
+    assert continuity["missing_sessions"] == ["2026-09-25"]
+    assert continuity["count_consistent"] is True
+
+
+def test_observation_confirms_contiguous_prospective_sessions(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    league_id = "strategy_league_contiguous_test"
+    _write_json(
+        data / "metrics" / "strategy_league" / "leaderboard.json",
+        _leaderboard(
+            "2026-09-28",
+            3,
+            league_id=league_id,
+            start_session="2026-09-24",
+        ),
+    )
+    _write_league_history(
+        data,
+        league_id,
+        [
+            ("GENESIS", "2026-09-24"),
+            ("EOD", "2026-09-25"),
+            ("EOD", "2026-09-28"),
+        ],
+    )
+
+    payload = build_experiment_observation(data)
+    continuity = payload["evidence"]["session_continuity"]
+
+    assert continuity["status"] == "OK"
+    assert continuity["expected_sessions"] == 3
+    assert continuity["observed_sessions"] == 3
+    assert continuity["reported_sessions"] == 3
+    assert continuity["missing_sessions"] == []
+    assert continuity["unexpected_sessions"] == []
+    assert continuity["count_consistent"] is True
+
