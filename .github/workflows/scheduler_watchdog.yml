@@ -59,7 +59,7 @@ jobs:
                 --workflow "$workflow" \
                 --branch main \
                 --limit 20 \
-                --json createdAt,status,conclusion,event 2>/dev/null)"; then
+                --json createdAt,status,conclusion,event,databaseId,headSha 2>/dev/null)"; then
                 printf '%s' "$runs"
                 return 0
               fi
@@ -96,6 +96,52 @@ jobs:
             ' <<<"$runs" >/dev/null
           }
 
+          deterministic_failure_circuit_open() {
+            local workflow="$1"
+            local signature="$2"
+            local runs run_id logs attempt
+
+            # A frozen-contract mismatch cannot self-heal by retrying the same
+            # commit. Scope the breaker to HEAD so the next corrective commit
+            # immediately restores normal recovery.
+            if ! runs="$(list_runs_with_retry "$workflow")"; then
+              return 2
+            fi
+            run_id="$(jq -r --arg sha "$GITHUB_SHA" '
+              [
+                .[]
+                | select(
+                    .status == "completed"
+                    and .conclusion == "failure"
+                    and .headSha == $sha
+                  )
+              ]
+              | sort_by(.createdAt)
+              | reverse
+              | .[0].databaseId // empty
+            ' <<<"$runs")"
+            if [ -z "$run_id" ]; then
+              return 1
+            fi
+
+            logs=""
+            for attempt in 1 2 3; do
+              if logs="$(gh run view "$run_id" --repo "$repo" --log-failed 2>/dev/null)"; then
+                break
+              fi
+              sleep $((attempt * 2))
+            done
+            if [ -z "$logs" ]; then
+              echo "::warning::Unable to classify deterministic failure; recovery remains enabled." >&2
+              return 2
+            fi
+            if grep -Fq "$signature" <<<"$logs"; then
+              echo "::warning::$workflow deterministic failure remains open on current SHA=$GITHUB_SHA run=$run_id; suppressing recovery dispatch until a corrective commit lands."
+              return 0
+            fi
+            return 1
+          }
+
           dispatch_with_retry() {
             local workflow="$1"
             local attempt
@@ -113,7 +159,8 @@ jobs:
             local workflow="$1"
             local max_age_seconds="$2"
             local output_name="$3"
-            local rc
+            local deterministic_signature="${4:-}"
+            local rc circuit_rc
             if has_recent_or_active_run "$workflow" "$max_age_seconds"; then
               echo "$output_name=skipped_recent_or_active" >> "$GITHUB_OUTPUT"
               echo "$workflow: recent/active run exists; no duplicate dispatch."
@@ -125,6 +172,18 @@ jobs:
             if [ "$rc" -eq 2 ]; then
               echo "$output_name=inspection_failed" >> "$GITHUB_OUTPUT"
               return 1
+            fi
+
+            if [ -n "$deterministic_signature" ]; then
+              if deterministic_failure_circuit_open "$workflow" "$deterministic_signature"; then
+                echo "$output_name=blocked_deterministic_same_sha" >> "$GITHUB_OUTPUT"
+                return 0
+              else
+                circuit_rc=$?
+              fi
+              if [ "$circuit_rc" -eq 2 ]; then
+                echo "::warning::$workflow deterministic classification unavailable; failing open to normal recovery."
+              fi
             fi
 
             if dispatch_with_retry "$workflow"; then
@@ -150,7 +209,7 @@ jobs:
 
           utc_hour="$(date -u +%H)"
           if [ "$((10#$utc_hour))" -ge 20 ]; then
-            dispatch_if_stale eod.yml 2100 eod || failures=$((failures + 1))
+            dispatch_if_stale eod.yml 2100 eod "Strategy League frozen contract changed; create a new league_id instead of rewriting history" || failures=$((failures + 1))
           else
             echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
@@ -181,6 +240,6 @@ jobs:
             echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"
             echo "- monitoring: ${{ steps.dispatch.outputs.monitoring }}"
-            echo "- policy: dispatch only when no recent/active run exists"
+            echo "- policy: dispatch only when no recent/active run exists; deterministic EOD frozen-contract failures are circuit-broken for the same commit SHA"
             echo "- unconditional main-push execution: disabled for intraday/eod"
           } >> "$GITHUB_STEP_SUMMARY"
