@@ -219,10 +219,11 @@ def test_every_dynamic_page_self_refreshes_without_stacking_filter_handlers() ->
         "system",
     ]:
         assert f"'{page}'" in app
-        assert f"'dynamic': True" in workflow
 
-    assert "'about'" not in app.split("const AUTO_REFRESH_PAGES = new Set([", 1)[1].split("]);", 1)[0]
-    assert "'dynamic': False" in workflow
+    assert workflow.count("'dynamic': True") == 8
+    refresh_pages = app.split("const AUTO_REFRESH_PAGES = new Set([", 1)[1].split("]);", 1)[0]
+    assert "'about'" not in refresh_pages
+    assert workflow.count("'dynamic': False") == 1
     assert "setInterval(pageHandler, PAGE_REFRESH_MS)" in app
     assert "document.visibilityState === 'visible'" in app
 
