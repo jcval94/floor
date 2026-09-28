@@ -1084,7 +1084,7 @@ async function system() {
 
   const overview = document.getElementById('systemOverview');
   if (overview) overview.innerHTML = [
-    metricCard('Estado general', dashboardR.ok ? String(dashboard.system_health || 'UNKNOWN') : 'UNKNOWN', dashboardR.ok ? 'Pipeline / dashboard' : 'No se pudo cargar dashboard.json', stateTone(dashboard.system_health)),
+    metricCard('Estado operativo', dashboardR.ok ? String(dashboard.system_health || 'UNKNOWN') : 'UNKNOWN', dashboardR.ok ? 'Pipeline / runtime' : 'No se pudo cargar dashboard.json', stateTone(dashboard.system_health)),
     metricCard('Publicación', pub.label, freshnessText(audit), pub.tone),
     metricCard('Modelos', String(modelsData.suite_status || 'UNKNOWN'), String(modelsData.suite_recommendation || 'Sin recomendación'), stateTone(modelsData.suite_status)),
     metricCard('Incidentes', incidentsR.ok ? String(incidentData.status || 'UNKNOWN') : 'UNKNOWN', incidentsR.ok ? String(incidentData.severity || '') : 'Reporte no disponible', stateTone(incidentData.status)),

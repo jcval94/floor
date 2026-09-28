@@ -110,6 +110,23 @@ def test_system_health_consolidates_trust_surfaces() -> None:
     assert "nunca como saludable por defecto" in page.lower()
 
 
+def test_system_operational_health_is_not_presented_as_global_health() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    assert "metricCard('Estado operativo'" in app
+    assert "Pipeline / runtime" in app
+    assert "metricCard('Estado general'" not in app
+
+
+def test_methodology_separates_central_forecast_from_risk_coverage() -> None:
+    methodology = (SITE / "about.html").read_text(encoding="utf-8").lower()
+    assert "forecast central vs risk geometry" in methodology
+    assert "atr-only" in methodology
+    assert "risk envelope" in methodology
+    assert "cobertura oos" in methodology
+    assert "no representa confianza direccional" in methodology
+    assert "probabilidad de que el forecast central sea correcto" in methodology
+
+
 def test_methodology_states_limits_and_non_advisory_scope() -> None:
     methodology = (SITE / "about.html").read_text(encoding="utf-8").lower()
     assert "no constituye asesoría financiera" in methodology
