@@ -5,7 +5,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from utils.pages_build import build_pages_data
+from utils.pages_build import _build_model_detail, build_pages_data
 
 
 def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
@@ -64,6 +64,10 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert set(models["champions"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["suite_status"] == "UNKNOWN"
     assert models["suite_recommendation"] == "PENDING"
+    assert models["serving"]["status"] == "UNKNOWN"
+    assert models["serving"]["active_champion_count"] == 0
+    assert models["suite_review"]["covered"] is True
+    assert models["suite_review"]["status"] == "UNKNOWN"
     assert models["retraining_schedule"]["cadence_days"] == 14
     assert set(models["details"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["details"]["value"]["current_version"] == "v2"
@@ -690,3 +694,135 @@ def test_build_pages_data_exposes_d1_w1_atr_central_skill(tmp_path: Path) -> Non
         assert benchmark["temporal_stability"]["periods_won_vs_atr"] == 7
         assert benchmark["coverage_used_for_selection"] is False
         assert benchmark["test_used_for_selection"] is False
+
+
+
+def test_model_detail_separates_active_champion_selection_and_monitoring_scope() -> None:
+    artifact = {
+        "model_name": "central_skill_ensemble_v1_d1",
+        "version": "v-central",
+        "metrics": {
+            "mae_spread_pct": 0.009,
+            "central_skill_vs_atr": 0.07,
+            "central_skill_floor_vs_atr": 0.01,
+            "central_skill_ceiling_vs_atr": 0.02,
+        },
+        "params": {
+            "dummy_benchmark": {
+                "atr_only_mae_spread_pct": 0.00967741935483871,
+            }
+        },
+    }
+
+    detail = _build_model_detail("d1", None, artifact, None)
+
+    # Legacy fields remain available for compatibility, but UI should use the
+    # explicit governance dimensions below.
+    assert detail["status"] == "UNREVIEWED"
+    assert detail["drift_level"] == "UNKNOWN"
+    assert detail["recommendation"] == "REVIEW_PENDING"
+
+    assert detail["serving"] == {
+        "status": "ACTIVE_CHAMPION",
+        "source": "champion_artifact",
+        "active": True,
+    }
+    assert detail["selection"]["has_evidence"] is True
+    assert detail["selection"]["benchmark"] == "atr_only"
+    assert detail["selection"]["status"] == "MODEL_SUPERIOR"
+    assert detail["selection"]["skill_vs_atr"] == 0.07
+    assert detail["selection"]["test_used_for_selection"] is False
+    assert detail["selection"]["coverage_used_for_selection"] is False
+
+    assert detail["monitoring"] == {
+        "covered": False,
+        "status": "NOT_COVERED",
+        "drift_level": None,
+        "recommendation": None,
+        "source": None,
+    }
+
+
+def test_model_detail_uses_governed_review_only_for_monitoring_state() -> None:
+    review = {
+        "model_name": "m3_value_linear",
+        "current_version": "v2",
+        "status": "WARN",
+        "drift_level": "YELLOW",
+        "recommendation": "RETRAIN_SOON",
+        "summary": {
+            "performance": {
+                "current_metrics": {"mae": 1.2},
+            }
+        },
+    }
+    artifact = {
+        "model_name": "m3_value_linear",
+        "version": "v2",
+        "metrics": {"mae": 1.0},
+    }
+
+    detail = _build_model_detail("value", review, artifact, None)
+
+    assert detail["serving"]["active"] is True
+    assert detail["serving"]["status"] == "ACTIVE_CHAMPION"
+    assert detail["monitoring"]["covered"] is True
+    assert detail["monitoring"]["status"] == "WARN"
+    assert detail["monitoring"]["drift_level"] == "YELLOW"
+    assert detail["monitoring"]["recommendation"] == "RETRAIN_SOON"
+    assert detail["selection"]["has_evidence"] is False
+
+
+
+def test_models_payload_marks_artifact_serving_without_inventing_review_health(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    model_dir = data_dir / "training" / "models"
+    model_dir.mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+    (model_dir / "d1_champion.json").write_text(
+        json.dumps(
+            {
+                "model_name": "central_skill_ensemble_v1_d1",
+                "version": "v1",
+                "metrics": {
+                    "mae_spread_pct": 0.009,
+                    "central_skill_vs_atr": 0.07,
+                },
+                "params": {
+                    "dummy_benchmark": {
+                        "atr_only_mae_spread_pct": 0.00967741935483871,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert models["serving"] == {
+        "status": "ACTIVE",
+        "source": "champion_artifacts",
+        "active_champion_count": 1,
+        "active_champion_tasks": ["d1"],
+    }
+    assert models["suite_review"] == {
+        "covered": False,
+        "status": "NOT_COVERED",
+        "recommendation": None,
+        "source": None,
+    }
+    assert models["details"]["d1"]["serving"]["status"] == "ACTIVE_CHAMPION"
+    assert models["details"]["d1"]["selection"]["status"] == "MODEL_SUPERIOR"
+    assert models["details"]["d1"]["monitoring"]["status"] == "NOT_COVERED"
