@@ -269,8 +269,8 @@ function renderHomeOperations(payload) {
   if (!root) return;
   const data = payload || {};
   root.innerHTML = [
-    homeOperationsPanel('Más ganancia en menos tiempo', 'Top operaciones', data.top_operations || [], 'positive'),
-    homeOperationsPanel('Peor pérdida por tiempo expuesto', 'Bottom operaciones', data.bottom_operations || [], 'negative'),
+    homeOperationsPanel('Más ganancia en menos tiempo', 'Top 10 operaciones', data.top_operations || [], 'positive'),
+    homeOperationsPanel('Peor pérdida por tiempo expuesto', 'Bottom 10 operaciones', data.bottom_operations || [], 'negative'),
   ].join('');
 }
 

@@ -664,11 +664,11 @@ function operationsPanels(data) {
   </table></div>`;
   return `
     <article class="panel league-operation-panel">
-      <div class="section-heading"><div><span class="eyebrow">Top operaciones</span><h3>Más ganancia en menos tiempo</h3><p>Ordenadas por P&L neto por sesión mantenida. ${escapeHTML(subtitle)}</p></div></div>
+      <div class="section-heading"><div><span class="eyebrow">Top 10 operaciones</span><h3>Más ganancia en menos tiempo</h3><p>Ordenadas por P&L neto por sesión mantenida. ${escapeHTML(subtitle)}</p></div></div>
       ${table(top, 'positive')}
     </article>
     <article class="panel league-operation-panel">
-      <div class="section-heading"><div><span class="eyebrow">Bottom operaciones</span><h3>Peor pérdida por tiempo expuesto</h3><p>Ordenadas por P&L neto por sesión, de peor a menos mala. ${escapeHTML(subtitle)}</p></div></div>
+      <div class="section-heading"><div><span class="eyebrow">Bottom 10 operaciones</span><h3>Peor pérdida por tiempo expuesto</h3><p>Ordenadas por P&L neto por sesión, de peor a menos mala. ${escapeHTML(subtitle)}</p></div></div>
       ${table(bottom, 'negative')}
     </article>`;
 }
