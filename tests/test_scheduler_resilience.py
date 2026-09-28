@@ -47,6 +47,8 @@ def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
 def test_strategy_live_cross_wakes_watchdog_without_invalidating_primary_evidence() -> None:
     workflow = _text("strategy_live.yml")
 
+    assert "watchdog_cross_wake:" in workflow
+    assert "needs: live_mark" in workflow
     assert "actions: write" in workflow
     assert "Cross-wake scheduler watchdog" in workflow
     assert "github.event.schedule == '20 13-22 * * 1-5'" in workflow
