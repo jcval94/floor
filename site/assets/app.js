@@ -606,12 +606,26 @@ async function tickers() {
 }
 
 async function strategies() {
-  const result = await loadJSONState('data/strategy.json', { status: 'UNKNOWN', equity_curve: [] });
+  const [result, leagueR, liveR] = await Promise.all([
+    loadJSONState('data/strategy.json', { status: 'UNKNOWN', equity_curve: [] }),
+    loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] }),
+    loadJSONState('data/strategy_live.json', { status: 'UNKNOWN', rows: [] }),
+  ]);
   const strategy = result.data || {};
+  const league = leagueR.data || {};
+  const live = liveR.data || {};
   const status = document.getElementById('strategyStatus');
   const metrics = document.getElementById('strategyMetrics');
   const curve = Array.isArray(strategy.equity_curve) ? strategy.equity_curve : [];
-  if (status) status.innerHTML = result.ok ? badge(strategy.status || 'UNKNOWN') : badge('UNKNOWN', 'Reporte no disponible');
+  if (status) {
+    const historicalEnd = curve[curve.length - 1]?.session || '—';
+    const officialEod = league?.last_session || '—';
+    const liveUpdated = live?.generated_at ? fmtDateTime(live.generated_at) : '—';
+    status.innerHTML = `<div class="trust-strip ${league?.status === 'RUNNING' ? 'ok' : 'warn'}">
+      <div>${result.ok ? badge(strategy.status || 'UNKNOWN', 'Backtest histórico') : badge('UNKNOWN', 'Backtest no disponible')}<span class="trust-time">Histórico hasta ${escapeHTML(historicalEnd)}</span></div>
+      <span class="trust-detail">EOD prospectivo ${escapeHTML(officialEod)} · Intradía ${escapeHTML(liveUpdated)}</span>
+    </div>`;
+  }
 
   const start = Number(curve[0]?.equity ?? curve[0]?.value);
   const end = Number(curve[curve.length - 1]?.equity ?? curve[curve.length - 1]?.value);
@@ -695,7 +709,7 @@ async function strategies() {
     }
   }
 
-  windowControl?.addEventListener('change', renderWindow);
+  if (windowControl) windowControl.onchange = renderWindow;
   renderWindow();
 }
 
@@ -882,3 +896,4 @@ initNavigation();
 const pageHandler = ({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}));
 pageHandler();
 if (page === 'home') setInterval(home, 300_000);
+if (page === 'strategies') setInterval(strategies, 300_000);
