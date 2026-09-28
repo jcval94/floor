@@ -376,3 +376,42 @@
     justify-content: space-between;
   }
 }
+
+.league-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 14px 0 18px;
+}
+
+.league-operation-panel {
+  min-width: 0;
+}
+
+.league-operation-panel .section-heading {
+  margin-bottom: 10px;
+}
+
+.league-operation-panel table {
+  min-width: 620px;
+}
+
+.league-operation-panel .table-wrap {
+  box-shadow: none;
+}
+
+.operation-efficiency {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.operation-period {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .league-operations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
