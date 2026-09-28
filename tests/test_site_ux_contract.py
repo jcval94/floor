@@ -198,3 +198,47 @@ def test_models_hero_separates_suite_serving_from_retraining_review() -> None:
     assert "Review de retraining desactualizado" in app
     assert "badge(models.suite_status" not in app
     assert "badge(models.suite_recommendation" not in app
+
+
+
+def test_every_dynamic_page_self_refreshes_without_stacking_filter_handlers() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    experiment = (SITE / "assets" / "experiment.js").read_text(encoding="utf-8")
+    workflow = _text(".github/workflows/e2e_yahoo_pages_audit.yml")
+
+    assert "const PAGE_REFRESH_MS = 300_000" in app
+    assert "const AUTO_REFRESH_PAGES = new Set([" in app
+    for page in [
+        "home",
+        "forecasts",
+        "tickers",
+        "strategies",
+        "models",
+        "drift",
+        "incidents",
+        "system",
+    ]:
+        assert f"'{page}'" in app
+
+    assert workflow.count("'dynamic': True") == 8
+    refresh_pages = app.split("const AUTO_REFRESH_PAGES = new Set([", 1)[1].split("]);", 1)[0]
+    assert "'about'" not in refresh_pages
+    assert workflow.count("'dynamic': False") == 1
+    assert "setInterval(pageHandler, PAGE_REFRESH_MS)" in app
+    assert "document.visibilityState === 'visible'" in app
+
+    assert "control.oninput = render" in app
+    assert "control.onchange = render" in app
+    assert "button.onclick = () =>" in app
+    assert "control?.addEventListener(control === search ? 'input' : 'change', render)" not in app
+    assert "button.addEventListener('click'" not in app
+    assert "tickerSortState" in app
+    assert "tickerRouteApplied" in app
+
+    assert "const EXPERIMENT_REFRESH_MS = 300_000" in experiment
+    assert "setInterval(main, EXPERIMENT_REFRESH_MS)" in experiment
+    assert 'document.addEventListener("visibilitychange"' in experiment
+
+    assert "initial_data_requests = len(data_requests)" in workflow
+    assert "returning to a visible tab did not refresh JSON data" in workflow
+    assert "assert len(results) == 9" in workflow

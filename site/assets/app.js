@@ -21,6 +21,9 @@ import { filterPointsByWindow, lineSvg, m3WeekBarsSvg, rangeSvg } from './charts
 import { initRouter } from './router.js';
 
 const HORIZON_ORDER = ['d1', 'w1', 'q1', 'm3'];
+const PAGE_REFRESH_MS = 300_000;
+let tickerSortState = { key: 'confidence', direction: 'desc' };
+let tickerRouteApplied = false;
 
 function setNav(page) {
   const primary = ['models', 'drift', 'incidents'].includes(page) ? 'system' : page;
@@ -639,7 +642,9 @@ async function forecasts() {
   }
 
   [search, horizon, confidence, sort].forEach((control) => {
-    control?.addEventListener(control === search ? 'input' : 'change', render);
+    if (!control) return;
+    if (control === search) control.oninput = render;
+    else control.onchange = render;
   });
   render();
 
@@ -672,9 +677,11 @@ async function tickers() {
   const detail = document.getElementById('tickerDetail');
   const count = document.getElementById('tickerCount');
   const route = initRouter();
-  let currentSort = { key: 'confidence', direction: 'desc' };
 
-  if (route.ticker && search) search.value = route.ticker;
+  if (route.ticker && search && !tickerRouteApplied) {
+    search.value = route.ticker;
+    tickerRouteApplied = true;
+  }
 
   function buildRows() {
     const selected = String(horizon?.value || 'w1').toLowerCase();
@@ -695,13 +702,13 @@ async function tickers() {
   }
 
   function sortRows(rows) {
-    const direction = currentSort.direction === 'asc' ? 1 : -1;
+    const direction = tickerSortState.direction === 'asc' ? 1 : -1;
     return rows.sort((a, b) => {
       const value = (item) => {
-        if (currentSort.key === 'symbol') return item.symbol;
-        if (currentSort.key === 'price') return item.ref.value ?? -Infinity;
-        if (currentSort.key === 'downside') return item.range.downside ?? -Infinity;
-        if (currentSort.key === 'upside') return item.range.upside ?? -Infinity;
+        if (tickerSortState.key === 'symbol') return item.symbol;
+        if (tickerSortState.key === 'price') return item.ref.value ?? -Infinity;
+        if (tickerSortState.key === 'downside') return item.range.downside ?? -Infinity;
+        if (tickerSortState.key === 'upside') return item.range.upside ?? -Infinity;
         return item.confidence ?? -Infinity;
       };
       const av = value(a);
@@ -764,19 +771,23 @@ async function tickers() {
     }
     document.querySelectorAll('[data-sort]').forEach((button) => {
       const th = button.closest('th');
-      if (th) th.setAttribute('aria-sort', currentSort.key === button.dataset.sort ? (currentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none');
+      if (th) th.setAttribute('aria-sort', tickerSortState.key === button.dataset.sort ? (tickerSortState.direction === 'asc' ? 'ascending' : 'descending') : 'none');
     });
   }
 
   document.querySelectorAll('[data-sort]').forEach((button) => {
-    button.addEventListener('click', () => {
+    button.onclick = () => {
       const key = button.dataset.sort;
-      if (currentSort.key === key) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      else currentSort = { key, direction: 'desc' };
+      if (tickerSortState.key === key) tickerSortState.direction = tickerSortState.direction === 'asc' ? 'desc' : 'asc';
+      else tickerSortState = { key, direction: 'desc' };
       render();
-    });
+    };
   });
-  [search, horizon, confidenceFilter].forEach((control) => control?.addEventListener(control === search ? 'input' : 'change', render));
+  [search, horizon, confidenceFilter].forEach((control) => {
+    if (!control) return;
+    if (control === search) control.oninput = render;
+    else control.onchange = render;
+  });
   render();
   if (route.ticker) renderDetail(route.ticker);
 }
@@ -1124,5 +1135,21 @@ setNav(page);
 initNavigation();
 const pageHandler = ({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}));
 pageHandler();
-if (page === 'home') setInterval(home, 300_000);
-if (page === 'strategies') setInterval(strategies, 300_000);
+
+const AUTO_REFRESH_PAGES = new Set([
+  'home',
+  'forecasts',
+  'tickers',
+  'strategies',
+  'models',
+  'drift',
+  'incidents',
+  'system',
+]);
+
+if (AUTO_REFRESH_PAGES.has(page)) {
+  setInterval(pageHandler, PAGE_REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pageHandler();
+  });
+}

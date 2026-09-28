@@ -110,4 +110,10 @@ async function main() {
   }
 }
 
+const EXPERIMENT_REFRESH_MS = 300_000;
+
 main();
+setInterval(main, EXPERIMENT_REFRESH_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") main();
+});
