@@ -3,7 +3,7 @@ name: monitoring
 on:
   schedule:
     # Off-peak minute reduces GitHub Actions schedule delay risk.
-    - cron: "11 14-23 * * 1-5"
+    - cron: "11 14-18 * * 1-5"\n    - cron: "11 19-23 * * 1-5"
   workflow_run:
     workflows: ["intraday_engine", "eod"]
     types: [completed]
