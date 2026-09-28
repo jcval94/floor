@@ -2,14 +2,14 @@ name: scheduler_watchdog
 
 on:
   schedule:
-    # One hourly backstop is enough because primary market workflows already poll every ~15 minutes.
-    - cron: "35 13-18 * * 1-5"
-    - cron: "35 19-23 * * 1-5"
+    # Offset half-hour backstop. It runs 10-12 minutes after the primary
+    # strategy/intraday polls so one missed poll can be repaired quickly.
+    - cron: "17,47 13-23 * * 1-5"
   workflow_run:
-    # Independent event-driven recovery path. Monitoring is already awakened
-    # by intraday/EOD completions, so a surviving operational path can wake
-    # the watchdog even when the watchdog's own cron is delayed.
-    workflows: ["monitoring"]
+    # GitHub-native recovery mesh: any surviving operational workflow can wake
+    # the watchdog. This does not eliminate a platform-wide Actions outage, but
+    # it removes monitoring as the single internal wake-up dependency.
+    workflows: ["strategy_live", "intraday_engine", "monitoring", "eod"]
     types: [completed]
     branches: [main]
   push:
@@ -59,7 +59,7 @@ jobs:
                 --workflow "$workflow" \
                 --branch main \
                 --limit 20 \
-                --json createdAt,status 2>/dev/null)"; then
+                --json createdAt,status,conclusion,event 2>/dev/null)"; then
                 printf '%s' "$runs"
                 return 0
               fi
@@ -81,7 +81,10 @@ jobs:
             jq -e --argjson cutoff "$cutoff" '
               any(.[];
                 (.status != "completed")
-                or ((.createdAt | fromdateiso8601) >= $cutoff)
+                or (
+                  .conclusion == "success"
+                  and ((.createdAt | fromdateiso8601) >= $cutoff)
+                )
               )
             ' <<<"$runs" >/dev/null
           }
@@ -127,27 +130,28 @@ jobs:
             return 1
           }
 
-          # Primary market workflows poll every 15 minutes. Twenty minutes
-          # distinguishes a dropped poll from a healthy scheduler without
-          # creating duplicate gate-only runs.
+          # Primary market workflows poll every 30 minutes. A 35-minute
+          # freshness budget avoids false redispatches from workflow_run wakes,
+          # while the offset watchdog catches a truly missed poll ~10-12 minutes
+          # after it was expected. Monitoring is hourly, so it gets 65 minutes.
           failures=0
-          dispatch_if_stale intraday_engine.yml 1200 intraday || failures=$((failures + 1))
+          dispatch_if_stale intraday_engine.yml 2100 intraday || failures=$((failures + 1))
 
           # Strategy League intraday monitor has the same cadence. Its own
           # market-hours gate makes a watchdog dispatch safe outside the session.
-          dispatch_if_stale strategy_live.yml 1200 strategy_live || failures=$((failures + 1))
+          dispatch_if_stale strategy_live.yml 2100 strategy_live || failures=$((failures + 1))
 
           utc_hour="$(date -u +%H)"
           if [ "$((10#$utc_hour))" -ge 20 ]; then
-            dispatch_if_stale eod.yml 1200 eod || failures=$((failures + 1))
+            dispatch_if_stale eod.yml 2100 eod || failures=$((failures + 1))
           else
             echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
 
           # Monitoring has its own hourly schedule plus workflow_run triggers.
-          # Dispatch only if neither path produced a run in the past 50 minutes.
+          # Dispatch only if neither path produced a healthy run in the past 65 minutes.
           if [ "$((10#$utc_hour))" -ge 14 ]; then
-            dispatch_if_stale monitoring.yml 3000 monitoring || failures=$((failures + 1))
+            dispatch_if_stale monitoring.yml 3900 monitoring || failures=$((failures + 1))
           else
             echo "monitoring=outside_monitoring_window" >> "$GITHUB_OUTPUT"
           fi
