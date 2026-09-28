@@ -33,3 +33,5 @@ This creates two independent workflow-level paths inside GitHub Actions:
 The watchdog still dispatches only workflows with no recent or active run, so the cross-wake cannot create duplicate market checkpoints. Intraday and EOD guards remain authoritative and idempotent.
 
 The cross-wake is deliberately non-fatal for the Strategy League observation. It retries three times and emits a warning if GitHub refuses the dispatch, but it never invalidates already-produced strategy evidence merely because the recovery helper failed. A separate external silence monitor is expected to detect the rarer case where GitHub's scheduler stops creating runs altogether.
+
+The critical scheduled workflows also use semantically equivalent split cron entries. This intentionally changes the stored cron definitions without changing cadence, so merging the hardening commit re-registers the schedules and refreshes the scheduled-workflow actor on GitHub. This is a one-time reactivation pulse, not an increase in polling frequency.
