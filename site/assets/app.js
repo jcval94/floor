@@ -54,11 +54,17 @@ function safeJSON(value) {
   return escapeHTML(JSON.stringify(value ?? {}, null, 2));
 }
 
-function coverageInfoFromForecast(row) {
+function centralCoverageFromForecast(row) {
+  const central = Number(row?.central_interval_coverage);
+  if (Number.isFinite(central) && central >= 0 && central <= 1) return central;
+  const breach = Number(row?.breach_probability ?? row?.breach_prob);
+  if (Number.isFinite(breach) && breach >= 0 && breach <= 1) return 1 - breach;
+  return null;
+}
+
+function riskCoverageFromForecast(row) {
   const jointRisk = Number(row?.risk_empirical_joint_coverage);
-  if (Number.isFinite(jointRisk) && jointRisk >= 0 && jointRisk <= 1) {
-    return { value: jointRisk, kind: 'risk' };
-  }
+  if (Number.isFinite(jointRisk) && jointRisk >= 0 && jointRisk <= 1) return jointRisk;
 
   const explicit = Number(row?.confidence_score ?? row?.confidence);
   const semantics = String(row?.confidence_semantics || '').toLowerCase();
@@ -68,40 +74,30 @@ function coverageInfoFromForecast(row) {
     && explicit >= 0
     && explicit <= 1
   ) {
-    return { value: explicit, kind: 'risk' };
+    return explicit;
   }
-
-  const central = Number(row?.central_interval_coverage);
-  if (Number.isFinite(central) && central >= 0 && central <= 1) {
-    return { value: central, kind: 'central' };
-  }
-  const breach = Number(row?.breach_probability ?? row?.breach_prob);
-  if (Number.isFinite(breach) && breach >= 0 && breach <= 1) {
-    return { value: 1 - breach, kind: 'central' };
-  }
-  if (Number.isFinite(explicit) && explicit >= 0 && explicit <= 1) {
-    // Legacy batches stored central interval coverage in confidence_score.
-    return { value: explicit, kind: 'central' };
-  }
-  return { value: null, kind: 'unknown' };
+  return null;
 }
 
 function confidenceFromForecast(row) {
-  return coverageInfoFromForecast(row).value;
+  return riskCoverageFromForecast(row);
 }
 
-function forecastCoverageChip(row) {
-  const coverage = coverageInfoFromForecast(row);
-  const numeric = Number(coverage.value);
+function centralCoverageChip(row) {
+  const numeric = Number(centralCoverageFromForecast(row));
+  if (!Number.isFinite(numeric)) return '';
+  return `<span class="confidence-chip neutral" title="Cobertura empírica OOS del forecast central; no pertenece al risk envelope">Central OOS · ${(numeric * 100).toFixed(0)}%</span>`;
+}
+
+function riskCoverageChip(row) {
+  const numeric = Number(riskCoverageFromForecast(row));
   if (!Number.isFinite(numeric)) {
-    return '<span class="confidence-chip neutral">No disponible</span>';
-  }
-  if (coverage.kind === 'central') {
-    return `<span class="confidence-chip neutral" title="Cobertura histórica del rango central; no es una probabilidad de acierto">Central · ${(numeric * 100).toFixed(0)}%</span>`;
+    return '<span class="confidence-chip neutral">Risk OOS · no disponible</span>';
   }
   const info = confidenceLabel(numeric);
-  return `<span class="confidence-chip ${info.tone}" title="Cobertura conjunta OOS del rango de riesgo">Riesgo OOS · ${(numeric * 100).toFixed(0)}%</span>`;
+  return `<span class="confidence-chip ${info.tone}" title="Cobertura conjunta OOS exclusivamente del risk envelope">Risk OOS · ${(numeric * 100).toFixed(0)}%</span>`;
 }
+
 
 function confidenceChip(value) {
   const info = confidenceLabel(value);
@@ -165,6 +161,60 @@ function forecastRange(row, reference) {
   return { floor, ceiling, downside, upside };
 }
 
+function riskRange(row, reference) {
+  const available = row?.risk_geometry_available !== false;
+  const floor = Number(row?.risk_floor_value);
+  const ceiling = Number(row?.risk_ceiling_value);
+  const ref = Number(reference);
+  const valid = available && Number.isFinite(floor) && Number.isFinite(ceiling);
+  const downside = valid && Number.isFinite(ref) ? relativeDelta(floor, ref) : null;
+  const upside = valid && Number.isFinite(ref) ? relativeDelta(ceiling, ref) : null;
+  return {
+    available: valid,
+    floor: valid ? floor : null,
+    ceiling: valid ? ceiling : null,
+    downside,
+    upside,
+  };
+}
+
+function compactRange(range) {
+  if (!range || !Number.isFinite(Number(range.floor)) || !Number.isFinite(Number(range.ceiling))) return '—';
+  return `${fmt(range.floor)} → ${fmt(range.ceiling)}`;
+}
+
+function rangeDeltas(range) {
+  if (!range) return '';
+  const down = range.downside == null ? '—' : fmtPct(range.downside);
+  const up = range.upside == null ? '—' : fmtPct(range.upside);
+  return `<span class="geometry-deltas"><span class="negative">${down}</span><span aria-hidden="true">/</span><span class="positive">${up}</span></span>`;
+}
+
+function geometryStack(symbol, horizon, row, reference) {
+  const central = forecastRange(row, reference);
+  const risk = riskRange(row, reference);
+  const centralChip = centralCoverageChip(row);
+  return `<div class="geometry-stack">
+    <section class="geometry-block central-geometry" aria-label="Forecast central">
+      <div class="geometry-heading">
+        <div><span class="geometry-kicker">Forecast central</span><small>Estimación típica · no es el intervalo de cobertura</small></div>
+        ${centralChip}
+      </div>
+      ${rangeSvg(central.floor, reference, central.ceiling, `${symbol} ${horizonLabel(horizon)} forecast central`)}
+    </section>
+    <section class="geometry-block risk-geometry" aria-label="Risk envelope">
+      <div class="geometry-heading">
+        <div><span class="geometry-kicker">Risk envelope</span><small>Intervalo más amplio para cobertura OOS</small></div>
+        ${riskCoverageChip(row)}
+      </div>
+      ${risk.available
+        ? rangeSvg(risk.floor, reference, risk.ceiling, `${symbol} ${horizonLabel(horizon)} risk envelope`)
+        : '<div class="empty-inline">Risk envelope no disponible</div>'}
+    </section>
+  </div>`;
+}
+
+
 function extractM3(rows) {
   const source = (rows || []).find((row) => row?.horizon === 'm3') || (rows || [])[0] || {};
   const week = Number(source?.floor_week_m3);
@@ -207,14 +257,13 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
         <a class="ticker-link" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a>
         <div class="eyebrow">${escapeHTML(horizonLabel(horizon))} <span class="code-label">${escapeHTML(horizonCode(horizon))}</span></div>
       </div>
-      ${forecastCoverageChip(row)}
     </div>
     <div class="forecast-price-row">
       <div><span class="metric-label">Referencia</span><strong>${fmt(ref.value)}</strong><small>${escapeHTML(ref.source)}</small></div>
-      <div><span class="metric-label">Piso</span><strong>${fmt(range.floor)}</strong><small class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</small></div>
-      <div><span class="metric-label">Techo</span><strong>${fmt(range.ceiling)}</strong><small class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</small></div>
+      <div><span class="metric-label">Piso central</span><strong>${fmt(range.floor)}</strong><small class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</small></div>
+      <div><span class="metric-label">Techo central</span><strong>${fmt(range.ceiling)}</strong><small class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</small></div>
     </div>
-    ${rangeSvg(range.floor, ref.value, range.ceiling, `${symbol} ${horizonLabel(horizon)}`)}
+    ${geometryStack(symbol, horizon, row, ref.value)}
     <div class="forecast-meta-grid">
       <div><span>Piso esperado</span><strong>${escapeHTML(String(timingFloor))}</strong></div>
       <div><span>Techo esperado</span><strong>${escapeHTML(String(timingCeiling))}</strong></div>
@@ -326,15 +375,13 @@ async function home() {
       if (!row) return '';
       const ref = referencePrice(forecasts, symbol, row);
       const range = forecastRange(row, ref.value);
-      const confidence = confidenceFromForecast(row);
+      const risk = riskRange(row, ref.value);
       return `<tr>
         <td><a class="ticker-link compact" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a></td>
         <td>${fmt(ref.value)}</td>
         <td>${escapeHTML(horizonLabel(row.horizon))}</td>
-        <td><span class="range-text">${fmt(range.floor)} <span aria-hidden="true">→</span> ${fmt(range.ceiling)}</span></td>
-        <td class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</td>
-        <td class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</td>
-        <td>${forecastCoverageChip(row)}</td>
+        <td><strong class="range-text">${compactRange(range)}</strong>${rangeDeltas(range)}<div class="table-subtext">Forecast central</div></td>
+        <td><strong class="range-text">${risk.available ? compactRange(risk) : '—'}</strong><div class="table-subtext">Risk envelope</div>${riskCoverageChip(row)}</td>
       </tr>`;
     }).filter(Boolean).join('');
     snapshot.innerHTML = preferred || emptyRow('No hay forecasts publicables para mostrar.', 7);
@@ -449,17 +496,15 @@ async function forecasts() {
         : emptyState(dataResult.ok ? 'Sin resultados' : 'No se pudieron cargar los forecasts', dataResult.ok ? 'Prueba con otros filtros.' : dataResult.error);
     }
     if (tableRoot) {
-      tableRoot.innerHTML = items.map(({ symbol, row, conf, ref, range }) => {
+      tableRoot.innerHTML = items.map(({ symbol, row, ref, range }) => {
+        const risk = riskRange(row, ref.value);
         return `<tr>
           <td><a class="ticker-link compact" href="tickers.html?ticker=${encodeURIComponent(symbol)}">${escapeHTML(symbol)}</a></td>
           <td>${fmt(ref.value)}</td>
-          <td>${fmt(range.floor)}</td>
-          <td class="negative">${range.downside == null ? '—' : fmtPct(range.downside)}</td>
-          <td>${fmt(range.ceiling)}</td>
-          <td class="positive">${range.upside == null ? '—' : fmtPct(range.upside)}</td>
-          <td>${forecastCoverageChip(row)}</td>
+          <td><strong class="range-text">${compactRange(range)}</strong>${rangeDeltas(range)}<div class="table-subtext">Forecast central</div>${centralCoverageChip(row)}</td>
+          <td><strong class="range-text">${risk.available ? compactRange(risk) : '—'}</strong>${risk.available ? rangeDeltas(risk) : ''}<div class="table-subtext">Risk envelope</div>${riskCoverageChip(row)}</td>
         </tr>`;
-      }).join('') || emptyRow('No hay datos que coincidan con los filtros.', 7);
+      }).join('') || emptyRow('No hay datos que coincidan con los filtros.', 4);
     }
   }
 
@@ -511,10 +556,11 @@ async function tickers() {
       if (!row) return null;
       const ref = referencePrice(data, symbol, row);
       const range = forecastRange(row, ref.value);
+      const risk = riskRange(row, ref.value);
       const conf = confidenceFromForecast(row);
       if (query && !String(symbol).toUpperCase().includes(query)) return null;
       if (minConfidence > 0 && (!Number.isFinite(conf) || conf < minConfidence)) return null;
-      return { symbol, row, rows, ref, range, confidence: conf };
+      return { symbol, row, rows, ref, range, risk, confidence: conf };
     }).filter(Boolean);
   }
 
@@ -560,10 +606,11 @@ async function tickers() {
       const skillLabel = Number.isFinite(skill)
         ? `${skill >= 0 ? '+' : ''}${(skill * 100).toFixed(1)}%`
         : '—';
+      const risk = riskRange(row, ref.value);
       return `<article class="detail-horizon">
-        <div class="detail-title"><strong>${escapeHTML(horizonLabel(key))}</strong><span class="code-label">${escapeHTML(key)}</span>${forecastCoverageChip(row)}</div>
-        ${rangeSvg(range.floor, ref.value, range.ceiling, `${symbol} ${horizonLabel(key)}`)}
-        <div class="detail-metrics"><span>Piso <strong>${fmt(range.floor)}</strong></span><span>Techo <strong>${fmt(range.ceiling)}</strong></span><span>Timing piso <strong>${escapeHTML(row.floor_time_bucket || '—')}</strong></span><span>Timing techo <strong>${escapeHTML(row.ceiling_time_bucket || '—')}</strong></span><span>Skill vs dummy <strong>${escapeHTML(skillLabel)}</strong></span></div>
+        <div class="detail-title"><strong>${escapeHTML(horizonLabel(key))}</strong><span class="code-label">${escapeHTML(key)}</span></div>
+        ${geometryStack(symbol, key, row, ref.value)}
+        <div class="detail-metrics"><span>Piso central <strong>${fmt(range.floor)}</strong></span><span>Techo central <strong>${fmt(range.ceiling)}</strong></span><span>Piso risk <strong>${risk.available ? fmt(risk.floor) : '—'}</strong></span><span>Techo risk <strong>${risk.available ? fmt(risk.ceiling) : '—'}</strong></span><span>Timing piso <strong>${escapeHTML(row.floor_time_bucket || '—')}</strong></span><span>Timing techo <strong>${escapeHTML(row.ceiling_time_bucket || '—')}</strong></span><span>Skill vs dummy <strong>${escapeHTML(skillLabel)}</strong></span></div>
       </article>`;
     }).join('');
     detail.innerHTML = `<section class="ticker-detail-card">
@@ -580,11 +627,10 @@ async function tickers() {
       table.innerHTML = rows.map((item) => `<tr>
         <td><a class="ticker-link compact" href="tickers.html?ticker=${encodeURIComponent(item.symbol)}">${escapeHTML(item.symbol)}</a></td>
         <td>${fmt(item.ref.value)}<div class="table-subtext">${escapeHTML(item.ref.source)}</div></td>
-        <td><span class="range-text">${fmt(item.range.floor)} → ${fmt(item.range.ceiling)}</span></td>
-        <td class="negative">${item.range.downside == null ? '—' : fmtPct(item.range.downside)}</td>
-        <td class="positive">${item.range.upside == null ? '—' : fmtPct(item.range.upside)}</td>
-        <td>${forecastCoverageChip(item.row)}</td>
-      </tr>`).join('') || emptyRow(forecastsR.ok ? 'No hay activos que coincidan con los filtros.' : 'No se pudieron cargar los forecasts.', 6);
+        <td><strong class="range-text">${compactRange(item.range)}</strong>${rangeDeltas(item.range)}<div class="table-subtext">Forecast central</div></td>
+        <td><strong class="range-text">${item.risk.available ? compactRange(item.risk) : '—'}</strong>${item.risk.available ? rangeDeltas(item.risk) : ''}<div class="table-subtext">Risk envelope</div></td>
+        <td>${riskCoverageChip(item.row)}</td>
+      </tr>`).join('') || emptyRow(forecastsR.ok ? 'No hay activos que coincidan con los filtros.' : 'No se pudieron cargar los forecasts.', 5);
     }
     document.querySelectorAll('[data-sort]').forEach((button) => {
       const th = button.closest('th');
