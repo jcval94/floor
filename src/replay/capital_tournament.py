@@ -152,7 +152,10 @@ def run_capital_tournament(
 
     requested_sessions = _sessions(start, end)
     symbols = parse_universe_yaml(universe_path)
-    daily_rows, market_summary = fetch_replay_daily_market_data(symbols)
+    daily_rows, market_summary = fetch_replay_daily_market_data(
+        symbols,
+        required_sessions=requested_sessions,
+    )
     daily_by_symbol = group_by_symbol(daily_rows)
     sessions, session_selection = _select_complete_session_run(
         requested_sessions=requested_sessions,
