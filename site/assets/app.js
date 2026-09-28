@@ -25,6 +25,16 @@ const PAGE_REFRESH_MS = 300_000;
 let tickerSortState = { key: 'confidence', direction: 'desc' };
 let tickerRouteApplied = false;
 
+function ensurePrimaryNavigation() {
+  const nav = document.querySelector('[data-primary-nav]');
+  if (!nav || nav.querySelector('[data-nav="about"]')) return;
+  const link = document.createElement('a');
+  link.dataset.nav = 'about';
+  link.href = 'about.html';
+  link.textContent = 'Metodología';
+  nav.appendChild(link);
+}
+
 function setNav(page) {
   const primary = ['models', 'drift', 'incidents'].includes(page) ? 'system' : page;
   document.querySelectorAll('[data-nav]').forEach((link) => {
@@ -139,6 +149,18 @@ function healthRow(component, status, detail = '') {
     <td><strong>${escapeHTML(component)}</strong>${detail ? `<div class="table-subtext">${escapeHTML(detail)}</div>` : ''}</td>
     <td>${badge(status)}</td>
   </tr>`;
+}
+
+function incidentDetail(status, severity) {
+  const state = String(status || 'UNKNOWN').toUpperCase();
+  if (state === 'OK') return 'Sin incidente';
+  return String(severity || 'Sin severidad');
+}
+
+function incidentBadges(status, severity) {
+  const state = String(status || 'UNKNOWN').toUpperCase();
+  if (state === 'OK') return badge('OK', 'Sin incidente');
+  return `${badge(state)} ${badge(severity || 'UNKNOWN')}`;
 }
 
 function selectForecast(rows, horizon) {
@@ -534,7 +556,7 @@ async function home() {
       healthRow('Publicación', pub.status, auditR.ok ? freshnessText(audit) : 'audit.json no disponible'),
       healthRow('Modelos', modelState, models.suite_recommendation || ''),
       healthRow('Drift', driftState, drift.decision || ''),
-      healthRow('Incidentes', incidentState, incidents.severity || ''),
+      healthRow('Incidentes', incidentState, incidentDetail(incidentState, incidents.severity)),
       healthRow('Pipeline', dashboardR.ok ? (dashboard.system_health || 'UNKNOWN') : 'UNKNOWN', dashboardR.ok ? 'Dashboard cargado' : 'dashboard.json no disponible'),
     ].join('');
   }
@@ -1060,7 +1082,7 @@ async function incidents() {
   const result = await loadJSONState('data/incidents.json', { status: 'UNKNOWN', severity: 'UNKNOWN', summary: {}, impact: {} });
   const i = result.data || {};
   const status = document.getElementById('status');
-  if (status) status.innerHTML = result.ok ? `${badge(i.status || 'UNKNOWN')} ${badge(i.severity || 'UNKNOWN')}` : badge('UNKNOWN', 'Estado no disponible');
+  if (status) status.innerHTML = result.ok ? incidentBadges(i.status, i.severity) : badge('UNKNOWN', 'Estado no disponible');
   const symptom = document.getElementById('symptom');
   if (symptom) symptom.textContent = result.ok ? (i.summary?.symptom || 'Sin síntoma reportado') : 'No fue posible cargar el reporte de incidentes.';
   const impact = document.getElementById('impact');
@@ -1087,7 +1109,7 @@ async function system() {
     metricCard('Estado operativo', dashboardR.ok ? String(dashboard.system_health || 'UNKNOWN') : 'UNKNOWN', dashboardR.ok ? 'Pipeline / runtime' : 'No se pudo cargar dashboard.json', stateTone(dashboard.system_health)),
     metricCard('Publicación', pub.label, freshnessText(audit), pub.tone),
     metricCard('Modelos', String(modelsData.suite_status || 'UNKNOWN'), String(modelsData.suite_recommendation || 'Sin recomendación'), stateTone(modelsData.suite_status)),
-    metricCard('Incidentes', incidentsR.ok ? String(incidentData.status || 'UNKNOWN') : 'UNKNOWN', incidentsR.ok ? String(incidentData.severity || '') : 'Reporte no disponible', stateTone(incidentData.status)),
+    metricCard('Incidentes', incidentsR.ok ? String(incidentData.status || 'UNKNOWN') : 'UNKNOWN', incidentsR.ok ? incidentDetail(incidentData.status, incidentData.severity) : 'Reporte no disponible', stateTone(incidentData.status)),
   ].join('');
 
   const components = document.getElementById('systemComponents');
@@ -1095,7 +1117,7 @@ async function system() {
     healthRow('Datos y publicación', pub.status, auditR.ok ? freshnessText(audit) : 'audit.json no disponible'),
     healthRow('Modelos', modelsR.ok ? (modelsData.suite_status || 'UNKNOWN') : 'UNKNOWN', modelsData.suite_recommendation || ''),
     healthRow('Drift', driftR.ok ? (driftData.drift_level || 'UNKNOWN') : 'UNKNOWN', driftData.decision || ''),
-    healthRow('Incidentes', incidentsR.ok ? (incidentData.status || 'UNKNOWN') : 'UNKNOWN', incidentData.severity || ''),
+    healthRow('Incidentes', incidentsR.ok ? (incidentData.status || 'UNKNOWN') : 'UNKNOWN', incidentsR.ok ? incidentDetail(incidentData.status, incidentData.severity) : 'Reporte no disponible'),
     healthRow('Pipeline', dashboardR.ok ? (dashboard.system_health || 'UNKNOWN') : 'UNKNOWN'),
   ].join('');
 
@@ -1110,7 +1132,7 @@ async function system() {
 
   const incidents = document.getElementById('systemIncidents');
   if (incidents) {
-    incidents.innerHTML = `<div class="system-panel-head">${incidentsR.ok ? `${badge(incidentData.status || 'UNKNOWN')} ${badge(incidentData.severity || 'UNKNOWN')}` : badge('UNKNOWN')}</div>
+    incidents.innerHTML = `<div class="system-panel-head">${incidentsR.ok ? incidentBadges(incidentData.status, incidentData.severity) : badge('UNKNOWN')}</div>
       <p>${escapeHTML(incidentsR.ok ? (incidentData.summary?.symptom || 'Sin síntoma reportado.') : 'Reporte de incidentes no disponible.')}</p>`;
   }
 
@@ -1131,6 +1153,7 @@ async function system() {
 }
 
 const page = document.body.dataset.page;
+ensurePrimaryNavigation();
 setNav(page);
 initNavigation();
 const pageHandler = ({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}));

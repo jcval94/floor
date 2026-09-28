@@ -117,6 +117,25 @@ def test_system_operational_health_is_not_presented_as_global_health() -> None:
     assert "metricCard('Estado general'" not in app
 
 
+def test_incident_ok_state_does_not_present_sev4_as_an_active_incident() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    assert "function incidentDetail" in app
+    assert "function incidentBadges" in app
+    assert "if (state === 'OK') return 'Sin incidente';" in app
+    assert "if (state === 'OK') return badge('OK', 'Sin incidente');" in app
+    assert "incidentBadges(i.status, i.severity)" in app
+    assert "incidentBadges(incidentData.status, incidentData.severity)" in app
+
+
+def test_methodology_is_injected_into_primary_navigation_before_active_state() -> None:
+    app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
+    assert "function ensurePrimaryNavigation()" in app
+    assert "link.dataset.nav = 'about';" in app
+    assert "link.textContent = 'Metodología';" in app
+    startup = app.split("const page = document.body.dataset.page;", 1)[1]
+    assert startup.index("ensurePrimaryNavigation();") < startup.index("setNav(page);")
+
+
 def test_methodology_separates_central_forecast_from_risk_coverage() -> None:
     methodology = (SITE / "about.html").read_text(encoding="utf-8").lower()
     assert "forecast central vs risk geometry" in methodology
