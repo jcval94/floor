@@ -4,11 +4,12 @@ import argparse
 import json
 import math
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import fmean, median
 from typing import Any
 
+from floor.calendar import is_market_session
 from floor.prediction_reconciliation import prediction_key
 from floor.storage import load_jsonl_rows
 
@@ -217,6 +218,86 @@ def _append_history_once(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _session_continuity(
+    league_root: Path,
+    league_id: str,
+    start_session: str | None,
+    last_session: str | None,
+    reported_sessions: int,
+) -> dict[str, Any]:
+    if not start_session or not last_session:
+        return {
+            "status": "WAITING",
+            "expected_sessions": 0,
+            "observed_sessions": 0,
+            "reported_sessions": reported_sessions,
+            "missing_sessions": [],
+        }
+
+    start = date.fromisoformat(start_session)
+    end = date.fromisoformat(last_session)
+    expected: list[str] = []
+    cursor = start
+    while cursor <= end:
+        if is_market_session(cursor):
+            expected.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+
+    history_path = league_root / "runs" / league_id / "history.jsonl"
+    if not history_path.exists():
+        return {
+            "status": "UNKNOWN",
+            "expected_sessions": len(expected),
+            "observed_sessions": None,
+            "reported_sessions": reported_sessions,
+            "missing_sessions": [],
+            "detail": "Strategy League hash-chain history is unavailable in this snapshot.",
+        }
+
+    observed: set[str] = set()
+    for line in history_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            return {
+                "status": "INVALID_HISTORY",
+                "expected_sessions": len(expected),
+                "observed_sessions": len(observed),
+                "reported_sessions": reported_sessions,
+                "missing_sessions": [],
+                "detail": "Strategy League history contains invalid JSON.",
+            }
+        if str(record.get("event") or "") not in {"GENESIS", "EOD"}:
+            continue
+        state_after = record.get("state_after")
+        if not isinstance(state_after, dict):
+            continue
+        session = str(state_after.get("last_session") or "").strip()
+        if session:
+            observed.add(session)
+
+    expected_set = set(expected)
+    missing = sorted(expected_set - observed)
+    unexpected = sorted(observed - expected_set)
+    count_consistent = reported_sessions == len(observed)
+    status = (
+        "OK"
+        if not missing and not unexpected and count_consistent
+        else "GAP_DETECTED"
+    )
+    return {
+        "status": status,
+        "expected_sessions": len(expected),
+        "observed_sessions": len(observed),
+        "reported_sessions": reported_sessions,
+        "missing_sessions": missing,
+        "unexpected_sessions": unexpected,
+        "count_consistent": count_consistent,
+    }
+
+
 def build_experiment_observation(
     data_dir: Path,
     league_config_path: Path | None = None,
@@ -282,6 +363,15 @@ def build_experiment_observation(
         if str(row.get("prediction_key") or "")
     }
 
+    reported_sessions = int(leaderboard.get("sessions", 0) or 0) if current_epoch else 0
+    continuity = _session_continuity(
+        league_root,
+        expected_league_id or str(leaderboard.get("league_id") or ""),
+        start_session,
+        last_session,
+        reported_sessions,
+    )
+
     payload: dict[str, Any] = {
         "schema_version": 1,
         "league_id": expected_league_id or leaderboard.get("league_id"),
@@ -289,7 +379,7 @@ def build_experiment_observation(
         "status": "RUNNING" if current_epoch else "WAITING_FOR_GENESIS",
         "start_session": start_session,
         "last_session": last_session,
-        "sessions": int(leaderboard.get("sessions", 0) or 0) if current_epoch else 0,
+        "sessions": reported_sessions,
         "strategy_league": {
             "status": (
                 leaderboard.get("status", "WAITING")
@@ -323,6 +413,7 @@ def build_experiment_observation(
         },
         "evidence": {
             "prediction_count_since_genesis": len(predictions),
+            "session_continuity": continuity,
             "reconciled_count_since_genesis": len(reconciliations),
             "note": (
                 "Prospective observational evidence only. Counts across symbols and dates "
