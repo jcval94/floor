@@ -46,12 +46,32 @@ def test_forecast_ui_distinguishes_central_from_joint_risk_coverage() -> None:
     app = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
     forecasts = (SITE / "forecasts.html").read_text(encoding="utf-8")
     tickers = (SITE / "tickers.html").read_text(encoding="utf-8")
+    home = (SITE / "index.html").read_text(encoding="utf-8")
+    styles = (SITE / "assets" / "styles.css").read_text(encoding="utf-8")
 
     assert "risk_empirical_joint_coverage" in app
-    assert "Riesgo OOS" in app
-    assert "Central ·" in app
-    assert "Cobertura mínima" in forecasts
-    assert "Cobertura mínima" in tickers
+    assert "risk_floor_value" in app
+    assert "risk_ceiling_value" in app
+    assert "Forecast central" in app
+    assert "Risk envelope" in app
+    assert "Central OOS" in app
+    assert "Risk OOS" in app
+    assert "forecastCoverageChip" not in app
+    assert "geometryStack" in app
+    assert "central-geometry" in styles
+    assert "risk-geometry" in styles
+
+    assert "Cobertura risk mínima" in forecasts
+    assert "Cobertura risk mínima" in tickers
+    assert "Forecast central" in forecasts
+    assert "Risk envelope · cobertura OOS" in forecasts
+    assert "Forecast central" in tickers
+    assert "Risk envelope" in tickers
+    assert "Forecast central" in home
+    assert "Risk envelope · cobertura OOS" in home
+
+    assert "<th>Cobertura</th>" not in forecasts
+    assert "<th>Cobertura</th>" not in tickers
     assert "Confianza mínima" not in forecasts
     assert "Confianza mínima" not in tickers
 
