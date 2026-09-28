@@ -71,7 +71,7 @@ def test_strategy_live_uses_half_hour_cadence_without_embedded_cross_wake() -> N
 def test_watchdog_counts_only_recent_active_or_successful_runs() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    assert "--json createdAt,status,conclusion,event" in workflow
+    assert "--json createdAt,status,conclusion,event,databaseId,headSha" in workflow
     assert 'active_cutoff=$((cutoff - 1800))' in workflow
     assert '--argjson active_cutoff "$active_cutoff"' in workflow
     assert '.conclusion == "success"' in workflow
@@ -89,3 +89,17 @@ def test_split_crons_never_contain_literal_newline_escape() -> None:
         "strategy_live.yml",
     ):
         assert "\\n    - cron:" not in _text(name)
+
+
+def test_watchdog_circuit_breaks_deterministic_eod_failure_per_head_sha() -> None:
+    workflow = _text("scheduler_watchdog.yml")
+
+    assert "deterministic_failure_circuit_open" in workflow
+    assert '.headSha == $sha' in workflow
+    assert 'gh run view "$run_id" --repo "$repo" --log-failed' in workflow
+    assert (
+        "Strategy League frozen contract changed; create a new league_id "
+        "instead of rewriting history"
+    ) in workflow
+    assert "blocked_deterministic_same_sha" in workflow
+    assert "failing open to normal recovery" in workflow

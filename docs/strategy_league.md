@@ -6,10 +6,10 @@ Strategy League is a **shadow-paper** experiment, isolated from the operational 
 
 The active contract is:
 
-- league: `strategy_league_v9_net_target_reversal_10k`;
+- league: `strategy_league_v10_d1_w1_champions_10k`;
 - initial NAV: **USD 10,000 per member**;
-- evidence: new prospective evidence starts only at the first complete v9 EOD genesis;
-- v8 evidence remains preserved, but it is not stitched into v9;
+- evidence: new prospective evidence starts only at the first complete v10 EOD genesis;
+- v7/v8/v9 evidence remains preserved in separate epochs, but none is stitched into v10;
 - automatic promotion: disabled;
 - PAPER/LIVE execution: disabled.
 
@@ -35,9 +35,9 @@ The league does not start until the same current market session has:
 
 At genesis every member is cash-only. A decision generated at close `t` can only execute at open `t+1`.
 
-## Weekly Opportunity v9
+## Weekly Opportunity v10
 
-The v9 Weekly model is trained on a cost-adjusted target:
+The v10 Weekly model keeps the v9 cost-adjusted target semantics:
 
 `sign(r_q1) * max(abs(r_q1) - round_trip_cost, 0) / max(q1_downside, 1%)`
 
@@ -47,7 +47,7 @@ The strategy interprets `weekly_opportunity_score × q1_downside` as model-impli
 
 New Weekly entries use the top 10% positive scores. Existing positions can remain while they stay in the top 20% positive scores, providing hysteresis. Review cadence and maximum holding remain 10 sessions.
 
-## Mean Reversion v9
+## Mean Reversion v10
 
 Mean Reversion uses W1 Floor/Ceiling only as payoff/risk anchors. Direction comes from:
 
@@ -75,6 +75,8 @@ The formula is centralized in `contracts.trading.round_trip_cost_bps_from_contra
 
 ## Frozen evidence
 
+v9 closed after its first prospective session because the serving D1 and W1 champions were later promoted from `robust_range_v3` to `central_skill_ensemble_v1`. Those promotions changed the frozen model-suite hashes, so v9 was not mutated or continued. v10 starts a clean evidence series with the current D1/W1 champions while preserving the same strategy, cost and contract semantics.
+
 At genesis the league freezes hashes for its league/strategy configuration, Weekly artifact and serving model suite. A semantic or parameter change requires a new `league_id`; the old epoch is retained rather than mutated.
 
 Each league history record participates in an audit hash chain. Walk-forward research also keeps one continuous account across model folds: retraining changes the model epoch, not cash, positions, accumulated transaction costs or trade history.
@@ -83,7 +85,7 @@ Each league history record participates in an audit hash chain. Walk-forward res
 
 The allocator combines eligible source strategies after ranking each source internally. It respects position, gross, heat and sector constraints. Consensus can improve ranking, but does not increase the configured per-position risk budget.
 
-For v9:
+For v10:
 
 - Weekly Opportunity: eligible source;
 - Breakout: eligible source;

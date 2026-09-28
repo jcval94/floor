@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY' >> "$GITHUB_OUTPUT"
+          import hashlib
           import json
           import os
           from pathlib import Path
@@ -53,6 +54,56 @@ jobs:
           model_path = str(cfg["weekly_model_path"])
           event_name = os.environ.get("EVENT_NAME", "")
 
+          epochs = json.loads(
+              Path("config/strategy_league_epochs.json").read_text(encoding="utf-8")
+          )
+          if str(epochs.get("current_league_id") or "") != league_id:
+              raise SystemExit(
+                  "Bootstrap refused: strategy_league_epochs current_league_id "
+                  f"does not match league_id={league_id!r}"
+              )
+          epoch = next(
+              (
+                  item
+                  for item in epochs.get("epochs", [])
+                  if str(item.get("league_id") or "") == league_id
+              ),
+              None,
+          )
+          if not isinstance(epoch, dict):
+              raise SystemExit(f"Bootstrap refused: current epoch {league_id!r} is not declared")
+          expected_freeze_id = str(epoch.get("freeze_id") or "")
+          if not expected_freeze_id:
+              raise SystemExit("Bootstrap refused: current epoch has no freeze_id")
+
+          if f"/{league_id}/" not in model_path:
+              raise SystemExit(
+                  "Bootstrap refused: weekly_model_path must be namespaced by current league_id"
+              )
+
+          freeze_matches = []
+          for freeze_path in sorted(Path("config/frozen").glob("capital_challenger*.json")):
+              payload = json.loads(freeze_path.read_text(encoding="utf-8"))
+              if str(payload.get("freeze_id") or "") == expected_freeze_id:
+                  freeze_matches.append((freeze_path, payload))
+          if len(freeze_matches) != 1:
+              raise SystemExit(
+                  "Bootstrap refused: expected exactly one frozen challenger manifest for "
+                  f"freeze_id={expected_freeze_id!r}, found={len(freeze_matches)}"
+              )
+          freeze_path, freeze = freeze_matches[0]
+          if str(freeze.get("source_league_id") or "") != league_id:
+              raise SystemExit("Bootstrap refused: frozen challenger source_league_id mismatch")
+          challenger = cfg.get("capital_allocation_challenger")
+          if freeze.get("challenger_config") != challenger:
+              raise SystemExit("Bootstrap refused: current challenger config differs from freeze")
+          canonical = json.dumps(
+              challenger, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+          )
+          actual_challenger_sha = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+          if actual_challenger_sha != str(freeze.get("challenger_config_sha256") or ""):
+              raise SystemExit("Bootstrap refused: frozen challenger hash is inconsistent")
+
           if event_name == "push":
               request = json.loads(
                   Path("config/strategy_league_genesis_request.json").read_text(encoding="utf-8")
@@ -60,6 +111,10 @@ jobs:
               if request.get("action") != "BOOTSTRAP_CLEAN_GENESIS":
                   raise SystemExit("Bootstrap refused: genesis request action is not BOOTSTRAP_CLEAN_GENESIS")
               confirmation = str(request.get("league_id") or "")
+              if str(request.get("freeze_id") or "") != expected_freeze_id:
+                  raise SystemExit(
+                      "Bootstrap refused: genesis request freeze_id does not match current epoch"
+                  )
           else:
               confirmation = os.environ.get("INPUT_LEAGUE_ID", "")
 
@@ -72,6 +127,8 @@ jobs:
           print(f"league_id={league_id}")
           print(f"model_path={model_path}")
           print(f"state_path={state_path}")
+          print(f"freeze_path={freeze_path}")
+          print(f"freeze_id={expected_freeze_id}")
           PY
 
       - name: Restore rolling runtime state
@@ -176,6 +233,7 @@ jobs:
             echo "- League: ${{ steps.contract.outputs.league_id }}"
             echo "- Challenger already existed: ${{ steps.challenger.outputs.exists }}"
             echo "- Model path: ${{ steps.contract.outputs.model_path }}"
+            echo "- Freeze: ${{ steps.contract.outputs.freeze_id }} (${{ steps.contract.outputs.freeze_path }})"
             echo "- Trigger: explicit dispatch or committed genesis request."
             echo "- Prospective history starts only on the first complete EOD for this league."
             echo "- Operational PAPER gateway: disabled"

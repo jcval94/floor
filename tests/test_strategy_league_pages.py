@@ -201,8 +201,8 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
     )
     member_ids = {str(member["id"]) for member in config["members"]}
-    assert config["league_id"] == "strategy_league_v9_net_target_reversal_10k"
-    assert "strategy_league_v9_net_target_reversal_10k" in config["weekly_model_path"]
+    assert config["league_id"] == "strategy_league_v10_d1_w1_champions_10k"
+    assert "strategy_league_v10_d1_w1_champions_10k" in config["weekly_model_path"]
     assert int(config["weekly_review_frequency_sessions"]) == 10
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
@@ -249,7 +249,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="liveCompetitionChart"' in page
     assert 'id="liveChartMetrics"' in page
     assert 'id="liveTable"' in page
-    assert "actualización ~15 min" in page
+    assert "actualización ~30 min" in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
     assert 'id="leagueOperations"' in page
