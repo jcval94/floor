@@ -97,8 +97,9 @@ function isBenchmark(row) {
 function statusCard(data) {
   const running = data?.status === 'RUNNING';
   const leagueId = data?.league_id || 'strategy_league';
+  const published = data?.published_at ? marketTime(data.published_at, true) : '—';
   const detail = running
-    ? `${data.start_session || '—'} → ${data.last_session || '—'} · ${data.sessions || 0} sesiones prospectivas · ${leagueId}`
+    ? `EOD ${data.last_session || '—'} · ${data.sessions || 0} sesiones prospectivas · Pages ${published} ET · ${leagueId}`
     : data?.detail || 'La liga aún no ha iniciado.';
   return `<div class="trust-strip ${running ? 'ok' : 'warn'}">
     <div><strong>${escapeHTML(running ? 'Strategy League activa' : String(data?.status || 'PENDIENTE'))}</strong></div>
@@ -606,7 +607,7 @@ async function renderRetrospective() {
       });
     }
   }
-  windowControl?.addEventListener('change', renderWindow);
+  if (windowControl) windowControl.onchange = renderWindow;
   renderWindow();
 
 const note = document.getElementById('replayNote');
@@ -626,20 +627,72 @@ const note = document.getElementById('replayNote');
   }
 }
 
+
+function operationRows(rows, tone) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return '<tr><td colspan="6"><div class="empty-state"><strong>Aún no hay operaciones cerradas en esta categoría.</strong><p>Se poblará automáticamente conforme la liga cierre posiciones.</p></div></td></tr>';
+  }
+  return rows.map((row) => {
+    const pnl = Number(row?.net_pnl);
+    const efficiency = Number(row?.net_pnl_per_session);
+    const netReturn = Number(row?.net_return);
+    const strategy = shortLabelFor(row?.strategy);
+    const period = `${row?.entry_session || '—'} → ${row?.exit_session || '—'}`;
+    const reason = String(row?.reason || '—').replaceAll('_', ' ');
+    return `<tr>
+      <td><strong>${escapeHTML(row?.symbol || '—')}</strong><div class="small">${escapeHTML(strategy)}</div></td>
+      <td class="${tone}">${money(pnl, 2)}</td>
+      <td class="operation-efficiency ${tone}">${money(efficiency, 2)}/ses.</td>
+      <td class="${Number.isFinite(netReturn) && netReturn >= 0 ? 'positive' : 'negative'}">${pct(netReturn)}</td>
+      <td>${escapeHTML(String(row?.holding_sessions ?? '—'))}</td>
+      <td class="operation-period">${escapeHTML(period)}<div class="small">${escapeHTML(reason)}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function operationsPanels(data) {
+  const top = Array.isArray(data?.top_operations) ? data.top_operations : [];
+  const bottom = Array.isArray(data?.bottom_operations) ? data.bottom_operations : [];
+  const realized = Number(data?.realized_operations || 0);
+  const waiting = data?.status !== 'OK';
+  const subtitle = waiting
+    ? 'Esperando las primeras posiciones cerradas de la liga prospectiva.'
+    : `${realized} operaciones realizadas · neto de costos · benchmarks excluidos`;
+  const table = (rows, tone) => `<div class="table-wrap"><table>
+    <thead><tr><th>Operación</th><th>P&L neto</th><th>P&L / sesión</th><th>Retorno</th><th>Ses.</th><th>Periodo / salida</th></tr></thead>
+    <tbody>${operationRows(rows, tone)}</tbody>
+  </table></div>`;
+  return `
+    <article class="panel league-operation-panel">
+      <div class="section-heading"><div><span class="eyebrow">Top operaciones</span><h3>Más ganancia en menos tiempo</h3><p>Ordenadas por P&L neto por sesión mantenida. ${escapeHTML(subtitle)}</p></div></div>
+      ${table(top, 'positive')}
+    </article>
+    <article class="panel league-operation-panel">
+      <div class="section-heading"><div><span class="eyebrow">Bottom operaciones</span><h3>Peor pérdida por tiempo expuesto</h3><p>Ordenadas por P&L neto por sesión, de peor a menos mala. ${escapeHTML(subtitle)}</p></div></div>
+      ${table(bottom, 'negative')}
+    </article>`;
+}
+
 async function renderLeague() {
   const statusRoot = document.getElementById('leagueStatus');
   const summaryRoot = document.getElementById('leagueSummary');
+  const operationsRoot = document.getElementById('leagueOperations');
   const table = document.getElementById('leagueTable');
   const chartRoot = document.getElementById('leagueCompetitionChart');
   const chartMetrics = document.getElementById('leagueChartMetrics');
   const windowControl = document.getElementById('leagueWindow');
-  if (!statusRoot && !summaryRoot && !table && !chartRoot) return;
+  if (!statusRoot && !summaryRoot && !operationsRoot && !table && !chartRoot) return;
 
-  const result = await loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] });
+  const [result, operationsResult] = await Promise.all([
+    loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] }),
+    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] }),
+  ]);
   const data = result.data || { status: 'UNKNOWN', rows: [] };
+  const operations = operationsResult.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] };
   const rows = Array.isArray(data.rows) ? data.rows : [];
   if (statusRoot) statusRoot.innerHTML = statusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = summaryCards(data, rows);
+  if (operationsRoot) operationsRoot.innerHTML = operationsPanels(operations);
   if (table) table.innerHTML = tableRows(rows);
 
   function renderWindow() {
@@ -663,7 +716,7 @@ async function renderLeague() {
         });
     }
   }
-  windowControl?.addEventListener('change', renderWindow);
+  if (windowControl) windowControl.onchange = renderWindow;
   renderWindow();
 
   const note = document.getElementById('leagueNote');
@@ -680,3 +733,5 @@ renderLive();
 renderRetrospective();
 renderLeague();
 setInterval(renderLive, 60_000);
+setInterval(renderRetrospective, 300_000);
+setInterval(renderLeague, 300_000);
