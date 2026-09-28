@@ -84,13 +84,15 @@ function confidenceFromForecast(row) {
 }
 
 function centralCoverageChip(row) {
-  const numeric = Number(centralCoverageFromForecast(row));
+  const raw = centralCoverageFromForecast(row);
+  const numeric = raw == null ? NaN : Number(raw);
   if (!Number.isFinite(numeric)) return '';
   return `<span class="confidence-chip neutral" title="Cobertura empírica OOS del forecast central; no pertenece al risk envelope">Central OOS · ${(numeric * 100).toFixed(0)}%</span>`;
 }
 
 function riskCoverageChip(row) {
-  const numeric = Number(riskCoverageFromForecast(row));
+  const raw = riskCoverageFromForecast(row);
+  const numeric = raw == null ? NaN : Number(raw);
   if (!Number.isFinite(numeric)) {
     return '<span class="confidence-chip neutral">Risk OOS · no disponible</span>';
   }
