@@ -240,6 +240,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
     research = (ROOT / "site" / "assets" / "research.js").read_text(encoding="utf-8")
+    experiment = (ROOT / "site" / "assets" / "experiment.js").read_text(encoding="utf-8")
 
     assert 'id="strategy-live"' in page
     assert 'id="liveSummary"' in page
@@ -304,6 +305,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="oosWindow"' in page
     assert 'id="oosChartMetrics"' in page
     assert "F${fold.fold}" in research
+    assert "session_continuity" in experiment
+    assert "continuidad sin huecos" in experiment
+    assert "Continuidad incompleta" in experiment
 
 def test_waiting_league_reports_genesis_when_frozen_weekly_exists(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
