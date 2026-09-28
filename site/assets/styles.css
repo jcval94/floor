@@ -461,6 +461,20 @@ input::placeholder { color: color-mix(in srgb, var(--muted) 74%, transparent); }
 .line-chart { width: 100%; min-height: 210px; }
 .chart-grid { stroke: var(--border); stroke-width: .6; }
 .chart-series { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+
+.enhanced-chart .chart-end-label {
+  fill: var(--muted);
+  font-size: 2.2px;
+  font-weight: 700;
+  font-family: inherit;
+}
+.enhanced-chart .chart-end-point,
+.enhanced-chart .chart-key-point {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: .8;
+  vector-effect: non-scaling-stroke;
+}
 .m3-bars { width: 100%; max-width: 280px; min-height: 92px; }
 .m3-bar-track { fill: var(--surface-3); }
 .m3-bar { fill: var(--accent); opacity: .78; }
@@ -515,6 +529,23 @@ input::placeholder { color: color-mix(in srgb, var(--muted) 74%, transparent); }
 }
 .empty-state strong { display: block; color: var(--text-strong); font-size: 14px; }
 .empty-state p { margin: 4px auto 0; max-width: 440px; font-size: 11px; }
+
+.operations-history-warmup {
+  min-height: 132px;
+  margin: 10px 0 2px;
+  display: grid;
+  place-content: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+#homeOperationsHistoryChart .line-chart,
+#leagueOperationsHistoryChart .line-chart {
+  display: block;
+  height: 220px;
+  min-height: 0;
+}
 
 .methodology-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .methodology-card { padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }

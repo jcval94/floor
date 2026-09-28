@@ -239,6 +239,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     script = (ROOT / "site" / "assets" / "league.js").read_text(encoding="utf-8")
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
+    base_styles = (ROOT / "site" / "assets" / "styles.css").read_text(encoding="utf-8")
     research = (ROOT / "site" / "assets" / "research.js").read_text(encoding="utf-8")
     app = (ROOT / "site" / "assets" / "app.js").read_text(encoding="utf-8")
     experiment = (ROOT / "site" / "assets" / "experiment.js").read_text(encoding="utf-8")
@@ -296,6 +297,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "P&L neto realizado por periodo" in script
     assert "Posiciones todavía abiertas en pérdida" in script
     assert "operations.operations_history" in script
+    assert "operationsHistoryChart" in script
+    assert "Aún no hay operaciones cerradas." in script
+    assert "Primer periodo realizado" in script
     assert "open_losing_positions" in script
     assert "setInterval(renderLeague, 300_000)" in script
     assert "setInterval(renderRetrospective, 300_000)" in script
@@ -318,6 +322,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert ".chart-warmup" in styles
     assert "aspect-ratio: 220 / 72" in styles
     assert "min-height: 330px" not in styles
+    assert ".operations-history-warmup" in base_styles
+    assert ".enhanced-chart .chart-end-label" in base_styles
+    assert "#homeOperationsHistoryChart .line-chart" in base_styles
+    assert "#leagueOperationsHistoryChart .line-chart" in base_styles
     assert "LIVE_MIN_POINTS = 3" in script
     assert "LEAGUE_MIN_SESSIONS = 5" in script
     assert "warmupChartState" in script
@@ -345,6 +353,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "P&L neto realizado por periodo" in app
     assert "Pérdidas no realizadas" in app
     assert "operations_history" in app
+    assert "homeOperationsHistoryChart" in app
+    assert "Aún no hay operaciones cerradas." in app
+    assert "Primer periodo realizado" in app
     assert "open_losing_positions" in app
     assert "OPERATIONS_RANKING_LIMIT = 10" in publisher
     assert "top_n=OPERATIONS_RANKING_LIMIT" in publisher

@@ -394,6 +394,39 @@ function homeOperationsKpis(rows) {
   ].join('');
 }
 
+
+function homeOperationsHistoryChart(rows) {
+  const visible = Array.isArray(rows) ? rows : [];
+  const realizedPeriods = visible.filter((row) => Number(row?.closed_operations || 0) > 0);
+
+  if (!realizedPeriods.length) {
+    return `<div class="empty-state operations-history-warmup" role="status">
+      <strong>Aún no hay operaciones cerradas.</strong>
+      <p>El historial se dibujará automáticamente cuando la liga registre su primer cierre. Los periodos sin cierres se mantienen en los KPIs, pero no se fuerzan como una serie de P&L.</p>
+    </div>`;
+  }
+
+  if (realizedPeriods.length === 1) {
+    const row = realizedPeriods[0];
+    const closed = Number(row?.closed_operations || 0);
+    return `<div class="empty-state operations-history-warmup" role="status">
+      <strong>Primer periodo realizado · $ ${fmt(Number(row?.net_pnl || 0), 2)}</strong>
+      <p>${escapeHTML(String(row?.session || 'Periodo actual'))} · ${closed} cierre${closed === 1 ? '' : 's'}. La línea temporal aparecerá cuando exista un segundo periodo con cierres.</p>
+    </div>`;
+  }
+
+  return lineSvg(
+    visible.map((row) => ({ session: row.session, value: row.net_pnl })),
+    {
+      title: 'P&L neto realizado por periodo',
+      valueFormat: 'money',
+      valueDigits: 0,
+      baseline: 0,
+      baselineLabel: 'Break-even',
+    },
+  );
+}
+
 function homeOpenLossRows(rows) {
   if (!Array.isArray(rows) || !rows.length) {
     return '<tr><td colspan="7"><div class="empty-state"><strong>No hay posiciones abiertas en pérdida.</strong><p>Cuando una estrategia mantenga una posición con mark-to-market negativo aparecerá aquí.</p></div></td></tr>';
@@ -450,16 +483,7 @@ function renderHomeOperations(payload) {
     const history = aggregateOperationHistory(data.operations_history || [], windowKey, granularity);
     if (historyMetrics) historyMetrics.innerHTML = homeOperationsKpis(history);
     if (historyRoot) {
-      historyRoot.innerHTML = lineSvg(
-        history.map((row) => ({ session: row.session, value: row.net_pnl })),
-        {
-          title: 'P&L neto realizado por periodo',
-          valueFormat: 'money',
-          valueDigits: 0,
-          baseline: 0,
-          baselineLabel: 'Break-even',
-        },
-      );
+      historyRoot.innerHTML = homeOperationsHistoryChart(history);
     }
   }
 
