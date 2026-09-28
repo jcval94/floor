@@ -64,6 +64,10 @@ def test_build_pages_data_generates_static_payloads(tmp_path: Path) -> None:
     assert set(models["champions"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["suite_status"] == "UNKNOWN"
     assert models["suite_recommendation"] == "PENDING"
+    assert models["serving"]["status"] == "UNKNOWN"
+    assert models["serving"]["active_champion_count"] == 0
+    assert models["suite_review"]["covered"] is True
+    assert models["suite_review"]["status"] == "UNKNOWN"
     assert models["retraining_schedule"]["cadence_days"] == 14
     assert set(models["details"].keys()) == {"d1", "w1", "q1", "value", "timing", "m3"}
     assert models["details"]["value"]["current_version"] == "v2"
@@ -767,3 +771,58 @@ def test_model_detail_uses_governed_review_only_for_monitoring_state() -> None:
     assert detail["monitoring"]["drift_level"] == "YELLOW"
     assert detail["monitoring"]["recommendation"] == "RETRAIN_SOON"
     assert detail["selection"]["has_evidence"] is False
+
+
+
+def test_models_payload_marks_artifact_serving_without_inventing_review_health(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    site_data = tmp_path / "site" / "data"
+    (data_dir / "reports").mkdir(parents=True)
+    model_dir = data_dir / "training" / "models"
+    model_dir.mkdir(parents=True)
+
+    (data_dir / "reports" / "dashboard.json").write_text(
+        json.dumps({"latest_predictions": []}),
+        encoding="utf-8",
+    )
+    (model_dir / "d1_champion.json").write_text(
+        json.dumps(
+            {
+                "model_name": "central_skill_ensemble_v1_d1",
+                "version": "v1",
+                "metrics": {
+                    "mae_spread_pct": 0.009,
+                    "central_skill_vs_atr": 0.07,
+                },
+                "params": {
+                    "dummy_benchmark": {
+                        "atr_only_mae_spread_pct": 0.00967741935483871,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    universe = tmp_path / "universe.yaml"
+    universe.write_text("symbols:\n  - AAPL\n", encoding="utf-8")
+
+    build_pages_data(data_dir=data_dir, site_data_dir=site_data, universe_path=universe)
+
+    models = json.loads((site_data / "models.json").read_text(encoding="utf-8"))
+    assert models["serving"] == {
+        "status": "ACTIVE",
+        "source": "champion_artifacts",
+        "active_champion_count": 1,
+        "active_champion_tasks": ["d1"],
+    }
+    assert models["suite_review"] == {
+        "covered": False,
+        "status": "NOT_COVERED",
+        "recommendation": None,
+        "source": None,
+    }
+    assert models["details"]["d1"]["serving"]["status"] == "ACTIVE_CHAMPION"
+    assert models["details"]["d1"]["selection"]["status"] == "MODEL_SUPERIOR"
+    assert models["details"]["d1"]["monitoring"]["status"] == "NOT_COVERED"
