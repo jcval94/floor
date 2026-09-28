@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from league.attribution import build_attribution_report
+from league.attribution import build_attribution_report, build_operations_ranking
 
 
 def test_attribution_tracks_sources_realized_pnl_and_heat(tmp_path: Path) -> None:
@@ -89,6 +89,10 @@ def test_attribution_tracks_sources_realized_pnl_and_heat(tmp_path: Path) -> Non
     assert report["summary"]["realized_round_trips"] == 1
     assert report["summary"]["realized_net_pnl"] == pytest.approx(96.0)
     assert report["summary"]["win_rate"] == pytest.approx(1.0)
+    trade = report["realized_trades"][0]
+    assert trade["holding_sessions"] == 2
+    assert trade["net_pnl_per_session"] == pytest.approx(48.0)
+    assert trade["net_return"] == pytest.approx(96.0 / 1002.0)
     by_source = {row["source_strategy"]: row for row in report["source_attribution"]}
     assert by_source["weekly_opportunity_ridge"]["net_pnl_equal_split"] == pytest.approx(48.0)
     assert by_source["mean_reversion_floor_w1"]["net_pnl_equal_split"] == pytest.approx(48.0)
@@ -98,3 +102,62 @@ def test_attribution_tracks_sources_realized_pnl_and_heat(tmp_path: Path) -> Non
 def test_missing_history_returns_waiting(tmp_path: Path) -> None:
     report = build_attribution_report(tmp_path / "missing.jsonl")
     assert report["status"] == "WAITING"
+
+
+
+def test_operations_ranking_uses_net_pnl_per_session_across_strategies(tmp_path: Path) -> None:
+    history = tmp_path / "history.jsonl"
+    records = [
+        {
+            "session": "2026-01-01",
+            "trades": [],
+            "decisions_for_next_open": {},
+            "state_after": {"members": {}},
+        },
+        {
+            "session": "2026-01-02",
+            "trades": [
+                {"member": "fast_strategy", "symbol": "AAA", "side": "BUY", "qty": 10, "fill_price": 100.0, "costs": 1.0},
+                {"member": "slow_strategy", "symbol": "BBB", "side": "BUY", "qty": 10, "fill_price": 100.0, "costs": 1.0},
+                {"member": "loss_strategy", "symbol": "CCC", "side": "BUY", "qty": 10, "fill_price": 100.0, "costs": 1.0},
+                {"member": "benchmark_spy", "symbol": "SPY", "side": "BUY", "qty": 10, "fill_price": 100.0, "costs": 1.0},
+            ],
+            "decisions_for_next_open": {},
+            "state_after": {"members": {}},
+        },
+        {
+            "session": "2026-01-03",
+            "trades": [
+                {"member": "fast_strategy", "symbol": "AAA", "side": "SELL", "qty": 10, "fill_price": 106.0, "costs": 1.0},
+                {"member": "loss_strategy", "symbol": "CCC", "side": "SELL", "qty": 10, "fill_price": 95.0, "costs": 1.0},
+                {"member": "benchmark_spy", "symbol": "SPY", "side": "SELL", "qty": 10, "fill_price": 120.0, "costs": 1.0},
+            ],
+            "decisions_for_next_open": {},
+            "state_after": {"members": {}},
+        },
+        {
+            "session": "2026-01-04",
+            "trades": [
+                {"member": "slow_strategy", "symbol": "BBB", "side": "SELL", "qty": 10, "fill_price": 108.0, "costs": 1.0},
+            ],
+            "decisions_for_next_open": {},
+            "state_after": {"members": {}},
+        },
+    ]
+    history.write_text("\n".join(json.dumps(row) for row in records) + "\n", encoding="utf-8")
+
+    ranking = build_operations_ranking(
+        history,
+        ["fast_strategy", "slow_strategy", "loss_strategy"],
+        top_n=5,
+    )
+
+    assert ranking["status"] == "OK"
+    assert ranking["realized_operations"] == 3
+    assert [row["strategy"] for row in ranking["top_operations"]] == [
+        "fast_strategy",
+        "slow_strategy",
+    ]
+    assert ranking["top_operations"][0]["net_pnl_per_session"] > ranking["top_operations"][1]["net_pnl_per_session"]
+    assert ranking["bottom_operations"][0]["strategy"] == "loss_strategy"
+    assert all(row["strategy"] != "benchmark_spy" for row in ranking["top_operations"])

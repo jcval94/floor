@@ -200,7 +200,7 @@ async function renderOOS() {
     if (chartMetrics) chartMetrics.innerHTML = rows.length ? oosWindowMetrics(rows, data, windowKey) : '';
     if (chart) chart.innerHTML = rows.length ? oosChart(rows, data, windowKey) : '<div class="empty-state"><strong>Sin curva OOS todavía.</strong></div>';
   }
-  windowControl?.addEventListener('change', renderWindow);
+  if (windowControl) windowControl.onchange = renderWindow;
   renderWindow();
 
   const table = document.getElementById('oosTable');
@@ -267,3 +267,5 @@ async function renderAttribution() {
 
 renderOOS();
 renderAttribution();
+setInterval(renderOOS, 300_000);
+setInterval(renderAttribution, 300_000);

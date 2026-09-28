@@ -100,9 +100,13 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
     books: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     realized: list[dict[str, Any]] = []
     final_state: dict[str, Any] = {}
+    session_ordinals: dict[str, int] = {}
 
     for record in history:
         session = str(record.get("session") or "")
+        if session and session not in session_ordinals:
+            session_ordinals[session] = len(session_ordinals) + 1
+        session_number = session_ordinals.get(session, len(session_ordinals) or 1)
         for trade in record.get("trades", []) or []:
             if not isinstance(trade, dict):
                 continue
@@ -134,6 +138,7 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
                         "risk_budget_pct_nav": spec.get("risk_budget_pct_nav"),
                         "stop_risk_pct": spec.get("stop_risk_pct"),
                         "entry_session": session,
+                        "entry_session_number": session_number,
                     }
                 old_qty = int(book["qty"])
                 new_qty = old_qty + qty
@@ -158,6 +163,9 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
             buy_cost_alloc = buy_cost_pool * (sold / owned_before) if owned_before > 0 else 0.0
             gross_pnl = sold * (fill - avg_fill)
             net_pnl = gross_pnl - buy_cost_alloc - costs
+            entry_notional = sold * avg_fill + buy_cost_alloc
+            entry_session_number = int(book.get("entry_session_number", session_number) or session_number)
+            holding_sessions = max(1, session_number - entry_session_number + 1)
             realized.append(
                 {
                     "member": member,
@@ -171,6 +179,10 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
                     "allocated_entry_costs": buy_cost_alloc,
                     "exit_costs": costs,
                     "net_pnl": net_pnl,
+                    "entry_notional": entry_notional,
+                    "net_return": net_pnl / entry_notional if entry_notional > 0 else None,
+                    "holding_sessions": holding_sessions,
+                    "net_pnl_per_session": net_pnl / holding_sessions,
                     "reason": trade.get("reason"),
                     "source_strategy": book.get("source_strategy"),
                     "source_strategies": list(book.get("source_strategies") or []),
@@ -238,6 +250,62 @@ def build_attribution_report(history_path: Path, *, member_id: str = CHALLENGER_
         "source_attribution": attribution,
         "realized_trades": member_realized,
         "exposure": _exposure_snapshot(final_state, member_id),
+    }
+
+
+
+def build_operations_ranking(
+    history_path: Path,
+    member_ids: list[str],
+    *,
+    top_n: int = 5,
+) -> dict[str, Any]:
+    """Rank realized strategy operations without mixing in benchmarks or open P&L."""
+
+    realized: list[dict[str, Any]] = []
+    for member_id in member_ids:
+        report = build_attribution_report(history_path, member_id=member_id)
+        for raw in report.get("realized_trades", []) or []:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            row["strategy"] = member_id
+            realized.append(row)
+
+    positive = [
+        row for row in realized
+        if _number(row.get("net_pnl")) > 0
+    ]
+    negative = [
+        row for row in realized
+        if _number(row.get("net_pnl")) < 0
+    ]
+    positive.sort(
+        key=lambda row: (
+            _number(row.get("net_pnl_per_session")),
+            _number(row.get("net_pnl")),
+        ),
+        reverse=True,
+    )
+    negative.sort(
+        key=lambda row: (
+            _number(row.get("net_pnl_per_session")),
+            _number(row.get("net_pnl")),
+        ),
+    )
+    return {
+        "schema_version": 1,
+        "status": "OK" if realized else "WAITING_FOR_CLOSED_TRADES",
+        "realized_operations": len(realized),
+        "strategy_members": list(member_ids),
+        "ranking_methodology": {
+            "scope": "realized closed strategy operations only; benchmarks and open mark-to-market positions excluded",
+            "top": "highest net P&L per held market session, then highest net P&L",
+            "bottom": "lowest net P&L per held market session, then lowest net P&L",
+            "costs": "entry and exit transaction costs are included in net P&L",
+        },
+        "top_operations": positive[: max(0, int(top_n))],
+        "bottom_operations": negative[: max(0, int(top_n))],
     }
 
 

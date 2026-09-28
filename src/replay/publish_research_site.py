@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from league.attribution import build_attribution_report
+from league.attribution import build_attribution_report, build_operations_ranking
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -104,13 +104,30 @@ def publish_research_payloads(
     prospective_attr["evidence_type"] = "prospective_shadow_paper_attribution"
     prospective_attr["prospective_evidence"] = True
 
+    strategy_members = [
+        str(member.get("id"))
+        for member in league_cfg.get("members", [])
+        if isinstance(member, dict)
+        and member.get("type") == "strategy"
+        and member.get("id")
+    ]
+    operations = build_operations_ranking(
+        prospective_history,
+        strategy_members,
+        top_n=5,
+    )
+    operations["evidence_type"] = "prospective_shadow_paper_realized_operations"
+    operations["prospective_evidence"] = True
+
     _write(site_data_dir / "walk_forward_oos.json", oos)
     _write(site_data_dir / "strategy_attribution.json", retrospective_attr)
     _write(site_data_dir / "strategy_league_attribution.json", prospective_attr)
+    _write(site_data_dir / "strategy_league_operations.json", operations)
     return {
         "oos_status": oos.get("status"),
         "retrospective_attribution_status": retrospective_attr.get("status"),
         "prospective_attribution_status": prospective_attr.get("status"),
+        "prospective_operations_status": operations.get("status"),
     }
 
 

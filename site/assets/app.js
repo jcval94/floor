@@ -226,14 +226,63 @@ function renderForecastCard(symbol, row, data, rowsForSymbol) {
   </article>`;
 }
 
+
+const HOME_STRATEGY_LABELS = {
+  weekly_opportunity_ridge: 'Weekly Opportunity',
+  breakout_protected_by_floor: 'Momentum + Floor',
+  mean_reversion_floor_w1: 'Mean Reversion + Floor',
+  cross_horizon_asymmetry: 'Cross-Horizon',
+  capital_allocation_challenger: 'Capital Challenger',
+};
+
+function homeOperationRows(rows, tone) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return '<tr><td colspan="5"><div class="empty-state"><strong>Aún no hay operaciones cerradas.</strong><p>La tabla se poblará automáticamente conforme la liga cierre posiciones.</p></div></td></tr>';
+  }
+  return rows.map((row) => {
+    const pnl = Number(row?.net_pnl);
+    const efficiency = Number(row?.net_pnl_per_session);
+    const netReturn = Number(row?.net_return);
+    const strategy = HOME_STRATEGY_LABELS[row?.strategy] || row?.strategy || '—';
+    return `<tr>
+      <td><strong>${escapeHTML(row?.symbol || '—')}</strong><div class="table-subtext">${escapeHTML(strategy)}</div></td>
+      <td class="${tone}">$ ${fmt(pnl, 2)}</td>
+      <td class="${tone}">$ ${fmt(efficiency, 2)}/ses.</td>
+      <td class="${Number.isFinite(netReturn) && netReturn >= 0 ? 'positive' : 'negative'}">${Number.isFinite(netReturn) ? fmtPct(netReturn * 100, 2) : '—'}</td>
+      <td>${escapeHTML(String(row?.holding_sessions ?? '—'))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function homeOperationsPanel(title, eyebrow, rows, tone) {
+  return `<article class="panel">
+    <div class="section-heading"><div><span class="eyebrow">${escapeHTML(eyebrow)}</span><h3>${escapeHTML(title)}</h3></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Operación</th><th>P&L neto</th><th>P&L / sesión</th><th>Retorno</th><th>Ses.</th></tr></thead>
+      <tbody>${homeOperationRows(rows, tone)}</tbody>
+    </table></div>
+  </article>`;
+}
+
+function renderHomeOperations(payload) {
+  const root = document.getElementById('homeOperations');
+  if (!root) return;
+  const data = payload || {};
+  root.innerHTML = [
+    homeOperationsPanel('Más ganancia en menos tiempo', 'Top operaciones', data.top_operations || [], 'positive'),
+    homeOperationsPanel('Peor pérdida por tiempo expuesto', 'Bottom operaciones', data.bottom_operations || [], 'negative'),
+  ].join('');
+}
+
 async function home() {
-  const [dashboardR, driftR, incidentsR, forecastsR, auditR, modelsR] = await Promise.all([
+  const [dashboardR, driftR, incidentsR, forecastsR, auditR, modelsR, operationsR] = await Promise.all([
     loadJSONState('data/dashboard.json', {}),
     loadJSONState('data/drift.json', {}),
     loadJSONState('data/incidents.json', {}),
     loadJSONState('data/forecasts.json', { rows: [] }),
     loadJSONState('data/audit.json', {}),
     loadJSONState('data/models.json', {}),
+    loadJSONState('data/strategy_league_operations.json', { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] }),
   ]);
   const dashboard = dashboardR.data || {};
   const drift = driftR.data || {};
@@ -241,6 +290,7 @@ async function home() {
   const forecasts = forecastsR.data || { rows: [] };
   const audit = auditR.data || {};
   const models = modelsR.data || {};
+  const operations = operationsR.data || { status: 'WAITING_FOR_CLOSED_TRADES', top_operations: [], bottom_operations: [] };
   const grouped = bySymbol(forecasts.rows || []);
   const symbols = Object.keys(grouped);
   const expected = Number(audit?.expected_prediction_rows || audit?.batch?.expected_rows || 0);
@@ -318,6 +368,8 @@ async function home() {
       healthRow('Pipeline', dashboardR.ok ? (dashboard.system_health || 'UNKNOWN') : 'UNKNOWN', dashboardR.ok ? 'Dashboard cargado' : 'dashboard.json no disponible'),
     ].join('');
   }
+
+  renderHomeOperations(operations);
 
   const watch = document.getElementById('m3Watch');
   if (watch) {
@@ -554,12 +606,26 @@ async function tickers() {
 }
 
 async function strategies() {
-  const result = await loadJSONState('data/strategy.json', { status: 'UNKNOWN', equity_curve: [] });
+  const [result, leagueR, liveR] = await Promise.all([
+    loadJSONState('data/strategy.json', { status: 'UNKNOWN', equity_curve: [] }),
+    loadJSONState('data/strategy_league.json', { status: 'UNKNOWN', rows: [] }),
+    loadJSONState('data/strategy_live.json', { status: 'UNKNOWN', rows: [] }),
+  ]);
   const strategy = result.data || {};
+  const league = leagueR.data || {};
+  const live = liveR.data || {};
   const status = document.getElementById('strategyStatus');
   const metrics = document.getElementById('strategyMetrics');
   const curve = Array.isArray(strategy.equity_curve) ? strategy.equity_curve : [];
-  if (status) status.innerHTML = result.ok ? badge(strategy.status || 'UNKNOWN') : badge('UNKNOWN', 'Reporte no disponible');
+  if (status) {
+    const historicalEnd = curve[curve.length - 1]?.session || '—';
+    const officialEod = league?.last_session || '—';
+    const liveUpdated = live?.generated_at ? fmtDateTime(live.generated_at) : '—';
+    status.innerHTML = `<div class="trust-strip ${league?.status === 'RUNNING' ? 'ok' : 'warn'}">
+      <div>${result.ok ? badge(strategy.status || 'UNKNOWN', 'Backtest histórico') : badge('UNKNOWN', 'Backtest no disponible')}<span class="trust-time">Histórico hasta ${escapeHTML(historicalEnd)}</span></div>
+      <span class="trust-detail">EOD prospectivo ${escapeHTML(officialEod)} · Intradía ${escapeHTML(liveUpdated)}</span>
+    </div>`;
+  }
 
   const start = Number(curve[0]?.equity ?? curve[0]?.value);
   const end = Number(curve[curve.length - 1]?.equity ?? curve[curve.length - 1]?.value);
@@ -643,7 +709,7 @@ async function strategies() {
     }
   }
 
-  windowControl?.addEventListener('change', renderWindow);
+  if (windowControl) windowControl.onchange = renderWindow;
   renderWindow();
 }
 
@@ -827,4 +893,7 @@ async function system() {
 const page = document.body.dataset.page;
 setNav(page);
 initNavigation();
-({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}))();
+const pageHandler = ({ home, forecasts, tickers, strategies, models, drift, incidents, system }[page] || (() => {}));
+pageHandler();
+if (page === 'home') setInterval(home, 300_000);
+if (page === 'strategies') setInterval(strategies, 300_000);
