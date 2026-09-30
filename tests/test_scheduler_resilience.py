@@ -37,7 +37,8 @@ def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
     assert 'cron: "35 19-23 * * 1-5"' not in workflow
     assert "actions: write" in workflow
     assert "has_recent_or_active_run" in workflow
-    assert "dispatch_if_stale intraday_engine.yml 2100 intraday" in workflow
+    assert "dispatch_if_stale intraday_engine.yml 1200 intraday" in workflow
+    assert "dispatch_if_stale intraday_engine.yml 2100 intraday" not in workflow
     assert "dispatch_if_stale eod.yml 2100 eod" in workflow
     assert "dispatch_if_stale monitoring.yml 3900 monitoring" in workflow
     assert "dispatch_if_stale strategy_live.yml 2100 strategy_live" in workflow
@@ -66,6 +67,17 @@ def test_strategy_live_uses_half_hour_cadence_without_embedded_cross_wake() -> N
     assert 'cron: "5,35 13-22 * * 1-5"' in workflow
     assert "watchdog_cross_wake:" not in workflow
     assert "gh workflow run scheduler_watchdog.yml" not in workflow
+
+
+def test_intraday_watchdog_budget_is_shorter_than_half_hour_cadence() -> None:
+    workflow = _text("scheduler_watchdog.yml")
+
+    # Primary polls are 30 minutes apart. The watchdog must not let a
+    # successful pre-checkpoint poll suppress the :47 recovery after a :30
+    # checkpoint becomes due.
+    assert "dispatch_if_stale intraday_engine.yml 1200 intraday" in workflow
+    assert "dispatch_if_stale strategy_live.yml 2100 strategy_live" in workflow
+    assert "successful pre-checkpoint poll" in workflow
 
 
 def test_watchdog_counts_only_recent_active_or_successful_runs() -> None:

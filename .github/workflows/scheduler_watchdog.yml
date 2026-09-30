@@ -201,7 +201,10 @@ jobs:
           # while the offset watchdog catches a truly missed poll ~10-12 minutes
           # after it was expected. Monitoring is hourly, so it gets 65 minutes.
           failures=0
-          dispatch_if_stale intraday_engine.yml 2100 intraday || failures=$((failures + 1))
+          # The primary intraday cron runs at :07/:37 and this watchdog at :17/:47.
+          # Use a sub-half-hour freshness budget so a successful pre-checkpoint poll
+          # cannot suppress recovery for a checkpoint that became due at :30.
+          dispatch_if_stale intraday_engine.yml 1200 intraday || failures=$((failures + 1))
 
           # Strategy League intraday monitor has the same cadence. Its own
           # market-hours gate makes a watchdog dispatch safe outside the session.
