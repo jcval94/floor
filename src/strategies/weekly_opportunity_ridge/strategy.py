@@ -139,7 +139,7 @@ def generate_weekly_opportunity_orders(
         alpha = long_alpha
         if (
             symbol in buy_symbols
-            and current_geometry["long_rr"] >= min_rr
+            and current_geometry["opportunity_long_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["up"], global_cfg, strategy_cfg
             )
@@ -147,11 +147,11 @@ def generate_weekly_opportunity_orders(
         ):
             action = "BUY"
             payoff_room = current_geometry["up"]
-            reward_risk = current_geometry["long_rr"]
+            reward_risk = current_geometry["opportunity_long_rr"]
             alpha = long_alpha
         elif (
             symbol in sell_symbols
-            and current_geometry["short_rr"] >= min_rr
+            and current_geometry["opportunity_short_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["down"], global_cfg, strategy_cfg
             )
@@ -159,7 +159,7 @@ def generate_weekly_opportunity_orders(
         ):
             action = "SELL"
             payoff_room = current_geometry["down"]
-            reward_risk = current_geometry["short_rr"]
+            reward_risk = current_geometry["opportunity_short_rr"]
             alpha = short_alpha
 
         if action == "HOLD" or not liquidity_ok(row, strategy_cfg):
@@ -172,7 +172,12 @@ def generate_weekly_opportunity_orders(
                         f"HOLD: weekly score={model_score:.4f}, "
                         f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
                         f"return={model_implied_signed_return:.2%} does not clear "
-                        "cost-aware alpha/payoff gate"
+                        "cost-aware alpha/payoff gate "
+                        f"(opp_rr_long={current_geometry['opportunity_long_rr']:.2f}, "
+                        f"opp_rr_short={current_geometry['opportunity_short_rr']:.2f}, "
+                        f"risk_rr_long={current_geometry['risk_long_rr']:.2f}, "
+                        f"risk_rr_short={current_geometry['risk_short_rr']:.2f}, "
+                        f"required_opp_rr={min_rr:.2f})"
                     ),
                 )
             )
@@ -212,7 +217,8 @@ def generate_weekly_opportunity_orders(
                     f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
                     f"return={model_implied_signed_return:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
-                    f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}"
+                    f"payoff_room={payoff_room:.2%}, opp_rr={reward_risk:.2f}, "
+                    f"risk_rr={current_geometry['risk_long_rr' if action == 'BUY' else 'risk_short_rr']:.2f}"
                     + (" · retained_by_hysteresis" if retention else "")
                 ),
                 exit_reason="Q1 anchor or ten-session timeout",
