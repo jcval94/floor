@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "league_id": "strategy_league_v10_d1_w1_champions_10k",
+  "league_id": "strategy_league_v11_intraday_informed_10k",
   "enabled": true,
   "mode": "shadow_paper",
   "initial_nav_usd": 10000,
   "benchmark_spy": "SPY",
-  "weekly_review_frequency_sessions": 10,
+  "weekly_review_frequency_sessions": 1,
   "execution": {
     "commission_bps": 26,
     "broker_commission_bps": 2,
@@ -56,7 +56,7 @@
   ],
   "weekly_model_path": "data/metrics/strategy_league/models/strategy_league_v10_d1_w1_champions_10k/weekly_opportunity_challenger.json",
   "capital_allocation_challenger": {
-    "review_frequency_sessions": 10,
+    "review_frequency_sessions": 1,
     "max_holding_sessions": 10,
     "risk_budget_pct_nav": 0.0075,
     "min_risk_scale": 0.65,
