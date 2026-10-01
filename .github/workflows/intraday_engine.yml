@@ -272,6 +272,18 @@ jobs:
               raise SystemExit(f"expected four strategy families, got: {summary}")
           if int(summary.get("decisions_evaluated", 0)) <= 0:
               raise SystemExit(f"strategy decision artifact is empty: {summary}")
+          event = str(payload.get("event") or "")
+          quote_source = payload.get("quote_source") or {}
+          coverage = float(summary.get("quote_coverage") or 0.0)
+          if event != "OPEN":
+              if coverage < 0.90:
+                  raise SystemExit(
+                      f"intraday decision quote coverage below 90%: {coverage:.2%}"
+                  )
+              if quote_source.get("spy_quote_available") is not True:
+                  raise SystemExit(
+                      "intraday decision checkpoint is missing point-in-time SPY quote"
+                  )
           print(json.dumps(summary, sort_keys=True))
           PY
 
