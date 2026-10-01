@@ -662,6 +662,9 @@ def test_workflows_wire_intraday_strategy_channel_without_touching_daily_bars() 
     eod_workflow = (ROOT / ".github" / "workflows" / "eod.yml").read_text(
         encoding="utf-8"
     )
+    intraday_workflow = (
+        ROOT / ".github" / "workflows" / "intraday_engine.yml"
+    ).read_text(encoding="utf-8")
     engine = (ROOT / "src" / "league" / "live_snapshot.py").read_text(
         encoding="utf-8"
     )
