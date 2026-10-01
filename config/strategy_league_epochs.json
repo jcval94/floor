@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "current_league_id": "strategy_league_v10_d1_w1_champions_10k",
+  "current_league_id": "strategy_league_v11_intraday_informed_10k",
   "epochs": [
     {
       "league_id": "strategy_league_v6_all_strategies_10k",
@@ -45,12 +45,23 @@
     },
     {
       "league_id": "strategy_league_v10_d1_w1_champions_10k",
-      "status": "DECLARED_CLEAN_EPOCH",
+      "status": "CLOSED_ENTRY_SEMANTICS_AND_CADENCE_CHANGE",
       "declared_on": "2026-09-28",
       "freeze_id": "capital_challenger_v1_refrozen_20260928_v10",
       "strategy_parameters_changed": false,
       "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v10. No v9 sessions are inherited; v7/v8/v9 remain separate historical evidence.",
-      "change_summary": "Serving D1 and W1 champions were explicitly promoted from robust_range_v3 to central_skill_ensemble_v1 after passing the permanent ATR-only gate. Strategy parameters, costs, model/strategy contracts, Q1/value/timing champions and allocator weights remain unchanged."
+      "change_summary": "Serving D1 and W1 champions were explicitly promoted from robust_range_v3 to central_skill_ensemble_v1 after passing the permanent ATR-only gate. Strategy parameters, costs, model/strategy contracts, Q1/value/timing champions and allocator weights remain unchanged.",
+      "closed_on": "2026-10-01",
+      "close_reason": "Entry opportunity reward/risk was incorrectly gated by the wider calibrated risk envelope and W1/Q1 entry discovery was tied to 5/10-session holding horizons. Preserve v10 as historical evidence; do not stitch it into v11."
+    },
+    {
+      "league_id": "strategy_league_v11_intraday_informed_10k",
+      "status": "DECLARED_CLEAN_EPOCH",
+      "declared_on": "2026-10-01",
+      "freeze_id": "capital_challenger_v1_refrozen_20261001_v11",
+      "strategy_parameters_changed": true,
+      "evidence_policy": "Prospective evidence begins only at the first complete EOD genesis for v11. No v10 sessions are inherited; intraday checkpoint decisions are observational and non-promotional until separately validated.",
+      "change_summary": "Separate central opportunity RR from calibrated risk-envelope RR; evaluate all strategy entries daily; evaluate all four source strategies at every accepted intraday checkpoint with structured gate traces; Capital Challenger observes every checkpoint while execution remains shadow-only. Holding horizons and calibrated stop/sizing geometry remain unchanged."
     }
   ]
 }
