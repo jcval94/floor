@@ -54,6 +54,41 @@ def generate_breakout_floor_orders(
             global_cfg,
             strategy_cfg,
         )
+        liquid = liquidity_ok(row, strategy_cfg)
+        long_payoff_ok = payoff_room_clears_cost(
+            current_geometry["up"], global_cfg, strategy_cfg
+        )
+        short_payoff_ok = payoff_room_clears_cost(
+            current_geometry["down"], global_cfg, strategy_cfg
+        )
+        trace = {
+            "inputs": {
+                "trend": trend,
+                "opportunity_long_rr": current_geometry["opportunity_long_rr"],
+                "opportunity_short_rr": current_geometry["opportunity_short_rr"],
+                "risk_long_rr": current_geometry["risk_long_rr"],
+                "risk_short_rr": current_geometry["risk_short_rr"],
+                "upside_pct": current_geometry["up"],
+                "downside_pct": current_geometry["down"],
+            },
+            "thresholds": {
+                "min_abs_trend_score": min_trend,
+                "min_opportunity_rr": min_rr,
+                "required_long_gross_alpha_pct": long_alpha["required_gross_alpha_pct"],
+                "required_short_gross_alpha_pct": short_alpha["required_gross_alpha_pct"],
+            },
+            "gates": {
+                "liquidity": liquid,
+                "long_trend": trend >= min_trend,
+                "long_opportunity_rr": current_geometry["opportunity_long_rr"] >= min_rr,
+                "long_payoff_after_costs": long_payoff_ok,
+                "long_alpha": long_alpha_ok,
+                "short_trend": trend <= -min_trend,
+                "short_opportunity_rr": current_geometry["opportunity_short_rr"] >= min_rr,
+                "short_payoff_after_costs": short_payoff_ok,
+                "short_alpha": short_alpha_ok,
+            },
+        }
 
         action = "HOLD"
         reward_risk = 0.0
@@ -62,9 +97,7 @@ def generate_breakout_floor_orders(
         if (
             trend >= min_trend
             and current_geometry["opportunity_long_rr"] >= min_rr
-            and payoff_room_clears_cost(
-                current_geometry["up"], global_cfg, strategy_cfg
-            )
+            and long_payoff_ok
             and long_alpha_ok
         ):
             action = "BUY"
@@ -74,9 +107,7 @@ def generate_breakout_floor_orders(
         elif (
             trend <= -min_trend
             and current_geometry["opportunity_short_rr"] >= min_rr
-            and payoff_room_clears_cost(
-                current_geometry["down"], global_cfg, strategy_cfg
-            )
+            and short_payoff_ok
             and short_alpha_ok
         ):
             action = "SELL"
@@ -84,7 +115,7 @@ def generate_breakout_floor_orders(
             payoff_room = current_geometry["down"]
             alpha = short_alpha
 
-        if action == "HOLD" or not liquidity_ok(row, strategy_cfg):
+        if action == "HOLD" or not liquid:
             output.append(
                 hold_decision(
                     STRATEGY_ID,
@@ -100,6 +131,7 @@ def generate_breakout_floor_orders(
                         f"risk_rr_short={current_geometry['risk_short_rr']:.2f}, "
                         f"required_opp_rr={min_rr:.2f})"
                     ),
+                    trace=trace,
                 )
             )
             continue
@@ -117,6 +149,10 @@ def generate_breakout_floor_orders(
                 "HOLD: reliable M3 floor timing blocks tactical BUY",
             )
             hold.m3_context = m3_context
+            hold.decision_trace = {
+                **trace,
+                "m3": {"passed": False, "context": m3_context},
+            }
             output.append(hold)
             continue
 
@@ -186,6 +222,11 @@ def generate_breakout_floor_orders(
                 cost_pct=alpha["cost_pct"],
                 alpha_source="momentum_relative_strength_trend_proxy",
                 payoff_room_pct=payoff_room,
+                decision_trace={
+                    **trace,
+                    "m3": {"passed": True, "context": m3_context},
+                    "selected_action": action,
+                },
             )
         )
 
