@@ -337,6 +337,7 @@ def hold_decision(
     horizon: str,
     reason: str,
     score: float = 0.0,
+    trace: dict[str, Any] | None = None,
 ) -> StrategyDecision:
     return StrategyDecision(
         strategy_id=strategy_id,
@@ -352,4 +353,5 @@ def hold_decision(
         expected_return=0.0,
         expected_range=0.0,
         timing_alignment=0.5,
+        decision_trace=trace,
     )
