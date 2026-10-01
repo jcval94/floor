@@ -299,7 +299,8 @@ jobs:
             --league-config config/strategy_league.json \
             --output site/data/strategy_league.json \
             --observation-output site/data/experiment_observation.json \
-            --live-output site/data/strategy_live.json
+            --live-output site/data/strategy_live.json \
+            --decision-output site/data/strategy_decisions_intraday.json
           PYTHONPATH=src python -m utils.pages_security --site-dir site
           touch site/.nojekyll
 
@@ -324,6 +325,7 @@ jobs:
           league = json.loads(Path('site/data/strategy_league.json').read_text(encoding='utf-8'))
           observation = json.loads(Path('site/data/experiment_observation.json').read_text(encoding='utf-8'))
           live = json.loads(Path('site/data/strategy_live.json').read_text(encoding='utf-8'))
+          decisions = json.loads(Path('site/data/strategy_decisions_intraday.json').read_text(encoding='utf-8'))
 
           if not audit.get('safe_to_deploy'):
               raise SystemExit('audit.safe_to_deploy is false')
@@ -362,6 +364,15 @@ jobs:
           if live.get('counts_as_prospective_evidence') is not False:
               raise SystemExit('Intraday strategy monitor must not count as official prospective evidence')
 
+          if decisions.get('live_execution_enabled') is not False:
+              raise SystemExit('Intraday strategy decisions must never enable LIVE execution')
+          if decisions.get('orders_emitted') is not False:
+              raise SystemExit('Intraday strategy decisions must never emit orders')
+          if decisions.get('counts_as_promotion_evidence') is not False:
+              raise SystemExit('Intraday strategy decisions must not count as promotion evidence')
+          if decisions.get('automatic_promotion') is not False:
+              raise SystemExit('Intraday strategy decisions must never auto-promote')
+
           safety = observation.get('safety') or {}
           if safety.get('live_execution_enabled') is not False:
               raise SystemExit('Experiment observation must never publish LIVE as enabled')
@@ -381,6 +392,9 @@ jobs:
           print('league_sessions=', league.get('sessions'))
           print('live_strategy_status=', live.get('status'))
           print('live_strategy_generated_at=', live.get('generated_at'))
+          print('intraday_decision_status=', decisions.get('status'))
+          print('intraday_decision_event=', decisions.get('event'))
+          print('intraday_actionable=', (decisions.get('summary') or {}).get('actionable_decisions'))
           print('observation_status=', observation.get('status'))
           print('observation_reconciled=', (observation.get('evidence') or {}).get('reconciled_count_since_genesis'))
           print('blockers=', audit.get('blockers', []))
@@ -393,6 +407,7 @@ jobs:
           node --check site/assets/app.js
           node --check site/assets/audit.js
           node --check site/assets/league.js
+          node --check site/assets/intraday-decisions.js
           node --check site/assets/charts.js
           node --check site/assets/experiment.js
           python - <<'PY'
