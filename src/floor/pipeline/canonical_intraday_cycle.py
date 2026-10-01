@@ -24,6 +24,10 @@ from floor.persistence_db import PersistenceWriter
 from floor.schemas import SignalRecord
 from floor.storage import append_jsonl
 from forecasting.run_forecast import run_forecast_pipeline
+from league.intraday_strategy_decisions import (
+    build_intraday_strategy_decisions,
+    write_intraday_strategy_decisions,
+)
 
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
@@ -139,7 +143,11 @@ def run_intraday_cycle(
     as_of: datetime | None = None,
     market_session: date | None = None,
 ) -> dict[str, object]:
-    """Canonical range-forecast cycle. No external override or directional orders."""
+    """Canonical range forecast plus auditable shadow strategy decisions.
+
+    Every accepted checkpoint evaluates the Strategy League families, while
+    order generation and live execution remain disabled.
+    """
 
     market_rows = _latest_feature_rows(cfg, symbols, max_market_session=market_session)
     if len(market_rows) != len(symbols):
@@ -160,7 +168,7 @@ def run_intraday_cycle(
     batch_id = _batch_id(as_of, event_type)
     logger.info(
         "[canonical-intraday] start event=%s batch_id=%s symbols=%s "
-        "directional_signals=disabled order_generation=disabled",
+        "directional_signals=shadow_decisions order_generation=disabled",
         event_type,
         batch_id,
         len(symbols),
@@ -186,6 +194,25 @@ def run_intraday_cycle(
     _validate_forecast_batch(forecasts, blocked, symbols)
 
     input_snapshot_id = _input_snapshot_id(market_rows, forecasts)
+    strategy_decisions = build_intraday_strategy_decisions(
+        market_rows,
+        forecasts,
+        event_type=event_type,
+        as_of=as_of,
+        data_dir=cfg.data_dir,
+        input_snapshot_id=input_snapshot_id,
+    )
+    strategy_decision_path = write_intraday_strategy_decisions(
+        strategy_decisions,
+        data_dir=cfg.data_dir,
+    )
+    logger.info(
+        "[canonical-intraday][strategy-decisions] event=%s path=%s summary=%s",
+        event_type,
+        strategy_decision_path,
+        strategy_decisions.get("summary", {}),
+    )
+
     marker_path = _input_snapshot_marker(cfg.data_dir, input_snapshot_id)
     if marker_path.exists():
         logger.info(
@@ -200,6 +227,8 @@ def run_intraday_cycle(
             "batch_id": batch_id,
             "input_snapshot_id": input_snapshot_id,
             "forecasts": len(forecasts),
+            "strategy_decisions": strategy_decisions.get("summary", {}),
+            "strategy_decision_path": str(strategy_decision_path),
             "reconciliation": {"status": "DEFERRED_TO_EOD"},
         }
 
@@ -280,5 +309,7 @@ def run_intraday_cycle(
         "batch_id": batch_id,
         "input_snapshot_id": input_snapshot_id,
         "forecasts": len(forecasts),
+        "strategy_decisions": strategy_decisions.get("summary", {}),
+        "strategy_decision_path": str(strategy_decision_path),
         "reconciliation": {"status": "DEFERRED_TO_EOD"},
     }
