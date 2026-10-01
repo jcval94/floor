@@ -28,7 +28,7 @@
 
   <section id="strategy-live" class="section">
     <div class="section-heading">
-      <div><span class="eyebrow">Intraday mark-to-market · actualización ~30 min</span><h2>Estrategias en tiempo casi real</h2><p class="lead">Las posiciones oficiales del último EOD se marcan durante el mercado con cotizaciones intradía de 5 minutos. Esta vista observa NAV, cambio del día, exposición, cash y cobertura sin generar órdenes ni alterar la Strategy League oficial.</p></div>
+      <div><span class="eyebrow">Intraday mark-to-market · actualización ~30 min</span><h2>Estrategias en tiempo casi real</h2><p class="lead">Las posiciones oficiales del último EOD se marcan durante el mercado con cotizaciones intradía de 5 minutos. El portafolio oficial no se rebalancea intradía; la sección siguiente evalúa por separado las nuevas decisiones BUY/SELL/HOLD en modo shadow.</p></div>
       <span class="status-badge neutral"><span class="status-dot"></span>Observacional</span>
     </div>
     <div id="liveStatus" aria-live="polite"></div>
@@ -37,6 +37,24 @@
     <article class="panel league-table-panel"><div class="section-heading"><div><span class="eyebrow">Live monitor</span><h3>Clasificación intradía</h3><p>El orden refleja el NAV marcado más reciente; es una lectura operacional, no una señal de compra/venta ni evidencia para promoción.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Miembro</th><th>Tipo</th><th>NAV ahora</th><th>Desde EOD</th><th>Retorno acum.</th><th>vs SPY</th><th>Exposición</th><th>Cash</th><th>Posiciones</th><th>Cobertura</th></tr></thead><tbody id="liveTable"></tbody></table></div></article>
     <p id="liveNote" class="small" aria-live="polite"></p>
     <div class="league-automation-note"><span class="status-badge ok"><span class="status-dot"></span>Automático</span><p><strong>Mercado abierto → quotes 5m → mark-to-market → Pages.</strong> El objetivo es refrescar aproximadamente cada 15 minutos. Los snapshots intradía viven en un canal separado y nunca cuentan como evidencia prospectiva oficial ni habilitan ejecución LIVE.</p></div>
+  </section>
+
+  <section id="intraday-decisions" class="section">
+    <div class="section-heading">
+      <div><span class="eyebrow">Checkpoint decision engine · OPEN / +2h / +4h / +6h / CLOSE</span><h2>Decisiones intradía informadas</h2><p class="lead">Cada checkpoint evalúa las cuatro estrategias fuente con los forecasts y features disponibles en ese momento. Aquí se muestran BUY/SELL/HOLD, gates fallidos y los targets que el Capital Challenger habría seleccionado. Es evidencia shadow: no envía órdenes y no cuenta para promoción.</p></div>
+      <span class="status-badge neutral"><span class="status-dot"></span>Shadow</span>
+    </div>
+    <div id="decisionStatus" aria-live="polite"></div>
+    <div id="decisionSummary" class="league-summary-grid" aria-label="Resumen de decisiones intradía"></div>
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Por estrategia</span><h3>Qué decidió y por qué</h3><p>Los HOLD ya no se descartan: se conservan junto con los valores, umbrales y gates que bloquearon la operación.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Estrategia</th><th>BUY</th><th>SELL</th><th>HOLD</th><th>Accionables</th><th>Gate dominante en HOLD</th></tr></thead><tbody id="decisionTable"></tbody></table></div>
+    </article>
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Candidatos del checkpoint</span><h3>Señales accionables</h3><p>Ranking shadow de los candidatos que superaron costos, geometría de oportunidad y filtros de estrategia. El risk envelope sigue gobernando stop y sizing.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Estrategia</th><th>Ticker</th><th>Acción</th><th>Score</th><th>Horizonte</th><th>Decisión</th></tr></thead><tbody id="decisionCandidates"></tbody></table></div>
+    </article>
+    <p id="decisionNote" class="small" aria-live="polite"></p>
   </section>
 
   <section id="retrospective-tournament" class="section">
