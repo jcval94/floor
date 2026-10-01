@@ -432,6 +432,107 @@ def test_waiting_league_reports_missing_weekly_model_truthfully(tmp_path: Path) 
     assert payload["weekly_model"]["status"] == "MISSING"
 
 
+def test_publish_intraday_decisions_is_safe_and_epoch_scoped(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    source = (
+        data_dir
+        / "metrics"
+        / "strategy_decisions"
+        / "intraday"
+        / "latest.json"
+    )
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v11_intraday_informed_10k",
+                "mode": "shadow_observation_no_execution",
+                "event": "OPEN_PLUS_2H",
+                "as_of": "2026-10-01T11:30:00-04:00",
+                "strategies": {
+                    "breakout_protected_by_floor": {
+                        "action_counts": {"BUY": 2, "SELL": 1, "HOLD": 47},
+                        "decisions": [],
+                    }
+                },
+                "summary": {
+                    "strategies_evaluated": 4,
+                    "symbols_evaluated": 50,
+                    "decisions_evaluated": 200,
+                    "actionable_decisions": 3,
+                    "quote_coverage": 0.98,
+                },
+                "capital_allocation_challenger": {
+                    "action": "ALLOCATE",
+                    "target_count": 2,
+                    "targets": {"AAA": {"weight": 0.2}},
+                },
+                "live_execution_enabled": True,
+                "orders_emitted": True,
+                "counts_as_promotion_evidence": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "strategy_league.json"
+    cfg.write_text(
+        json.dumps({"league_id": "strategy_league_v11_intraday_informed_10k"}),
+        encoding="utf-8",
+    )
+    output = tmp_path / "site" / "data" / "strategy_decisions_intraday.json"
+
+    payload = publish_intraday_decision_payload(data_dir, output, cfg)
+
+    assert payload["status"] == "READY"
+    assert payload["summary"]["decisions_evaluated"] == 200
+    assert payload["summary"]["quote_coverage"] == pytest.approx(0.98)
+    assert payload["counts_as_promotion_evidence"] is False
+    assert payload["live_execution_enabled"] is False
+    assert payload["orders_emitted"] is False
+    assert payload["automatic_promotion"] is False
+
+
+def test_publish_intraday_decisions_withholds_previous_epoch(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    source = (
+        data_dir
+        / "metrics"
+        / "strategy_decisions"
+        / "intraday"
+        / "latest.json"
+    )
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        json.dumps(
+            {
+                "league_id": "strategy_league_v10_d1_w1_champions_10k",
+                "status": "READY",
+                "summary": {"actionable_decisions": 99},
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = tmp_path / "strategy_league.json"
+    cfg.write_text(
+        json.dumps({"league_id": "strategy_league_v11_intraday_informed_10k"}),
+        encoding="utf-8",
+    )
+
+    payload = publish_intraday_decision_payload(
+        data_dir,
+        tmp_path / "site" / "data" / "strategy_decisions_intraday.json",
+        cfg,
+    )
+
+    assert payload["status"] == "WAITING_FOR_INTRADAY_DECISIONS"
+    assert payload["summary"]["actionable_decisions"] == 0
+    assert payload["league_id"] == "strategy_league_v11_intraday_informed_10k"
+
+
 def test_publish_live_payload_is_non_promotional_and_strips_internal_cache(
     tmp_path: Path,
 ) -> None:
