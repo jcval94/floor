@@ -249,6 +249,32 @@ jobs:
             --action-return-tolerance 0.0 \
             --sample-limit 10
 
+          decision_path="data/metrics/strategy_decisions/intraday/${{ needs.gate.outputs.session_day }}/${{ needs.gate.outputs.event }}.json"
+          test -s "$decision_path" || {
+            echo "::error::Missing intraday strategy decision artifact: $decision_path"
+            exit 1
+          }
+          python - "$decision_path" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          summary = payload.get("summary", {})
+          if payload.get("mode") != "shadow_observation_no_execution":
+              raise SystemExit(f"unexpected strategy decision mode: {payload.get('mode')}")
+          if payload.get("live_execution_enabled") is not False:
+              raise SystemExit("intraday strategy observation must never enable live execution")
+          if payload.get("orders_emitted") is not False:
+              raise SystemExit("intraday strategy observation unexpectedly emitted orders")
+          if int(summary.get("strategies_evaluated", 0)) != 4:
+              raise SystemExit(f"expected four strategy families, got: {summary}")
+          if int(summary.get("decisions_evaluated", 0)) <= 0:
+              raise SystemExit(f"strategy decision artifact is empty: {summary}")
+          print(json.dumps(summary, sort_keys=True))
+          PY
+
       - name: Mark checkpoint complete
         if: steps.lock_guard.outputs.run == 'true'
         run: |
