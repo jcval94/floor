@@ -54,7 +54,7 @@
       "required": true
     }
   ],
-  "weekly_model_path": "data/metrics/strategy_league/models/strategy_league_v10_d1_w1_champions_10k/weekly_opportunity_challenger.json",
+  "weekly_model_path": "data/metrics/strategy_league/models/strategy_league_v11_intraday_informed_10k/weekly_opportunity_challenger.json",
   "capital_allocation_challenger": {
     "review_frequency_sessions": 1,
     "max_holding_sessions": 10,
