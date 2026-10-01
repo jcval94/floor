@@ -61,26 +61,26 @@ def generate_breakout_floor_orders(
         alpha = long_alpha
         if (
             trend >= min_trend
-            and current_geometry["long_rr"] >= min_rr
+            and current_geometry["opportunity_long_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["up"], global_cfg, strategy_cfg
             )
             and long_alpha_ok
         ):
             action = "BUY"
-            reward_risk = current_geometry["long_rr"]
+            reward_risk = current_geometry["opportunity_long_rr"]
             payoff_room = current_geometry["up"]
             alpha = long_alpha
         elif (
             trend <= -min_trend
-            and current_geometry["short_rr"] >= min_rr
+            and current_geometry["opportunity_short_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["down"], global_cfg, strategy_cfg
             )
             and short_alpha_ok
         ):
             action = "SELL"
-            reward_risk = current_geometry["short_rr"]
+            reward_risk = current_geometry["opportunity_short_rr"]
             payoff_room = current_geometry["down"]
             alpha = short_alpha
 
@@ -92,7 +92,13 @@ def generate_breakout_floor_orders(
                     "d1",
                     (
                         "HOLD: directional alpha/payoff room does not clear "
-                        f"cost-adjusted gate (trend={trend:.4f})"
+                        "cost-adjusted gate "
+                        f"(trend={trend:.4f}, "
+                        f"opp_rr_long={current_geometry['opportunity_long_rr']:.2f}, "
+                        f"opp_rr_short={current_geometry['opportunity_short_rr']:.2f}, "
+                        f"risk_rr_long={current_geometry['risk_long_rr']:.2f}, "
+                        f"risk_rr_short={current_geometry['risk_short_rr']:.2f}, "
+                        f"required_opp_rr={min_rr:.2f})"
                     ),
                 )
             )
@@ -160,7 +166,8 @@ def generate_breakout_floor_orders(
                 entry_reason=(
                     f"{action}: trend-alpha={alpha['gross_alpha_pct']:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
-                    f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}, "
+                    f"payoff_room={payoff_room:.2%}, opp_rr={reward_risk:.2f}, "
+                    f"risk_rr={current_geometry['risk_long_rr' if action == 'BUY' else 'risk_short_rr']:.2f}, "
                     f"cost={round_trip_cost_bps(global_cfg):.0f} bps"
                 ),
                 exit_reason="D1 floor/ceiling or one-session timeout",
