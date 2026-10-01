@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: intraday-engine-${{ github.ref }}
@@ -82,10 +83,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    concurrency:
-      group: floor-runtime-state-writer
-      cancel-in-progress: false
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -96,6 +94,11 @@ jobs:
           python-version: "3.12"
       - name: Install runtime dependencies
         run: python -m pip install -e . "numpy>=2.0,<3"
+
+      - name: Acquire runtime writer lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh acquire
 
       - name: Restore rolling runtime state
         env:
@@ -330,6 +333,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/checkpoint_state.sh publish
+
+      - name: Release runtime writer lock
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh release
 
       - name: Upload immutable per-run audit artifact
         if: steps.lock_guard.outputs.run == 'true'
