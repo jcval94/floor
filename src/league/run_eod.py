@@ -84,10 +84,10 @@ def _retain_hold_positions(
     rows_by_symbol: dict[str, dict],
     strategies_cfg: dict,
 ) -> dict[str, dict]:
-    """Keep existing long positions when today's strategy decision is HOLD.
+    """Keep existing long positions on HOLD and admit new BUYs into spare capital.
 
-    Daily entry discovery must not turn a W1/Q1 holding horizon into a daily
-    liquidation rule. SELL remains an explicit exit/no-position instruction;
+    Existing positions have priority so increasing entry-evaluation frequency
+    cannot force churn. SELL remains an explicit exit/no-position instruction;
     stops, take-profit and max-holding exits remain owned by league.engine.
     """
 
@@ -100,31 +100,75 @@ def _retain_hold_positions(
     global_nav = float(
         strategies_cfg.get("portfolio", {}).get("nav_usd", 1.0) or 1.0
     )
-    retained = dict(targets)
+    retained: dict[str, dict] = {}
+
+    # Protect existing non-SELL positions first. If today's decision is BUY,
+    # refresh its stop/target metadata without mechanically resizing the
+    # existing position; resizing is left to future explicit portfolio logic.
     for symbol, position in current_positions.items():
         decision = by_symbol.get(str(symbol))
         if decision is not None and str(decision.side).upper() == "SELL":
-            continue
-        if str(symbol) in retained:
             continue
         row = rows_by_symbol.get(str(symbol), {})
         close = float(row.get("close", 0.0) or 0.0)
         qty = int(position.get("qty", 0) or 0) if isinstance(position, dict) else 0
         if close <= 0 or qty <= 0:
             continue
-        weight = min(1.0, max(0.0, qty * close / global_nav))
+        current_weight = min(1.0, max(0.0, qty * close / global_nav))
+        proposed = targets.get(str(symbol), {})
         retained[str(symbol)] = {
-            "weight": weight,
-            "stop_price": float(position.get("stop_price", 0.0) or 0.0),
-            "take_profit_price": float(position.get("take_profit_price", 0.0) or 0.0),
-            "score": float(getattr(decision, "score", 0.0) or 0.0),
-            "expected_return": float(
-                getattr(decision, "expected_return", 0.0) or 0.0
+            **proposed,
+            "weight": current_weight,
+            "stop_price": float(
+                proposed.get("stop_price", position.get("stop_price", 0.0)) or 0.0
             ),
-            "retained_on_hold": True,
+            "take_profit_price": float(
+                proposed.get(
+                    "take_profit_price",
+                    position.get("take_profit_price", 0.0),
+                )
+                or 0.0
+            ),
+            "score": float(
+                proposed.get("score", getattr(decision, "score", 0.0)) or 0.0
+            ),
+            "expected_return": float(
+                proposed.get(
+                    "expected_return",
+                    getattr(decision, "expected_return", 0.0),
+                )
+                or 0.0
+            ),
+            "retained_on_hold": (
+                decision is None or str(decision.side).upper() == "HOLD"
+            ),
         }
-    return retained
 
+    gross_used = sum(float(spec.get("weight", 0.0) or 0.0) for spec in retained.values())
+    remaining = max(0.0, 1.0 - gross_used)
+
+    # New positions compete for the residual capacity by score. This prevents
+    # retained holdings plus newly discovered entries from exceeding 100% gross.
+    new_candidates = [
+        (symbol, spec)
+        for symbol, spec in targets.items()
+        if symbol not in retained
+    ]
+    new_candidates.sort(
+        key=lambda item: float(item[1].get("score", 0.0) or 0.0),
+        reverse=True,
+    )
+    for symbol, spec in new_candidates:
+        if remaining <= 1e-12:
+            break
+        requested = max(0.0, min(1.0, float(spec.get("weight", 0.0) or 0.0)))
+        weight = min(requested, remaining)
+        if weight <= 1e-12:
+            continue
+        retained[symbol] = {**spec, "weight": weight}
+        remaining -= weight
+
+    return retained
 
 def _equal_weight_capped_targets(
     targets: dict[str, dict],
