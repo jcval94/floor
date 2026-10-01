@@ -28,6 +28,7 @@ from league.intraday_strategy_decisions import (
     build_intraday_strategy_decisions,
     write_intraday_strategy_decisions,
 )
+from league.live_snapshot import fetch_checkpoint_quotes
 
 logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
@@ -194,6 +195,20 @@ def run_intraday_cycle(
     _validate_forecast_batch(forecasts, blocked, symbols)
 
     input_snapshot_id = _input_snapshot_id(market_rows, forecasts)
+
+    # Forecasts remain anchored to the last completed daily bar. Strategy
+    # observation gets a strict point-in-time overlay from fully completed 5m
+    # bars so +2h/+4h/+6h/CLOSE can react without contaminating model inputs.
+    if event_type == "OPEN":
+        checkpoint_quotes: dict[str, dict[str, object]] = {}
+        quote_failures = sorted(set([*symbols, "SPY"]))
+    else:
+        checkpoint_quotes, quote_failures = fetch_checkpoint_quotes(
+            [*symbols, "SPY"],
+            checkpoint_at=as_of,
+            range_="1d",
+            interval="5m",
+        )
     strategy_decisions = build_intraday_strategy_decisions(
         market_rows,
         forecasts,
@@ -201,16 +216,19 @@ def run_intraday_cycle(
         as_of=as_of,
         data_dir=cfg.data_dir,
         input_snapshot_id=input_snapshot_id,
+        checkpoint_quotes=checkpoint_quotes,
+        quote_failures=quote_failures,
     )
     strategy_decision_path = write_intraday_strategy_decisions(
         strategy_decisions,
         data_dir=cfg.data_dir,
     )
     logger.info(
-        "[canonical-intraday][strategy-decisions] event=%s path=%s summary=%s",
+        "[canonical-intraday][strategy-decisions] event=%s path=%s summary=%s quote_source=%s",
         event_type,
         strategy_decision_path,
         strategy_decisions.get("summary", {}),
+        strategy_decisions.get("quote_source", {}),
     )
 
     marker_path = _input_snapshot_marker(cfg.data_dir, input_snapshot_id)
