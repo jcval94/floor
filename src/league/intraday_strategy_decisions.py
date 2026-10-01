@@ -99,21 +99,6 @@ def _overlay_checkpoint_quotes(
             row["momentum_20"] = live_m20
             row["rel_strength_20"] = live_m20 - live_spy_m20
 
-            base_trend = float(row.get("trend_context_m3", 0.0) or 0.0)
-            if 1.0 + base_trend > 1e-9 and base_close > 0:
-                inferred_sma65 = base_close / (1.0 + base_trend)
-                if inferred_sma65 > 0:
-                    row["trend_context_m3"] = live_price / inferred_sma65 - 1.0
-
-            base_drawdown = float(row.get("drawdown_13w", 0.0) or 0.0)
-            if 1.0 + base_drawdown > 1e-9 and base_close > 0:
-                inferred_peak65 = base_close / (1.0 + base_drawdown)
-                if inferred_peak65 > 0:
-                    row["drawdown_13w"] = min(
-                        0.0,
-                        live_price / inferred_peak65 - 1.0,
-                    )
-
             row["close_eod_reference"] = base_close
             row["close"] = live_price
             row["intraday_price"] = live_price
