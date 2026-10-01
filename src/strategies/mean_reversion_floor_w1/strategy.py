@@ -68,7 +68,7 @@ def generate_mean_reversion_orders(
         if (
             floor_distance <= near_anchor
             and reversal_signal >= min_reversal
-            and current_geometry["long_rr"] >= min_rr
+            and current_geometry["opportunity_long_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["up"], global_cfg, strategy_cfg
             )
@@ -78,7 +78,7 @@ def generate_mean_reversion_orders(
                 (
                     "BUY",
                     max(0.0, long_alpha["net_alpha_pct"])
-                    * min(current_geometry["long_rr"], 3.0),
+                    * min(current_geometry["opportunity_long_rr"], 3.0),
                     current_geometry["up"],
                     current_geometry["long_rr"],
                     long_alpha,
@@ -88,7 +88,7 @@ def generate_mean_reversion_orders(
         if (
             ceiling_distance <= near_anchor
             and reversal_signal <= -min_reversal
-            and current_geometry["short_rr"] >= min_rr
+            and current_geometry["opportunity_short_rr"] >= min_rr
             and payoff_room_clears_cost(
                 current_geometry["down"], global_cfg, strategy_cfg
             )
@@ -98,7 +98,7 @@ def generate_mean_reversion_orders(
                 (
                     "SELL",
                     max(0.0, short_alpha["net_alpha_pct"])
-                    * min(current_geometry["short_rr"], 3.0),
+                    * min(current_geometry["opportunity_short_rr"], 3.0),
                     current_geometry["down"],
                     current_geometry["short_rr"],
                     short_alpha,
@@ -117,7 +117,12 @@ def generate_mean_reversion_orders(
                         f"ceiling_dist={ceiling_distance:.2%}, "
                         f"momentum10={momentum_10:.2%}, "
                         f"momentum20={momentum_20:.2%}, "
-                        f"reversal={reversal_signal:.2%})"
+                        f"reversal={reversal_signal:.2%}, "
+                        f"opp_rr_long={current_geometry['opportunity_long_rr']:.2f}, "
+                        f"opp_rr_short={current_geometry['opportunity_short_rr']:.2f}, "
+                        f"risk_rr_long={current_geometry['risk_long_rr']:.2f}, "
+                        f"risk_rr_short={current_geometry['risk_short_rr']:.2f}, "
+                        f"required_opp_rr={min_rr:.2f})"
                     ),
                 )
             )
@@ -182,7 +187,8 @@ def generate_mean_reversion_orders(
                     f"{action}: W1 reversal confirmed by 10d-vs-20d momentum "
                     f"alpha={alpha['gross_alpha_pct']:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
-                    f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}"
+                    f"payoff_room={payoff_room:.2%}, opp_rr={reward_risk:.2f}, "
+                    f"risk_rr={current_geometry['risk_long_rr' if action == 'BUY' else 'risk_short_rr']:.2f}"
                 ),
                 exit_reason="Opposite W1 anchor or five-session timeout",
                 stop_price=stop,
