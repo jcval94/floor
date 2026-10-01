@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from league import intraday_strategy_decisions as intraday
+from league.run_eod import _retain_hold_positions
 from strategies.common import geometry
 
 ET = ZoneInfo("America/New_York")
@@ -89,6 +91,27 @@ def test_every_checkpoint_evaluates_all_strategy_families_and_preserves_gate_tra
         strategies_config_path=repo_root / "config" / "strategies.yaml",
         league_config_path=repo_root / "config" / "strategy_league.json",
         weekly_artifact={"params": {"canonical_serving_enabled": False}},
+        checkpoint_quotes={
+            "AAA": {
+                "price": 101.0,
+                "previous_close": 100.0,
+                "as_of": "2026-10-01T15:25:00+00:00",
+                "source": "yahoo_chart_checkpoint",
+                "session_return": 0.01,
+                "return_15m": 0.004,
+                "return_1h": 0.008,
+                "session_high": 101.2,
+                "session_low": 99.5,
+                "completed_bars": 24,
+            },
+            "SPY": {
+                "price": 505.0,
+                "previous_close": 500.0,
+                "as_of": "2026-10-01T15:25:00+00:00",
+                "source": "yahoo_chart_checkpoint",
+                "session_return": 0.01,
+            },
+        },
     )
 
     assert payload["mode"] == "shadow_observation_no_execution"
@@ -101,8 +124,11 @@ def test_every_checkpoint_evaluates_all_strategy_families_and_preserves_gate_tra
     breakout = payload["strategies"]["breakout_protected_by_floor"]["decisions"][0]
     assert breakout["action"] == "BUY"
     trace = breakout["decision_trace"]
-    assert trace["inputs"]["opportunity_long_rr"] == pytest.approx(2.5)
-    assert trace["inputs"]["risk_long_rr"] == pytest.approx(0.5)
+    assert trace["inputs"]["opportunity_long_rr"] == pytest.approx(4.0 / 3.0)
+    assert trace["inputs"]["risk_long_rr"] == pytest.approx(4.0 / 11.0)
+    assert trace["intraday"]["price"] == pytest.approx(101.0)
+    assert trace["intraday"]["return_15m"] == pytest.approx(0.004)
+    assert payload["summary"]["quote_coverage"] == pytest.approx(1.0)
     assert trace["gates"]["long_opportunity_rr"] is True
     assert trace["gates"]["long_alpha"] is True
     assert trace["gates"]["long_payoff_after_costs"] is True
@@ -145,3 +171,80 @@ def test_checkpoint_decisions_are_written_idempotently_by_session_and_event(
     )
     assert latest.is_file()
     assert latest.read_text(encoding="utf-8") == first.read_text(encoding="utf-8")
+
+
+def test_daily_entry_discovery_retains_hold_positions_without_exceeding_capacity() -> None:
+    strategies_cfg = {
+        "portfolio": {"nav_usd": 10_000},
+    }
+    current_positions = {
+        "AAA": {
+            "qty": 20,
+            "stop_price": 90.0,
+            "take_profit_price": 110.0,
+        }
+    }
+    rows = {
+        "AAA": {"close": 100.0},
+        "BBB": {"close": 100.0},
+    }
+    decisions = [
+        SimpleNamespace(
+            symbol="AAA",
+            side="HOLD",
+            score=0.0,
+            expected_return=0.0,
+        ),
+        SimpleNamespace(
+            symbol="BBB",
+            side="BUY",
+            score=2.0,
+            expected_return=0.05,
+        ),
+    ]
+    targets = {
+        "BBB": {
+            "weight": 0.90,
+            "stop_price": 92.0,
+            "take_profit_price": 115.0,
+            "score": 2.0,
+        }
+    }
+
+    result = _retain_hold_positions(
+        targets,
+        decisions,
+        current_positions,
+        rows,
+        strategies_cfg,
+    )
+
+    assert result["AAA"]["weight"] == pytest.approx(0.20)
+    assert result["AAA"]["retained_on_hold"] is True
+    assert result["BBB"]["weight"] == pytest.approx(0.80)
+    assert sum(float(spec["weight"]) for spec in result.values()) <= 1.0 + 1e-12
+
+
+def test_explicit_sell_is_not_retained_by_daily_entry_discovery() -> None:
+    result = _retain_hold_positions(
+        {},
+        [
+            SimpleNamespace(
+                symbol="AAA",
+                side="SELL",
+                score=1.0,
+                expected_return=-0.02,
+            )
+        ],
+        {
+            "AAA": {
+                "qty": 10,
+                "stop_price": 90.0,
+                "take_profit_price": 110.0,
+            }
+        },
+        {"AAA": {"close": 100.0}},
+        {"portfolio": {"nav_usd": 10_000}},
+    )
+
+    assert "AAA" not in result
