@@ -80,7 +80,7 @@ def _decision_targets(
 def _retain_hold_positions(
     targets: dict[str, dict],
     decisions: list[Any],
-    current_positions: dict[str, dict],
+    current_positions: dict[str, dict] | set[str],
     rows_by_symbol: dict[str, dict],
     strategies_cfg: dict,
 ) -> dict[str, dict]:
@@ -92,6 +92,11 @@ def _retain_hold_positions(
     """
 
     if not current_positions:
+        return targets
+    # Replay/tournament callers historically pass only a set of held symbols.
+    # Without qty/stop metadata we cannot safely synthesize retained targets,
+    # so keep their previous semantics. Runtime EOD passes the full mapping.
+    if isinstance(current_positions, set):
         return targets
     by_symbol = {
         str(decision.symbol): decision
@@ -199,7 +204,7 @@ def _strategy_targets(
     include_cross_horizon: bool = False,
     include_challenger: bool = False,
     challenger_cfg: dict | None = None,
-    current_positions_by_strategy: dict[str, dict[str, dict]] | None = None,
+    current_positions_by_strategy: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, dict]]:
     challenger_cfg = challenger_cfg or {}
     current_positions_by_strategy = current_positions_by_strategy or {}
