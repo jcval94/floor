@@ -303,6 +303,10 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "dominantHoldGate" in intraday_script
     assert "renderIntradayDecisions" in intraday_script
     assert "setInterval(renderIntradayDecisions, 60_000)" in intraday_script
+    assert "timingLabel" in intraday_script
+    assert "Score base → intra" in page
+    assert "Timing 15m/1h" in page
+    assert "sólo ajustan el ranking intradía" in intraday_script
     assert "geometría central" in intraday_script
     assert "data/strategy_league_operations.json" in script
     assert "Top 10 operaciones" in script
@@ -670,6 +674,8 @@ def test_workflows_wire_intraday_strategy_channel_without_touching_daily_bars() 
     assert "--live-output site/data/strategy_live.json" in pages_workflow
     assert "--decision-output site/data/strategy_decisions_intraday.json" in pages_workflow
     assert "Intraday strategy decisions must never emit orders" in pages_workflow
+    assert "intraday timing changed source actions" in intraday_workflow
+    assert "intraday timing changed source quantities" in intraday_workflow
     assert "league.live_snapshot export-base" in eod_workflow
     assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in eod_workflow
     assert "actions: write" in eod_workflow
