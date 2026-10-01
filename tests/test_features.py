@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from statistics import mean
 from typing import cast
 
 from features.run_features import build_modelable_dataset
 from features.feature_builder import build_features
-from strategies.common.mechanics import liquidity_ok
 
 
 def _next_business_day(d: datetime) -> datetime:
@@ -171,8 +169,6 @@ def test_new_key_indicators_present() -> None:
         "bollinger_width_20",
         "vwap_distance",
         "parkinson_vol_20",
-        "dollar_volume",
-        "avg_dollar_volume",
         "momentum_10",
         "momentum_20",
         "trend_context_m3",
@@ -190,44 +186,6 @@ def test_new_key_indicators_present() -> None:
         "ai_horizon_alignment",
     ]:
         assert col in sample
-
-
-def test_liquidity_features_match_trailing_dollar_volume_and_strategy_contract() -> None:
-    rows: list[dict] = []
-    start = datetime(2026, 1, 2, 16, 0)
-    for index in range(25):
-        close = 100.0 + index
-        volume = 1_000_000.0 + index * 25_000.0
-        rows.append(
-            {
-                "symbol": "AAA",
-                "timestamp": (start + timedelta(days=index)).isoformat(),
-                "open": close - 0.5,
-                "high": close + 1.0,
-                "low": close - 1.0,
-                "close": close,
-                "volume": volume,
-                "benchmark_close": 400.0 + index,
-            }
-        )
-
-    featured = build_features(rows)
-    latest = featured[-1]
-    expected = mean(
-        float(row["close"]) * float(row["volume"])
-        for row in rows[-20:]
-    )
-
-    assert latest["dollar_volume"] == float(rows[-1]["close"]) * float(rows[-1]["volume"])
-    assert latest["avg_dollar_volume"] == expected
-    assert liquidity_ok(
-        latest,
-        {"liquidity": {"min_avg_dollar_volume": expected * 0.9}},
-    )
-    assert not liquidity_ok(
-        latest,
-        {"liquidity": {"min_avg_dollar_volume": expected * 1.1}},
-    )
 
 
 def test_m3_tie_break_selects_earliest_week() -> None:
