@@ -128,6 +128,13 @@ def test_every_checkpoint_evaluates_all_strategy_families_and_preserves_gate_tra
     assert trace["inputs"]["risk_long_rr"] == pytest.approx(4.0 / 11.0)
     assert trace["intraday"]["price"] == pytest.approx(101.0)
     assert trace["intraday"]["return_15m"] == pytest.approx(0.004)
+    timing = trace["intraday_timing"]
+    assert timing["status"] == "confirmed"
+    assert timing["action_changed"] is False
+    assert timing["qty_changed"] is False
+    assert breakout["intraday_rank_score"] > breakout["base_score"]
+    assert payload["intraday_timing_adapter"]["action_changes"] == 0
+    assert payload["intraday_timing_adapter"]["qty_changes"] == 0
     assert payload["summary"]["quote_coverage"] == pytest.approx(1.0)
     assert trace["gates"]["long_opportunity_rr"] is True
     assert trace["gates"]["long_alpha"] is True
@@ -139,6 +146,61 @@ def test_every_checkpoint_evaluates_all_strategy_families_and_preserves_gate_tra
     assert mean_reversion["decision_trace"]["gates"]["long_reversal"] is True
 
     assert payload["capital_allocation_challenger"]["target_count"] >= 1
+
+
+def test_momentum_timing_adapter_rewards_confirmation_and_penalizes_conflict() -> None:
+    decision = SimpleNamespace(side="BUY", score=1.0)
+    confirmed = intraday._timing_context(
+        "breakout_protected_by_floor",
+        decision,
+        {"intraday_return_15m": 0.004, "intraday_return_1h": 0.010},
+    )
+    contradicted = intraday._timing_context(
+        "breakout_protected_by_floor",
+        decision,
+        {"intraday_return_15m": -0.004, "intraday_return_1h": -0.010},
+    )
+
+    assert confirmed["status"] == "confirmed"
+    assert confirmed["rank_score"] > confirmed["base_score"]
+    assert contradicted["status"] == "contradicted"
+    assert contradicted["rank_score"] < contradicted["base_score"]
+    assert confirmed["action_changed"] is False
+    assert contradicted["qty_changed"] is False
+
+
+def test_mean_reversion_timing_prefers_short_term_reversal_after_one_hour_dislocation() -> None:
+    decision = SimpleNamespace(side="BUY", score=1.0)
+    reversal = intraday._timing_context(
+        "mean_reversion_floor_w1",
+        decision,
+        {"intraday_return_15m": 0.004, "intraday_return_1h": -0.012},
+    )
+    catching_fall = intraday._timing_context(
+        "mean_reversion_floor_w1",
+        decision,
+        {"intraday_return_15m": -0.004, "intraday_return_1h": -0.012},
+    )
+
+    assert reversal["status"] == "confirmed"
+    assert reversal["rank_score"] > 1.0
+    assert catching_fall["rank_score"] < reversal["rank_score"]
+    assert reversal["mode"] == "ranking_only"
+
+
+def test_open_without_intraday_returns_keeps_source_score_unchanged() -> None:
+    decision = SimpleNamespace(side="BUY", score=0.75)
+    timing = intraday._timing_context(
+        "weekly_opportunity_ridge",
+        decision,
+        {"intraday_return_15m": None, "intraday_return_1h": None},
+    )
+
+    assert timing["status"] == "unavailable"
+    assert timing["multiplier"] == pytest.approx(1.0)
+    assert timing["rank_score"] == pytest.approx(0.75)
+    assert timing["action_changed"] is False
+    assert timing["qty_changed"] is False
 
 
 def test_checkpoint_decisions_are_written_idempotently_by_session_and_event(
