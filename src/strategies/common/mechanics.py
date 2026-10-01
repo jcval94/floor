@@ -184,6 +184,16 @@ def geometry(row: dict, horizon: str) -> dict[str, Any]:
             "down": 0.0,
             "long_risk": 0.0,
             "short_risk": 0.0,
+            # Entry attractiveness uses the central opportunity geometry.
+            # Risk-envelope ratios stay separate because conformal boundaries
+            # are intentionally wider and are used for stops/sizing, not for
+            # deciding whether central payoff asymmetry exists.
+            "opportunity_long_rr": 0.0,
+            "opportunity_short_rr": 0.0,
+            "risk_long_rr": 0.0,
+            "risk_short_rr": 0.0,
+            # Backward-compatible aliases: long_rr/short_rr retain the risk
+            # envelope semantics introduced by the v2 risk contract.
             "long_rr": 0.0,
             "short_rr": 0.0,
         }
@@ -208,6 +218,10 @@ def geometry(row: dict, horizon: str) -> dict[str, Any]:
         "down": down,
         "long_risk": long_risk,
         "short_risk": short_risk,
+        "opportunity_long_rr": up / max(down, 1e-9),
+        "opportunity_short_rr": down / max(up, 1e-9),
+        "risk_long_rr": up / max(long_risk, 1e-9),
+        "risk_short_rr": down / max(short_risk, 1e-9),
         "long_rr": up / max(long_risk, 1e-9),
         "short_rr": down / max(short_risk, 1e-9),
     }
