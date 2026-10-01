@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -190,6 +190,145 @@ def _latest_quote(symbol: str, range_: str, interval: str) -> dict[str, Any] | N
         "source": "yahoo_chart",
         "interval": interval,
     }
+
+
+def _checkpoint_quote(
+    symbol: str,
+    checkpoint_at: datetime,
+    range_: str,
+    interval: str,
+) -> dict[str, Any] | None:
+    """Return the latest fully completed intraday bar at/before a checkpoint."""
+
+    yahoo_symbol = symbol.upper().replace(".", "-")
+    payload = fetch_yahoo_chart(yahoo_symbol, range_, interval)
+    bars = parse_daily_bars(symbol, payload)
+    if not bars:
+        return None
+
+    interval_minutes = 5
+    if interval.endswith("m"):
+        try:
+            interval_minutes = max(1, int(interval[:-1]))
+        except ValueError:
+            interval_minutes = 5
+    elif interval.endswith("h"):
+        try:
+            interval_minutes = max(1, int(interval[:-1])) * 60
+        except ValueError:
+            interval_minutes = 60
+
+    cutoff = checkpoint_at
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=ET)
+    cutoff_utc = cutoff.astimezone(timezone.utc)
+    completed_cutoff = cutoff_utc - timedelta(minutes=interval_minutes)
+
+    eligible: list[tuple[datetime, Any]] = []
+    for bar in bars:
+        try:
+            timestamp = datetime.fromisoformat(
+                str(bar.ts_utc).replace("Z", "+00:00")
+            )
+        except ValueError:
+            continue
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.astimezone(timezone.utc)
+        if timestamp <= completed_cutoff:
+            eligible.append((timestamp, bar))
+    if not eligible:
+        return None
+
+    eligible.sort(key=lambda item: item[0])
+    timestamp, latest = eligible[-1]
+    if latest.close <= 0:
+        return None
+
+    chart = ((payload.get("chart") or {}).get("result") or [{}])[0]
+    meta = chart.get("meta") if isinstance(chart, dict) else {}
+    meta = meta if isinstance(meta, dict) else {}
+    previous_close = _number(
+        meta.get("previousClose"),
+        _number(meta.get("chartPreviousClose")),
+    )
+
+    completed_bars = [item[1] for item in eligible]
+    closes = [float(item.close) for item in completed_bars if item.close > 0]
+    highs = [float(item.high) for item in completed_bars if item.high > 0]
+    lows = [float(item.low) for item in completed_bars if item.low > 0]
+
+    def trailing_return(minutes: int) -> float | None:
+        bars_back = max(1, minutes // interval_minutes)
+        if len(closes) <= bars_back:
+            return None
+        reference = closes[-bars_back - 1]
+        return latest.close / reference - 1.0 if reference > 0 else None
+
+    return {
+        "symbol": symbol.upper(),
+        "price": float(latest.close),
+        "as_of": timestamp.isoformat(),
+        "source": "yahoo_chart_checkpoint",
+        "interval": interval,
+        "previous_close": previous_close if previous_close > 0 else None,
+        "session_return": (
+            float(latest.close) / previous_close - 1.0
+            if previous_close > 0
+            else None
+        ),
+        "return_15m": trailing_return(15),
+        "return_1h": trailing_return(60),
+        "session_high": max(highs) if highs else None,
+        "session_low": min(lows) if lows else None,
+        "completed_bars": len(completed_bars),
+        "checkpoint_at": cutoff_utc.isoformat(),
+    }
+
+
+def fetch_checkpoint_quotes(
+    symbols: list[str],
+    *,
+    checkpoint_at: datetime,
+    range_: str = "1d",
+    interval: str = "5m",
+    max_workers: int = 8,
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Fetch point-in-time quotes without contaminating the daily-bar database.
+
+    Only bars fully completed by the accepted checkpoint are eligible, so a
+    delayed GitHub runner cannot accidentally look beyond the checkpoint.
+    """
+
+    normalized = sorted({symbol.upper() for symbol in symbols if symbol})
+    if not normalized:
+        return {}, []
+
+    quotes: dict[str, dict[str, Any]] = {}
+    failed: list[str] = []
+    workers = max(1, min(max_workers, len(normalized)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(
+                _checkpoint_quote,
+                symbol,
+                checkpoint_at,
+                range_,
+                interval,
+            ): symbol
+            for symbol in normalized
+        }
+        for future in as_completed(futures):
+            symbol = futures[future]
+            try:
+                quote = future.result()
+            except Exception:
+                quote = None
+            if quote is None:
+                failed.append(symbol)
+            else:
+                quotes[symbol] = quote
+    return quotes, sorted(failed)
 
 
 def fetch_live_quotes(
