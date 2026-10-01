@@ -70,6 +70,7 @@ def build_features(rows: list[dict]) -> list[dict]:
         highs: list[float] = []
         lows: list[float] = []
         volumes: list[float] = []
+        dollar_volumes: list[float] = []
         bench_closes: list[float] = []
         rets: list[float] = []
         bench_rets: list[float] = []
@@ -117,7 +118,14 @@ def build_features(rows: list[dict]) -> list[dict]:
             highs.append(high)
             lows.append(low)
             volumes.append(volume)
+            dollar_volume = close * volume
+            dollar_volumes.append(dollar_volume)
             bench_closes.append(bench_close)
+
+            row["dollar_volume"] = dollar_volume
+            row["avg_dollar_volume"] = _safe_mean(
+                _rolling(dollar_volumes, idx, 20)
+            )
 
             row["ret_lag_1"] = ret_1
             row["ret_lag_2"] = None if idx < 2 else close / closes[-3] - 1.0
