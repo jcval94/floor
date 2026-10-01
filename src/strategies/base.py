@@ -30,6 +30,7 @@ class StrategyDecision:
     cost_pct: float = 0.0
     alpha_source: str = ""
     payoff_room_pct: float = 0.0
+    decision_trace: dict[str, Any] | None = None
 
 
 def _safe_float(v: Any, default: float = 0.0) -> float:

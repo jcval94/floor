@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from floor.config import RuntimeConfig
+from floor.pipeline import canonical_intraday_cycle as canonical
 from floor.pipeline.canonical_intraday_cycle import run_intraday_cycle
 from floor.reporting.generate_site_data import build_dashboard_snapshot
 from storage.market_db import DailyBar, init_market_db, upsert_daily_bars
@@ -76,7 +77,7 @@ def _seed_models(models_dir: Path) -> None:
     )
 
 
-def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
+def test_m3_contract_flows_to_site_data(tmp_path: Path, monkeypatch) -> None:
     root_dir = tmp_path
     data_dir = tmp_path / "data"
     (root_dir / "config").mkdir(parents=True, exist_ok=True)
@@ -86,6 +87,29 @@ def test_m3_contract_flows_to_site_data(tmp_path: Path) -> None:
     _seed_models(data_dir / "training" / "models")
 
     cfg = RuntimeConfig(root_dir=root_dir, data_dir=data_dir, recommendations_csv_url=None, live_trading_enabled=False)
+    monkeypatch.setattr(
+        canonical,
+        "build_intraday_strategy_decisions",
+        lambda *_args, **_kwargs: {
+            "summary": {
+                "strategies_evaluated": 4,
+                "symbols_evaluated": 1,
+                "decisions_evaluated": 4,
+                "actionable_decisions": 0,
+                "challenger_targets": 0,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        canonical,
+        "write_intraday_strategy_decisions",
+        lambda *_args, **_kwargs: data_dir / "metrics" / "strategy_decisions" / "test.json",
+    )
+    monkeypatch.setattr(
+        canonical,
+        "fetch_checkpoint_quotes",
+        lambda *_args, **_kwargs: ({}, []),
+    )
     run_intraday_cycle(event_type="OPEN", symbols=["AAPL"], cfg=cfg)
     build_dashboard_snapshot(data_dir, data_dir / "reports" / "dashboard.json")
 

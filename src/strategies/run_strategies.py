@@ -48,6 +48,7 @@ def _signal_payload(signal: StrategyDecision, config: dict) -> dict:
         "platform_fee_bps_per_side": round(platform_fee_bps_per_side(config), 4),
         "m3_context": signal.m3_context or {},
         "priority_adjustment": int(signal.priority_adjustment or 0),
+        "decision_trace": signal.decision_trace or {},
     }
 
 

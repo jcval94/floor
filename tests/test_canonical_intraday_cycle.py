@@ -67,6 +67,29 @@ def _patch_minimal_cycle(
     )
     monkeypatch.setattr(
         canonical,
+        "fetch_checkpoint_quotes",
+        lambda *_args, **_kwargs: ({}, []),
+    )
+    monkeypatch.setattr(
+        canonical,
+        "build_intraday_strategy_decisions",
+        lambda *_args, **_kwargs: {
+            "summary": {
+                "strategies_evaluated": 4,
+                "symbols_evaluated": 1,
+                "decisions_evaluated": 4,
+                "actionable_decisions": 1,
+                "challenger_targets": 1,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        canonical,
+        "write_intraday_strategy_decisions",
+        lambda *_args, **_kwargs: Path("data/metrics/strategy_decisions/intraday/test.json"),
+    )
+    monkeypatch.setattr(
+        canonical,
         "_prediction_payloads",
         lambda _row, event: [
             (
@@ -109,6 +132,7 @@ def test_canonical_cycle_is_hold_only_and_does_not_write_orders(
     result = canonical.run_intraday_cycle("OPEN", ["AAPL"], cfg)
 
     assert result["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
+    assert result["strategy_decisions"]["strategies_evaluated"] == 4
     assert any("/predictions/" in path for path in written_paths)
     assert any("/signals/" in path for path in written_paths)
     assert all("/orders/" not in path for path in written_paths)
@@ -193,6 +217,7 @@ def test_canonical_cycle_suppresses_repeated_market_model_snapshot(
     assert first["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
     assert second["reconciliation"] == {"status": "DEFERRED_TO_EOD"}
     assert second["input_snapshot_id"] == first["input_snapshot_id"]
+    assert second["strategy_decisions"]["decisions_evaluated"] == 4
     assert len(written_paths) == first_write_count
     marker = (
         cfg.data_dir

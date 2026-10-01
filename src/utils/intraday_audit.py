@@ -199,6 +199,30 @@ def build_intraday_audit(
         output_dir / "reports" / "dashboard.json",
     )
 
+    strategy_decision_source = (
+        data_dir
+        / "metrics"
+        / "strategy_decisions"
+        / "intraday"
+        / session_day
+        / f"{event}.json"
+    )
+    strategy_decision_destination = (
+        output_dir / "evidence" / "strategy_decisions.json"
+    )
+    if not _copy_if_exists(
+        strategy_decision_source,
+        strategy_decision_destination,
+    ):
+        raise FileNotFoundError(
+            f"intraday strategy decision evidence missing: {strategy_decision_source}"
+        )
+    strategy_decisions = json.loads(
+        strategy_decision_destination.read_text(encoding="utf-8")
+    )
+    if not isinstance(strategy_decisions, dict):
+        raise ValueError("intraday strategy decision evidence must be a JSON object")
+
     manifest: dict[str, Any] = {
         "schema_version": 1,
         "artifact_type": "intraday_run_audit",
@@ -215,8 +239,9 @@ def build_intraday_audit(
         "input_snapshot_id": input_snapshot_id,
         "prediction_rows": len(prediction_rows),
         "signal_rows": len(signal_rows),
+        "strategy_decisions": strategy_decisions.get("summary", {}),
         "orders_expected": False,
-        "orders_reason": "canonical_intraday_order_generation_disabled",
+        "orders_reason": "shadow_strategy_decisions_are_observational_only",
         "durable_authority": "rolling_runtime_state_jsonl",
         "batch_extract_source": "reconstructable_sqlite_cache",
     }

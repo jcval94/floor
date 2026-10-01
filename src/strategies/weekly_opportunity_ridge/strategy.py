@@ -133,36 +133,71 @@ def generate_weekly_opportunity_orders(
                 strategy_cfg,
             )
 
+        liquid = liquidity_ok(row, strategy_cfg)
+        long_payoff_ok = payoff_room_clears_cost(
+            current_geometry["up"], global_cfg, strategy_cfg
+        )
+        short_payoff_ok = payoff_room_clears_cost(
+            current_geometry["down"], global_cfg, strategy_cfg
+        )
+        trace = {
+            "inputs": {
+                "weekly_opportunity_score": model_score,
+                "model_implied_signed_return": model_implied_signed_return,
+                "opportunity_long_rr": current_geometry["opportunity_long_rr"],
+                "opportunity_short_rr": current_geometry["opportunity_short_rr"],
+                "risk_long_rr": current_geometry["risk_long_rr"],
+                "risk_short_rr": current_geometry["risk_short_rr"],
+                "upside_pct": current_geometry["up"],
+                "downside_pct": current_geometry["down"],
+            },
+            "thresholds": {
+                "min_buy_score": min_buy_score,
+                "max_sell_score": max_sell_score,
+                "min_opportunity_rr": min_rr,
+                "required_long_gross_alpha_pct": long_alpha["required_gross_alpha_pct"],
+                "required_short_gross_alpha_pct": short_alpha["required_gross_alpha_pct"],
+            },
+            "gates": {
+                "liquidity": liquid,
+                "ranked_for_new_buy": symbol in new_buy_symbols,
+                "retained_by_hysteresis": symbol in retained_buy_symbols,
+                "ranked_for_sell": symbol in sell_symbols,
+                "long_opportunity_rr": current_geometry["opportunity_long_rr"] >= min_rr,
+                "long_payoff_after_costs": long_payoff_ok,
+                "long_alpha": long_alpha_ok,
+                "short_opportunity_rr": current_geometry["opportunity_short_rr"] >= min_rr,
+                "short_payoff_after_costs": short_payoff_ok,
+                "short_alpha": short_alpha_ok,
+            },
+        }
+
         action = "HOLD"
         reward_risk = 0.0
         payoff_room = 0.0
         alpha = long_alpha
         if (
             symbol in buy_symbols
-            and current_geometry["long_rr"] >= min_rr
-            and payoff_room_clears_cost(
-                current_geometry["up"], global_cfg, strategy_cfg
-            )
+            and current_geometry["opportunity_long_rr"] >= min_rr
+            and long_payoff_ok
             and long_alpha_ok
         ):
             action = "BUY"
             payoff_room = current_geometry["up"]
-            reward_risk = current_geometry["long_rr"]
+            reward_risk = current_geometry["opportunity_long_rr"]
             alpha = long_alpha
         elif (
             symbol in sell_symbols
-            and current_geometry["short_rr"] >= min_rr
-            and payoff_room_clears_cost(
-                current_geometry["down"], global_cfg, strategy_cfg
-            )
+            and current_geometry["opportunity_short_rr"] >= min_rr
+            and short_payoff_ok
             and short_alpha_ok
         ):
             action = "SELL"
             payoff_room = current_geometry["down"]
-            reward_risk = current_geometry["short_rr"]
+            reward_risk = current_geometry["opportunity_short_rr"]
             alpha = short_alpha
 
-        if action == "HOLD" or not liquidity_ok(row, strategy_cfg):
+        if action == "HOLD" or not liquid:
             output.append(
                 hold_decision(
                     STRATEGY_ID,
@@ -172,8 +207,14 @@ def generate_weekly_opportunity_orders(
                         f"HOLD: weekly score={model_score:.4f}, "
                         f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
                         f"return={model_implied_signed_return:.2%} does not clear "
-                        "cost-aware alpha/payoff gate"
+                        "cost-aware alpha/payoff gate "
+                        f"(opp_rr_long={current_geometry['opportunity_long_rr']:.2f}, "
+                        f"opp_rr_short={current_geometry['opportunity_short_rr']:.2f}, "
+                        f"risk_rr_long={current_geometry['risk_long_rr']:.2f}, "
+                        f"risk_rr_short={current_geometry['risk_short_rr']:.2f}, "
+                        f"required_opp_rr={min_rr:.2f})"
                     ),
+                    trace=trace,
                 )
             )
             continue
@@ -193,6 +234,7 @@ def generate_weekly_opportunity_orders(
                     row,
                     "q1",
                     "HOLD: zero risk-sized quantity",
+                    trace={**trace, "selected_action": action},
                 )
             )
             continue
@@ -212,7 +254,8 @@ def generate_weekly_opportunity_orders(
                     f"model_implied_{'net_' if score_semantics == 'net_after_round_trip_costs' else ''}"
                     f"return={model_implied_signed_return:.2%}, "
                     f"net_alpha={alpha['net_alpha_pct']:.2%}, "
-                    f"payoff_room={payoff_room:.2%}, rr={reward_risk:.2f}"
+                    f"payoff_room={payoff_room:.2%}, opp_rr={reward_risk:.2f}, "
+                    f"risk_rr={current_geometry['risk_long_rr' if action == 'BUY' else 'risk_short_rr']:.2f}"
                     + (" · retained_by_hysteresis" if retention else "")
                 ),
                 exit_reason="Q1 anchor or ten-session timeout",
@@ -237,6 +280,11 @@ def generate_weekly_opportunity_orders(
                     else "weekly_ridge_score_x_predicted_q1_downside"
                 ),
                 payoff_room_pct=payoff_room,
+                decision_trace={
+                    **trace,
+                    "selected_action": action,
+                    "retained_by_hysteresis": retention,
+                },
             )
         )
 

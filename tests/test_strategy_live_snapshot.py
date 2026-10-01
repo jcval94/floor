@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from league.live_snapshot import build_live_snapshot
+from league import live_snapshot
+from league.live_snapshot import build_live_snapshot, fetch_checkpoint_quotes
 
 
 def _base() -> dict:
@@ -200,3 +201,61 @@ def test_intraday_curve_resets_on_new_market_session() -> None:
         if row["strategy"] == "capital_allocation_challenger"
     )
     assert challenger["intraday_curve"] == [{"session": "11:00", "nav": 10500.0}]
+
+
+def test_checkpoint_quotes_exclude_bars_not_completed_by_accepted_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timestamps = [
+        int(datetime(2026, 10, 1, 15, 15, tzinfo=timezone.utc).timestamp()),
+        int(datetime(2026, 10, 1, 15, 20, tzinfo=timezone.utc).timestamp()),
+        int(datetime(2026, 10, 1, 15, 25, tzinfo=timezone.utc).timestamp()),
+        int(datetime(2026, 10, 1, 15, 30, tzinfo=timezone.utc).timestamp()),
+    ]
+    payload = {
+        "chart": {
+            "result": [
+                {
+                    "meta": {"previousClose": 100.0},
+                    "timestamp": timestamps,
+                    "indicators": {
+                        "quote": [
+                            {
+                                "open": [100.0, 100.5, 101.0, 999.0],
+                                "high": [100.6, 101.1, 102.5, 999.0],
+                                "low": [99.9, 100.4, 100.9, 999.0],
+                                "close": [100.5, 101.0, 102.0, 999.0],
+                                "volume": [1000, 1100, 1200, 1],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    }
+    monkeypatch.setattr(
+        live_snapshot,
+        "fetch_yahoo_chart",
+        lambda *_args, **_kwargs: payload,
+    )
+
+    quotes, failed = fetch_checkpoint_quotes(
+        ["AAA"],
+        checkpoint_at=datetime(
+            2026,
+            10,
+            1,
+            11,
+            30,
+            tzinfo=live_snapshot.ET,
+        ),
+        range_="1d",
+        interval="5m",
+        max_workers=1,
+    )
+
+    assert failed == []
+    assert quotes["AAA"]["price"] == pytest.approx(102.0)
+    assert quotes["AAA"]["as_of"].startswith("2026-10-01T15:25:00")
+    assert quotes["AAA"]["session_return"] == pytest.approx(0.02)
+    assert quotes["AAA"]["price"] != pytest.approx(999.0)

@@ -9,7 +9,7 @@ from typing import Any
 
 BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
 CHALLENGER_ID = "capital_allocation_challenger"
-DEFAULT_LEAGUE_ID = "strategy_league_v9_net_target_reversal_10k"
+DEFAULT_LEAGUE_ID = "strategy_league_v11_intraday_informed_10k"
 
 def _load_object(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
@@ -340,6 +340,86 @@ def publish_live_payload(
     _write_object(output_path, payload)
     return payload
 
+def publish_intraday_decision_payload(
+    data_dir: Path,
+    output_path: Path,
+    league_config_path: Path | None = None,
+) -> dict[str, Any]:
+    """Publish the latest checkpoint-level strategy decisions safely."""
+
+    source = data_dir / "metrics" / "strategy_decisions" / "intraday" / "latest.json"
+    source_payload = _load_object(source)
+    league_cfg = _load_object(league_config_path)
+    expected_league_id = str(league_cfg.get("league_id") or DEFAULT_LEAGUE_ID)
+
+    if not source_payload:
+        payload: dict[str, Any] = {
+            "schema_version": 1,
+            "artifact_type": "intraday_strategy_decisions",
+            "league_id": expected_league_id,
+            "mode": "shadow_observation_no_execution",
+            "status": "WAITING_FOR_INTRADAY_DECISIONS",
+            "detail": "No checkpoint-level strategy decision snapshot is available yet.",
+            "event": None,
+            "as_of": None,
+            "session_day": None,
+            "strategies": {},
+            "capital_allocation_challenger": {
+                "action": "HOLD",
+                "target_count": 0,
+                "targets": {},
+                "reason": "Waiting for the first accepted market checkpoint.",
+            },
+            "summary": {
+                "strategies_evaluated": 0,
+                "symbols_evaluated": 0,
+                "decisions_evaluated": 0,
+                "actionable_decisions": 0,
+                "challenger_targets": 0,
+            },
+        }
+    elif str(source_payload.get("league_id") or "") != expected_league_id:
+        payload = {
+            "schema_version": 1,
+            "artifact_type": "intraday_strategy_decisions",
+            "league_id": expected_league_id,
+            "mode": "shadow_observation_no_execution",
+            "status": "WAITING_FOR_INTRADAY_DECISIONS",
+            "detail": (
+                "The available checkpoint decisions belong to a previous "
+                "Strategy League epoch and are withheld."
+            ),
+            "event": None,
+            "as_of": None,
+            "session_day": None,
+            "strategies": {},
+            "capital_allocation_challenger": {
+                "action": "HOLD",
+                "target_count": 0,
+                "targets": {},
+                "reason": "Waiting for checkpoint decisions from the current league.",
+            },
+            "summary": {
+                "strategies_evaluated": 0,
+                "symbols_evaluated": 0,
+                "decisions_evaluated": 0,
+                "actionable_decisions": 0,
+                "challenger_targets": 0,
+            },
+        }
+    else:
+        payload = dict(source_payload)
+        payload["status"] = "READY"
+
+    payload["counts_as_promotion_evidence"] = False
+    payload["live_execution_enabled"] = False
+    payload["orders_emitted"] = False
+    payload["automatic_promotion"] = False
+    payload["published_at"] = datetime.now(timezone.utc).isoformat()
+    _write_object(output_path, payload)
+    return payload
+
+
 def publish_observation_payload(
     data_dir: Path,
     output_path: Path,
@@ -415,6 +495,11 @@ def main() -> None:
         default=None,
         help="Optional live snapshot output; defaults beside --output.",
     )
+    parser.add_argument(
+        "--decision-output",
+        default=None,
+        help="Optional intraday decision output; defaults beside --output.",
+    )
     args = parser.parse_args()
     data_dir = Path(args.data_dir)
     league_config = Path(args.league_config)
@@ -423,6 +508,11 @@ def main() -> None:
         Path(args.live_output)
         if args.live_output
         else output_path.parent / "strategy_live.json"
+    )
+    decision_output_path = (
+        Path(args.decision_output)
+        if args.decision_output
+        else output_path.parent / "strategy_decisions_intraday.json"
     )
     payload = publish_league_payload(
         data_dir,
@@ -437,6 +527,11 @@ def main() -> None:
     live = publish_live_payload(
         data_dir,
         live_output_path,
+        league_config,
+    )
+    decisions = publish_intraday_decision_payload(
+        data_dir,
+        decision_output_path,
         league_config,
     )
 
@@ -457,6 +552,8 @@ def main() -> None:
                 "leader": (payload.get("summary") or {}).get("strategy_leader"),
                 "observation_status": observation.get("status"),
                 "live_status": live.get("status"),
+                "decision_status": decisions.get("status"),
+                "decision_event": decisions.get("event"),
                 **research,
             },
             ensure_ascii=False,

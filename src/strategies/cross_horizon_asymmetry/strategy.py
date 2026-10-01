@@ -95,6 +95,39 @@ def generate_cross_horizon_orders(
             global_cfg,
             strategy_cfg,
         )
+        liquid = liquidity_ok(row, strategy_cfg)
+        long_payoff_ok = payoff_room_clears_cost(
+            weighted_up, global_cfg, strategy_cfg
+        )
+        short_payoff_ok = payoff_room_clears_cost(
+            weighted_down, global_cfg, strategy_cfg
+        )
+        trace = {
+            "inputs": {
+                "weighted_upside_pct": weighted_up,
+                "weighted_downside_pct": weighted_down,
+                "long_asymmetry_ratio": long_ratio,
+                "short_asymmetry_ratio": short_ratio,
+                "trend": trend,
+            },
+            "thresholds": {
+                "min_asymmetry_ratio": min_ratio,
+                "min_abs_trend_score": min_trend,
+                "required_long_gross_alpha_pct": long_alpha["required_gross_alpha_pct"],
+                "required_short_gross_alpha_pct": short_alpha["required_gross_alpha_pct"],
+            },
+            "gates": {
+                "liquidity": liquid,
+                "long_asymmetry": long_ratio >= min_ratio,
+                "long_trend": trend >= min_trend,
+                "long_payoff_after_costs": long_payoff_ok,
+                "long_alpha": long_alpha_ok,
+                "short_asymmetry": short_ratio >= min_ratio,
+                "short_trend": trend <= -min_trend,
+                "short_payoff_after_costs": short_payoff_ok,
+                "short_alpha": short_alpha_ok,
+            },
+        }
 
         action = "HOLD"
         payoff_room = 0.0
@@ -103,7 +136,7 @@ def generate_cross_horizon_orders(
         if (
             long_ratio >= min_ratio
             and trend >= min_trend
-            and payoff_room_clears_cost(weighted_up, global_cfg, strategy_cfg)
+            and long_payoff_ok
             and long_alpha_ok
         ):
             action = "BUY"
@@ -113,7 +146,7 @@ def generate_cross_horizon_orders(
         elif (
             short_ratio >= min_ratio
             and trend <= -min_trend
-            and payoff_room_clears_cost(weighted_down, global_cfg, strategy_cfg)
+            and short_payoff_ok
             and short_alpha_ok
         ):
             action = "SELL"
@@ -132,6 +165,7 @@ def generate_cross_horizon_orders(
                         f"alpha does not clear costs (long={long_ratio:.2f}, "
                         f"short={short_ratio:.2f}, trend={trend:.4f})"
                     ),
+                    trace=trace,
                 )
             )
             continue
@@ -149,6 +183,10 @@ def generate_cross_horizon_orders(
                 "HOLD: reliable M3 floor timing blocks tactical BUY",
             )
             hold.m3_context = m3_context
+            hold.decision_trace = {
+                **trace,
+                "m3": {"passed": False, "context": m3_context},
+            }
             output.append(hold)
             continue
 
@@ -176,6 +214,7 @@ def generate_cross_horizon_orders(
                     row,
                     "q1",
                     "HOLD: zero risk-sized quantity",
+                    trace={**trace, "selected_action": action},
                 )
             )
             continue
@@ -215,6 +254,11 @@ def generate_cross_horizon_orders(
                 cost_pct=alpha["cost_pct"],
                 alpha_source="momentum_relative_strength_trend_proxy",
                 payoff_room_pct=payoff_room,
+                decision_trace={
+                    **trace,
+                    "m3": {"passed": True, "context": m3_context},
+                    "selected_action": action,
+                },
             )
         )
 

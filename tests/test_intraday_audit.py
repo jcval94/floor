@@ -72,6 +72,33 @@ def test_intraday_audit_contains_only_requested_batch_and_run_context(
     reports.mkdir(parents=True, exist_ok=True)
     (reports / "dashboard.json").write_text("{}\n", encoding="utf-8")
 
+    strategy_decisions = (
+        data
+        / "metrics"
+        / "strategy_decisions"
+        / "intraday"
+        / "2026-09-23"
+        / "OPEN.json"
+    )
+    strategy_decisions.parent.mkdir(parents=True, exist_ok=True)
+    strategy_decisions.write_text(
+        json.dumps(
+            {
+                "artifact_type": "intraday_strategy_decisions",
+                "event": "OPEN",
+                "session_day": "2026-09-23",
+                "summary": {
+                    "strategies_evaluated": 4,
+                    "symbols_evaluated": 1,
+                    "decisions_evaluated": 4,
+                    "actionable_decisions": 1,
+                    "challenger_targets": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
     output = tmp_path / "audit"
     manifest = build_intraday_audit(
         data_dir=data,
@@ -98,12 +125,15 @@ def test_intraday_audit_contains_only_requested_batch_and_run_context(
     assert (output / "snapshots" / "workflow_run.json").is_file()
     assert (output / "snapshots" / "input_snapshot.json").is_file()
     assert (output / "reports" / "dashboard.json").is_file()
+    assert (output / "evidence" / "strategy_decisions.json").is_file()
+    assert manifest["strategy_decisions"]["strategies_evaluated"] == 4
     assert (output / "manifest.json").is_file()
     assert (output / "SHA256SUMS").is_file()
 
     inventory_paths = {item["path"] for item in manifest["files"]}
     assert "evidence/predictions.jsonl" in inventory_paths
     assert "evidence/signals.jsonl" in inventory_paths
+    assert "evidence/strategy_decisions.json" in inventory_paths
     assert all("app.sqlite" not in path for path in inventory_paths)
     assert all("market_data.sqlite" not in path for path in inventory_paths)
 
