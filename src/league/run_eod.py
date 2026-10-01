@@ -77,6 +77,55 @@ def _decision_targets(
     return targets
 
 
+def _retain_hold_positions(
+    targets: dict[str, dict],
+    decisions: list[Any],
+    current_positions: dict[str, dict],
+    rows_by_symbol: dict[str, dict],
+    strategies_cfg: dict,
+) -> dict[str, dict]:
+    """Keep existing long positions when today's strategy decision is HOLD.
+
+    Daily entry discovery must not turn a W1/Q1 holding horizon into a daily
+    liquidation rule. SELL remains an explicit exit/no-position instruction;
+    stops, take-profit and max-holding exits remain owned by league.engine.
+    """
+
+    if not current_positions:
+        return targets
+    by_symbol = {
+        str(decision.symbol): decision
+        for decision in decisions
+    }
+    global_nav = float(
+        strategies_cfg.get("portfolio", {}).get("nav_usd", 1.0) or 1.0
+    )
+    retained = dict(targets)
+    for symbol, position in current_positions.items():
+        decision = by_symbol.get(str(symbol))
+        if decision is not None and str(decision.side).upper() == "SELL":
+            continue
+        if str(symbol) in retained:
+            continue
+        row = rows_by_symbol.get(str(symbol), {})
+        close = float(row.get("close", 0.0) or 0.0)
+        qty = int(position.get("qty", 0) or 0) if isinstance(position, dict) else 0
+        if close <= 0 or qty <= 0:
+            continue
+        weight = min(1.0, max(0.0, qty * close / global_nav))
+        retained[str(symbol)] = {
+            "weight": weight,
+            "stop_price": float(position.get("stop_price", 0.0) or 0.0),
+            "take_profit_price": float(position.get("take_profit_price", 0.0) or 0.0),
+            "score": float(getattr(decision, "score", 0.0) or 0.0),
+            "expected_return": float(
+                getattr(decision, "expected_return", 0.0) or 0.0
+            ),
+            "retained_on_hold": True,
+        }
+    return retained
+
+
 def _equal_weight_capped_targets(
     targets: dict[str, dict],
     max_weight: float,
@@ -106,7 +155,7 @@ def _strategy_targets(
     include_cross_horizon: bool = False,
     include_challenger: bool = False,
     challenger_cfg: dict | None = None,
-    current_positions_by_strategy: dict[str, set[str]] | None = None,
+    current_positions_by_strategy: dict[str, dict[str, dict]] | None = None,
 ) -> dict[str, dict[str, dict]]:
     challenger_cfg = challenger_cfg or {}
     current_positions_by_strategy = current_positions_by_strategy or {}
@@ -150,9 +199,11 @@ def _strategy_targets(
             strategies_cfg,
             weekly_cfg,
             "CLOSE",
-            held_symbols=current_positions_by_strategy.get(
-                "weekly_opportunity_ridge",
-                set(),
+            held_symbols=set(
+                current_positions_by_strategy.get(
+                    "weekly_opportunity_ridge",
+                    {},
+                )
             ),
         )
         if include_weekly:
@@ -165,9 +216,16 @@ def _strategy_targets(
                 weekly_cfg.get("position_sizing", {}).get("max_weight_pct_nav", 0.20)
                 or 0.20
             )
-            targets["weekly_opportunity_ridge"] = _equal_weight_capped_targets(
+            normalized_targets = _equal_weight_capped_targets(
                 raw_targets,
                 max_weight,
+            )
+            targets["weekly_opportunity_ridge"] = _retain_hold_positions(
+                normalized_targets,
+                weekly_decisions,
+                current_positions_by_strategy.get("weekly_opportunity_ridge", {}),
+                rows_by_symbol,
+                strategies_cfg,
             )
 
     breakout_cfg = strategies_cfg["strategies"]["breakout_protected_by_floor"]
@@ -193,8 +251,14 @@ def _strategy_targets(
             "CLOSE",
         )
         if include_mean_reversion:
-            targets["mean_reversion_floor_w1"] = _decision_targets(
+            targets["mean_reversion_floor_w1"] = _retain_hold_positions(
+                _decision_targets(
+                    mean_reversion,
+                    rows_by_symbol,
+                    strategies_cfg,
+                ),
                 mean_reversion,
+                current_positions_by_strategy.get("mean_reversion_floor_w1", {}),
                 rows_by_symbol,
                 strategies_cfg,
             )
@@ -209,8 +273,14 @@ def _strategy_targets(
             "CLOSE",
         )
         if include_cross_horizon:
-            targets["cross_horizon_asymmetry"] = _decision_targets(
+            targets["cross_horizon_asymmetry"] = _retain_hold_positions(
+                _decision_targets(
+                    cross_horizon,
+                    rows_by_symbol,
+                    strategies_cfg,
+                ),
                 cross_horizon,
+                current_positions_by_strategy.get("cross_horizon_asymmetry", {}),
                 rows_by_symbol,
                 strategies_cfg,
             )
@@ -461,7 +531,11 @@ def run_league_eod(
         include_cross_horizon = True
         include_challenger = True
         current_positions_by_strategy = {
-            member_id: set(member.get("positions", {}))
+            member_id: {
+                str(symbol): dict(position)
+                for symbol, position in member.get("positions", {}).items()
+                if isinstance(position, dict)
+            }
             for member_id, member in (state or {}).get("members", {}).items()
             if isinstance(member, dict)
         }
