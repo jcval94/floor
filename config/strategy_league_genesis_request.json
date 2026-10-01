@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "action": "BOOTSTRAP_CLEAN_GENESIS",
-  "league_id": "strategy_league_v10_d1_w1_champions_10k",
-  "freeze_id": "capital_challenger_v1_refrozen_20260928_v10",
-  "requested_on": "2026-09-28",
-  "reason": "Create a clean epoch because the serving D1/W1 champion hashes changed after v9 genesis. Preserve v9 byte-for-byte as historical evidence; do not inherit its prospective session. Strategy, cost and contract semantics remain unchanged."
+  "league_id": "strategy_league_v11_intraday_informed_10k",
+  "freeze_id": "capital_challenger_v1_refrozen_20261001_v11",
+  "requested_on": "2026-10-01",
+  "reason": "Create a clean epoch after correcting structural inactivity: central opportunity geometry now governs entry RR while the calibrated risk envelope remains dedicated to stops/sizing; entry evaluation is daily and checkpoint-level intraday decisions are auditable. Preserve v10 byte-for-byte as historical evidence."
 }
