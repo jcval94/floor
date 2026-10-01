@@ -14,16 +14,13 @@ on:
 
 permissions:
   contents: write
-
-concurrency:
-  group: floor-runtime-state-writer
-  cancel-in-progress: false
+  actions: read
 
 jobs:
   bootstrap:
     if: github.ref_name == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -131,6 +128,11 @@ jobs:
           print(f"freeze_id={expected_freeze_id}")
           PY
 
+      - name: Acquire runtime writer lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh acquire
+
       - name: Restore rolling runtime state
         env:
           GH_TOKEN: ${{ github.token }}
@@ -225,6 +227,12 @@ jobs:
           path: ${{ steps.contract.outputs.model_path }}
           if-no-files-found: error
           retention-days: 90
+
+      - name: Release runtime writer lock
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh release
 
       - name: Summary
         run: |
