@@ -54,6 +54,107 @@ def _merge_rows(market_rows: list[dict], forecast_rows: list[dict]) -> list[dict
     ]
 
 
+def _overlay_checkpoint_quotes(
+    rows: list[dict],
+    checkpoint_quotes: dict[str, dict[str, Any]],
+) -> tuple[list[dict], dict[str, Any]]:
+    """Overlay point-in-time prices onto completed-daily features for shadow decisions.
+
+    Forecasts remain trained/served from completed daily bars. Only the strategy
+    observation layer receives the checkpoint price. Daily momentum, relative
+    strength, trend context and drawdown are algebraically updated from that
+    price; 15m/1h returns are preserved as context, not promoted to alpha.
+    """
+
+    spy_quote = checkpoint_quotes.get("SPY", {})
+    spy_ratio = 1.0
+    spy_previous = float(spy_quote.get("previous_close", 0.0) or 0.0)
+    spy_price = float(spy_quote.get("price", 0.0) or 0.0)
+    if spy_previous > 0 and spy_price > 0:
+        spy_ratio = spy_price / spy_previous
+
+    overlaid: list[dict] = []
+    fresh = 0
+    for raw in rows:
+        row = dict(raw)
+        symbol = str(row.get("symbol") or "").upper()
+        quote = checkpoint_quotes.get(symbol, {})
+        live_price = float(quote.get("price", 0.0) or 0.0)
+        base_close = float(row.get("close", 0.0) or 0.0)
+        previous_close = float(quote.get("previous_close", 0.0) or 0.0)
+        reference_close = previous_close if previous_close > 0 else base_close
+
+        if live_price > 0 and reference_close > 0:
+            fresh += 1
+            price_ratio = live_price / reference_close
+            base_m10 = float(row.get("momentum_10", 0.0) or 0.0)
+            base_m20 = float(row.get("momentum_20", 0.0) or 0.0)
+            base_rel20 = float(row.get("rel_strength_20", 0.0) or 0.0)
+            base_spy_m20 = base_m20 - base_rel20
+
+            live_m10 = (1.0 + base_m10) * price_ratio - 1.0
+            live_m20 = (1.0 + base_m20) * price_ratio - 1.0
+            live_spy_m20 = (1.0 + base_spy_m20) * spy_ratio - 1.0
+            row["momentum_10"] = live_m10
+            row["momentum_20"] = live_m20
+            row["rel_strength_20"] = live_m20 - live_spy_m20
+
+            base_trend = float(row.get("trend_context_m3", 0.0) or 0.0)
+            if 1.0 + base_trend > 1e-9 and base_close > 0:
+                inferred_sma65 = base_close / (1.0 + base_trend)
+                if inferred_sma65 > 0:
+                    row["trend_context_m3"] = live_price / inferred_sma65 - 1.0
+
+            base_drawdown = float(row.get("drawdown_13w", 0.0) or 0.0)
+            if 1.0 + base_drawdown > 1e-9 and base_close > 0:
+                inferred_peak65 = base_close / (1.0 + base_drawdown)
+                if inferred_peak65 > 0:
+                    row["drawdown_13w"] = min(
+                        0.0,
+                        live_price / inferred_peak65 - 1.0,
+                    )
+
+            row["close_eod_reference"] = base_close
+            row["close"] = live_price
+            row["intraday_price"] = live_price
+            row["intraday_quote_as_of"] = quote.get("as_of")
+            row["intraday_session_return"] = quote.get("session_return")
+            row["intraday_return_15m"] = quote.get("return_15m")
+            row["intraday_return_1h"] = quote.get("return_1h")
+            row["intraday_session_high"] = quote.get("session_high")
+            row["intraday_session_low"] = quote.get("session_low")
+            row["intraday_completed_5m_bars"] = quote.get("completed_bars")
+            row["intraday_quote_source"] = quote.get("source")
+        else:
+            row["close_eod_reference"] = base_close
+            row["intraday_price"] = None
+            row["intraday_quote_as_of"] = None
+            row["intraday_session_return"] = None
+            row["intraday_return_15m"] = None
+            row["intraday_return_1h"] = None
+            row["intraday_session_high"] = None
+            row["intraday_session_low"] = None
+            row["intraday_completed_5m_bars"] = 0
+            row["intraday_quote_source"] = "eod_reference_fallback"
+
+        overlaid.append(row)
+
+    expected = len(rows)
+    coverage = fresh / expected if expected else 1.0
+    return overlaid, {
+        "provider": "Yahoo Finance chart",
+        "interval": "5m",
+        "expected_symbols": expected,
+        "fresh_symbols": fresh,
+        "fresh_coverage": coverage,
+        "spy_quote_available": spy_price > 0,
+        "semantics": (
+            "completed daily forecasts plus point-in-time 5m price overlay; "
+            "15m/1h returns are observational context only"
+        ),
+    }
+
+
 def _current_positions(data_dir: Path, league_id: str) -> dict[str, set[str]]:
     state = load_state(
         data_dir / "metrics" / "strategy_league" / "runs" / league_id
@@ -116,7 +217,22 @@ def _serialize_decision(
     decision: Any,
     *,
     currently_held: bool,
+    row: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    row = row or {}
+    trace = dict(decision.decision_trace or {})
+    trace["intraday"] = {
+        "price": row.get("intraday_price"),
+        "quote_as_of": row.get("intraday_quote_as_of"),
+        "session_return": row.get("intraday_session_return"),
+        "return_15m": row.get("intraday_return_15m"),
+        "return_1h": row.get("intraday_return_1h"),
+        "session_high": row.get("intraday_session_high"),
+        "session_low": row.get("intraday_session_low"),
+        "completed_5m_bars": row.get("intraday_completed_5m_bars"),
+        "quote_source": row.get("intraday_quote_source"),
+        "eod_reference_close": row.get("close_eod_reference"),
+    }
     return {
         "strategy_id": str(decision.strategy_id),
         "symbol": str(decision.symbol),
@@ -134,7 +250,7 @@ def _serialize_decision(
         "alpha_source": str(decision.alpha_source or ""),
         "payoff_room_pct": float(decision.payoff_room_pct or 0.0),
         "m3_context": dict(decision.m3_context or {}),
-        "decision_trace": dict(decision.decision_trace or {}),
+        "decision_trace": trace,
         "currently_held": bool(currently_held),
     }
 
@@ -169,6 +285,8 @@ def build_intraday_strategy_decisions(
     strategies_config_path: Path | None = None,
     league_config_path: Path | None = None,
     weekly_artifact: dict | None = None,
+    checkpoint_quotes: dict[str, dict[str, Any]] | None = None,
+    quote_failures: list[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate every Strategy League family at every accepted market checkpoint.
 
@@ -199,6 +317,10 @@ def build_intraday_strategy_decisions(
             "Intraday strategy observation refused incomplete market/forecast join: "
             f"market={len(market_rows)} forecasts={len(forecast_rows)} joined={len(rows)}"
         )
+
+    checkpoint_quotes = checkpoint_quotes or {}
+    quote_failures = quote_failures or []
+    rows, quote_source = _overlay_checkpoint_quotes(rows, checkpoint_quotes)
 
     params = weekly_artifact.get("params", {})
     for row in rows:
@@ -255,6 +377,7 @@ def build_intraday_strategy_decisions(
             _serialize_decision(
                 decision,
                 currently_held=str(decision.symbol) in held,
+                row=rows_by_symbol.get(str(decision.symbol)),
             )
             for decision in decisions_by_strategy[strategy_id]
         ]
@@ -279,9 +402,14 @@ def build_intraday_strategy_decisions(
         "live_execution_enabled": False,
         "orders_emitted": False,
         "intraday_feature_caveat": (
-            "Checkpoint rows may contain a partially formed current-session daily bar. "
-            "Decisions are shadow evidence until intraday OOS behavior is validated."
+            "Official forecasts use only completed daily bars. Shadow strategy "
+            "decisions overlay the last fully completed 5m price at the accepted "
+            "checkpoint; 15m/1h returns are context only until separately validated."
         ),
+        "quote_source": {
+            **quote_source,
+            "failed_symbols": sorted(set(quote_failures)),
+        },
         "strategies": strategy_payloads,
         "capital_allocation_challenger": {
             "action": "ALLOCATE" if challenger_targets else "HOLD",
@@ -301,6 +429,7 @@ def build_intraday_strategy_decisions(
             ),
             "actionable_decisions": total_actionable,
             "challenger_targets": len(challenger_targets),
+            "quote_coverage": quote_source.get("fresh_coverage"),
         },
     }
 
