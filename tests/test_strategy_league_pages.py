@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from league.publish_site import (
+    publish_intraday_decision_payload,
     publish_league_payload,
     publish_live_payload,
     publish_observation_payload,
@@ -201,9 +202,10 @@ def test_strategy_league_config_tracks_every_base_strategy() -> None:
         (ROOT / "config" / "strategy_league.json").read_text(encoding="utf-8")
     )
     member_ids = {str(member["id"]) for member in config["members"]}
-    assert config["league_id"] == "strategy_league_v10_d1_w1_champions_10k"
-    assert "strategy_league_v10_d1_w1_champions_10k" in config["weekly_model_path"]
-    assert int(config["weekly_review_frequency_sessions"]) == 10
+    assert config["league_id"] == "strategy_league_v11_intraday_informed_10k"
+    assert "strategy_league_v11_intraday_informed_10k" in config["weekly_model_path"]
+    assert int(config["weekly_review_frequency_sessions"]) == 1
+    assert int(config["capital_allocation_challenger"]["review_frequency_sessions"]) == 1
     assert float(config["execution"]["min_rebalance_weight_delta"]) == pytest.approx(0.02)
     assert float(config["execution"]["min_rebalance_notional_usd"]) == pytest.approx(100.0)
     assert int(config["promotion_review"]["turnover_review_window_sessions"]) == 63
@@ -237,6 +239,7 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     page = (ROOT / "site" / "strategies.html").read_text(encoding="utf-8")
     home = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "site" / "assets" / "league.js").read_text(encoding="utf-8")
+    intraday_script = (ROOT / "site" / "assets" / "intraday-decisions.js").read_text(encoding="utf-8")
     charts = (ROOT / "site" / "assets" / "charts.js").read_text(encoding="utf-8")
     styles = (ROOT / "site" / "assets" / "league.css").read_text(encoding="utf-8")
     base_styles = (ROOT / "site" / "assets" / "styles.css").read_text(encoding="utf-8")
@@ -251,6 +254,12 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="liveChartMetrics"' in page
     assert 'id="liveTable"' in page
     assert "actualización ~30 min" in page
+    assert 'id="intraday-decisions"' in page
+    assert 'id="decisionStatus"' in page
+    assert 'id="decisionSummary"' in page
+    assert 'id="decisionTable"' in page
+    assert 'id="decisionCandidates"' in page
+    assert 'src="assets/intraday-decisions.js"' in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
     assert 'id="leagueOperations"' in page
@@ -290,6 +299,11 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "data/strategy_live.json" in script
     assert "intraday_curve" in script
     assert "setInterval(renderLive, 60_000)" in script
+    assert "data/strategy_decisions_intraday.json" in intraday_script
+    assert "dominantHoldGate" in intraday_script
+    assert "renderIntradayDecisions" in intraday_script
+    assert "setInterval(renderIntradayDecisions, 60_000)" in intraday_script
+    assert "geometría central" in intraday_script
     assert "data/strategy_league_operations.json" in script
     assert "Top 10 operaciones" in script
     assert "Bottom 10 operaciones" in script
@@ -553,6 +567,8 @@ def test_workflows_wire_intraday_strategy_channel_without_touching_daily_bars() 
     assert "strategy_live" in pages_workflow
     assert "strategy-live-v1" in pages_workflow
     assert "--live-output site/data/strategy_live.json" in pages_workflow
+    assert "--decision-output site/data/strategy_decisions_intraday.json" in pages_workflow
+    assert "Intraday strategy decisions must never emit orders" in pages_workflow
     assert "league.live_snapshot export-base" in eod_workflow
     assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in eod_workflow
     assert "actions: write" in eod_workflow
