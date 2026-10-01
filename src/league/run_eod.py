@@ -452,26 +452,14 @@ def run_league_eod(
     rows = list(snapshot.get("rows", []))
     next_targets: dict[str, dict[str, dict]] = {}
     if snapshot.get("status") == "OK":
-        weekly_frequency = max(
-            weekly_max_holding_sessions,
-            int(
-                league_cfg.get(
-                    "weekly_review_frequency_sessions",
-                    weekly_max_holding_sessions,
-                )
-            ),
-        )
-        mean_frequency = mean_max_holding_sessions
-        cross_frequency = cross_max_holding_sessions
-        challenger_frequency = max(
-            1,
-            int(challenger_cfg.get("review_frequency_sessions", weekly_frequency)),
-        )
-        current_count = int(state.get("session_count", 0)) if state is not None else 0
-        include_weekly = state is None or current_count % weekly_frequency == 0
-        include_mean_reversion = state is None or current_count % mean_frequency == 0
-        include_cross_horizon = state is None or current_count % cross_frequency == 0
-        include_challenger = state is None or current_count % challenger_frequency == 0
+        # Entry evaluation is daily. Holding horizons remain independent and
+        # continue to control stop/target/timeout exits in league.engine.
+        # A W1/Q1 strategy must not wait 5-10 sessions before it can discover
+        # a new opportunity.
+        include_weekly = True
+        include_mean_reversion = True
+        include_cross_horizon = True
+        include_challenger = True
         current_positions_by_strategy = {
             member_id: set(member.get("positions", {}))
             for member_id, member in (state or {}).get("members", {}).items()
