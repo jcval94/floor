@@ -203,7 +203,29 @@ def test_bounded_serving_features_match_full_history_latest_row(tmp_path: Path) 
     cfg = RuntimeConfig(root_dir=tmp_path, data_dir=data_dir)
     bounded = _latest_feature_rows(cfg, ["AAPL"])
     assert len(bounded) == 1
-    assert bounded[0] == full_latest
+
+    strategy_fields = {
+        "dollar_volume",
+        "avg_dollar_volume",
+        "avg_dollar_volume_observations",
+    }
+    model_feature_view = {
+        key: value
+        for key, value in bounded[0].items()
+        if key not in strategy_fields
+    }
+    assert model_feature_view == full_latest
+
+    aapl_bars = [bar for bar in bars if bar.symbol == "AAPL"]
+    trailing_adv = sum(
+        float(bar.close) * float(bar.volume)
+        for bar in aapl_bars[-20:]
+    ) / 20.0
+    assert bounded[0]["dollar_volume"] == (
+        float(aapl_bars[-1].close) * float(aapl_bars[-1].volume)
+    )
+    assert abs(bounded[0]["avg_dollar_volume"] - trailing_adv) < 1e-9
+    assert bounded[0]["avg_dollar_volume_observations"] == 20.0
 
 
 def test_serving_history_has_explicit_warmup_margin() -> None:
