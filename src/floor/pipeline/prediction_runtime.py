@@ -219,6 +219,45 @@ def _bounded_serving_market_rows(
     return output
 
 
+def _strategy_liquidity_snapshot(
+    market_rows: list[dict],
+) -> dict[str, dict[str, float]]:
+    """Build leakage-safe liquidity fields for the latest serving row per symbol.
+
+    These fields are strategy inputs, not forecasting-model features. Keeping
+    them outside build_features prevents a strategy contract repair from
+    changing the governed model feature space.
+    """
+
+    by_symbol: dict[str, list[dict]] = {}
+    for row in market_rows:
+        symbol = str(row.get("symbol") or "").upper()
+        if symbol:
+            by_symbol.setdefault(symbol, []).append(row)
+
+    output: dict[str, dict[str, float]] = {}
+    for symbol, rows in by_symbol.items():
+        rows.sort(key=lambda row: str(row.get("timestamp") or ""))
+        trailing = rows[-20:]
+        dollar_volumes = [
+            _to_float(row.get("close"), 0.0) * _to_float(row.get("volume"), 0.0)
+            for row in trailing
+        ]
+        dollar_volumes = [value for value in dollar_volumes if value > 0.0]
+        if not dollar_volumes:
+            continue
+        latest = rows[-1]
+        output[symbol] = {
+            "dollar_volume": (
+                _to_float(latest.get("close"), 0.0)
+                * _to_float(latest.get("volume"), 0.0)
+            ),
+            "avg_dollar_volume": sum(dollar_volumes) / len(dollar_volumes),
+            "avg_dollar_volume_observations": float(len(dollar_volumes)),
+        }
+    return output
+
+
 def _latest_feature_rows(
     cfg: RuntimeConfig,
     symbols: list[str],
@@ -238,9 +277,13 @@ def _latest_feature_rows(
         max_market_session,
     )
     featured = build_features(selected)
+    strategy_liquidity = _strategy_liquidity_snapshot(selected)
     latest_by_symbol: dict[str, dict] = {}
     for row in featured:
-        latest_by_symbol[str(row["symbol"]).upper()] = row
+        symbol = str(row["symbol"]).upper()
+        latest = dict(row)
+        latest.update(strategy_liquidity.get(symbol, {}))
+        latest_by_symbol[symbol] = latest
     missing = [symbol for symbol in symbols if symbol.upper() not in latest_by_symbol]
     if missing:
         logger.warning(
