@@ -67,6 +67,11 @@ def _patch_minimal_cycle(
     )
     monkeypatch.setattr(
         canonical,
+        "fetch_checkpoint_quotes",
+        lambda *_args, **_kwargs: ({}, []),
+    )
+    monkeypatch.setattr(
+        canonical,
         "build_intraday_strategy_decisions",
         lambda *_args, **_kwargs: {
             "summary": {
