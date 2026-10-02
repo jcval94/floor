@@ -107,3 +107,39 @@ This preserves the causal sequence:
 `EOD compute → durable state → Pages publication`
 
 and prevents the dashboard from racing ahead of the state it claims to display.
+
+
+## v11 intraday shadow ownership
+
+The frozen `strategy_league_v11_intraday_informed_10k` contract keeps EOD as the
+official owner of Strategy League history. Intraday execution remains a
+non-promotional shadow layer with LIVE trading disabled.
+
+During each market session:
+
+1. T-1 `pending_targets` are copied from the official EOD base.
+2. The first valid `strategy_live` heartbeat applies those targets at today's
+   OPEN with the exact Strategy League execution primitives for sizing,
+   rebalance suppression, slippage, commission, sell fees, stops and takes.
+3. Subsequent ~30-minute heartbeats restore the same shadow portfolio, mark it
+   with completed 5m bars, and resolve any point-in-time stop/take exits.
+4. `intraday_engine` owns the official decision checkpoints
+   `OPEN/+2h/+4h/+6h/CLOSE`; delayed runs drain the oldest missing checkpoint
+   first and never consume bars after its immutable `checkpoint_at`.
+5. EOD advances the frozen v11 league with the final daily bar and then
+   reconciles the official trades against the intraday shadow ledger. Material
+   unexplained divergence fails closed. Differences caused specifically by 5m
+   path ordering versus the frozen daily-OHLC stop-first rule are retained as
+   explicit source-granularity explanations, never silently discarded.
+
+The scheduler watchdog remains recovery-only: it dispatches an existing
+workflow only when its normal polling run is stale or absent.
+
+### Deliberate v12 candidate
+
+A future v12 may move official target execution ownership from EOD to the OPEN
+heartbeat and persist the intraday position ledger as the authoritative league
+state. That change would alter frozen execution semantics and therefore must use
+a new `league_id`; v11 is not rewritten in place. A v12 proposal should also
+decide whether 5m path ordering replaces the current conservative daily-OHLC
+stop/take ambiguity rule.
