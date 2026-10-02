@@ -48,19 +48,61 @@ def reconcile(
 
     official_by_key = {_key(row): row for row in official_trades}
     divergences: list[dict[str, Any]] = []
+    explained_differences: list[dict[str, Any]] = []
+    matched_official_keys: set[tuple[str, str, str, int, str]] = set()
     matched = 0
+    exit_reasons = {
+        "stop_touched_conservative_first",
+        "stop_gap_through_at_open",
+        "take_profit_touched",
+        "take_profit_gap_through_at_open",
+    }
     for row in shadow_trades:
         key = _key(row)
         peer = official_by_key.get(key)
+        if peer is None and str(row.get("side") or "") == "SELL" and str(row.get("reason") or "") in exit_reasons:
+            candidates = [
+                candidate
+                for candidate in official_trades
+                if str(candidate.get("member") or "") == str(row.get("member") or "")
+                and str(candidate.get("symbol") or "") == str(row.get("symbol") or "")
+                and str(candidate.get("side") or "") == "SELL"
+                and int(candidate.get("qty", 0) or 0) == int(row.get("qty", 0) or 0)
+                and str(candidate.get("reason") or "") in exit_reasons
+            ]
+            if len(candidates) == 1:
+                peer = candidates[0]
+                explained_differences.append(
+                    {
+                        "kind": "intraday_path_vs_daily_ohlc_exit",
+                        "member": row.get("member"),
+                        "symbol": row.get("symbol"),
+                        "shadow_reason": row.get("reason"),
+                        "official_reason": peer.get("reason"),
+                        "shadow_fill_price": row.get("fill_price"),
+                        "official_fill_price": peer.get("fill_price"),
+                        "explanation": (
+                            "5m point-in-time ordering resolves stop/take path while the frozen "
+                            "v11 daily OHLC contract uses conservative stop-first semantics."
+                        ),
+                    }
+                )
         if peer is None:
             divergences.append({"kind": "missing_official_trade", "shadow": row})
             continue
+        matched_official_keys.add(_key(peer))
         matched += 1
         shadow_price = float(row.get("fill_price", 0.0) or 0.0)
         official_price = float(peer.get("fill_price", 0.0) or 0.0)
         price_bps = abs(shadow_price / official_price - 1.0) * 10000 if official_price > 0 else 0.0
         cost_delta = abs(float(row.get("costs", 0.0) or 0.0) - float(peer.get("costs", 0.0) or 0.0))
-        if price_bps > price_tolerance_bps or cost_delta > cost_tolerance_usd:
+        path_explained = (
+            str(row.get("side") or "") == "SELL"
+            and str(row.get("reason") or "") in exit_reasons
+            and str(peer.get("reason") or "") in exit_reasons
+            and str(row.get("reason") or "") != str(peer.get("reason") or "")
+        )
+        if (price_bps > price_tolerance_bps or cost_delta > cost_tolerance_usd) and not path_explained:
             divergences.append({
                 "kind": "trade_mismatch",
                 "key": key,
@@ -74,7 +116,7 @@ def reconcile(
     # They are recorded but are not treated as shadow divergence.
     official_only = [
         row for row in official_trades
-        if _key(row) not in {_key(item) for item in shadow_trades}
+        if _key(row) not in matched_official_keys
     ]
     unexplained_official = [
         row for row in official_only
@@ -98,7 +140,8 @@ def reconcile(
         "price_tolerance_bps": price_tolerance_bps,
         "cost_tolerance_usd": cost_tolerance_usd,
         "divergences": divergences,
-        "note": "v11 keeps EOD as official owner; max-holding/session-timeout exits may remain EOD-only until v12.",
+        "explained_differences": explained_differences,
+        "note": "v11 keeps EOD as official owner; source-granularity exit differences and EOD-only max-holding/session-timeout exits are documented until v12.",
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
