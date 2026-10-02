@@ -67,6 +67,7 @@ def test_open_shadow_fill_uses_league_execution_costs_and_is_idempotent() -> Non
     first = build_shadow_snapshot(_base(), {}, _cfg(), now=now, session_bars=bars)
     fills = first["shadow_open_fills"]
     assert first["open_fills_applied"] is True
+    assert first["shadow_evidence_complete"] is True
     assert len(fills) == 1
     assert fills[0]["qty"] == 50
     assert fills[0]["raw_price"] == pytest.approx(100.0)
@@ -144,3 +145,22 @@ def test_repeated_heartbeats_append_observations_without_reopening_positions() -
     assert len(second["shadow_open_fills"]) == 1
     assert len(second["observations"]) == 2
     assert second["rows"][0]["nav"] > first["rows"][0]["nav"]
+
+
+def test_legacy_live_base_without_pending_targets_marks_shadow_evidence_incomplete() -> None:
+    base = _base()
+    del base["members"]["capital_allocation_challenger"]["pending_targets"]
+    payload = build_shadow_snapshot(
+        base,
+        {},
+        _cfg(),
+        now=datetime(2026, 10, 2, 10, 5, tzinfo=ET),
+        session_bars={},
+    )
+
+    assert payload["shadow_evidence_complete"] is False
+    assert payload["pending_targets_contract_present"] is False
+    assert payload["shadow_evidence_incomplete_reason"] == (
+        "legacy_live_base_missing_pending_targets"
+    )
+    assert payload["shadow_open_fills"] == []
