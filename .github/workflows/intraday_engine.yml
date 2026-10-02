@@ -275,6 +275,13 @@ jobs:
               raise SystemExit(f"expected four strategy families, got: {summary}")
           if int(summary.get("decisions_evaluated", 0)) <= 0:
               raise SystemExit(f"strategy decision artifact is empty: {summary}")
+          timing = payload.get("intraday_timing_adapter") or {}
+          if timing.get("mode") != "ranking_only":
+              raise SystemExit(f"unexpected intraday timing mode: {timing}")
+          if int(timing.get("action_changes", -1)) != 0:
+              raise SystemExit(f"intraday timing changed source actions: {timing}")
+          if int(timing.get("qty_changes", -1)) != 0:
+              raise SystemExit(f"intraday timing changed source quantities: {timing}")
           event = str(payload.get("event") or "")
           quote_source = payload.get("quote_source") or {}
           coverage = float(summary.get("quote_coverage") or 0.0)

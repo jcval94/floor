@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime
+from math import tanh
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -61,9 +63,10 @@ def _overlay_checkpoint_quotes(
     """Overlay point-in-time prices onto completed-daily features for shadow decisions.
 
     Forecasts remain trained/served from completed daily bars. Only the strategy
-    observation layer receives the checkpoint price. Daily momentum, relative
-    strength, trend context and drawdown are algebraically updated from that
-    price; 15m/1h returns are preserved as context, not promoted to alpha.
+    observation layer receives the checkpoint price. Daily momentum and relative
+    strength are algebraically updated from that price. Slower rolling features
+    stay frozen at EOD. Fully completed 15m/1h returns are exposed to the shadow
+    timing adapter; they never manufacture a BUY/SELL action on their own.
     """
 
     spy_quote = checkpoint_quotes.get("SPY", {})
@@ -135,8 +138,164 @@ def _overlay_checkpoint_quotes(
         "spy_quote_available": spy_price > 0,
         "semantics": (
             "completed daily forecasts plus point-in-time 5m price overlay; "
-            "15m/1h returns are observational context only"
+            "15m/1h returns rank already-valid shadow actions but never create them"
         ),
+    }
+
+
+def _timing_context(
+    strategy_id: str,
+    decision: Any,
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    """Score point-in-time 15m/1h alignment without changing the source action.
+
+    The adapter is intentionally ranking-only. It can strengthen or weaken the
+    score used by the intraday Capital Challenger, but it cannot flip side,
+    create quantity, or turn HOLD into BUY/SELL.
+    """
+
+    side = str(getattr(decision, "side", "HOLD") or "HOLD").upper()
+    base_score = float(getattr(decision, "score", 0.0) or 0.0)
+    r15_raw = row.get("intraday_return_15m")
+    r1h_raw = row.get("intraday_return_1h")
+    try:
+        r15 = float(r15_raw) if r15_raw is not None else None
+    except (TypeError, ValueError):
+        r15 = None
+    try:
+        r1h = float(r1h_raw) if r1h_raw is not None else None
+    except (TypeError, ValueError):
+        r1h = None
+
+    if side not in {"BUY", "SELL"}:
+        return {
+            "status": "not_applicable",
+            "mode": "ranking_only",
+            "base_score": base_score,
+            "timing_score": 0.0,
+            "multiplier": 1.0,
+            "rank_score": base_score,
+            "return_15m": r15,
+            "return_1h": r1h,
+            "action_changed": False,
+            "qty_changed": False,
+        }
+
+    if r15 is None or r1h is None:
+        return {
+            "status": "unavailable",
+            "mode": "ranking_only",
+            "base_score": base_score,
+            "timing_score": 0.0,
+            "multiplier": 1.0,
+            "rank_score": base_score,
+            "return_15m": r15,
+            "return_1h": r1h,
+            "action_changed": False,
+            "qty_changed": False,
+        }
+
+    direction = 1.0 if side == "BUY" else -1.0
+    if strategy_id == "mean_reversion_floor_w1":
+        # Mean reversion wants short-term stabilization/reversal in the trade
+        # direction while the prior 1h move still reflects the dislocation.
+        timing_score = (
+            0.65 * tanh(direction * r15 / 0.003)
+            + 0.35 * tanh(-direction * r1h / 0.008)
+        )
+        max_adjustment = 0.15
+        timing_style = "reversal_confirmation"
+    else:
+        # Momentum/Cross-Horizon prefer immediate directional confirmation.
+        # Weekly uses the same sign logic but with half the influence because
+        # its alpha is deliberately slower-moving.
+        timing_score = (
+            0.60 * tanh(direction * r15 / 0.003)
+            + 0.40 * tanh(direction * r1h / 0.008)
+        )
+        max_adjustment = 0.08 if strategy_id == "weekly_opportunity_ridge" else 0.15
+        timing_style = (
+            "directional_confirmation_mild"
+            if strategy_id == "weekly_opportunity_ridge"
+            else "directional_confirmation"
+        )
+
+    multiplier = 1.0 + max_adjustment * timing_score
+    rank_score = max(0.0, base_score * multiplier)
+    if timing_score >= 0.20:
+        status = "confirmed"
+    elif timing_score <= -0.20:
+        status = "contradicted"
+    else:
+        status = "mixed"
+
+    return {
+        "status": status,
+        "mode": "ranking_only",
+        "style": timing_style,
+        "base_score": base_score,
+        "timing_score": timing_score,
+        "multiplier": multiplier,
+        "rank_score": rank_score,
+        "return_15m": r15,
+        "return_1h": r1h,
+        "action_changed": False,
+        "qty_changed": False,
+    }
+
+
+def _apply_intraday_timing(
+    decisions_by_strategy: dict[str, list[Any]],
+    rows_by_symbol: dict[str, dict[str, Any]],
+) -> tuple[dict[str, list[Any]], dict[str, Any]]:
+    """Return score-adjusted shadow copies plus a compact timing summary."""
+
+    adjusted: dict[str, list[Any]] = {}
+    status_counts = {
+        "confirmed": 0,
+        "mixed": 0,
+        "contradicted": 0,
+        "unavailable": 0,
+        "not_applicable": 0,
+    }
+    actionable_seen = 0
+
+    for strategy_id, decisions in decisions_by_strategy.items():
+        strategy_rows: list[Any] = []
+        for decision in decisions:
+            symbol = str(getattr(decision, "symbol", "") or "")
+            row = rows_by_symbol.get(symbol, {})
+            timing = _timing_context(strategy_id, decision, row)
+            status = str(timing.get("status") or "unavailable")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            side = str(getattr(decision, "side", "HOLD") or "HOLD").upper()
+            if side in {"BUY", "SELL"} and int(getattr(decision, "qty", 0) or 0) > 0:
+                actionable_seen += 1
+
+            trace = dict(getattr(decision, "decision_trace", None) or {})
+            trace["intraday_timing"] = timing
+            strategy_rows.append(
+                replace(
+                    decision,
+                    score=float(timing["rank_score"]),
+                    decision_trace=trace,
+                )
+            )
+        adjusted[strategy_id] = strategy_rows
+
+    return adjusted, {
+        "mode": "ranking_only",
+        "actionable_decisions_seen": actionable_seen,
+        "status_counts": status_counts,
+        "action_changes": 0,
+        "qty_changes": 0,
+        "max_score_adjustment_pct": {
+            "weekly_opportunity_ridge": 0.08,
+            "breakout_protected_by_floor": 0.15,
+            "mean_reversion_floor_w1": 0.15,
+            "cross_horizon_asymmetry": 0.15,
+        },
     }
 
 
@@ -223,6 +382,12 @@ def _serialize_decision(
         "symbol": str(decision.symbol),
         "action": str(decision.side),
         "score": float(decision.score),
+        "base_score": float(
+            (trace.get("intraday_timing") or {}).get("base_score", decision.score)
+        ),
+        "intraday_rank_score": float(
+            (trace.get("intraday_timing") or {}).get("rank_score", decision.score)
+        ),
         "qty": int(decision.qty),
         "horizon": str(decision.horizon),
         "reason": str(decision.entry_reason),
@@ -285,7 +450,7 @@ def build_intraday_strategy_decisions(
     league_config_path = league_config_path or repo_root / "config" / "strategy_league.json"
 
     strategies_cfg = deepcopy(load_simple_yaml(strategies_config_path))
-    # Intraday observation must use the exact same friction contract as v10 EOD.
+    # Intraday observation must use the exact same friction contract as v11 EOD.
     strategies_cfg["costs"] = shadow_execution_contract()
     league_cfg = _load_json(league_config_path)
 
@@ -347,6 +512,10 @@ def build_intraday_strategy_decisions(
         "cross_horizon_asymmetry": cross_horizon,
     }
     rows_by_symbol = {str(row["symbol"]): row for row in rows}
+    decisions_by_strategy, timing_summary = _apply_intraday_timing(
+        decisions_by_strategy,
+        rows_by_symbol,
+    )
     challenger_targets = build_capital_challenger_targets(
         decisions_by_strategy,
         rows_by_symbol,
@@ -389,8 +558,10 @@ def build_intraday_strategy_decisions(
         "intraday_feature_caveat": (
             "Official forecasts use only completed daily bars. Shadow strategy "
             "decisions overlay the last fully completed 5m price at the accepted "
-            "checkpoint; 15m/1h returns are context only until separately validated."
+            "checkpoint. Fully completed 15m/1h returns adjust ranking only; they "
+            "cannot change action, quantity, official portfolio state, or promotion."
         ),
+        "intraday_timing_adapter": timing_summary,
         "quote_source": {
             **quote_source,
             "failed_symbols": sorted(set(quote_failures)),
