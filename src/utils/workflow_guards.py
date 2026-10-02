@@ -58,6 +58,16 @@ def _marker_exists(data_dir: Path, kind: str, day: str, event: str) -> bool:
     return _marker_path(data_dir, _marker_key(kind=kind, day=day, event=event)).exists()
 
 
+def _missing_marker_path(data_dir: Path, day: str, event: str) -> Path:
+    return _marker_path(data_dir, f"intraday_missing_{day}_{event}")
+
+
+def _checkpoint_finalized(data_dir: Path, day: str, event: str) -> bool:
+    return _marker_exists(data_dir, "intraday", day, event) or _missing_marker_path(
+        data_dir, day, event
+    ).exists()
+
+
 def _required_session(kind: str, checkpoint_at: datetime) -> str:
     if kind == "eod":
         return checkpoint_at.astimezone(ET).date().isoformat()
@@ -91,7 +101,7 @@ def _intraday_decision(
     pending = [
         (event, timestamp)
         for event, timestamp in due
-        if not _marker_exists(data_dir, "intraday", day, event)
+        if not _checkpoint_finalized(data_dir, day, event)
     ]
     if not pending:
         event, timestamp = max(due, key=lambda item: item[1])
@@ -322,6 +332,37 @@ def validate_accepted_context(
     }
 
 
+def mark_missing_checkpoint(
+    data_dir: Path,
+    *,
+    event: str,
+    session_day: str,
+    checkpoint_at: str,
+    reason: str,
+    now: datetime | None = None,
+) -> Path:
+    current = _as_et(now)
+    marker = _missing_marker_path(data_dir, session_day, event)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        json.dumps(
+            {
+                "kind": "intraday_missing",
+                "day": session_day,
+                "event": event,
+                "checkpoint_at": checkpoint_at,
+                "recorded_at": current.isoformat(),
+                "reason": reason,
+                "run_id": os.getenv("GITHUB_RUN_ID", "local"),
+                "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return marker
+
+
 def mark_run(
     kind: str,
     data_dir: Path,
@@ -379,6 +420,13 @@ def main() -> None:
     p_mark.add_argument("--checkpoint-at", default=None)
     p_mark.add_argument("--data-dir", default="data")
 
+    p_missing = sub.add_parser("mark-missing")
+    p_missing.add_argument("--event", required=True)
+    p_missing.add_argument("--session-day", required=True)
+    p_missing.add_argument("--checkpoint-at", required=True)
+    p_missing.add_argument("--reason", required=True)
+    p_missing.add_argument("--data-dir", default="data")
+
     args = parser.parse_args()
 
     if args.cmd == "check":
@@ -397,6 +445,15 @@ def main() -> None:
                 allow_existing_repair=args.allow_existing_repair,
             )
         )
+    elif args.cmd == "mark-missing":
+        path = mark_missing_checkpoint(
+            Path(args.data_dir),
+            event=args.event,
+            session_day=args.session_day,
+            checkpoint_at=args.checkpoint_at,
+            reason=args.reason,
+        )
+        _write_outputs({"marker": str(path)})
     elif args.cmd == "mark":
         path = mark_run(
             args.kind,
