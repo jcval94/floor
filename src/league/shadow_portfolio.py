@@ -111,6 +111,7 @@ def _symbols(base: dict[str, Any]) -> list[str]:
 
 def _fresh_shadow(base: dict[str, Any], session: str) -> dict[str, Any]:
     members = copy.deepcopy(base.get("members") or {})
+    strategy_members: list[dict[str, Any]] = []
     for member_id, member in members.items():
         if not isinstance(member, dict):
             continue
@@ -118,6 +119,16 @@ def _fresh_shadow(base: dict[str, Any], session: str) -> dict[str, Any]:
         member.setdefault("trade_count", int(member.get("trades", 0) or 0))
         member.setdefault("gross_traded_notional", 0.0)
         member.setdefault("suppressed_rebalances", 0)
+        if str(member.get("member_type") or "strategy") == "strategy":
+            strategy_members.append(member)
+
+    # A compact base generated before the intraday-shadow rollout did not expose
+    # pending_targets. In that case OPEN execution cannot be reconstructed safely.
+    # Keep the shadow observable, but mark the session explicitly non-comparable
+    # rather than inventing fills or reporting false EOD divergences.
+    pending_targets_contract_present = bool(strategy_members) and all(
+        "pending_targets" in member for member in strategy_members
+    )
     return {
         "schema_version": 2,
         "league_id": base.get("league_id"),
@@ -131,6 +142,13 @@ def _fresh_shadow(base: dict[str, Any], session: str) -> dict[str, Any]:
         "shadow_open_fills": [],
         "shadow_exits": [],
         "open_fills_applied": False,
+        "pending_targets_contract_present": pending_targets_contract_present,
+        "shadow_evidence_complete": pending_targets_contract_present,
+        "shadow_evidence_incomplete_reason": (
+            None
+            if pending_targets_contract_present
+            else "legacy_live_base_missing_pending_targets"
+        ),
         "observations": [],
         "live_execution_enabled": False,
         "counts_as_prospective_evidence": False,

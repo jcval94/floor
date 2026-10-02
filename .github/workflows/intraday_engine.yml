@@ -338,6 +338,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
           RUNTIME_STATE_CHECKPOINT_EVENT: ${{ needs.gate.outputs.event }}
+          # Catch-up may rebuild OPEN/+2h after a later frontier was already persisted.
+          # Persist the reconstructed evidence without moving the global frontier backwards.
+          RUNTIME_STATE_ALLOW_STALE_CHECKPOINT: "true"
         run: bash scripts/runtime_state.sh publish
 
       - name: Publish lightweight checkpoint index

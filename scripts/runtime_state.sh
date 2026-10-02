@@ -7,6 +7,7 @@ ASSET="${RUNTIME_STATE_ASSET:-floor-runtime-state.tar.gz}"
 MAX_MB="${RUNTIME_STATE_MAX_MB:-500}"
 RETENTION_INTERVAL_SECONDS="${RUNTIME_STATE_RETENTION_INTERVAL_SECONDS:-86400}"
 FORCE_RETENTION="${RUNTIME_STATE_FORCE_RETENTION:-false}"
+ALLOW_STALE_CHECKPOINT="${RUNTIME_STATE_ALLOW_STALE_CHECKPOINT:-false}"
 REPO="${GITHUB_REPOSITORY:-}"
 TOKEN_FILE="${RUNTIME_STATE_TOKEN_FILE:-${RUNNER_TEMP:-.}/floor-runtime-state-restore-token.json}"
 
@@ -31,6 +32,10 @@ if ! [[ "$RETENTION_INTERVAL_SECONDS" =~ ^[0-9]+$ ]]; then
 fi
 if [[ "$FORCE_RETENTION" != "true" && "$FORCE_RETENTION" != "false" ]]; then
   echo "RUNTIME_STATE_FORCE_RETENTION must be true or false, got: $FORCE_RETENTION" >&2
+  exit 2
+fi
+if [[ "$ALLOW_STALE_CHECKPOINT" != "true" && "$ALLOW_STALE_CHECKPOINT" != "false" ]]; then
+  echo "RUNTIME_STATE_ALLOW_STALE_CHECKPOINT must be true or false, got: $ALLOW_STALE_CHECKPOINT" >&2
   exit 2
 fi
 
@@ -270,6 +275,9 @@ publish_state() {
       --checkpoint-at "$RUNTIME_STATE_CHECKPOINT_AT"
       --event "${RUNTIME_STATE_CHECKPOINT_EVENT:-}"
     )
+    if [[ "$ALLOW_STALE_CHECKPOINT" == "true" ]]; then
+      frontier_args+=(--allow-stale-checkpoint)
+    fi
   fi
   if ! PYTHONPATH=src python -m utils.runtime_state_cas "${frontier_args[@]}" > "$frontier_result"; then
     echo "::error::Runtime-state checkpoint frontier validation failed." >&2

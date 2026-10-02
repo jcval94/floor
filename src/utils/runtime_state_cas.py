@@ -85,6 +85,7 @@ def resolve_publish_frontier(
     marker_dir: Path | None,
     checkpoint_at: str | None,
     event: str | None,
+    allow_stale_checkpoint: bool = False,
 ) -> RuntimeStateFrontier:
     parent = frontier_from_metadata(parent_metadata_path)
     candidate = RuntimeStateFrontier(
@@ -101,11 +102,16 @@ def resolve_publish_frontier(
     candidate_dt = _checkpoint_dt(candidate.checkpoint_at)
     assert candidate_dt is not None
     floors = [parent, latest_marker_frontier(marker_dir)]
+    latest_floor: tuple[datetime, RuntimeStateFrontier] | None = None
     for floor in floors:
         floor_dt = _checkpoint_dt(floor.checkpoint_at)
         if floor_dt is None:
             continue
+        if latest_floor is None or floor_dt > latest_floor[0]:
+            latest_floor = (floor_dt, floor)
         if candidate_dt < floor_dt:
+            if allow_stale_checkpoint:
+                continue
             raise RuntimeError(
                 "Runtime-state checkpoint regression refused: "
                 f"candidate={candidate} frontier={floor}"
@@ -115,6 +121,8 @@ def resolve_publish_frontier(
                 "Runtime-state checkpoint event mismatch at same timestamp: "
                 f"candidate={candidate} frontier={floor}"
             )
+    if allow_stale_checkpoint and latest_floor is not None and candidate_dt < latest_floor[0]:
+        return latest_floor[1]
     return candidate
 
 
@@ -235,6 +243,7 @@ def main() -> int:
     frontier.add_argument("--marker-dir")
     frontier.add_argument("--checkpoint-at")
     frontier.add_argument("--event")
+    frontier.add_argument("--allow-stale-checkpoint", action="store_true")
     frontier.add_argument("--format", choices=["json", "tsv"], default="json")
 
     args = parser.parse_args()
@@ -250,6 +259,7 @@ def main() -> int:
                 marker_dir=Path(args.marker_dir) if args.marker_dir else None,
                 checkpoint_at=args.checkpoint_at,
                 event=args.event,
+                allow_stale_checkpoint=args.allow_stale_checkpoint,
             )
             if args.format == "tsv":
                 print(f"{resolved.checkpoint_at or '-'}\t{resolved.event or '-'}")

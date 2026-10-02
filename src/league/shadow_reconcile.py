@@ -46,6 +46,48 @@ def reconcile(
         if isinstance(row, dict)
     ]
 
+    # Explicitly incomplete evidence is not a reconciliation success and not a
+    # material divergence either. This occurs for the one rollout session whose
+    # compact base predates pending_targets export. Never synthesize OPEN fills.
+    if shadow.get("shadow_evidence_complete") is False:
+        payload = {
+            "schema_version": 1,
+            "status": "INCOMPLETE_EVIDENCE",
+            "market_session": shadow.get("market_session"),
+            "official_session": official.get("session"),
+            "shadow_trade_count": len(shadow_trades),
+            "official_trade_count": len(official_trades),
+            "matched_trade_count": 0,
+            "allowed_eod_only_trade_count": 0,
+            "price_tolerance_bps": price_tolerance_bps,
+            "cost_tolerance_usd": cost_tolerance_usd,
+            "divergences": [],
+            "explained_differences": [
+                {
+                    "kind": str(
+                        shadow.get("shadow_evidence_incomplete_reason")
+                        or "shadow_evidence_incomplete"
+                    ),
+                    "explanation": (
+                        "The intraday shadow base lacks the T-1 pending-target contract, "
+                        "so OPEN fills cannot be reconstructed safely. Official EOD remains "
+                        "authoritative and no shadow/EOD equivalence claim is made."
+                    ),
+                }
+            ],
+            "reconciliation_skipped": True,
+            "note": (
+                "Incomplete rollout evidence is recorded explicitly; complete future "
+                "shadow sessions remain fail-closed on material divergence."
+            ),
+        }
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return payload
+
     official_by_key = {_key(row): row for row in official_trades}
     divergences: list[dict[str, Any]] = []
     explained_differences: list[dict[str, Any]] = []

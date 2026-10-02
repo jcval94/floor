@@ -70,3 +70,39 @@ def test_shadow_eod_material_fill_difference_fails_closed(tmp_path: Path) -> Non
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "DIVERGED"
     assert payload["divergences"][0]["kind"] == "trade_mismatch"
+
+
+def test_legacy_shadow_without_pending_targets_is_explicitly_not_comparable(
+    tmp_path: Path,
+) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "reconciliation.json"
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-02",
+            "shadow_evidence_complete": False,
+            "shadow_evidence_incomplete_reason": "legacy_live_base_missing_pending_targets",
+            "shadow_open_fills": [],
+            "shadow_exits": [],
+        },
+    )
+    _write(
+        history,
+        {"session": "2026-10-02", "event": "EOD", "trades": [_trade()]},
+    )
+
+    payload = reconcile(
+        shadow_path=shadow,
+        history_path=history,
+        output_path=output,
+    )
+
+    assert payload["status"] == "INCOMPLETE_EVIDENCE"
+    assert payload["reconciliation_skipped"] is True
+    assert payload["divergences"] == []
+    assert payload["official_trade_count"] == 1
+    assert payload["explained_differences"][0]["kind"] == (
+        "legacy_live_base_missing_pending_targets"
+    )

@@ -159,3 +159,24 @@ def test_non_checkpoint_publisher_inherits_parent_frontier(tmp_path: Path) -> No
     assert resolved == RuntimeStateFrontier(
         "2026-09-22T11:30:00-04:00", "OPEN_PLUS_2H"
     )
+
+
+def test_checkpoint_frontier_preserves_newer_frontier_during_explicit_catchup(
+    tmp_path: Path,
+) -> None:
+    metadata = _metadata_with_frontier(
+        tmp_path, "2026-09-22T13:30:00-04:00", "OPEN_PLUS_4H"
+    )
+    markers = _marker(
+        tmp_path, "OPEN_PLUS_4H", "2026-09-22T13:30:00-04:00"
+    )
+    resolved = resolve_publish_frontier(
+        parent_metadata_path=metadata,
+        marker_dir=markers,
+        checkpoint_at="2026-09-22T09:30:00-04:00",
+        event="OPEN",
+        allow_stale_checkpoint=True,
+    )
+    assert resolved == RuntimeStateFrontier(
+        "2026-09-22T13:30:00-04:00", "OPEN_PLUS_4H"
+    )
