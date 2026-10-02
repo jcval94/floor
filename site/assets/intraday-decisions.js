@@ -110,18 +110,82 @@ function strategyRows(data) {
 
 function candidateRows(data) {
   const strategies = data && data.strategies && typeof data.strategies === 'object' ? data.strategies : {};
+  const shadow = (data && data.shadow_portfolio) || {};
+  const fills = Array.isArray(shadow.fills) ? shadow.fills : [];
+  const exits = Array.isArray(shadow.exits) ? shadow.exits : [];
+  const liveRows = Array.isArray(shadow.rows) ? shadow.rows : [];
   const candidates = Object.entries(strategies).flatMap(([strategyId, payload]) => {
     const rows = payload && Array.isArray(payload.top_actionable) ? payload.top_actionable : [];
     return rows.map((row) => ({ ...row, strategy_id: strategyId }));
-  }).sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 15);
-  if (!candidates.length) return '<tr><td colspan="7"><div class="empty-state"><strong>Este checkpoint no produjo señales accionables.</strong><p>La tabla superior muestra el gate dominante que mantuvo a cada estrategia en HOLD.</p></div></td></tr>';
+  }).sort((a, b) => Number(b.intraday_rank_score || b.score || 0) - Number(a.intraday_rank_score || a.score || 0)).slice(0, 20);
+  if (!candidates.length) return '<tr><td colspan="14"><div class="empty-state"><strong>Este checkpoint no produjo señales accionables.</strong><p>La tabla superior muestra el gate dominante que mantuvo a cada estrategia en HOLD.</p></div></td></tr>';
   return candidates.map((row) => {
     const action = String(row.action || 'HOLD');
     const tone = action === 'BUY' ? 'positive' : action === 'SELL' ? 'negative' : '';
     const baseScore = Number.isFinite(Number(row.base_score)) ? number(row.base_score) : number(row.score);
     const intraScore = Number.isFinite(Number(row.intraday_rank_score)) ? number(row.intraday_rank_score) : number(row.score);
-    return '<tr><td>' + escapeHTML(labelFor(row.strategy_id)) + '</td><td><strong>' + escapeHTML(String(row.symbol || '—')) + '</strong></td><td class="' + tone + '"><strong>' + escapeHTML(action) + '</strong></td><td><strong>' + baseScore + ' → ' + intraScore + '</strong></td><td>' + escapeHTML(timingLabel(row)) + '</td><td>' + escapeHTML(String(row.horizon || '—').toUpperCase()) + '</td><td>' + escapeHTML(String(row.reason || '—')) + '</td></tr>';
+    const memberFills = fills.filter((trade) => String(trade.member || '') === row.strategy_id && String(trade.symbol || '') === String(row.symbol || ''));
+    const memberExits = exits.filter((trade) => String(trade.member || '') === row.strategy_id && String(trade.symbol || '') === String(row.symbol || ''));
+    const fill = memberFills[0] || null;
+    const exit = memberExits[memberExits.length - 1] || null;
+    const member = liveRows.find((item) => String(item.strategy || '') === row.strategy_id) || {};
+    const position = (member.positions || []).find((item) => String(item.symbol || '') === String(row.symbol || '')) || null;
+    const qty = Number((position && position.qty) || (fill && fill.qty) || row.qty || 0);
+    const entryRaw = Number((fill && fill.raw_price) || (position && position.entry) || 0);
+    const entryFill = Number((fill && fill.fill_price) || (position && position.entry) || 0);
+    const markRaw = Number((exit && exit.raw_price) || (position && position.last_price) || 0);
+    const costs = [...memberFills, ...memberExits].reduce((sum, trade) => sum + Number(trade.costs || 0), 0);
+    const gross = qty > 0 && entryRaw > 0 && markRaw > 0 ? (markRaw - entryRaw) * qty : 0;
+    const net = gross - costs;
+    const stop = Number((position && position.stop) || row.stop_price || 0);
+    const take = Number((position && position.take) || row.take_profit_price || 0);
+    const fillLabel = fill ? (exit ? 'OPEN→EXIT' : 'OPEN') : '—';
+    return '<tr><td>' + escapeHTML(labelFor(row.strategy_id)) + '</td><td><strong>' + escapeHTML(String(row.symbol || '—')) + '</strong></td><td class="' + tone + '"><strong>' + escapeHTML(action) + '</strong></td><td><strong>' + baseScore + ' → ' + intraScore + '</strong></td><td>' + escapeHTML(timingLabel(row)) + '</td><td>' + fillLabel + '</td><td>' + (qty || '—') + '</td><td>' + (entryFill > 0 ? '$' + number(entryFill, 2) : '—') + '</td><td>' + (stop > 0 ? '$' + number(stop, 2) : '—') + '</td><td>' + (take > 0 ? '$' + number(take, 2) : '—') + '</td><td>$' + number(gross, 2) + '</td><td>$' + number(costs, 2) + '</td><td class="' + (net >= 0 ? 'positive' : 'negative') + '">$' + number(net, 2) + '</td><td>' + escapeHTML(String(row.reason || '—')) + '</td></tr>';
   }).join('');
+}
+
+function pct(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? (numeric * 100).toFixed(1) + '%' : '—';
+}
+
+function funnelCards(data) {
+  const funnel = (data && data.funnel) || {};
+  const metrics = (data && data.session_metrics) || {};
+  const cards = [
+    ['Evaluaciones', funnel.evaluations || 0, 'actionable ' + pct(metrics.actionable_rate)],
+    ['Accionables', funnel.actionable || 0, 'target rate ' + pct(metrics.target_rate)],
+    ['Challenger targets', funnel.challenger_targets || 0, 'execution ' + pct(metrics.execution_rate)],
+    ['Fills', funnel.fills || 0, 'turnover ' + pct(metrics.turnover)],
+    ['Posiciones', funnel.positions || 0, 'shadow vivo'],
+    ['Exits', funnel.exits || 0, 'stops/takes PIT'],
+    ['P&L neto', '$' + number(funnel.net_pnl || 0, 2), 'cost drag ' + pct(metrics.cost_drag)],
+    ['Signal half-life', metrics.signal_half_life_hours == null ? '—' : number(metrics.signal_half_life_hours, 1) + 'h', 'hasta cambio de BUY/SELL'],
+    ['HOLD→BUY', ((metrics.transitions || {})['HOLD→BUY'] || 0), 'BUY→HOLD ' + String(((metrics.transitions || {})['BUY→HOLD'] || 0))],
+    ['Confirmed', pct((((metrics.posterior_return_by_timing || {}).confirmed || {}).mean_signed_return)), 'n=' + String((((metrics.posterior_return_by_timing || {}).confirmed || {}).count || 0))],
+    ['Contradicted', pct((((metrics.posterior_return_by_timing || {}).contradicted || {}).mean_signed_return)), 'n=' + String((((metrics.posterior_return_by_timing || {}).contradicted || {}).count || 0))],
+  ];
+  return cards.map((card) => '<article class="metric-card league-metric"><span class="metric-label">' + escapeHTML(String(card[0])) + '</span><strong class="metric-value">' + escapeHTML(String(card[1])) + '</strong><span class="metric-detail">' + escapeHTML(String(card[2])) + '</span></article>').join('');
+}
+
+function checkpointRows(data) {
+  const order = ['OPEN', 'OPEN_PLUS_2H', 'OPEN_PLUS_4H', 'OPEN_PLUS_6H', 'CLOSE'];
+  const labels = { OPEN: 'OPEN', OPEN_PLUS_2H: '+2h', OPEN_PLUS_4H: '+4h', OPEN_PLUS_6H: '+6h', CLOSE: 'CLOSE' };
+  const byEvent = new Map(((data && data.checkpoints) || []).map((row) => [String(row.event || ''), row]));
+  return order.map((event) => {
+    const row = byEvent.get(event);
+    if (!row) return '<tr><td><strong>' + labels[event] + '</strong></td><td colspan="5">Pendiente / faltante explícito</td></tr>';
+    const summary = row.summary || {};
+    const challenger = row.capital_allocation_challenger || {};
+    return '<tr><td><strong>' + labels[event] + '</strong></td><td>' + marketTime(row.as_of) + '</td><td>' + escapeHTML(String(summary.decisions_evaluated || 0)) + '</td><td>' + escapeHTML(String(summary.actionable_decisions || 0)) + '</td><td>' + escapeHTML(String(challenger.target_count || 0)) + '</td><td>' + pct(summary.quote_coverage) + '</td></tr>';
+  }).join('');
+}
+
+function observationRows(data) {
+  const observations = (data && data.observations_30m) || [];
+  const rows = observations.flatMap((snapshot) => (snapshot.rows || []).map((row) => ({ ...row, at: snapshot.at })));
+  if (!rows.length) return '<tr><td colspan="8">Sin observaciones intermedias todavía.</td></tr>';
+  return rows.slice(-80).reverse().map((row) => '<tr><td>' + marketTime(row.at) + '</td><td>' + escapeHTML(labelFor(row.strategy)) + '</td><td>$' + number(row.nav, 2) + '</td><td>$' + number(row.gross_pnl, 2) + '</td><td>$' + number(row.costs, 2) + '</td><td>$' + number(row.net_pnl, 2) + '</td><td>$' + number(row.cash, 2) + '</td><td>$' + number(row.gross_exposure, 2) + '</td></tr>').join('');
 }
 
 async function renderIntradayDecisions() {
@@ -130,13 +194,19 @@ async function renderIntradayDecisions() {
   const tableRoot = document.getElementById('decisionTable');
   const candidateRoot = document.getElementById('decisionCandidates');
   const noteRoot = document.getElementById('decisionNote');
-  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const funnelRoot = document.getElementById('decisionFunnel');
+  const checkpointRoot = document.getElementById('decisionCheckpointTimeline');
+  const observationsRoot = document.getElementById('decisionObservations');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot && !funnelRoot && !checkpointRoot && !observationsRoot) return;
   const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
   const data = result.data || {};
   if (statusRoot) statusRoot.innerHTML = statusCard(data);
   if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
   if (tableRoot) tableRoot.innerHTML = strategyRows(data);
   if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (funnelRoot) funnelRoot.innerHTML = funnelCards(data);
+  if (checkpointRoot) checkpointRoot.innerHTML = checkpointRows(data);
+  if (observationsRoot) observationsRoot.innerHTML = observationRows(data);
   if (noteRoot) {
     const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
     const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';

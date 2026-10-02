@@ -87,10 +87,10 @@ def export_live_base(
     league_config_path: Path,
     output_path: Path,
 ) -> dict[str, Any]:
-    """Export the minimum official EOD state needed for intraday mark-to-market.
+    """Export the compact official EOD base needed by the intraday shadow layer.
 
-    The export excludes pending targets and audit history. Intraday monitoring may
-    mark existing positions but cannot mutate official Strategy League state.
+    The base includes pending T-1 targets plus current positions and execution
+    metadata, but remains a read-only copy of official v11 Strategy League state.
     """
 
     league_cfg = _load_object(league_config_path)
@@ -132,6 +132,10 @@ def export_live_base(
                 "qty": qty,
                 "cost_basis": _number(position_raw.get("cost_basis")),
                 "last_price": _number(position_raw.get("last_price")),
+                "stop_price": position_raw.get("stop_price"),
+                "take_profit_price": position_raw.get("take_profit_price"),
+                "entry_session": position_raw.get("entry_session"),
+                "entry_session_number": position_raw.get("entry_session_number"),
             }
 
         members[str(member_id)] = {
@@ -139,8 +143,13 @@ def export_live_base(
                 str(member_id),
                 "benchmark" if str(member_id) in BENCHMARK_IDS else "strategy",
             ),
+            "id": str(member_id),
             "cash": _number(member_raw.get("cash")),
             "positions": positions,
+            "pending_targets": member_raw.get("pending_targets"),
+            "trade_count": int(member_raw.get("trade_count", 0) or 0),
+            "gross_traded_notional": _number(member_raw.get("gross_traded_notional")),
+            "suppressed_rebalances": int(member_raw.get("suppressed_rebalances", 0) or 0),
             "eod_nav": _number(
                 official.get("nav"),
                 _number(league_cfg.get("initial_nav_usd"), 10000.0),

@@ -411,6 +411,146 @@ def publish_intraday_decision_payload(
         payload = dict(source_payload)
         payload["status"] = "READY"
 
+    event_order = ["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"]
+    session_day = str(payload.get("session_day") or "")
+    checkpoints: list[dict[str, Any]] = []
+    root = data_dir / "metrics" / "strategy_decisions" / "intraday" / session_day
+    if session_day and root.exists():
+        for event in event_order:
+            item = _load_object(root / f"{event}.json")
+            if item and str(item.get("league_id") or "") == expected_league_id:
+                checkpoints.append(item)
+    payload["checkpoints"] = checkpoints
+
+    live_snapshot = _load_object(
+        data_dir / "metrics" / "strategy_league" / "live_snapshot.json"
+    )
+    payload["observations_30m"] = list(live_snapshot.get("observations") or [])
+    payload["shadow_portfolio"] = {
+        "status": live_snapshot.get("status"),
+        "market_session": live_snapshot.get("market_session"),
+        "generated_at": live_snapshot.get("generated_at"),
+        "fills": list(live_snapshot.get("shadow_open_fills") or []),
+        "exits": list(live_snapshot.get("shadow_exits") or []),
+        "rows": list(live_snapshot.get("rows") or []),
+    }
+
+    latest_summary = payload.get("summary") or {}
+    latest_challenger = payload.get("capital_allocation_challenger") or {}
+    fills = list(live_snapshot.get("shadow_open_fills") or [])
+    exits = list(live_snapshot.get("shadow_exits") or [])
+    live_rows = list(live_snapshot.get("rows") or [])
+    positions = sum(len(row.get("positions") or []) for row in live_rows if isinstance(row, dict))
+    evaluations = int(latest_summary.get("decisions_evaluated", 0) or 0)
+    actionable = int(latest_summary.get("actionable_decisions", 0) or 0)
+    targets = int(latest_challenger.get("target_count", 0) or 0)
+    gross_pnl = sum(float(row.get("gross_pnl", 0.0) or 0.0) for row in live_rows if isinstance(row, dict))
+    costs = sum(float(row.get("costs", 0.0) or 0.0) for row in live_rows if isinstance(row, dict))
+    net_pnl = sum(float(row.get("net_pnl", 0.0) or 0.0) for row in live_rows if isinstance(row, dict))
+    gross_notional = sum(float(row.get("notional", 0.0) or 0.0) for row in fills + exits if isinstance(row, dict))
+    nav_denominator = sum(float(row.get("eod_nav", 0.0) or 0.0) for row in live_rows if isinstance(row, dict))
+    payload["funnel"] = {
+        "evaluations": evaluations,
+        "actionable": actionable,
+        "challenger_targets": targets,
+        "fills": len(fills),
+        "positions": positions,
+        "exits": len(exits),
+        "net_pnl": net_pnl,
+    }
+    payload["session_metrics"] = {
+        "actionable_rate": actionable / evaluations if evaluations else 0.0,
+        "target_rate": targets / actionable if actionable else 0.0,
+        "execution_rate": len(fills) / targets if targets else 0.0,
+        "turnover": gross_notional / nav_denominator if nav_denominator else 0.0,
+        "cost_drag": costs / max(abs(gross_pnl), 1e-12) if gross_pnl else 0.0,
+        "gross_pnl": gross_pnl,
+        "costs": costs,
+        "net_pnl": net_pnl,
+    }
+
+    transitions = {"HOLD→BUY": 0, "BUY→BUY": 0, "BUY→HOLD": 0, "BUY→SELL": 0}
+    previous_actions: dict[tuple[str, str], str] = {}
+    for checkpoint in checkpoints:
+        current_actions: dict[tuple[str, str], str] = {}
+        for strategy_id, strategy_payload in (checkpoint.get("strategies") or {}).items():
+            for row in strategy_payload.get("decisions") or []:
+                key = (str(strategy_id), str(row.get("symbol") or ""))
+                action = str(row.get("action") or "HOLD")
+                current_actions[key] = action
+                if key in previous_actions:
+                    label = f"{previous_actions[key]}→{action}"
+                    if label in transitions:
+                        transitions[label] += 1
+        previous_actions = current_actions
+    payload["session_metrics"]["transitions"] = transitions
+
+    checkpoint_maps: list[tuple[dict[str, Any], dict[tuple[str, str], dict[str, Any]]]] = []
+    for checkpoint in checkpoints:
+        mapped: dict[tuple[str, str], dict[str, Any]] = {}
+        for strategy_id, strategy_payload in (checkpoint.get("strategies") or {}).items():
+            for row in strategy_payload.get("decisions") or []:
+                mapped[(str(strategy_id), str(row.get("symbol") or ""))] = row
+        checkpoint_maps.append((checkpoint, mapped))
+
+    half_life_hours: list[float] = []
+    active_since: dict[tuple[str, str], tuple[str, Any]] = {}
+    for checkpoint, mapped in checkpoint_maps:
+        as_of_raw = checkpoint.get("as_of")
+        try:
+            as_of_dt = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            as_of_dt = None
+        all_keys = set(active_since) | set(mapped)
+        for key in all_keys:
+            action = str((mapped.get(key) or {}).get("action") or "HOLD")
+            prior = active_since.get(key)
+            if prior is None:
+                if action in {"BUY", "SELL"} and as_of_dt is not None:
+                    active_since[key] = (action, as_of_dt)
+                continue
+            prior_action, started = prior
+            if action != prior_action:
+                if as_of_dt is not None:
+                    half_life_hours.append(
+                        max(0.0, (as_of_dt - started).total_seconds() / 3600.0)
+                    )
+                active_since.pop(key, None)
+                if action in {"BUY", "SELL"} and as_of_dt is not None:
+                    active_since[key] = (action, as_of_dt)
+
+    posterior: dict[str, list[float]] = {"confirmed": [], "contradicted": []}
+    for idx in range(len(checkpoint_maps) - 1):
+        _checkpoint, current_map = checkpoint_maps[idx]
+        _next_checkpoint, next_map = checkpoint_maps[idx + 1]
+        for key, row in current_map.items():
+            action = str(row.get("action") or "HOLD").upper()
+            if action not in {"BUY", "SELL"} or key not in next_map:
+                continue
+            trace = row.get("decision_trace") or {}
+            timing = trace.get("intraday_timing") or {}
+            status = str(timing.get("status") or "")
+            if status not in posterior:
+                continue
+            next_trace = (next_map[key].get("decision_trace") or {})
+            current_price = float((trace.get("intraday") or {}).get("price", 0.0) or 0.0)
+            next_price = float((next_trace.get("intraday") or {}).get("price", 0.0) or 0.0)
+            if current_price <= 0 or next_price <= 0:
+                continue
+            raw_return = next_price / current_price - 1.0
+            posterior[status].append(raw_return if action == "BUY" else -raw_return)
+
+    payload["session_metrics"]["signal_half_life_hours"] = (
+        sum(half_life_hours) / len(half_life_hours) if half_life_hours else None
+    )
+    payload["session_metrics"]["posterior_return_by_timing"] = {
+        status: {
+            "count": len(values),
+            "mean_signed_return": sum(values) / len(values) if values else None,
+        }
+        for status, values in posterior.items()
+    }
+
     payload["counts_as_promotion_evidence"] = False
     payload["live_execution_enabled"] = False
     payload["orders_emitted"] = False

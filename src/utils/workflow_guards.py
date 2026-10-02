@@ -58,6 +58,16 @@ def _marker_exists(data_dir: Path, kind: str, day: str, event: str) -> bool:
     return _marker_path(data_dir, _marker_key(kind=kind, day=day, event=event)).exists()
 
 
+def _missing_marker_path(data_dir: Path, day: str, event: str) -> Path:
+    return _marker_path(data_dir, f"intraday_missing_{day}_{event}")
+
+
+def _checkpoint_finalized(data_dir: Path, day: str, event: str) -> bool:
+    return _marker_exists(data_dir, "intraday", day, event) or _missing_marker_path(
+        data_dir, day, event
+    ).exists()
+
+
 def _required_session(kind: str, checkpoint_at: datetime) -> str:
     if kind == "eod":
         return checkpoint_at.astimezone(ET).date().isoformat()
@@ -84,27 +94,42 @@ def _intraday_decision(
         out["reason"] = "no_checkpoint_due"
         return out
 
-    # Point-in-time checkpoints are not reconstructable after a later
-    # checkpoint has become due. Always reason about the most recent due
-    # checkpoint only; never fall back to an older unmarked checkpoint.
-    event, timestamp = max(due, key=lambda item: item[1])
+    # Catch up chronologically. Every accepted checkpoint is reconstructed
+    # strictly point-in-time by the downstream engine, so scheduler delay is not
+    # a reason to skip older evidence. The half-hour heartbeat keeps draining
+    # this queue until all due checkpoints are finalized.
+    pending = [
+        (event, timestamp)
+        for event, timestamp in due
+        if not _checkpoint_finalized(data_dir, day, event)
+    ]
+    if not pending:
+        event, timestamp = max(due, key=lambda item: item[1])
+        lateness = max(0, int((now - timestamp).total_seconds() // 60))
+        out.update(
+            {
+                "reason": "already_ran",
+                "event": event,
+                "checkpoint_at": timestamp.isoformat(),
+                "lateness_minutes": str(lateness),
+                "required_market_session": _required_session("intraday", timestamp),
+            }
+        )
+        return out
+
+    event, timestamp = min(pending, key=lambda item: item[1])
     lateness = max(0, int((now - timestamp).total_seconds() // 60))
-    base = {
-        "event": event,
-        "checkpoint_at": timestamp.isoformat(),
-        "lateness_minutes": str(lateness),
-        "required_market_session": _required_session("intraday", timestamp),
-    }
-
-    if _marker_exists(data_dir, "intraday", day, event):
-        out.update({"reason": "already_ran", **base})
-        return out
-
-    if now - timestamp <= tolerance:
-        out.update({"run": "true", "reason": "checkpoint_due", **base})
-        return out
-
-    out.update({"reason": "checkpoint_missed", **base})
+    reason = "checkpoint_due" if now - timestamp <= tolerance else "checkpoint_catchup"
+    out.update(
+        {
+            "run": "true",
+            "reason": reason,
+            "event": event,
+            "checkpoint_at": timestamp.isoformat(),
+            "lateness_minutes": str(lateness),
+            "required_market_session": _required_session("intraday", timestamp),
+        }
+    )
     return out
 
 
@@ -279,40 +304,6 @@ def validate_accepted_context(
     if kind == "eod" and event != "CLOSE":
         raise RuntimeError("EOD accepted context must use CLOSE")
 
-    if kind == "intraday":
-        current = _as_et(None)
-        later_checkpoints = [
-            (name, timestamp)
-            for name, timestamp in checkpoint_times(info).items()
-            if timestamp > checkpoint
-        ]
-        later_due = [
-            (name, timestamp)
-            for name, timestamp in later_checkpoints
-            if current.date() == info.session_day and timestamp <= current
-        ]
-        later_completed = [
-            (name, timestamp)
-            for name, timestamp in later_checkpoints
-            if _marker_exists(data_dir, "intraday", session_day, name)
-        ]
-        superseding = later_due + later_completed
-        if superseding:
-            latest_name, latest_timestamp = max(
-                superseding, key=lambda item: item[1]
-            )
-            return {
-                "run": "false",
-                "reason": "superseded_checkpoint",
-                "event": event,
-                "session_day": session_day,
-                "checkpoint_at": checkpoint.isoformat(),
-                "lateness_minutes": "",
-                "required_market_session": _required_session(kind, checkpoint),
-                "superseded_by": latest_name,
-                "superseded_by_at": latest_timestamp.isoformat(),
-            }
-
     exists = _marker_exists(data_dir, kind, session_day, event)
     if allow_existing_repair:
         if kind != "intraday":
@@ -339,6 +330,37 @@ def validate_accepted_context(
         "lateness_minutes": "",
         "required_market_session": _required_session(kind, checkpoint),
     }
+
+
+def mark_missing_checkpoint(
+    data_dir: Path,
+    *,
+    event: str,
+    session_day: str,
+    checkpoint_at: str,
+    reason: str,
+    now: datetime | None = None,
+) -> Path:
+    current = _as_et(now)
+    marker = _missing_marker_path(data_dir, session_day, event)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        json.dumps(
+            {
+                "kind": "intraday_missing",
+                "day": session_day,
+                "event": event,
+                "checkpoint_at": checkpoint_at,
+                "recorded_at": current.isoformat(),
+                "reason": reason,
+                "run_id": os.getenv("GITHUB_RUN_ID", "local"),
+                "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return marker
 
 
 def mark_run(
@@ -398,6 +420,13 @@ def main() -> None:
     p_mark.add_argument("--checkpoint-at", default=None)
     p_mark.add_argument("--data-dir", default="data")
 
+    p_missing = sub.add_parser("mark-missing")
+    p_missing.add_argument("--event", required=True)
+    p_missing.add_argument("--session-day", required=True)
+    p_missing.add_argument("--checkpoint-at", required=True)
+    p_missing.add_argument("--reason", required=True)
+    p_missing.add_argument("--data-dir", default="data")
+
     args = parser.parse_args()
 
     if args.cmd == "check":
@@ -416,6 +445,15 @@ def main() -> None:
                 allow_existing_repair=args.allow_existing_repair,
             )
         )
+    elif args.cmd == "mark-missing":
+        path = mark_missing_checkpoint(
+            Path(args.data_dir),
+            event=args.event,
+            session_day=args.session_day,
+            checkpoint_at=args.checkpoint_at,
+            reason=args.reason,
+        )
+        _write_outputs({"marker": str(path)})
     elif args.cmd == "mark":
         path = mark_run(
             args.kind,
