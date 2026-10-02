@@ -214,6 +214,7 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         env:
           LIVE_TRADING_ENABLED: "false"
+          GH_TOKEN: ${{ github.token }}
           GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL: ${{ secrets.GOOGLE_SHEETS_RECOMMENDATIONS_CSV_URL }}
         run: |
           set -euo pipefail
@@ -232,7 +233,17 @@ jobs:
             tail -n 120 "$logfile" || true
             sleep $((i*30))
           done
-          [ "$success" = true ] || { echo "::error::Intraday engine failed after 3 attempts"; exit 1; }
+          if [ "$success" != true ]; then
+            echo "::error::Intraday engine could not safely reconstruct the accepted checkpoint after 3 attempts."
+            PYTHONPATH=src python -m utils.workflow_guards mark-missing \
+              --event "${{ needs.gate.outputs.event }}" \
+              --session-day "${{ needs.gate.outputs.session_day }}" \
+              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+              --reason "reconstruction_failed_after_3_attempts" \
+              --data-dir data
+            bash scripts/checkpoint_state.sh publish
+            exit 1
+          fi
 
       - name: Validate generated state
         if: steps.lock_guard.outputs.run == 'true'
