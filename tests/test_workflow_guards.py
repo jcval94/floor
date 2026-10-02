@@ -106,7 +106,7 @@ def test_intraday_never_runs_future_checkpoint(tmp_path: Path) -> None:
     assert result["reason"] == "already_ran"
 
 
-def test_intraday_prefers_most_recent_due_checkpoint_after_long_delay(tmp_path: Path) -> None:
+def test_intraday_prefers_oldest_pending_checkpoint_after_long_delay(tmp_path: Path) -> None:
     result = workflow_guards.should_run(
         kind="intraday",
         tolerance_minutes=90,
@@ -116,11 +116,12 @@ def test_intraday_prefers_most_recent_due_checkpoint_after_long_delay(tmp_path: 
     )
 
     assert result["run"] == "true"
-    assert result["event"] == "OPEN_PLUS_2H"
-    assert result["lateness_minutes"] == "20"
+    assert result["reason"] == "checkpoint_catchup"
+    assert result["event"] == "OPEN"
+    assert result["lateness_minutes"] == "140"
 
 
-def test_intraday_reports_checkpoint_missed_instead_of_green_skip(tmp_path: Path) -> None:
+def test_intraday_late_checkpoint_is_reconstructable_catchup(tmp_path: Path) -> None:
     result = workflow_guards.should_run(
         kind="intraday",
         tolerance_minutes=90,
@@ -129,8 +130,8 @@ def test_intraday_reports_checkpoint_missed_instead_of_green_skip(tmp_path: Path
         now=datetime(2026, 3, 12, 11, 10, tzinfo=ET),
     )
 
-    assert result["run"] == "false"
-    assert result["reason"] == "checkpoint_missed"
+    assert result["run"] == "true"
+    assert result["reason"] == "checkpoint_catchup"
     assert result["event"] == "OPEN"
     assert result["lateness_minutes"] == "100"
 
@@ -260,7 +261,7 @@ def test_eod_waits_for_daily_bar_completion_window(tmp_path: Path) -> None:
     assert ready["required_market_session"] == "2026-03-12"
 
 
-def test_intraday_never_backfills_older_checkpoint_after_newer_completed(
+def test_intraday_backfills_oldest_gap_even_if_newer_checkpoint_completed(
     tmp_path: Path,
 ) -> None:
     _write_marker(tmp_path, "2026-03-12", "OPEN_PLUS_2H")
@@ -273,12 +274,11 @@ def test_intraday_never_backfills_older_checkpoint_after_newer_completed(
         now=datetime(2026, 3, 12, 12, 25, tzinfo=ET),
     )
 
-    assert result["run"] == "false"
-    assert result["reason"] == "already_ran"
-    assert result["event"] == "OPEN_PLUS_2H"
+    assert result["run"] == "true"
+    assert result["event"] == "OPEN"
 
 
-def test_accepted_older_checkpoint_is_suppressed_if_newer_completed_while_waiting(
+def test_accepted_older_checkpoint_remains_valid_if_newer_completed_while_waiting(
     tmp_path: Path,
 ) -> None:
     accepted = workflow_guards.should_run(
@@ -300,9 +300,9 @@ def test_accepted_older_checkpoint_is_suppressed_if_newer_completed_while_waitin
         data_dir=tmp_path,
     )
 
-    assert fixed["run"] == "false"
-    assert fixed["reason"] == "superseded_checkpoint"
-    assert fixed["superseded_by"] == "OPEN_PLUS_2H"
+    assert fixed["run"] == "true"
+    assert fixed["reason"] == "accepted_context"
+    assert fixed["event"] == "OPEN"
 
 
 def test_latest_completed_checkpoint_can_be_explicitly_repaired(tmp_path: Path) -> None:
@@ -321,7 +321,7 @@ def test_latest_completed_checkpoint_can_be_explicitly_repaired(tmp_path: Path) 
     assert repaired["reason"] == "repair_existing_checkpoint"
 
 
-def test_completed_checkpoint_repair_is_blocked_when_later_marker_exists(
+def test_completed_checkpoint_repair_is_allowed_when_later_marker_exists(
     tmp_path: Path,
 ) -> None:
     _write_marker(tmp_path, "2026-03-12", "OPEN_PLUS_2H")
@@ -336,9 +336,8 @@ def test_completed_checkpoint_repair_is_blocked_when_later_marker_exists(
         allow_existing_repair=True,
     )
 
-    assert repaired["run"] == "false"
-    assert repaired["reason"] == "superseded_checkpoint"
-    assert repaired["superseded_by"] == "OPEN_PLUS_4H"
+    assert repaired["run"] == "true"
+    assert repaired["reason"] == "repair_existing_checkpoint"
 
 
 def test_existing_checkpoint_repair_requires_completed_marker(tmp_path: Path) -> None:
