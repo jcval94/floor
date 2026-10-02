@@ -250,12 +250,20 @@ def _apply_intraday_exits(
                 take_hit = take > 0 and high >= take
                 if stop_hit:
                     exit_price = min(stop, open_price) if open_price > 0 else stop
-                    reason = "stop_touched_conservative_first"
+                    reason = (
+                        "stop_gap_through_at_open"
+                        if open_price > 0 and open_price < stop
+                        else "stop_touched_conservative_first"
+                    )
                     touched_at = row.get("ts")
                     break
                 if take_hit:
                     exit_price = max(take, open_price) if open_price > 0 else take
-                    reason = "take_profit_touched"
+                    reason = (
+                        "take_profit_gap_through_at_open"
+                        if open_price > take
+                        else "take_profit_touched"
+                    )
                     touched_at = row.get("ts")
                     break
             if exit_price <= 0:
