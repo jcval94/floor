@@ -124,6 +124,221 @@ function candidateRows(data) {
   }).join('');
 }
 
+
+function pct(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? (numeric * 100).toFixed(1) + '%' : '—';
+}
+
+function funnelCards(data) {
+  const funnel = (data && data.funnel) || {};
+  const metrics = (data && data.session_metrics) || {};
+  const cards = [
+    ['Evaluaciones', funnel.evaluations || 0, 'actionable ' + pct(metrics.actionable_rate)],
+    ['Accionables', funnel.actionable || 0, 'target rate ' + pct(metrics.target_rate)],
+    ['Challenger targets', funnel.challenger_targets || 0, 'execution ' + pct(metrics.execution_rate)],
+    ['Fills', funnel.fills || 0, 'turnover ' + pct(metrics.turnover)],
+    ['Posiciones', funnel.positions || 0, 'shadow vivo'],
+    ['Exits', funnel.exits || 0, 'stops/takes PIT'],
+    ['P&L neto', '
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  const funnelRoot = document.getElementById('decisionFunnel');
+  const checkpointRoot = document.getElementById('decisionCheckpointTimeline');
+  const observationsRoot = document.getElementById('decisionObservations');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot && !funnelRoot && !checkpointRoot && !observationsRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (funnelRoot) funnelRoot.innerHTML = funnelCards(data);
+  if (checkpointRoot) checkpointRoot.innerHTML = checkpointRows(data);
+  if (observationsRoot) observationsRoot.innerHTML = observationRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(funnel.net_pnl || 0, 2), 'cost drag ' + pct(metrics.cost_drag)],
+  ];
+  return cards.map((card) => '<article class="metric-card league-metric"><span class="metric-label">' + escapeHTML(String(card[0])) + '</span><strong class="metric-value">' + escapeHTML(String(card[1])) + '</strong><span class="metric-detail">' + escapeHTML(String(card[2])) + '</span></article>').join('');
+}
+
+function checkpointRows(data) {
+  const order = ['OPEN', 'OPEN_PLUS_2H', 'OPEN_PLUS_4H', 'OPEN_PLUS_6H', 'CLOSE'];
+  const labels = { OPEN: 'OPEN', OPEN_PLUS_2H: '+2h', OPEN_PLUS_4H: '+4h', OPEN_PLUS_6H: '+6h', CLOSE: 'CLOSE' };
+  const byEvent = new Map(((data && data.checkpoints) || []).map((row) => [String(row.event || ''), row]));
+  return order.map((event) => {
+    const row = byEvent.get(event);
+    if (!row) return '<tr><td><strong>' + labels[event] + '</strong></td><td colspan="5">Pendiente / faltante explícito</td></tr>';
+    const summary = row.summary || {};
+    const challenger = row.capital_allocation_challenger || {};
+    return '<tr><td><strong>' + labels[event] + '</strong></td><td>' + marketTime(row.as_of) + '</td><td>' + escapeHTML(String(summary.decisions_evaluated || 0)) + '</td><td>' + escapeHTML(String(summary.actionable_decisions || 0)) + '</td><td>' + escapeHTML(String(challenger.target_count || 0)) + '</td><td>' + pct(summary.quote_coverage) + '</td></tr>';
+  }).join('');
+}
+
+function observationRows(data) {
+  const observations = (data && data.observations_30m) || [];
+  const rows = observations.flatMap((snapshot) => (snapshot.rows || []).map((row) => ({ ...row, at: snapshot.at })));
+  if (!rows.length) return '<tr><td colspan="8">Sin observaciones intermedias todavía.</td></tr>';
+  return rows.slice(-80).reverse().map((row) => '<tr><td>' + marketTime(row.at) + '</td><td>' + escapeHTML(labelFor(row.strategy)) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.nav, 2) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.gross_pnl, 2) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.costs, 2) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.net_pnl, 2) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.cash, 2) + '</td><td>
+  const statusRoot = document.getElementById('decisionStatus');
+  const summaryRoot = document.getElementById('decisionSummary');
+  const tableRoot = document.getElementById('decisionTable');
+  const candidateRoot = document.getElementById('decisionCandidates');
+  const noteRoot = document.getElementById('decisionNote');
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot) return;
+  const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
+  const data = result.data || {};
+  if (statusRoot) statusRoot.innerHTML = statusCard(data);
+  if (summaryRoot) summaryRoot.innerHTML = summaryCards(data);
+  if (tableRoot) tableRoot.innerHTML = strategyRows(data);
+  if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
+  if (noteRoot) {
+    const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
+    const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
+    noteRoot.textContent = data.status === 'READY'
+      ? 'La geometría central decide la oportunidad; el envelope de riesgo calibrado se reserva para stops y sizing. Los retornos 15m/1h sólo ajustan el ranking intradía entre señales que ya eran válidas; no cambian BUY/SELL/HOLD ni quantity.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      : data.detail || 'Esperando decisiones del checkpoint.';
+  }
+}
+
+renderIntradayDecisions();
+setInterval(renderIntradayDecisions, 60_000);
+ + number(row.gross_exposure, 2) + '</td></tr>').join('');
+}
+
 async function renderIntradayDecisions() {
   const statusRoot = document.getElementById('decisionStatus');
   const summaryRoot = document.getElementById('decisionSummary');
