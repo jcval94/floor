@@ -485,6 +485,72 @@ def publish_intraday_decision_payload(
         previous_actions = current_actions
     payload["session_metrics"]["transitions"] = transitions
 
+    checkpoint_maps: list[tuple[dict[str, Any], dict[tuple[str, str], dict[str, Any]]]] = []
+    for checkpoint in checkpoints:
+        mapped: dict[tuple[str, str], dict[str, Any]] = {}
+        for strategy_id, strategy_payload in (checkpoint.get("strategies") or {}).items():
+            for row in strategy_payload.get("decisions") or []:
+                mapped[(str(strategy_id), str(row.get("symbol") or ""))] = row
+        checkpoint_maps.append((checkpoint, mapped))
+
+    half_life_hours: list[float] = []
+    active_since: dict[tuple[str, str], tuple[str, Any]] = {}
+    for checkpoint, mapped in checkpoint_maps:
+        as_of_raw = checkpoint.get("as_of")
+        try:
+            as_of_dt = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            as_of_dt = None
+        all_keys = set(active_since) | set(mapped)
+        for key in all_keys:
+            action = str((mapped.get(key) or {}).get("action") or "HOLD")
+            prior = active_since.get(key)
+            if prior is None:
+                if action in {"BUY", "SELL"} and as_of_dt is not None:
+                    active_since[key] = (action, as_of_dt)
+                continue
+            prior_action, started = prior
+            if action != prior_action:
+                if as_of_dt is not None:
+                    half_life_hours.append(
+                        max(0.0, (as_of_dt - started).total_seconds() / 3600.0)
+                    )
+                active_since.pop(key, None)
+                if action in {"BUY", "SELL"} and as_of_dt is not None:
+                    active_since[key] = (action, as_of_dt)
+
+    posterior: dict[str, list[float]] = {"confirmed": [], "contradicted": []}
+    for idx in range(len(checkpoint_maps) - 1):
+        _checkpoint, current_map = checkpoint_maps[idx]
+        _next_checkpoint, next_map = checkpoint_maps[idx + 1]
+        for key, row in current_map.items():
+            action = str(row.get("action") or "HOLD").upper()
+            if action not in {"BUY", "SELL"} or key not in next_map:
+                continue
+            trace = row.get("decision_trace") or {}
+            timing = trace.get("intraday_timing") or {}
+            status = str(timing.get("status") or "")
+            if status not in posterior:
+                continue
+            next_trace = (next_map[key].get("decision_trace") or {})
+            current_price = float((trace.get("intraday") or {}).get("price", 0.0) or 0.0)
+            next_price = float((next_trace.get("intraday") or {}).get("price", 0.0) or 0.0)
+            if current_price <= 0 or next_price <= 0:
+                continue
+            raw_return = next_price / current_price - 1.0
+            posterior[status].append(raw_return if action == "BUY" else -raw_return)
+
+    payload["session_metrics"]["signal_half_life_hours"] = (
+        sum(half_life_hours) / len(half_life_hours) if half_life_hours else None
+    )
+    payload["session_metrics"]["posterior_return_by_timing"] = {
+        status: {
+            "count": len(values),
+            "mean_signed_return": sum(values) / len(values) if values else None,
+        }
+        for status, values in posterior.items()
+    }
+
     payload["counts_as_promotion_evidence"] = False
     payload["live_execution_enabled"] = False
     payload["orders_emitted"] = False
