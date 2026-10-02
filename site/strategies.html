@@ -47,6 +47,18 @@
     <div id="decisionStatus" aria-live="polite"></div>
     <div id="decisionSummary" class="league-summary-grid" aria-label="Resumen de decisiones intradía"></div>
     <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Funnel intradía</span><h3>De evaluación a P&amp;L neto</h3><p>Separación explícita entre señal, target, ejecución shadow, posición y salida. Los runs ~30 min observan; sólo OPEN/+2h/+4h/+6h/CLOSE son checkpoints oficiales.</p></div></div>
+      <div id="decisionFunnel" class="league-summary-grid" aria-label="Funnel intradía"></div>
+    </article>
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Ledger oficial</span><h3>OPEN → +2h → +4h → +6h → CLOSE</h3><p>Reconstrucción cronológica de checkpoints point-in-time; un checkpoint faltante queda visible y nunca se rellena con barras futuras.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Checkpoint</th><th>Hora ET</th><th>Evaluaciones</th><th>Accionables</th><th>Targets</th><th>Cobertura</th></tr></thead><tbody id="decisionCheckpointTimeline"></tbody></table></div>
+    </article>
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Heartbeat ~30 min</span><h3>Observaciones intermedias</h3><p>Mark-to-market del portfolio shadow entre checkpoints oficiales; no infla la evidencia comparable.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Hora ET</th><th>Portfolio</th><th>NAV</th><th>P&amp;L bruto</th><th>Costos</th><th>P&amp;L neto</th><th>Cash</th><th>Exposición</th></tr></thead><tbody id="decisionObservations"></tbody></table></div>
+    </article>
+    <article class="panel league-table-panel">
       <div class="section-heading"><div><span class="eyebrow">Por estrategia</span><h3>Qué decidió y por qué</h3><p>Los HOLD ya no se descartan: se conservan junto con los valores, umbrales y gates que bloquearon la operación.</p></div></div>
       <div class="table-wrap"><table><thead><tr><th>Estrategia</th><th>BUY</th><th>SELL</th><th>HOLD</th><th>Accionables</th><th>Gate dominante en HOLD</th></tr></thead><tbody id="decisionTable"></tbody></table></div>
     </article>
