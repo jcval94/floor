@@ -191,6 +191,36 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main build-site
 
+      - name: Restore intraday shadow base and latest portfolio
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/strategy_live_state.sh restore-base
+          bash scripts/strategy_live_state.sh restore-snapshot
+
+      - name: Finalize shadow portfolio at close before official EOD mutation
+        id: shadow_close
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          LIVE_TRADING_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          if [ -s data/metrics/strategy_league/live_base.json ] \
+            && [ "$(python -c 'import json; print(json.load(open("data/metrics/strategy_league/live_base.json")).get("status"))')" = "READY" ]; then
+            PYTHONPATH=src python -m league.shadow_portfolio \
+              --base data/metrics/strategy_league/live_base.json \
+              --previous-snapshot data/metrics/strategy_league/live_snapshot.json \
+              --league-config config/strategy_league.json \
+              --output data/metrics/strategy_league/live_snapshot.json \
+              --range 1d \
+              --interval 5m
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No prior official live base exists; this is likely league genesis."
+          fi
+
       - name: Update prospective Strategy League
         if: steps.lock_guard.outputs.run == 'true'
         run: |
@@ -199,6 +229,21 @@ jobs:
             --league-config config/strategy_league.json \
             --strategies-config config/strategies.yaml \
             --universe config/universe.yaml
+
+      - name: Reconcile intraday shadow against official EOD
+        if: steps.lock_guard.outputs.run == 'true' && steps.shadow_close.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          league_id="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path("config/strategy_league.json").read_text(encoding="utf-8"))["league_id"])
+          PY
+          )"
+          PYTHONPATH=src python -m league.shadow_reconcile \
+            --shadow data/metrics/strategy_league/live_snapshot.json \
+            --history "data/metrics/strategy_league/runs/${league_id}/history.jsonl" \
+            --output data/metrics/strategy_league/shadow_eod_reconciliation.json
 
       - name: Export compact official base for intraday Strategy League
         if: steps.lock_guard.outputs.run == 'true'
