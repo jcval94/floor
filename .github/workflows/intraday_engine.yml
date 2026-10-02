@@ -332,13 +332,63 @@ jobs:
             --run-id "${{ github.run_id }}" \
             --source-sha "${{ github.sha }}"
 
+      - name: Detect historical checkpoint persistence mode
+        id: persistence_mode
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python - <<'PY' >> "$GITHUB_OUTPUT"
+          from datetime import datetime
+          from pathlib import Path
+          from utils.runtime_state_cas import latest_marker_frontier
+
+          candidate = datetime.fromisoformat("${{ needs.gate.outputs.checkpoint_at }}")
+          frontier = latest_marker_frontier(Path("data/snapshots/workflow_runs"))
+          historical = False
+          if frontier.checkpoint_at:
+              historical = candidate < datetime.fromisoformat(frontier.checkpoint_at)
+          print(f"historical_backfill={'true' if historical else 'false'}")
+          print(f"frontier_at={frontier.checkpoint_at or ''}")
+          print(f"frontier_event={frontier.event or ''}")
+          PY
+
+      - name: Rebase historical catch-up onto authoritative runtime frontier
+        if: steps.lock_guard.outputs.run == 'true' && steps.persistence_mode.outputs.historical_backfill == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          overlay="${RUNNER_TEMP}/intraday-catchup-overlay"
+          decision="data/metrics/strategy_decisions/intraday/${{ needs.gate.outputs.session_day }}/${{ needs.gate.outputs.event }}.json"
+          marker="data/snapshots/workflow_runs/intraday_${{ needs.gate.outputs.session_day }}_${{ needs.gate.outputs.event }}.json"
+          rm -rf "$overlay"
+          mkdir -p "$overlay"
+          cp "$decision" "$overlay/decision.json"
+          cp "$marker" "$overlay/marker.json"
+
+          # A historical checkpoint is additive evidence. Restore the latest
+          # authoritative runtime again so shared latest/dashboard/DB state
+          # cannot regress to the older checkpoint, then overlay only the
+          # immutable checkpoint artifact and its idempotency marker.
+          bash scripts/runtime_state.sh restore
+          mkdir -p "$(dirname "$decision")" "$(dirname "$marker")"
+          cp "$overlay/decision.json" "$decision"
+          cp "$overlay/marker.json" "$marker"
+
       - name: Publish rolling runtime state outside Git
         if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
           RUNTIME_STATE_CHECKPOINT_EVENT: ${{ needs.gate.outputs.event }}
-        run: bash scripts/runtime_state.sh publish
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.persistence_mode.outputs.historical_backfill }}" = "true" ]; then
+            # Keep the existing forward frontier while publishing the additive
+            # historical checkpoint. CAS still protects the exact parent generation.
+            unset RUNTIME_STATE_CHECKPOINT_AT
+            unset RUNTIME_STATE_CHECKPOINT_EVENT
+          fi
+          bash scripts/runtime_state.sh publish
 
       - name: Publish lightweight checkpoint index
         if: steps.lock_guard.outputs.run == 'true'
