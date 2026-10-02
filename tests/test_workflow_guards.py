@@ -369,3 +369,28 @@ def test_resolve_context_allows_checkpoint_once_due() -> None:
     )
     assert result["event"] == "OPEN_PLUS_4H"
     assert result["checkpoint_at"] == "2026-03-12T13:30:00-04:00"
+
+
+def test_missing_checkpoint_is_terminal_for_catchup_queue(tmp_path: Path) -> None:
+    workflow_guards.mark_missing_checkpoint(
+        tmp_path,
+        event="OPEN",
+        session_day="2026-03-12",
+        checkpoint_at="2026-03-12T09:30:00-04:00",
+        reason="missing_yahoo_data",
+        now=datetime(2026, 3, 12, 12, 20, tzinfo=ET),
+    )
+
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 12, 20, tzinfo=ET),
+    )
+
+    assert result["run"] == "true"
+    assert result["event"] == "OPEN_PLUS_2H"
+    missing = tmp_path / "snapshots" / "workflow_runs" / "intraday_missing_2026-03-12_OPEN.json"
+    assert missing.exists()
+    assert "missing_yahoo_data" in missing.read_text(encoding="utf-8")
