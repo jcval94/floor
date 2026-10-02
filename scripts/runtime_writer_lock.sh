@@ -96,7 +96,9 @@ acquire() {
         continue
       fi
 
-      created_at="$(jq -r '.created_at // empty' <<<"$current")"
+      # GitHub can preserve an old created_at when a release is recreated for a
+      # long-lived tag. published_at reflects the current lock acquisition.
+      created_at="$(jq -r '.published_at // .created_at // empty' <<<"$current")"
       if [[ -n "$created_at" ]]; then
         created_epoch="$(date -u -d "$created_at" +%s 2>/dev/null || echo 0)"
         now="$(date -u +%s)"
