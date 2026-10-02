@@ -55,3 +55,10 @@ def test_mutex_contract_has_owner_and_stale_recovery() -> None:
     assert "safe_delete_if_owner" in script
     assert "releases/$release_id" in script
     assert "gh release delete" not in script
+
+
+def test_mutex_stale_age_uses_current_release_publication_time() -> None:
+    script = (ROOT / "scripts" / "runtime_writer_lock.sh").read_text(
+        encoding="utf-8"
+    )
+    assert ".published_at // .created_at // empty" in script
