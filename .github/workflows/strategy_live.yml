@@ -97,10 +97,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/strategy_live_state.sh restore-snapshot
 
-      - name: Build intraday mark-to-market snapshot
+      - name: Build live shadow portfolio from T-1 targets
+        if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
+        env:
+          LIVE_TRADING_ENABLED: "false"
+        run: |
+          PYTHONPATH=src python -m league.shadow_portfolio \
+            --base data/metrics/strategy_league/live_base.json \
+            --previous-snapshot data/metrics/strategy_league/live_snapshot.json \
+            --league-config config/strategy_league.json \
+            --output data/metrics/strategy_league/live_snapshot.json \
+            --range 1d \
+            --interval 5m
+
+      - name: Validate shadow portfolio invariants
         if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
         run: |
-          PYTHONPATH=src python -m league.live_snapshot mark             --base data/metrics/strategy_league/live_base.json             --previous-snapshot data/metrics/strategy_league/live_snapshot.json             --output data/metrics/strategy_league/live_snapshot.json             --range 1d             --interval 5m
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("data/metrics/strategy_league/live_snapshot.json").read_text(encoding="utf-8"))
+          if payload.get("live_execution_enabled") is not False:
+              raise SystemExit("live trading must remain disabled")
+          fills = payload.get("shadow_open_fills") or []
+          keys = [row.get("idempotency_key") for row in fills if row.get("idempotency_key")]
+          if len(keys) != len(set(keys)):
+              raise SystemExit("double shadow fill detected")
+          if payload.get("open_fill_status") == "MISSING_OPEN_DATA":
+              print("shadow portfolio degraded: missing OPEN data; no invented fills")
+          elif payload.get("open_fills_applied") is not True:
+              raise SystemExit("shadow OPEN fills were not applied")
+          print(json.dumps({
+              "status": payload.get("status"),
+              "fills": len(fills),
+              "exits": len(payload.get("shadow_exits") or []),
+              "observations": len(payload.get("observations") or []),
+          }, sort_keys=True))
+          PY
 
       - name: Publish compact intraday snapshot
         if: steps.market.outputs.run == 'true' && steps.base.outputs.ready == 'true'
