@@ -84,27 +84,42 @@ def _intraday_decision(
         out["reason"] = "no_checkpoint_due"
         return out
 
-    # Point-in-time checkpoints are not reconstructable after a later
-    # checkpoint has become due. Always reason about the most recent due
-    # checkpoint only; never fall back to an older unmarked checkpoint.
-    event, timestamp = max(due, key=lambda item: item[1])
+    # Catch up chronologically. Every accepted checkpoint is reconstructed
+    # strictly point-in-time by the downstream engine, so scheduler delay is not
+    # a reason to skip older evidence. The half-hour heartbeat keeps draining
+    # this queue until all due checkpoints are finalized.
+    pending = [
+        (event, timestamp)
+        for event, timestamp in due
+        if not _marker_exists(data_dir, "intraday", day, event)
+    ]
+    if not pending:
+        event, timestamp = max(due, key=lambda item: item[1])
+        lateness = max(0, int((now - timestamp).total_seconds() // 60))
+        out.update(
+            {
+                "reason": "already_ran",
+                "event": event,
+                "checkpoint_at": timestamp.isoformat(),
+                "lateness_minutes": str(lateness),
+                "required_market_session": _required_session("intraday", timestamp),
+            }
+        )
+        return out
+
+    event, timestamp = min(pending, key=lambda item: item[1])
     lateness = max(0, int((now - timestamp).total_seconds() // 60))
-    base = {
-        "event": event,
-        "checkpoint_at": timestamp.isoformat(),
-        "lateness_minutes": str(lateness),
-        "required_market_session": _required_session("intraday", timestamp),
-    }
-
-    if _marker_exists(data_dir, "intraday", day, event):
-        out.update({"reason": "already_ran", **base})
-        return out
-
-    if now - timestamp <= tolerance:
-        out.update({"run": "true", "reason": "checkpoint_due", **base})
-        return out
-
-    out.update({"reason": "checkpoint_missed", **base})
+    reason = "checkpoint_due" if now - timestamp <= tolerance else "checkpoint_catchup"
+    out.update(
+        {
+            "run": "true",
+            "reason": reason,
+            "event": event,
+            "checkpoint_at": timestamp.isoformat(),
+            "lateness_minutes": str(lateness),
+            "required_market_session": _required_session("intraday", timestamp),
+        }
+    )
     return out
 
 
@@ -278,40 +293,6 @@ def validate_accepted_context(
         )
     if kind == "eod" and event != "CLOSE":
         raise RuntimeError("EOD accepted context must use CLOSE")
-
-    if kind == "intraday":
-        current = _as_et(None)
-        later_checkpoints = [
-            (name, timestamp)
-            for name, timestamp in checkpoint_times(info).items()
-            if timestamp > checkpoint
-        ]
-        later_due = [
-            (name, timestamp)
-            for name, timestamp in later_checkpoints
-            if current.date() == info.session_day and timestamp <= current
-        ]
-        later_completed = [
-            (name, timestamp)
-            for name, timestamp in later_checkpoints
-            if _marker_exists(data_dir, "intraday", session_day, name)
-        ]
-        superseding = later_due + later_completed
-        if superseding:
-            latest_name, latest_timestamp = max(
-                superseding, key=lambda item: item[1]
-            )
-            return {
-                "run": "false",
-                "reason": "superseded_checkpoint",
-                "event": event,
-                "session_day": session_day,
-                "checkpoint_at": checkpoint.isoformat(),
-                "lateness_minutes": "",
-                "required_market_session": _required_session(kind, checkpoint),
-                "superseded_by": latest_name,
-                "superseded_by_at": latest_timestamp.isoformat(),
-            }
 
     exists = _marker_exists(data_dir, kind, session_day, event)
     if allow_existing_repair:
