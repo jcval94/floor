@@ -562,7 +562,7 @@ def mark_run(
     key = _marker_key(kind=kind, day=day, event=marker_event)
     marker = _marker_path(data_dir, key)
     marker.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, object] = {
         "kind": kind,
         "day": day,
         "event": marker_event,
