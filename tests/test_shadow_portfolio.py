@@ -16,6 +16,7 @@ def _base() -> dict:
         "league_id": "strategy_league_v11_intraday_informed_10k",
         "status": "READY",
         "last_eod_session": "2026-10-01",
+        "official_state_hash": "state-hash-2026-10-01",
         "sessions": 5,
         "initial_nav_usd": 10000.0,
         "members": {
@@ -164,3 +165,37 @@ def test_legacy_live_base_without_pending_targets_marks_shadow_evidence_incomple
         "legacy_live_base_missing_pending_targets"
     )
     assert payload["shadow_open_fills"] == []
+
+
+def test_previous_shadow_is_rebuilt_when_authoritative_base_hash_changes() -> None:
+    now = datetime(2026, 10, 2, 10, 35, tzinfo=ET)
+    bars = {
+        "AAA": [
+            _bar("2026-10-02T13:30:00+00:00", 100.0, 102.0, 99.0, 101.0),
+            _bar("2026-10-02T14:00:00+00:00", 101.0, 103.0, 100.0, 102.0),
+        ]
+    }
+    first = build_shadow_snapshot(
+        _base(),
+        {},
+        _cfg(),
+        now=datetime(2026, 10, 2, 10, 5, tzinfo=ET),
+        session_bars=bars,
+    )
+    assert first["source_base_state_hash"] == "state-hash-2026-10-01"
+
+    corrected = _base()
+    corrected["official_state_hash"] = "corrected-authoritative-state"
+    corrected["members"]["capital_allocation_challenger"]["pending_targets"]["AAA"]["weight"] = 0.25
+
+    rebuilt = build_shadow_snapshot(
+        corrected,
+        first,
+        _cfg(),
+        now=now,
+        session_bars=bars,
+    )
+
+    assert rebuilt["source_base_state_hash"] == "corrected-authoritative-state"
+    assert len(rebuilt["observations"]) == 1
+    assert rebuilt["shadow_open_fills"][0]["qty"] == 25
