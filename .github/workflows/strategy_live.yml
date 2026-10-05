@@ -57,15 +57,50 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/strategy_live_state.sh restore-base
 
-      - name: Bootstrap compact EOD base when the release channel is empty
+      - name: Validate or repair compact EOD cache from authoritative runtime
         id: base
         if: steps.market.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ ! -s data/metrics/strategy_league/live_base.json ]; then
-            echo "Compact live base does not exist yet; bootstrapping once from authoritative runtime state."
+          refresh="$(PYTHONPATH=src python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          from floor.calendar import ET, previous_market_session
+
+          path = Path("data/metrics/strategy_league/live_base.json")
+          expected = previous_market_session(datetime.now(ET).date()).isoformat()
+          refresh = True
+          reason = "missing"
+          if path.exists():
+              try:
+                  payload = json.loads(path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  payload = {}
+              if (
+                  payload.get("status") == "READY"
+                  and int(payload.get("schema_version", 0) or 0) >= 2
+                  and payload.get("source_authority") == "runtime_state_hash_chain"
+                  and str(payload.get("last_eod_session") or "") == expected
+              ):
+                  refresh = False
+                  reason = "fresh_authoritative_cache"
+              else:
+                  reason = (
+                      "stale_or_legacy:"
+                      f"schema={payload.get('schema_version')} "
+                      f"session={payload.get('last_eod_session')} expected={expected}"
+                  )
+          print("true" if refresh else "false")
+          print(f"compact_base_validation={reason}", file=__import__("sys").stderr)
+          PY
+          )"
+
+          if [ "$refresh" = "true" ]; then
+            echo "Refreshing compact cache from authoritative runtime state."
             bash scripts/runtime_state.sh restore
             PYTHONPATH=src python -m league.live_snapshot export-base \
               --data-dir data \
@@ -84,11 +119,11 @@ jobs:
           fi
 
           if [ -s data/metrics/strategy_league/live_base.json ] \
-            && [ "$(python -c 'import json; print(json.load(open("data/metrics/strategy_league/live_base.json")).get("status"))')" = "READY" ]; then
+            && [ "$(python -c 'import json; p=json.load(open("data/metrics/strategy_league/live_base.json")); print(p.get("status") == "READY" and int(p.get("schema_version", 0) or 0) >= 2)')" = "True" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "No official Strategy League EOD state is available yet."
+            echo "No authoritative Strategy League EOD cache is available yet."
           fi
 
       - name: Restore previous intraday snapshot
