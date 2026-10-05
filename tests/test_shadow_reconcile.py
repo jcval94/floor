@@ -106,3 +106,108 @@ def test_legacy_shadow_without_pending_targets_is_explicitly_not_comparable(
     assert payload["explained_differences"][0]["kind"] == (
         "legacy_live_base_missing_pending_targets"
     )
+
+
+def test_daily_ohlc_only_stop_exit_is_explained_not_material(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "reconciliation.json"
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-02",
+            "shadow_open_fills": [],
+            "shadow_exits": [],
+        },
+    )
+    official_exit = {
+        **_trade(),
+        "side": "SELL",
+        "reason": "stop_touched_conservative_first",
+    }
+    _write(
+        history,
+        {"session": "2026-10-02", "event": "EOD", "trades": [official_exit]},
+    )
+
+    payload = reconcile(shadow_path=shadow, history_path=history, output_path=output)
+
+    assert payload["status"] == "RECONCILED"
+    assert payload["divergences"] == []
+    assert payload["explained_difference_counts"] == {
+        "daily_ohlc_only_exit_source_granularity": 1
+    }
+
+
+def test_intraday_only_take_exit_is_explained_not_material(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "reconciliation.json"
+    shadow_exit = {
+        **_trade(),
+        "side": "SELL",
+        "reason": "take_profit_touched",
+        "touched_at": "2026-10-02T15:00:00+00:00",
+    }
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-02",
+            "shadow_open_fills": [],
+            "shadow_exits": [shadow_exit],
+        },
+    )
+    _write(history, {"session": "2026-10-02", "event": "EOD", "trades": []})
+
+    payload = reconcile(shadow_path=shadow, history_path=history, output_path=output)
+
+    assert payload["status"] == "RECONCILED"
+    assert payload["divergences"] == []
+    assert payload["explained_difference_counts"] == {
+        "intraday_only_exit_source_granularity": 1
+    }
+
+
+def test_unmatched_official_open_trade_remains_material(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "reconciliation.json"
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-02",
+            "shadow_open_fills": [],
+            "shadow_exits": [],
+        },
+    )
+    _write(history, {"session": "2026-10-02", "event": "EOD", "trades": [_trade()]})
+
+    with pytest.raises(RuntimeError, match="unexpected_official_only_trade"):
+        reconcile(shadow_path=shadow, history_path=history, output_path=output)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["divergence_counts"] == {"unexpected_official_only_trade": 1}
+
+
+def test_duplicate_trade_keys_are_matched_as_a_multiset(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "reconciliation.json"
+    trades = [_trade(), _trade()]
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-02",
+            "shadow_open_fills": trades,
+            "shadow_exits": [],
+        },
+    )
+    _write(
+        history,
+        {"session": "2026-10-02", "event": "EOD", "trades": trades},
+    )
+
+    payload = reconcile(shadow_path=shadow, history_path=history, output_path=output)
+
+    assert payload["status"] == "RECONCILED"
+    assert payload["matched_trade_count"] == 2
