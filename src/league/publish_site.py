@@ -476,6 +476,79 @@ def _intraday_operational_timeline(
     return rows
 
 
+OFFICIAL_INTRADAY_EVENTS = [
+    "OPEN",
+    "OPEN_PLUS_2H",
+    "OPEN_PLUS_4H",
+    "OPEN_PLUS_6H",
+    "CLOSE",
+]
+
+
+def _decision_counts(payload: dict[str, Any]) -> tuple[int, int, int]:
+    summary = payload.get("summary") or {}
+    evaluations = int(summary.get("decisions_evaluated", 0) or 0)
+    actionable = int(summary.get("actionable_decisions", 0) or 0)
+    holds = 0
+    for strategy_payload in (payload.get("strategies") or {}).values():
+        if not isinstance(strategy_payload, dict):
+            continue
+        counts = strategy_payload.get("action_counts") or {}
+        holds += int(counts.get("HOLD", 0) or 0)
+    return evaluations, actionable, holds
+
+
+def _workflow_marker(
+    data_dir: Path,
+    session_day: str,
+    event: str,
+) -> dict[str, Any]:
+    kind = "intraday_heartbeat" if event.startswith("HEARTBEAT_") else "intraday"
+    return _load_object(
+        data_dir
+        / "snapshots"
+        / "workflow_runs"
+        / f"{kind}_{session_day}_{event}.json"
+    )
+
+
+def _missing_checkpoint_marker(
+    data_dir: Path,
+    session_day: str,
+    event: str,
+) -> dict[str, Any]:
+    return _load_object(
+        data_dir
+        / "snapshots"
+        / "workflow_runs"
+        / f"intraday_missing_{session_day}_{event}.json"
+    )
+
+
+def _checkpoint_state(
+    *,
+    event: str,
+    marker: dict[str, Any],
+    missing: dict[str, Any] | None = None,
+) -> str:
+    missing = missing or {}
+    if missing:
+        reason = str(missing.get("reason") or "")
+        return (
+            "SCHEDULER_MISSED"
+            if reason == "scheduler_missed_after_close"
+            else "CHECKPOINT_FAILED"
+        )
+    reason = str(marker.get("guard_reason") or "")
+    if reason == "checkpoint_catchup":
+        return "CHECKPOINT_CATCH_UP"
+    if event.startswith("HEARTBEAT_"):
+        return "HEARTBEAT"
+    if marker:
+        return "CHECKPOINT_ON_TIME"
+    return "UNMARKED_DECISION"
+
+
 def publish_intraday_decision_payload(
     data_dir: Path,
     output_path: Path,
