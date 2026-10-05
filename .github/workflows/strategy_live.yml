@@ -97,6 +97,7 @@ jobs:
           PY
           }
 
+          refreshed=false
           if ! validate_base; then
             echo "::warning::Release-backed live base is stale or belongs to another league epoch; rebuilding from authoritative runtime state."
             rm -f data/metrics/strategy_league/live_base.json
@@ -105,11 +106,14 @@ jobs:
               --data-dir data \
               --league-config config/strategy_league.json \
               --output data/metrics/strategy_league/live_base.json
+            refreshed=true
           fi
 
           if validate_base; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            bash scripts/strategy_live_state.sh publish-base
+            if [ "$refreshed" = "true" ]; then
+              bash scripts/strategy_live_state.sh publish-base
+            fi
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No authoritative T-1 Strategy League base is available; shadow trading stays disabled."
