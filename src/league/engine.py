@@ -10,6 +10,7 @@ from typing import Any
 from contracts.strategy_contract import strategy_contract
 from floor.calendar import is_market_session
 
+
 def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
