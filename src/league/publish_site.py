@@ -482,47 +482,85 @@ def _intraday_decision_timeline(
     session_day: str,
     expected_league_id: str,
 ) -> list[dict[str, Any]]:
-    """Return every official and 30-minute decision snapshot for the session."""
+    """Return durable official and ~30-minute decision activity for the session.
+
+    Full decision JSON is preferred when available. Heartbeat summaries are also
+    embedded in checkpoint-state markers so Pages can observe every accepted
+    heartbeat without publishing the full runtime database every 30 minutes.
+    """
 
     if not session_day:
         return []
+
     root = data_dir / "metrics" / "strategy_decisions" / "intraday" / session_day
-    if not root.exists():
-        return []
-
-    rows: list[dict[str, Any]] = []
-    for path in root.glob("*.json"):
-        item = _load_object(path)
-        if not item or str(item.get("league_id") or "") != expected_league_id:
-            continue
-        event = str(item.get("event") or path.stem)
-        summary = item.get("summary") or {}
-        evaluations = int(summary.get("decisions_evaluated", 0) or 0)
-        actionable = int(summary.get("actionable_decisions", 0) or 0)
-        holds = 0
-        for strategy_payload in (item.get("strategies") or {}).values():
-            if not isinstance(strategy_payload, dict):
+    decision_by_event: dict[str, dict[str, Any]] = {}
+    if root.exists():
+        for path in root.glob("*.json"):
+            item = _load_object(path)
+            if not item or str(item.get("league_id") or "") != expected_league_id:
                 continue
-            counts = strategy_payload.get("action_counts") or {}
-            holds += int(counts.get("HOLD", 0) or 0)
+            event = str(item.get("event") or path.stem)
+            if event:
+                decision_by_event[event] = item
 
-        marker_kind = (
-            "intraday_heartbeat"
-            if event.startswith("HEARTBEAT_")
-            else "intraday"
+    marker_dir = data_dir / "snapshots" / "workflow_runs"
+    marker_by_event: dict[str, dict[str, Any]] = {}
+    if marker_dir.exists():
+        for pattern in (
+            f"intraday_{session_day}_*.json",
+            f"intraday_heartbeat_{session_day}_*.json",
+        ):
+            for path in marker_dir.glob(pattern):
+                marker = _load_object(path)
+                event = str(marker.get("event") or "")
+                if event:
+                    marker_by_event[event] = marker
+
+    events = sorted(set(decision_by_event) | set(marker_by_event))
+    rows: list[dict[str, Any]] = []
+    for event in events:
+        item = decision_by_event.get(event, {})
+        marker = marker_by_event.get(event, {})
+        embedded = marker.get("decision_evidence") or {}
+        summary = item.get("summary") or {}
+
+        evaluations = int(
+            embedded.get("evaluations")
+            if embedded.get("evaluations") is not None
+            else summary.get("decisions_evaluated", 0)
+            or 0
         )
-        marker = _load_object(
-            data_dir
-            / "snapshots"
-            / "workflow_runs"
-            / f"{marker_kind}_{session_day}_{event}.json"
+        actionable = int(
+            embedded.get("actionable")
+            if embedded.get("actionable") is not None
+            else summary.get("actionable_decisions", 0)
+            or 0
         )
+        holds = int(embedded.get("holds", 0) or 0)
+        if not holds:
+            for strategy_payload in (item.get("strategies") or {}).values():
+                if not isinstance(strategy_payload, dict):
+                    continue
+                counts = strategy_payload.get("action_counts") or {}
+                holds += int(counts.get("HOLD", 0) or 0)
+
+        challenger = item.get("capital_allocation_challenger") or {}
+        target_count = int(
+            embedded.get("challenger_targets")
+            if embedded.get("challenger_targets") is not None
+            else challenger.get("target_count", 0)
+            or 0
+        )
+        as_of = embedded.get("as_of") or item.get("as_of") or marker.get("checkpoint_at")
+        quote_coverage = (
+            embedded.get("quote_coverage")
+            if embedded.get("quote_coverage") is not None
+            else summary.get("quote_coverage")
+        )
+
         missing = (
             _load_object(
-                data_dir
-                / "snapshots"
-                / "workflow_runs"
-                / f"intraday_missing_{session_day}_{event}.json"
+                marker_dir / f"intraday_missing_{session_day}_{event}.json"
             )
             if not event.startswith("HEARTBEAT_")
             else {}
@@ -547,11 +585,10 @@ def _intraday_decision_timeline(
         else:
             operational_state = "UNMARKED_DECISION"
 
-        challenger = item.get("capital_allocation_challenger") or {}
         rows.append(
             {
                 "event": event,
-                "as_of": item.get("as_of"),
+                "as_of": as_of,
                 "event_kind": (
                     "HEARTBEAT"
                     if event.startswith("HEARTBEAT_")
@@ -559,7 +596,9 @@ def _intraday_decision_timeline(
                 ),
                 "operational_state": operational_state,
                 "decision_state": (
-                    "ACTIONABLE"
+                    str(embedded.get("decision_state"))
+                    if embedded.get("decision_state")
+                    else "ACTIONABLE"
                     if actionable > 0
                     else "HOLD"
                     if evaluations > 0
@@ -568,15 +607,20 @@ def _intraday_decision_timeline(
                 "evaluations": evaluations,
                 "actionable": actionable,
                 "holds": holds,
-                "challenger_targets": int(challenger.get("target_count", 0) or 0),
-                "quote_coverage": summary.get("quote_coverage"),
+                "challenger_targets": target_count,
+                "quote_coverage": quote_coverage,
                 "guard_reason": guard_reason or None,
                 "lateness_minutes": marker.get("lateness_minutes"),
                 "missing_reason": missing.get("reason") if missing else None,
             }
         )
 
-    rows.sort(key=lambda row: (str(row.get("as_of") or ""), str(row.get("event") or "")))
+    rows.sort(
+        key=lambda row: (
+            str(row.get("as_of") or ""),
+            str(row.get("event") or ""),
+        )
+    )
     return rows
 
 
@@ -689,16 +733,35 @@ def publish_intraday_decision_payload(
 
     latest_summary = payload.get("summary") or {}
     latest_challenger = payload.get("capital_allocation_challenger") or {}
-    latest_actionable = int(latest_summary.get("actionable_decisions", 0) or 0)
-    latest_evaluations = int(latest_summary.get("decisions_evaluated", 0) or 0)
+    latest_activity = decision_timeline[-1] if decision_timeline else {}
+    payload["latest_activity"] = latest_activity
+    latest_actionable = int(
+        latest_activity.get("actionable")
+        if latest_activity
+        else latest_summary.get("actionable_decisions", 0)
+        or 0
+    )
+    latest_evaluations = int(
+        latest_activity.get("evaluations")
+        if latest_activity
+        else latest_summary.get("decisions_evaluated", 0)
+        or 0
+    )
     latest_decision_state = (
-        "ACTIONABLE"
+        str(latest_activity.get("decision_state"))
+        if latest_activity
+        else "ACTIONABLE"
         if latest_actionable > 0
         else "HOLD"
         if latest_evaluations > 0
         else "WAITING"
     )
-    latest_event = str(payload.get("event") or "")
+    latest_event = str(
+        latest_activity.get("event")
+        if latest_activity
+        else payload.get("event")
+        or ""
+    )
     latest_checkpoint = next(
         (
             row
