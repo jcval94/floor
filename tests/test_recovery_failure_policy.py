@@ -25,3 +25,26 @@ def test_non_eod_workflow_is_not_classified_by_eod_policy() -> None:
         workflow="intraday_engine.yml",
     )
     assert result["deterministic"] is False
+
+
+def test_known_weekly_contract_failures_are_deterministic() -> None:
+    cases = {
+        "weekly_model_missing": "Frozen Weekly challenger is missing.",
+        "weekly_model_lfs_pointer": (
+            "Frozen Weekly challenger is an unresolved LFS pointer: model.json"
+        ),
+        "weekly_model_serving_mode_invalid": (
+            "Frozen Weekly challenger must keep canonical_serving_enabled=false"
+        ),
+        "weekly_model_contract_invalid": (
+            "Strategy League weekly model contract invalid: target_semantics"
+        ),
+        "weekly_model_serving_contract_invalid": (
+            "Strategy League refuses Weekly artifact unless "
+            "canonical_serving_enabled=false"
+        ),
+    }
+    for expected_code, message in cases.items():
+        result = classify_failure_text(message, workflow="eod.yml")
+        assert result["deterministic"] is True
+        assert result["code"] == expected_code
