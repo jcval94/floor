@@ -342,7 +342,8 @@ jobs:
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --required-market-session "${{ needs.gate.outputs.required_market_session }}" \
             --run-id "${{ github.run_id }}" \
-            --source-sha "${{ github.sha }}"
+            --source-sha "${{ github.sha }}" \
+            --marker-kind "${{ needs.gate.outputs.kind }}"
 
       - name: Publish rolling runtime state outside Git
         if: steps.lock_guard.outputs.run == 'true' && needs.gate.outputs.kind == 'intraday'
