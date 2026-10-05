@@ -100,8 +100,9 @@ function decisionState(data) {
 function statusCard(data) {
   const ready = data && data.status === 'READY';
   const summary = (data && data.summary) || {};
+  const activity = (data && data.latest_activity) || {};
   const operational = (data && data.operational_state) || {};
-  const state = decisionState(data);
+  const state = String(activity.decision_state || decisionState(data));
   const actionDetail = state === 'ACTIONABLE'
     ? String(summary.actionable_decisions || 0) + ' señales BUY/SELL accionables'
     : state === 'HOLD'
@@ -113,7 +114,7 @@ function statusCard(data) {
     ? ' · sesión: ' + sessionActionable + ' accionables en ' + sessionSnapshots + ' snapshots'
     : '';
   const detail = ready
-    ? String(data.event || '—') + ' · ' + marketTime(data.as_of, true) + ' ET · ' + String(summary.decisions_evaluated || 0) + ' decisiones · ' + actionDetail + sessionActivity + ' · ' + operationalLabel(operational.checkpoint_state)
+    ? String(activity.event || data.event || '—') + ' · ' + marketTime(activity.as_of || data.as_of, true) + ' ET · ' + String(activity.evaluations ?? summary.decisions_evaluated ?? 0) + ' decisiones · ' + actionDetail + sessionActivity + ' · ' + operationalLabel(operational.checkpoint_state)
     : (data && data.detail) || 'Esperando el primer checkpoint de decisiones.';
   const title = ready
     ? state + ' · motor intradía'
@@ -123,14 +124,17 @@ function statusCard(data) {
 
 function summaryCards(data) {
   const summary = (data && data.summary) || {};
+  const activity = (data && data.latest_activity) || {};
   const challenger = (data && data.capital_allocation_challenger) || {};
   const operational = (data && data.operational_state) || {};
-  const state = decisionState(data);
+  const state = String(activity.decision_state || decisionState(data));
+  const currentActionable = Number(activity.actionable ?? summary.actionable_decisions ?? 0);
+  const currentEvaluations = Number(activity.evaluations ?? summary.decisions_evaluated ?? 0);
   const cards = [
     ['Estado decisión', state, state === 'HOLD' ? 'motor evaluó y decidió no actuar' : state === 'ACTIONABLE' ? 'existen BUY/SELL válidos' : 'esperando evaluación', state === 'ACTIONABLE' ? 'ok' : ''],
-    ['Checkpoint', String((data && data.event) || '—'), operationalLabel(operational.checkpoint_state) + ' · ' + String((data && data.session_day) || '—') + ' · ' + marketTime(data && data.as_of) + ' ET', data && data.status === 'READY' ? 'ok' : ''],
-    ['Decisiones', String(summary.decisions_evaluated || 0), String(summary.strategies_evaluated || 0) + ' estrategias × ' + String(summary.symbols_evaluated || 0) + ' tickers', Number(summary.decisions_evaluated) > 0 ? 'ok' : ''],
-    ['Accionables ahora', String(summary.actionable_decisions || 0), 'BUY/SELL del snapshot más reciente', Number(summary.actionable_decisions) > 0 ? 'ok' : ''],
+    ['Checkpoint', String(activity.event || (data && data.event) || '—'), operationalLabel(operational.checkpoint_state) + ' · ' + String((data && data.session_day) || '—') + ' · ' + marketTime(activity.as_of || (data && data.as_of)) + ' ET', data && data.status === 'READY' ? 'ok' : ''],
+    ['Decisiones ahora', String(currentEvaluations), String(summary.strategies_evaluated || 0) + ' estrategias × ' + String(summary.symbols_evaluated || 0) + ' tickers', currentEvaluations > 0 ? 'ok' : ''],
+    ['Accionables ahora', String(currentActionable), 'BUY/SELL del snapshot más reciente', currentActionable > 0 ? 'ok' : ''],
     ['Actividad sesión', String(operational.session_actionable_decisions || 0), String(operational.session_snapshots || 0) + ' snapshots · ' + String(operational.session_actionable_snapshots || 0) + ' con ACTIONABLE · ' + String(operational.session_hold_decisions || 0) + ' HOLD', Number(operational.session_actionable_decisions) > 0 ? 'ok' : ''],
     ['Heartbeats decisión', String(operational.session_heartbeat_snapshots || 0), 'evaluaciones ~30 min independientes del mark-to-market', Number(operational.session_heartbeat_snapshots) > 0 ? 'ok' : ''],
     ['Catch-ups', String(operational.checkpoint_catchups || 0), 'checkpoints reconstruidos cronológicamente', ''],
