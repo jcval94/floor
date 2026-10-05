@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from utils.market_session import ET, checkpoint_times, session_info_for_day
 
 
 BENCHMARK_IDS = {"benchmark_spy", "benchmark_equal_weight"}
@@ -340,6 +342,140 @@ def publish_live_payload(
     _write_object(output_path, payload)
     return payload
 
+def _intraday_operational_timeline(
+    data_dir: Path,
+    *,
+    session_day: str,
+    checkpoints: list[dict[str, Any]],
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Describe checkpoint execution separately from trading decisions.
+
+    A completed checkpoint may be ON_TIME or CHECKPOINT_CATCH_UP. Missing
+    checkpoints become SCHEDULER_MISSED only after the same 180-minute recovery
+    budget used by the intraday workflow. Decision state is independent:
+    ACTIONABLE means BUY/SELL candidates existed; HOLD means the engine evaluated
+    normally and intentionally produced no actionable candidates.
+    """
+
+    if not session_day:
+        return []
+    try:
+        day = date.fromisoformat(session_day)
+    except ValueError:
+        return []
+
+    info = session_info_for_day(day)
+    expected = checkpoint_times(info)
+    now_et = (now or datetime.now(tz=ET)).astimezone(ET)
+    decision_by_event = {
+        str(item.get("event") or ""): item
+        for item in checkpoints
+        if isinstance(item, dict)
+    }
+    marker_dir = data_dir / "snapshots" / "workflow_runs"
+    rows: list[dict[str, Any]] = []
+
+    for event in ("OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"):
+        checkpoint_at = expected.get(event)
+        if checkpoint_at is None:
+            continue
+        marker = _load_object(marker_dir / f"intraday_{session_day}_{event}.json")
+        missing = _load_object(
+            marker_dir / f"intraday_missing_{session_day}_{event}.json"
+        )
+        decision = decision_by_event.get(event, {})
+        summary = decision.get("summary", {}) if isinstance(decision, dict) else {}
+        actionable = int(summary.get("actionable_decisions", 0) or 0)
+        evaluations = int(summary.get("decisions_evaluated", 0) or 0)
+        decision_state = (
+            "ACTIONABLE"
+            if actionable > 0
+            else "HOLD"
+            if evaluations > 0
+            else "NO_DECISION"
+        )
+
+        guard_reason = str(marker.get("guard_reason") or "")
+        try:
+            lateness = int(str(marker.get("lateness_minutes") or "0") or 0)
+        except ValueError:
+            lateness = 0
+        completed_at = marker.get("completed_at")
+        inferred_late = False
+        if completed_at:
+            try:
+                completed_dt = datetime.fromisoformat(
+                    str(completed_at).replace("Z", "+00:00")
+                )
+                if completed_dt.tzinfo is None:
+                    completed_dt = completed_dt.replace(tzinfo=ET)
+                inferred_late = (
+                    completed_dt.astimezone(ET) - checkpoint_at
+                ) > timedelta(minutes=45)
+            except ValueError:
+                inferred_late = False
+
+        if marker:
+            catch_up = (
+                guard_reason
+                in {
+                    "checkpoint_catchup",
+                    "repair_existing_checkpoint",
+                    "manual_repair",
+                }
+                or lateness >= 30
+                or inferred_late
+            )
+            operational_state = (
+                "CHECKPOINT_CATCH_UP" if catch_up else "ON_TIME"
+            )
+            detail = (
+                f"Recovered checkpoint; guard_reason={guard_reason or 'legacy'} "
+                f"lateness_minutes={lateness}"
+                if catch_up
+                else "Checkpoint completed within the normal scheduler window."
+            )
+        elif missing:
+            operational_state = "SCHEDULER_MISSED"
+            detail = (
+                "Checkpoint could not be reconstructed: "
+                + str(missing.get("reason") or "missing runtime evidence")
+            )
+        elif now_et >= checkpoint_at + timedelta(minutes=180):
+            operational_state = "SCHEDULER_MISSED"
+            detail = "No completed checkpoint marker exists after the 180-minute recovery budget."
+        else:
+            operational_state = "PENDING"
+            detail = (
+                "Checkpoint is due and still inside the recovery budget."
+                if now_et >= checkpoint_at
+                else "Checkpoint is not due yet."
+            )
+
+        rows.append(
+            {
+                "event": event,
+                "checkpoint_at": checkpoint_at.isoformat(),
+                "operational_state": operational_state,
+                "decision_state": decision_state,
+                "guard_reason": guard_reason or None,
+                "lateness_minutes": lateness if marker else None,
+                "completed_at": completed_at,
+                "missing_reason": missing.get("reason") if missing else None,
+                "detail": detail,
+                "summary": summary,
+                "capital_allocation_challenger": (
+                    decision.get("capital_allocation_challenger", {})
+                    if isinstance(decision, dict)
+                    else {}
+                ),
+                "as_of": decision.get("as_of") if isinstance(decision, dict) else None,
+            }
+        )
+    return rows
+
+
 def publish_intraday_decision_payload(
     data_dir: Path,
     output_path: Path,
@@ -421,6 +557,12 @@ def publish_intraday_decision_payload(
             if item and str(item.get("league_id") or "") == expected_league_id:
                 checkpoints.append(item)
     payload["checkpoints"] = checkpoints
+    operational_timeline = _intraday_operational_timeline(
+        data_dir,
+        session_day=session_day,
+        checkpoints=checkpoints,
+    )
+    payload["operational_timeline"] = operational_timeline
 
     live_snapshot = _load_object(
         data_dir / "metrics" / "strategy_league" / "live_snapshot.json"
@@ -437,6 +579,57 @@ def publish_intraday_decision_payload(
 
     latest_summary = payload.get("summary") or {}
     latest_challenger = payload.get("capital_allocation_challenger") or {}
+    latest_actionable = int(latest_summary.get("actionable_decisions", 0) or 0)
+    latest_evaluations = int(latest_summary.get("decisions_evaluated", 0) or 0)
+    latest_decision_state = (
+        "ACTIONABLE"
+        if latest_actionable > 0
+        else "HOLD"
+        if latest_evaluations > 0
+        else "WAITING"
+    )
+    latest_event = str(payload.get("event") or "")
+    latest_checkpoint = next(
+        (
+            row
+            for row in operational_timeline
+            if str(row.get("event") or "") == latest_event
+        ),
+        None,
+    )
+    missed_count = sum(
+        1
+        for row in operational_timeline
+        if row.get("operational_state") == "SCHEDULER_MISSED"
+    )
+    catchup_count = sum(
+        1
+        for row in operational_timeline
+        if row.get("operational_state") == "CHECKPOINT_CATCH_UP"
+    )
+    payload["operational_state"] = {
+        "decision_state": latest_decision_state,
+        "latest_event": latest_event or None,
+        "latest_event_kind": (
+            "HEARTBEAT"
+            if latest_event.startswith("HEARTBEAT_")
+            else "OFFICIAL_CHECKPOINT"
+            if latest_event
+            else "WAITING"
+        ),
+        "checkpoint_state": (
+            latest_checkpoint.get("operational_state")
+            if latest_checkpoint
+            else "HEARTBEAT"
+            if latest_event.startswith("HEARTBEAT_")
+            else "WAITING"
+        ),
+        "scheduler_state": "MISSED" if missed_count else "HEALTHY",
+        "scheduler_missed_checkpoints": missed_count,
+        "checkpoint_catchups": catchup_count,
+        "actionable_decisions": latest_actionable,
+        "decisions_evaluated": latest_evaluations,
+    }
     fills = list(live_snapshot.get("shadow_open_fills") or [])
     exits = list(live_snapshot.get("shadow_exits") or [])
     live_rows = list(live_snapshot.get("rows") or [])
