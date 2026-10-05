@@ -82,6 +82,41 @@ jobs:
             PYTHONPATH=src python -m utils.workflow_guards check --kind intraday --tolerance-minutes 180 --data-dir data
           fi
 
+  record_missed_checkpoint:
+    needs: gate
+    if: needs.gate.outputs.run != 'true' && needs.gate.outputs.reason == 'checkpoint_missed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Restore lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh restore
+      - name: Persist scheduler miss once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          marker="data/snapshots/workflow_runs/intraday_missing_${{ needs.gate.outputs.session_day }}_${{ needs.gate.outputs.event }}.json"
+          if [ ! -s "$marker" ]; then
+            PYTHONPATH=src python -m utils.workflow_guards mark-missing \
+              --event "${{ needs.gate.outputs.event }}" \
+              --session-day "${{ needs.gate.outputs.session_day }}" \
+              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+              --reason "scheduler_missed_after_close" \
+              --data-dir data
+            bash scripts/checkpoint_state.sh publish
+          else
+            echo "Scheduler miss already persisted: $marker"
+          fi
+
   engine_critical:
     needs: gate
     if: needs.gate.outputs.run == 'true'
