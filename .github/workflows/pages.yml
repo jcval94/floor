@@ -11,6 +11,7 @@ on:
       - '.github/workflows/pages.yml'
       - '.github/workflows/strategy_live.yml'
       - 'scripts/runtime_state.sh'
+      - 'scripts/checkpoint_state.sh'
       - 'scripts/strategy_live_state.sh'
       - 'scripts/monitoring_state.sh'
       - 'scripts/research_state.sh'
@@ -184,10 +185,11 @@ jobs:
           research_payload="$(resolve_payload research-state-v1 floor-research-state.tar.gz .sha256)"
           monitoring_payload="$(resolve_payload monitoring-state-v1 public_metrics.json .sha256)"
           strategy_live_payload="$(resolve_payload strategy-live-v1 strategy-live.json .sha256)"
+          checkpoint_payload="$(resolve_payload checkpoint-state-v1 floor-checkpoint-state.tar.gz .sha256)"
           publication_head="$(git rev-parse HEAD)"
           manifest="$RUNNER_TEMP/pages-state-manifest.json"
 
-          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" "$strategy_live_payload" <<'PY'
+          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" "$strategy_live_payload" "$checkpoint_payload" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
@@ -200,6 +202,7 @@ jobs:
               "research": ("research-state-v1", "floor-research-state.tar.gz", sys.argv[4]),
               "monitoring": ("monitoring-state-v1", "public_metrics.json", sys.argv[5]),
               "strategy_live": ("strategy-live-v1", "strategy-live.json", sys.argv[6]),
+              "checkpoint": ("checkpoint-state-v1", "floor-checkpoint-state.tar.gz", sys.argv[7]),
           }
           sources = {}
           for name, (tag, base_asset, payload) in values.items():
@@ -235,6 +238,7 @@ jobs:
             echo "research_payload=$research_payload"
             echo "monitoring_payload=$monitoring_payload"
             echo "strategy_live_payload=$strategy_live_payload"
+            echo "checkpoint_payload=$checkpoint_payload"
             echo "manifest=$manifest"
           } >> "$GITHUB_OUTPUT"
 
@@ -245,6 +249,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.runtime_payload }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Overlay latest lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.checkpoint_payload }}
+        run: bash scripts/checkpoint_state.sh restore
 
       - name: Overlay durable research evidence
         env:
@@ -470,6 +480,7 @@ jobs:
               'runtime_state_source': 'github_release:runtime-state-v1',
               'monitoring_state_source': 'github_release:monitoring-state-v1',
               'strategy_live_state_source': 'github_release:strategy-live-v1',
+              'checkpoint_state_source': 'github_release:checkpoint-state-v1',
               'files': entries,
           }
           (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
