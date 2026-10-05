@@ -104,7 +104,7 @@ def reconcile(
     ]
 
     if shadow.get("shadow_evidence_complete") is False:
-        payload = {
+        payload: dict[str, Any] = {
             "schema_version": 2,
             "status": "INCOMPLETE_EVIDENCE",
             "market_session": shadow.get("market_session"),
