@@ -199,6 +199,16 @@ jobs:
           bash scripts/strategy_live_state.sh restore-base
           bash scripts/strategy_live_state.sh restore-snapshot
 
+      - name: Recover one legacy compact EOD checkpoint into authoritative runtime
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m league.state_recovery \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --compact-base data/metrics/strategy_league/live_base.json \
+            | tee data/metrics/strategy_league/state_recovery_latest.json
+
       - name: Finalize shadow portfolio at close before official EOD mutation
         id: shadow_close
         if: steps.lock_guard.outputs.run == 'true'
@@ -250,7 +260,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: shadow-eod-reconciliation-${{ github.run_id }}
-          path: data/metrics/strategy_league/shadow_eod_reconciliation.json
+          path: |
+            data/metrics/strategy_league/shadow_eod_reconciliation.json
+            data/metrics/strategy_league/state_recovery_latest.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -261,12 +273,6 @@ jobs:
             --data-dir data \
             --league-config config/strategy_league.json \
             --output data/metrics/strategy_league/live_base.json
-
-      - name: Publish compact official base for intraday Strategy League
-        if: steps.lock_guard.outputs.run == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/strategy_live_state.sh publish-base
 
       - name: Build experiment observation snapshot
         if: steps.lock_guard.outputs.run == 'true'
@@ -288,6 +294,15 @@ jobs:
           RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
           RUNTIME_STATE_CHECKPOINT_EVENT: CLOSE
         run: bash scripts/runtime_state.sh publish
+
+      # The compact base is a derived cache. Publish it only after the
+      # authoritative runtime transaction commits, so it can never get ahead.
+      - name: Publish compact official base after authoritative runtime commit
+        if: steps.lock_guard.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh publish-base
+
       - name: Publish lightweight checkpoint index
         if: steps.lock_guard.outputs.run == 'true'
         env:

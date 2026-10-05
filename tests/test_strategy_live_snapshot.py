@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from league import live_snapshot
-from league.live_snapshot import build_live_snapshot, fetch_checkpoint_quotes
+from league.engine import initialize_league
+from league.live_snapshot import (
+    build_live_snapshot,
+    export_live_base,
+    fetch_checkpoint_quotes,
+)
 
 
 def _base() -> dict:
@@ -259,3 +266,56 @@ def test_checkpoint_quotes_exclude_bars_not_completed_by_accepted_checkpoint(
     assert quotes["AAA"]["as_of"].startswith("2026-10-01T15:25:00")
     assert quotes["AAA"]["session_return"] == pytest.approx(0.02)
     assert quotes["AAA"]["price"] != pytest.approx(999.0)
+
+
+
+def test_exported_compact_base_is_provenance_stamped_derived_cache(
+    tmp_path: Path,
+) -> None:
+    league_id = "test_live_base_authority"
+    cfg = {
+        "league_id": league_id,
+        "initial_nav_usd": 10000.0,
+        "members": [
+            {"id": "strategy_a", "type": "strategy"},
+            {"id": "benchmark_spy", "type": "benchmark"},
+        ],
+    }
+    config_path = tmp_path / "strategy_league.json"
+    config_path.write_text(json.dumps(cfg), encoding="utf-8")
+    state_dir = (
+        tmp_path
+        / "data"
+        / "metrics"
+        / "strategy_league"
+        / "runs"
+        / league_id
+    )
+    initialize_league(
+        state_dir,
+        cfg,
+        "2026-10-02",
+        {
+            "league_config_sha256": "league",
+            "strategies_config_sha256": "strategies",
+            "weekly_model_sha256": "weekly",
+        },
+        {
+            "strategy_a": {},
+            "benchmark_spy": {"SPY": {"weight": 1.0}},
+        },
+    )
+    output = tmp_path / "live_base.json"
+
+    payload = export_live_base(
+        tmp_path / "data",
+        config_path,
+        output,
+    )
+
+    assert payload["schema_version"] == 2
+    assert payload["source_authority"] == "runtime_state_hash_chain"
+    assert payload["source_last_session"] == "2026-10-02"
+    assert payload["source_session_count"] == 1
+    assert len(payload["source_history_sha256"]) == 64
+    assert len(payload["source_audit_hash"]) == 64

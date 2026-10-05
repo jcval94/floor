@@ -3,10 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 from contracts.strategy_contract import strategy_contract
+from floor.calendar import is_market_session
+
 
 def _canonical_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -597,6 +600,194 @@ def _validate_history(history_path: Path) -> tuple[dict | None, str]:
 def load_state(state_dir: Path) -> dict | None:
     state, _ = _validate_history(state_dir / "history.jsonl")
     return state
+
+
+def next_market_session_after(session: str) -> str:
+    current = date.fromisoformat(session)
+    for offset in range(1, 15):
+        candidate = current + timedelta(days=offset)
+        if is_market_session(candidate):
+            return candidate.isoformat()
+    raise RuntimeError(f"Unable to resolve next market session after {session}")
+
+
+def recover_legacy_compact_base(
+    state_dir: Path,
+    compact_base_path: Path,
+) -> dict[str, Any]:
+    """Recover exactly one lost EOD commit from the legacy compact cache.
+
+    This compatibility bridge is intentionally restricted to schema-v1 bases.
+    New schema-v2 compact bases are derived caches and may never advance the
+    authoritative runtime history.
+    """
+
+    state = load_state(state_dir)
+    if state is None:
+        return {"status": "NO_AUTHORITATIVE_STATE"}
+    if not compact_base_path.exists():
+        return {"status": "NO_COMPACT_BASE"}
+
+    base = json.loads(compact_base_path.read_text(encoding="utf-8"))
+    if not isinstance(base, dict) or str(base.get("status") or "") != "READY":
+        return {"status": "COMPACT_BASE_NOT_READY"}
+
+    league_id = str(state.get("league_id") or "")
+    if str(base.get("league_id") or "") != league_id:
+        raise RuntimeError(
+            "Compact Strategy League base belongs to another league: "
+            f"runtime={league_id} compact={base.get('league_id')}"
+        )
+
+    runtime_session = str(state.get("last_session") or "")
+    compact_session = str(base.get("last_eod_session") or "")
+    if not runtime_session or not compact_session:
+        raise RuntimeError("Strategy League recovery requires both runtime and compact sessions")
+    if compact_session <= runtime_session:
+        return {
+            "status": "NOT_AHEAD",
+            "runtime_session": runtime_session,
+            "compact_session": compact_session,
+        }
+
+    if int(base.get("schema_version", 0) or 0) != 1:
+        raise RuntimeError(
+            "Refusing to promote a modern compact cache over authoritative runtime state"
+        )
+
+    expected_session = next_market_session_after(runtime_session)
+    expected_count = int(state.get("session_count", 0) or 0) + 1
+    compact_count = int(base.get("sessions", 0) or 0)
+    if compact_session != expected_session or compact_count != expected_count:
+        raise RuntimeError(
+            "Legacy compact recovery is only allowed for exactly one missing market session: "
+            f"runtime={runtime_session}/{state.get('session_count')} "
+            f"expected={expected_session}/{expected_count} "
+            f"compact={compact_session}/{compact_count}"
+        )
+
+    state_members = state.get("members")
+    base_members = base.get("members")
+    if not isinstance(state_members, dict) or not isinstance(base_members, dict):
+        raise RuntimeError("Strategy League recovery requires member dictionaries")
+    if set(state_members) != set(base_members):
+        raise RuntimeError(
+            "Compact/runtime member sets differ; automatic recovery is unsafe"
+        )
+
+    recovered = json.loads(json.dumps(state, ensure_ascii=False))
+    for member_id, prior in state_members.items():
+        compact = base_members.get(member_id)
+        if not isinstance(prior, dict) or not isinstance(compact, dict):
+            raise RuntimeError(f"Invalid member payload during recovery: {member_id}")
+
+        cash = float(compact.get("cash", 0.0) or 0.0)
+        if not math.isfinite(cash) or cash < -1e-6:
+            raise RuntimeError(f"Invalid recovered cash for {member_id}: {cash}")
+
+        positions_raw = compact.get("positions", {})
+        if not isinstance(positions_raw, dict):
+            raise RuntimeError(f"Invalid recovered positions for {member_id}")
+        positions: dict[str, dict[str, Any]] = {}
+        marked_value = 0.0
+        for symbol, raw_position in positions_raw.items():
+            if not isinstance(raw_position, dict):
+                raise RuntimeError(
+                    f"Invalid recovered position payload for {member_id}/{symbol}"
+                )
+            qty = int(raw_position.get("qty", 0) or 0)
+            last_price = float(raw_position.get("last_price", 0.0) or 0.0)
+            cost_basis = float(raw_position.get("cost_basis", 0.0) or 0.0)
+            if qty <= 0 or last_price <= 0 or cost_basis <= 0:
+                raise RuntimeError(
+                    f"Invalid recovered position for {member_id}/{symbol}: "
+                    f"qty={qty} last={last_price} basis={cost_basis}"
+                )
+            if not all(math.isfinite(value) for value in (last_price, cost_basis)):
+                raise RuntimeError(
+                    f"Non-finite recovered position for {member_id}/{symbol}"
+                )
+            positions[str(symbol)] = dict(raw_position)
+            marked_value += qty * last_price
+
+        eod_nav = float(compact.get("eod_nav", 0.0) or 0.0)
+        if not math.isfinite(eod_nav) or eod_nav <= 0:
+            raise RuntimeError(f"Invalid recovered EOD NAV for {member_id}: {eod_nav}")
+        reconstructed_nav = cash + marked_value
+        nav_tolerance = max(0.05, abs(eod_nav) * 1e-6)
+        if abs(reconstructed_nav - eod_nav) > nav_tolerance:
+            raise RuntimeError(
+                f"Recovered NAV invariant failed for {member_id}: "
+                f"compact={eod_nav} reconstructed={reconstructed_nav}"
+            )
+
+        for field in (
+            "trade_count",
+            "gross_traded_notional",
+            "suppressed_rebalances",
+            "costs_paid",
+        ):
+            recovered_value = float(compact.get(field, 0.0) or 0.0)
+            prior_value = float(prior.get(field, 0.0) or 0.0)
+            if not math.isfinite(recovered_value) or recovered_value + 1e-9 < prior_value:
+                raise RuntimeError(
+                    f"Recovered cumulative counter regressed for {member_id}/{field}: "
+                    f"prior={prior_value} recovered={recovered_value}"
+                )
+
+        daily_nav = [
+            dict(row)
+            for row in prior.get("daily_nav", [])
+            if isinstance(row, dict)
+        ]
+        if daily_nav and str(daily_nav[-1].get("session") or "") >= compact_session:
+            raise RuntimeError(
+                f"Recovered daily NAV would rewrite history for {member_id}"
+            )
+        daily_nav.append({"session": compact_session, "nav": eod_nav})
+
+        recovered_member = recovered["members"][member_id]
+        recovered_member.update(
+            {
+                "cash": cash,
+                "positions": positions,
+                "pending_targets": compact.get("pending_targets"),
+                "daily_nav": daily_nav,
+                "trade_count": int(compact.get("trade_count", 0) or 0),
+                "costs_paid": float(compact.get("costs_paid", 0.0) or 0.0),
+                "gross_traded_notional": float(
+                    compact.get("gross_traded_notional", 0.0) or 0.0
+                ),
+                "suppressed_rebalances": int(
+                    compact.get("suppressed_rebalances", 0) or 0
+                ),
+            }
+        )
+
+    recovered["last_session"] = compact_session
+    recovered["session_count"] = compact_count
+    recovery = {
+        "reason": "legacy_compact_published_before_runtime_commit",
+        "source": "strategy-live-base-v1",
+        "source_schema_version": 1,
+        "source_sha256": sha256_file(compact_base_path),
+        "source_generated_at": base.get("generated_at"),
+        "recovered_from_session": runtime_session,
+        "recovered_to_session": compact_session,
+    }
+    _append_record(
+        state_dir,
+        "RECOVERY_COMPACT_EOD",
+        recovered,
+        [],
+        {"recovery": recovery},
+    )
+    return {
+        "status": "RECOVERED",
+        **recovery,
+        "session_count": compact_count,
+        "audit_hash": recovered.get("last_hash"),
+    }
 
 
 def _append_record(

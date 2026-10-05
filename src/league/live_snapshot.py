@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from league.engine import build_leaderboard, load_state
+from league.engine import build_leaderboard, load_state, sha256_file
 from storage.yahoo_ingest import fetch_yahoo_chart, parse_daily_bars
 
 
@@ -67,7 +67,7 @@ def _member_types(league_cfg: dict[str, Any]) -> dict[str, str]:
 
 def _waiting_base(league_cfg: dict[str, Any], detail: str) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "league_id": str(league_cfg.get("league_id") or ""),
         "mode": "shadow_paper_mark_to_market_base",
         "status": "WAITING_FOR_GENESIS",
@@ -166,10 +166,21 @@ def export_live_base(
             ),
         }
 
+    history_path = state_dir / "history.jsonl"
+    if not history_path.exists():
+        raise RuntimeError(
+            f"Authoritative Strategy League history is missing: {history_path}"
+        )
+
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "league_id": league_id,
         "mode": "shadow_paper_mark_to_market_base",
+        "source_authority": "runtime_state_hash_chain",
+        "source_history_sha256": sha256_file(history_path),
+        "source_audit_hash": state.get("last_hash"),
+        "source_last_session": state.get("last_session"),
+        "source_session_count": int(state.get("session_count", 0) or 0),
         "status": "READY",
         "last_eod_session": state.get("last_session"),
         "sessions": int(state.get("session_count", 0) or 0),

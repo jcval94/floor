@@ -10,6 +10,8 @@ from league.engine import (
     build_leaderboard,
     initialize_league,
     load_state,
+    next_market_session_after,
+    recover_legacy_compact_base,
     transition_research_model_epoch,
 )
 from league.run_eod import _equal_weight_capped_targets
@@ -552,3 +554,136 @@ def test_turnover_gate_is_rate_normalized_instead_of_growing_with_league_age(
     assert weekly["turnover_review_window"] == pytest.approx(10.0)
     assert weekly["turnover_warning"] is False
     assert weekly["promotion_checks"]["max_gross_turnover"] is True
+
+
+
+def _compact_base_from_state(state: dict, *, schema_version: int = 1) -> dict:
+    members: dict[str, dict] = {}
+    for member_id, member in state["members"].items():
+        nav = float(member["cash"]) + sum(
+            int(position["qty"]) * float(position["last_price"])
+            for position in member.get("positions", {}).values()
+        )
+        members[member_id] = {
+            "cash": member["cash"],
+            "positions": member.get("positions", {}),
+            "pending_targets": member.get("pending_targets"),
+            "trade_count": member.get("trade_count", 0),
+            "costs_paid": member.get("costs_paid", 0.0),
+            "gross_traded_notional": member.get("gross_traded_notional", 0.0),
+            "suppressed_rebalances": member.get("suppressed_rebalances", 0),
+            "eod_nav": nav,
+        }
+    return {
+        "schema_version": schema_version,
+        "status": "READY",
+        "league_id": state["league_id"],
+        "last_eod_session": state["last_session"],
+        "sessions": state["session_count"],
+        "generated_at": "2026-08-25T22:00:00+00:00",
+        "members": members,
+    }
+
+
+def test_legacy_compact_base_recovers_exactly_one_missing_market_session(
+    tmp_path: Path,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    source_dir = tmp_path / "source"
+    runtime = initialize_league(
+        runtime_dir,
+        _cfg(),
+        "2026-08-24",
+        _contract(),
+        _targets(),
+    )
+    source = initialize_league(
+        source_dir,
+        _cfg(),
+        "2026-08-24",
+        _contract(),
+        _targets(),
+    )
+    source = advance_league(
+        source_dir,
+        source,
+        _cfg(),
+        "2026-08-25",
+        _bars(open_price=100.0, close_price=110.0),
+        _contract(),
+        {"weekly_opportunity_ridge": {}},
+    )
+    compact_path = tmp_path / "live_base.json"
+    compact_path.write_text(
+        json.dumps(_compact_base_from_state(source), sort_keys=True),
+        encoding="utf-8",
+    )
+
+    result = recover_legacy_compact_base(runtime_dir, compact_path)
+    recovered = load_state(runtime_dir)
+
+    assert result["status"] == "RECOVERED"
+    assert recovered is not None
+    assert recovered["last_session"] == "2026-08-25"
+    assert recovered["session_count"] == 2
+    assert recovered["members"]["weekly_opportunity_ridge"]["positions"] == (
+        source["members"]["weekly_opportunity_ridge"]["positions"]
+    )
+    assert recovered["members"]["weekly_opportunity_ridge"]["pending_targets"] == {}
+    assert recovered["last_hash"] != runtime["last_hash"]
+
+    records = [
+        json.loads(line)
+        for line in (runtime_dir / "history.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert records[-1]["event"] == "RECOVERY_COMPACT_EOD"
+    recovery = records[-1]["decisions_for_next_open"]["recovery"]
+    assert recovery["recovered_from_session"] == "2026-08-24"
+    assert recovery["recovered_to_session"] == "2026-08-25"
+    assert len(recovery["source_sha256"]) == 64
+
+
+def test_modern_compact_cache_can_never_advance_authoritative_runtime(
+    tmp_path: Path,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    source_dir = tmp_path / "source"
+    initialize_league(runtime_dir, _cfg(), "2026-08-24", _contract(), _targets())
+    source = initialize_league(source_dir, _cfg(), "2026-08-24", _contract(), _targets())
+    source = advance_league(
+        source_dir,
+        source,
+        _cfg(),
+        "2026-08-25",
+        _bars(),
+        _contract(),
+        {},
+    )
+    compact_path = tmp_path / "live_base.json"
+    compact_path.write_text(
+        json.dumps(_compact_base_from_state(source, schema_version=2)),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="modern compact cache"):
+        recover_legacy_compact_base(runtime_dir, compact_path)
+
+
+def test_legacy_compact_recovery_refuses_multi_session_jump(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    initialize_league(runtime_dir, _cfg(), "2026-08-24", _contract(), _targets())
+    compact = _compact_base_from_state(
+        initialize_league(tmp_path / "source", _cfg(), "2026-08-24", _contract(), _targets())
+    )
+    compact["last_eod_session"] = "2026-08-26"
+    compact["sessions"] = 2
+    compact_path = tmp_path / "live_base.json"
+    compact_path.write_text(json.dumps(compact), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="exactly one missing market session"):
+        recover_legacy_compact_base(runtime_dir, compact_path)
+
+
+def test_next_market_session_skips_weekend() -> None:
+    assert next_market_session_after("2026-10-02") == "2026-10-05"

@@ -50,6 +50,11 @@ def test_eod_closes_the_prospective_evidence_loop() -> None:
     assert "league.run_eod" in workflow
     assert "league.experiment_observation" in workflow
     assert "experiment_observation_history.jsonl" in workflow
+    assert "league.state_recovery" in workflow
+    assert "RECOVERY_COMPACT_EOD" not in workflow
+    assert workflow.index("runtime_state.sh publish") < workflow.index(
+        "strategy_live_state.sh publish-base"
+    )
     assert 'LIVE_TRADING_ENABLED: "true"' not in workflow
 
 
@@ -112,3 +117,17 @@ def test_retrain_assessment_invalidates_on_model_code_changes() -> None:
 
     assert "- 'src/models/**'" in workflow
     assert "retrain_assessment_request.json" in workflow
+
+
+
+def test_strategy_live_repairs_stale_cache_only_from_runtime_authority() -> None:
+    workflow = _text(".github/workflows/strategy_live.yml")
+
+    assert "Validate or repair compact EOD cache from authoritative runtime" in workflow
+    assert 'payload.get("source_authority") == "runtime_state_hash_chain"' in workflow
+    assert 'int(payload.get("schema_version", 0) or 0) >= 2' in workflow
+    assert "previous_market_session" in workflow
+    assert "bash scripts/runtime_state.sh restore" in workflow
+    assert workflow.index("bash scripts/runtime_state.sh restore") < workflow.index(
+        "league.live_snapshot export-base"
+    )

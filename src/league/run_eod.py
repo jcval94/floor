@@ -21,6 +21,7 @@ from league.engine import (
     advance_league,
     initialize_league,
     load_state,
+    next_market_session_after,
     sha256_file,
     write_leaderboard,
 )
@@ -613,6 +614,15 @@ def run_league_eod(
             initial_targets,
         )
     elif session > str(state.get("last_session") or ""):
+        previous_session = str(state.get("last_session") or "")
+        expected_session = next_market_session_after(previous_session)
+        if session != expected_session:
+            raise RuntimeError(
+                "Strategy League market-session gap detected; refusing to execute "
+                "stale pending targets at a later open. "
+                f"last_session={previous_session} expected_next={expected_session} "
+                f"current_session={session}"
+            )
         state = advance_league(
             run_dir,
             state,
