@@ -118,12 +118,35 @@ jobs:
             fi
           fi
 
-          if [ -s data/metrics/strategy_league/live_base.json ] \
-            && [ "$(python -c 'import json; p=json.load(open("data/metrics/strategy_league/live_base.json")); print(p.get("status") == "READY" and int(p.get("schema_version", 0) or 0) >= 2)')" = "True" ]; then
+          final_ready="$(PYTHONPATH=src python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          from floor.calendar import ET, previous_market_session
+
+          path = Path("data/metrics/strategy_league/live_base.json")
+          expected = previous_market_session(datetime.now(ET).date()).isoformat()
+          ready = False
+          if path.exists():
+              try:
+                  payload = json.loads(path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  payload = {}
+              ready = (
+                  payload.get("status") == "READY"
+                  and int(payload.get("schema_version", 0) or 0) >= 2
+                  and payload.get("source_authority") == "runtime_state_hash_chain"
+                  and str(payload.get("last_eod_session") or "") == expected
+              )
+          print("true" if ready else "false")
+          PY
+          )"
+          if [ "$final_ready" = "true" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "No authoritative Strategy League EOD cache is available yet."
+            echo "::warning::Authoritative Strategy League T-1 state is missing or stale; shadow evaluation is blocked."
           fi
 
       - name: Restore previous intraday snapshot
