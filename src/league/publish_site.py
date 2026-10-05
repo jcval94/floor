@@ -43,6 +43,13 @@ def _integer(value: Any, default: int = 0) -> int:
     except (TypeError, ValueError):
         return default
 
+
+def _integer(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
 def _return_sort_key(row: dict[str, Any]) -> tuple[bool, float]:
     value = _number(row.get("return"))
     return (
