@@ -30,6 +30,7 @@ def main() -> None:
     run_cycle.add_argument("--symbols", default=None)
     run_cycle.add_argument("--checkpoint-at", default=None)
     run_cycle.add_argument("--required-market-session", default=None)
+    run_cycle.add_argument("--decision-only", action="store_true")
 
     sub.add_parser("review-training")
     sub.add_parser("reconcile-predictions")
@@ -86,6 +87,7 @@ def main() -> None:
                 cfg=cfg,
                 as_of=checkpoint_at,
                 market_session=required_market_session,
+                decision_only=bool(args.decision_only),
             ) or {"status": "WRITTEN"}
             if cycle_result.get("status") == "WRITTEN":
                 batch = validate_latest_prediction_batch(
