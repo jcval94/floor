@@ -549,7 +549,12 @@ def build_intraday_strategy_decisions(
         "as_of": generated_at.isoformat(),
         "session_day": generated_at.date().isoformat(),
         "input_snapshot_id": input_snapshot_id,
-        "strategy_evaluation_frequency": "every_accepted_market_checkpoint",
+        "strategy_evaluation_frequency": (
+            "every_30m_live_market_heartbeat"
+            if str(event_type).startswith("HEARTBEAT_")
+            else "official_market_checkpoint"
+        ),
+        "official_checkpoint": not str(event_type).startswith("HEARTBEAT_"),
         "holding_horizon_is_not_entry_frequency": True,
         "official_portfolio_owner": "strategy_league_eod",
         "counts_as_promotion_evidence": False,

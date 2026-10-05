@@ -10,9 +10,11 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     intraday = _text(".github/workflows/intraday_engine.yml")
     monitoring = _text(".github/workflows/monitoring.yml")
 
-    assert 'cron: "7,37 13-22 * * 1-5"' in intraday
+    assert 'cron: "7,22,37,52 13-22 * * 1-5"' in intraday
     assert 'cron: "22,52 13-22 * * 1-5"' not in intraday
     assert "--tolerance-minutes 180" in intraday
+    assert "--decision-only" in intraday
+    assert "intraday_heartbeat" in intraday
     assert "checkpoint_state.sh restore" in intraday
     assert "validate-context" in intraday
     assert "--checkpoint-at" in intraday

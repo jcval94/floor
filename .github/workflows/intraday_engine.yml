@@ -4,7 +4,9 @@ on:
   schedule:
     # Half-hour polling is sufficient because the checkpoint guard tolerates
     # scheduler delay and restores only lightweight marker state before gating.
-    - cron: "7,37 13-22 * * 1-5"
+    # Four wake opportunities/hour compensate for GitHub schedule jitter. The
+    # guard still admits only one nominal 30-minute heartbeat or official checkpoint.
+    - cron: "7,22,37,52 13-22 * * 1-5"
   workflow_dispatch:
     inputs:
       force_run:
@@ -42,6 +44,7 @@ jobs:
       contents: read
     outputs:
       run: ${{ steps.guard.outputs.run }}
+      kind: ${{ steps.guard.outputs.kind }}
       reason: ${{ steps.guard.outputs.reason }}
       event: ${{ steps.guard.outputs.event }}
       session_day: ${{ steps.guard.outputs.session_day }}
@@ -114,7 +117,7 @@ jobs:
             repair_args+=(--allow-existing-repair)
           fi
           PYTHONPATH=src python -m utils.workflow_guards validate-context \
-            --kind intraday \
+            --kind "${{ needs.gate.outputs.kind }}" \
             --event "${{ needs.gate.outputs.event }}" \
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
@@ -222,10 +225,15 @@ jobs:
           success=false
           for i in 1 2 3; do
             logfile="data/logs/intraday_engine_${{ needs.gate.outputs.event }}_attempt${i}.log"
-            if PYTHONPATH=src python -m floor.main run-cycle \
-              --event "${{ needs.gate.outputs.event }}" \
-              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
-              --required-market-session "${{ needs.gate.outputs.required_market_session }}" \
+            cycle_args=(
+              --event "${{ needs.gate.outputs.event }}"
+              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}"
+              --required-market-session "${{ needs.gate.outputs.required_market_session }}"
+            )
+            if [ "${{ needs.gate.outputs.kind }}" = "intraday_heartbeat" ]; then
+              cycle_args+=(--decision-only)
+            fi
+            if PYTHONPATH=src python -m floor.main run-cycle "${cycle_args[@]}" \
               2>&1 | tee "$logfile"; then
               success=true
               break
@@ -234,14 +242,18 @@ jobs:
             sleep $((i*30))
           done
           if [ "$success" != true ]; then
-            echo "::error::Intraday engine could not safely reconstruct the accepted checkpoint after 3 attempts."
-            PYTHONPATH=src python -m utils.workflow_guards mark-missing \
-              --event "${{ needs.gate.outputs.event }}" \
-              --session-day "${{ needs.gate.outputs.session_day }}" \
-              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
-              --reason "reconstruction_failed_after_3_attempts" \
-              --data-dir data
-            bash scripts/checkpoint_state.sh publish
+            echo "::error::Intraday engine failed accepted context after 3 attempts kind=${{ needs.gate.outputs.kind }} event=${{ needs.gate.outputs.event }}."
+            if [ "${{ needs.gate.outputs.kind }}" = "intraday" ]; then
+              PYTHONPATH=src python -m utils.workflow_guards mark-missing \
+                --event "${{ needs.gate.outputs.event }}" \
+                --session-day "${{ needs.gate.outputs.session_day }}" \
+                --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+                --reason "reconstruction_failed_after_3_attempts" \
+                --data-dir data
+              bash scripts/checkpoint_state.sh publish
+            else
+              echo "::warning::Live heartbeat failed; leaving its slot unmarked so the next redundant wake can retry it."
+            fi
             exit 1
           fi
 
@@ -312,7 +324,7 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         run: |
           PYTHONPATH=src python -m utils.workflow_guards mark \
-            --kind intraday \
+            --kind "${{ needs.gate.outputs.kind }}" \
             --event "${{ needs.gate.outputs.event }}" \
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
@@ -330,10 +342,11 @@ jobs:
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --required-market-session "${{ needs.gate.outputs.required_market_session }}" \
             --run-id "${{ github.run_id }}" \
-            --source-sha "${{ github.sha }}"
+            --source-sha "${{ github.sha }}" \
+            --marker-kind "${{ needs.gate.outputs.kind }}"
 
       - name: Publish rolling runtime state outside Git
-        if: steps.lock_guard.outputs.run == 'true'
+        if: steps.lock_guard.outputs.run == 'true' && needs.gate.outputs.kind == 'intraday'
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_STATE_CHECKPOINT_AT: ${{ needs.gate.outputs.checkpoint_at }}
@@ -350,7 +363,7 @@ jobs:
         run: bash scripts/checkpoint_state.sh publish
 
       - name: Repair lightweight checkpoint index after duplicate suppression
-        if: steps.lock_guard.outputs.run != 'true' && steps.lock_guard.outputs.reason == 'already_ran'
+        if: steps.lock_guard.outputs.run != 'true' && (steps.lock_guard.outputs.reason == 'already_ran' || steps.lock_guard.outputs.reason == 'heartbeat_already_ran')
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/checkpoint_state.sh publish
@@ -390,13 +403,14 @@ jobs:
       - name: Emit decision
         run: |
           echo "run=${{ needs.gate.outputs.run }}"
+          echo "kind=${{ needs.gate.outputs.kind }}"
           echo "event=${{ needs.gate.outputs.event }}"
           echo "reason=${{ needs.gate.outputs.reason }}"
           echo "checkpoint_at=${{ needs.gate.outputs.checkpoint_at }}"
           echo "lateness_minutes=${{ needs.gate.outputs.lateness_minutes }}"
           echo "required_market_session=${{ needs.gate.outputs.required_market_session }}"
-          echo "runtime_state=github_release:runtime-state-v1"
-          echo "checkpoint_state=github_release:checkpoint-state-v1"
+          echo "runtime_state=github_release:runtime-state-v1 (official checkpoints only)"
+          echo "checkpoint_state=github_release:checkpoint-state-v1 (official + live heartbeat markers)"
           echo "git_operational_writes=disabled"
           if [ "${{ needs.gate.outputs.reason }}" = "checkpoint_missed" ]; then
             echo "::error::A market checkpoint was missed outside the allowed lateness window."

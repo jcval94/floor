@@ -143,6 +143,7 @@ def run_intraday_cycle(
     *,
     as_of: datetime | None = None,
     market_session: date | None = None,
+    decision_only: bool = False,
 ) -> dict[str, object]:
     """Canonical range forecast plus auditable shadow strategy decisions.
 
@@ -230,6 +231,24 @@ def run_intraday_cycle(
         strategy_decisions.get("summary", {}),
         strategy_decisions.get("quote_source", {}),
     )
+
+    if decision_only:
+        logger.info(
+            "[canonical-intraday] decision-only heartbeat complete event=%s batch_id=%s "
+            "input_snapshot_id=%s prediction_persistence=disabled",
+            event_type,
+            batch_id,
+            input_snapshot_id,
+        )
+        return {
+            "status": "DECISION_ONLY",
+            "batch_id": batch_id,
+            "input_snapshot_id": input_snapshot_id,
+            "forecasts": len(forecasts),
+            "strategy_decisions": strategy_decisions.get("summary", {}),
+            "strategy_decision_path": str(strategy_decision_path),
+            "reconciliation": {"status": "DEFERRED_TO_EOD"},
+        }
 
     marker_path = _input_snapshot_marker(cfg.data_dir, input_snapshot_id)
     if marker_path.exists():

@@ -245,6 +245,15 @@ jobs:
             --history "data/metrics/strategy_league/runs/${league_id}/history.jsonl" \
             --output data/metrics/strategy_league/shadow_eod_reconciliation.json
 
+      - name: Upload shadow/EOD reconciliation audit
+        if: always() && steps.lock_guard.outputs.run == 'true' && steps.shadow_close.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: shadow-eod-reconciliation-${{ github.run_id }}
+          path: data/metrics/strategy_league/shadow_eod_reconciliation.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Export compact official base for intraday Strategy League
         if: steps.lock_guard.outputs.run == 'true'
         run: |

@@ -142,6 +142,7 @@ def build_intraday_audit(
     required_market_session: str,
     run_id: str,
     source_sha: str,
+    marker_kind: str = "intraday",
 ) -> dict[str, Any]:
     expected_batch_id = f"{session_day}:{event}"
     if batch_id != expected_batch_id:
@@ -165,7 +166,7 @@ def build_intraday_audit(
         data_dir
         / "snapshots"
         / "workflow_runs"
-        / f"intraday_{session_day}_{event}.json"
+        / f"{marker_kind}_{session_day}_{event}.json"
     )
     if not _copy_if_exists(
         workflow_marker,
@@ -232,6 +233,7 @@ def build_intraday_audit(
         "run_id": str(run_id),
         "source_sha": source_sha,
         "event": event,
+        "marker_kind": marker_kind,
         "session_day": session_day,
         "checkpoint_at": checkpoint_at,
         "required_market_session": required_market_session,
@@ -243,7 +245,11 @@ def build_intraday_audit(
         "orders_expected": False,
         "orders_reason": "shadow_strategy_decisions_are_observational_only",
         "durable_authority": "rolling_runtime_state_jsonl",
-        "batch_extract_source": "reconstructable_sqlite_cache",
+        "batch_extract_source": (
+            "decision_only_no_prediction_batch"
+            if marker_kind == "intraday_heartbeat"
+            else "reconstructable_sqlite_cache"
+        ),
     }
     manifest["files"] = _file_inventory(output_dir)
     manifest_path = output_dir / "manifest.json"
@@ -279,6 +285,11 @@ def main() -> None:
     parser.add_argument("--required-market-session", required=True)
     parser.add_argument("--run-id", default=os.getenv("GITHUB_RUN_ID", "local"))
     parser.add_argument("--source-sha", default=os.getenv("GITHUB_SHA", "unknown"))
+    parser.add_argument(
+        "--marker-kind",
+        default="intraday",
+        choices=["intraday", "intraday_heartbeat"],
+    )
     args = parser.parse_args()
 
     manifest = build_intraday_audit(
@@ -291,6 +302,7 @@ def main() -> None:
         required_market_session=args.required_market_session,
         run_id=args.run_id,
         source_sha=args.source_sha,
+        marker_kind=args.marker_kind,
     )
     print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
 

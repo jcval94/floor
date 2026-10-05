@@ -17,7 +17,7 @@ def test_market_crons_avoid_top_of_hour_without_main_push_fanout() -> None:
     eod = _text("eod.yml")
     monitoring = _text("monitoring.yml")
 
-    assert 'cron: "7,37 13-22 * * 1-5"' in intraday
+    assert 'cron: "7,22,37,52 13-22 * * 1-5"' in intraday
     assert 'cron: "22,52 13-22 * * 1-5"' not in intraday
     assert 'cron: "5,35 13-22 * * 1-5"' in strategy_live
     assert 'cron: "20 13-22 * * 1-5"' not in strategy_live
@@ -32,12 +32,15 @@ def test_market_crons_avoid_top_of_hour_without_main_push_fanout() -> None:
 def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    assert 'cron: "17,47 13-23 * * 1-5"' in workflow
+    assert 'cron: "2,17,32,47 13-23 * * 1-5"' in workflow
     assert 'cron: "35 13-18 * * 1-5"' not in workflow
     assert 'cron: "35 19-23 * * 1-5"' not in workflow
     assert "actions: write" in workflow
     assert "has_recent_or_active_run" in workflow
     assert "dispatch_if_stale intraday_engine.yml 1200 intraday" in workflow
+    assert 'if [ "$INTRADAY_WINDOW" = "true" ]' in workflow
+    assert 'if [ "$MARKET_LIVE" = "true" ]' in workflow
+    assert 'if [ "$EOD_WINDOW" = "true" ]' in workflow
     assert "dispatch_if_stale intraday_engine.yml 2100 intraday" not in workflow
     assert "dispatch_if_stale eod.yml 2100 eod" in workflow
     assert "dispatch_if_stale monitoring.yml 3900 monitoring" in workflow
@@ -69,15 +72,15 @@ def test_strategy_live_uses_half_hour_cadence_without_embedded_cross_wake() -> N
     assert "gh workflow run scheduler_watchdog.yml" not in workflow
 
 
-def test_intraday_watchdog_budget_is_shorter_than_half_hour_cadence() -> None:
+def test_intraday_watchdog_budget_is_shorter_than_logical_heartbeat_cadence() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    # Primary polls are 30 minutes apart. The watchdog must not let a
-    # successful pre-checkpoint poll suppress the :47 recovery after a :30
-    # checkpoint becomes due.
+    # Logical heartbeats are 30 minutes apart while independent wake attempts
+    # occur every 15 minutes. The freshness budget must therefore stay below
+    # one logical heartbeat interval.
     assert "dispatch_if_stale intraday_engine.yml 1200 intraday" in workflow
     assert "dispatch_if_stale strategy_live.yml 2100 strategy_live" in workflow
-    assert "successful pre-checkpoint poll" in workflow
+    assert 'cron: "2,17,32,47 13-23 * * 1-5"' in workflow
 
 
 def test_watchdog_counts_only_recent_active_or_successful_runs() -> None:
@@ -113,5 +116,25 @@ def test_watchdog_circuit_breaks_deterministic_eod_failure_per_head_sha() -> Non
         "Strategy League frozen contract changed; create a new league_id "
         "instead of rewriting history"
     ) in workflow
+    assert "Material shadow/EOD divergence:" in workflow
     assert "blocked_deterministic_same_sha" in workflow
     assert "failing open to normal recovery" in workflow
+
+
+def test_watchdog_uses_new_york_market_calendar_not_raw_utc_hour() -> None:
+    workflow = _text("scheduler_watchdog.yml")
+
+    assert "Resolve NYSE recovery windows" in workflow
+    assert "from utils.market_session import ET, get_session_info" in workflow
+    assert "market_live = info.market_open <= now < info.market_close" in workflow
+    assert "info.market_close + timedelta(minutes=20)" in workflow
+    assert 'utc_hour="$(date -u +%H)"' not in workflow
+
+
+def test_intraday_engine_has_redundant_wakes_but_one_nominal_heartbeat_grid() -> None:
+    workflow = _text("intraday_engine.yml")
+
+    assert 'cron: "7,22,37,52 13-22 * * 1-5"' in workflow
+    assert "--decision-only" in workflow
+    assert "needs.gate.outputs.kind == 'intraday'" in workflow
+    assert '--marker-kind "${{ needs.gate.outputs.kind }}"' in workflow
