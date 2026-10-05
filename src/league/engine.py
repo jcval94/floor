@@ -748,7 +748,7 @@ def recover_legacy_compact_base(
         recovered_member = recovered["members"][member_id]
         recovered_member.update(
             {
-                "cash": max(0.0, cash),
+                "cash": cash,
                 "positions": positions,
                 "pending_targets": compact.get("pending_targets"),
                 "daily_nav": daily_nav,
