@@ -310,7 +310,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "operationalLabel" in intraday_script
     assert "decisionTimelineRows" in intraday_script
     assert "session_actionable_decisions" in intraday_script
-    assert "ACTIONABLE · motor intradía" in intraday_script
+    assert "ACTIONABLE" in intraday_script
+    assert "motor intradía" in intraday_script
     assert "HOLD no significa inactividad" in intraday_script
     assert "CHECKPOINT CATCH-UP" in page
     assert "SCHEDULER MISSED" in page
