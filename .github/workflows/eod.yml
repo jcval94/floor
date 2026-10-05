@@ -222,7 +222,8 @@ jobs:
               --league-config config/strategy_league.json \
               --output data/metrics/strategy_league/live_snapshot.json \
               --range 1d \
-              --interval 5m
+              --interval 5m \
+              --authoritative-eod-replay
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
