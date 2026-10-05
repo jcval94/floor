@@ -15,7 +15,7 @@ dev = [
   "numpy>=2.2.6,<3",
   "pytest>=9.1.1",
   "pytest-cov>=7.1.0",
-  "ruff==0.16.8",
+  "ruff==0.16.10",
   "scikit-learn==1.8.0",
 ]
 modeling = ["numpy>=2.2.6,<3", "scikit-learn==1.8.0"]
