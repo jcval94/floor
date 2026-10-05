@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from league import shadow_portfolio
 from league.shadow_portfolio import build_shadow_snapshot
 
 ET = ZoneInfo("America/New_York")
@@ -199,3 +202,51 @@ def test_previous_shadow_is_rebuilt_when_authoritative_base_hash_changes() -> No
     assert rebuilt["source_base_state_hash"] == "corrected-authoritative-state"
     assert len(rebuilt["observations"]) == 1
     assert rebuilt["shadow_open_fills"][0]["qty"] == 25
+
+
+def test_eod_replay_can_use_hash_bound_authoritative_state_older_than_t1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = _base()
+    base["last_eod_session"] = "2026-09-30"
+    base_path = tmp_path / "base.json"
+    previous_path = tmp_path / "previous.json"
+    config_path = tmp_path / "league.json"
+    output_path = tmp_path / "shadow.json"
+    base_path.write_text(json.dumps(base), encoding="utf-8")
+    previous_path.write_text("{}", encoding="utf-8")
+    config_path.write_text(
+        json.dumps({"league_id": base["league_id"], **_cfg()}),
+        encoding="utf-8",
+    )
+    bars = {
+        "AAA": [_bar("2026-10-02T13:30:00+00:00", 100.0, 102.0, 99.0, 101.0)]
+    }
+    monkeypatch.setattr(
+        shadow_portfolio,
+        "fetch_session_bars",
+        lambda *args, **kwargs: (bars, []),
+    )
+    now = datetime(2026, 10, 2, 10, 5, tzinfo=ET)
+
+    with pytest.raises(RuntimeError, match="not T-1 authoritative state"):
+        shadow_portfolio.run(
+            base_path=base_path,
+            previous_path=previous_path,
+            config_path=config_path,
+            output_path=output_path,
+            now=now,
+        )
+
+    payload = shadow_portfolio.run(
+        base_path=base_path,
+        previous_path=previous_path,
+        config_path=config_path,
+        output_path=output_path,
+        now=now,
+        authoritative_eod_replay=True,
+    )
+
+    assert payload["source_base_state_hash"] == base["official_state_hash"]
+    assert payload["open_fills_applied"] is True
