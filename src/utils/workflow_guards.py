@@ -501,6 +501,49 @@ def mark_missing_checkpoint(
     return marker
 
 
+def _decision_evidence(path: Path | None) -> dict[str, object] | None:
+    if path is None or not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid decision evidence: {path}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Decision evidence must be an object: {path}")
+
+    summary = payload.get("summary") or {}
+    actionable = int(summary.get("actionable_decisions", 0) or 0)
+    evaluations = int(summary.get("decisions_evaluated", 0) or 0)
+    holds = 0
+    buys = 0
+    sells = 0
+    for strategy_payload in (payload.get("strategies") or {}).values():
+        if not isinstance(strategy_payload, dict):
+            continue
+        counts = strategy_payload.get("action_counts") or {}
+        holds += int(counts.get("HOLD", 0) or 0)
+        buys += int(counts.get("BUY", 0) or 0)
+        sells += int(counts.get("SELL", 0) or 0)
+    challenger = payload.get("capital_allocation_challenger") or {}
+    return {
+        "decision_state": (
+            "ACTIONABLE"
+            if actionable > 0
+            else "HOLD"
+            if evaluations > 0
+            else "WAITING"
+        ),
+        "as_of": payload.get("as_of"),
+        "evaluations": evaluations,
+        "actionable": actionable,
+        "holds": holds,
+        "buys": buys,
+        "sells": sells,
+        "challenger_targets": int(challenger.get("target_count", 0) or 0),
+        "quote_coverage": summary.get("quote_coverage"),
+    }
+
+
 def mark_run(
     kind: str,
     data_dir: Path,
@@ -511,6 +554,7 @@ def mark_run(
     checkpoint_at: str | None = None,
     reason: str | None = None,
     lateness_minutes: str | int | None = None,
+    decision_path: Path | None = None,
 ) -> Path:
     current = _as_et(now)
     day = session_day or current.date().isoformat()
@@ -529,6 +573,9 @@ def mark_run(
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
     }
+    evidence = _decision_evidence(decision_path)
+    if evidence is not None:
+        payload["decision_evidence"] = evidence
     marker.write_text(json.dumps(payload), encoding="utf-8")
     return marker
 
@@ -566,6 +613,7 @@ def main() -> None:
     p_mark.add_argument("--checkpoint-at", default=None)
     p_mark.add_argument("--reason", default=None)
     p_mark.add_argument("--lateness-minutes", default=None)
+    p_mark.add_argument("--decision-path", default=None)
     p_mark.add_argument("--data-dir", default="data")
 
     p_missing = sub.add_parser("mark-missing")
@@ -611,6 +659,7 @@ def main() -> None:
             checkpoint_at=args.checkpoint_at,
             reason=args.reason,
             lateness_minutes=args.lateness_minutes,
+            decision_path=Path(args.decision_path) if args.decision_path else None,
         )
         _write_outputs({"marker": str(path)})
 
