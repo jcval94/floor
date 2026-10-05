@@ -509,6 +509,8 @@ def mark_run(
     *,
     session_day: str | None = None,
     checkpoint_at: str | None = None,
+    reason: str | None = None,
+    lateness_minutes: str | int | None = None,
 ) -> Path:
     current = _as_et(now)
     day = session_day or current.date().isoformat()
@@ -522,6 +524,8 @@ def mark_run(
         "event": marker_event,
         "checkpoint_at": checkpoint_at,
         "completed_at": current.isoformat(),
+        "guard_reason": reason,
+        "lateness_minutes": lateness_minutes,
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "workflow": os.getenv("GITHUB_WORKFLOW", "local"),
     }
@@ -560,6 +564,8 @@ def main() -> None:
     p_mark.add_argument("--event", default=None)
     p_mark.add_argument("--session-day", default=None)
     p_mark.add_argument("--checkpoint-at", default=None)
+    p_mark.add_argument("--reason", default=None)
+    p_mark.add_argument("--lateness-minutes", default=None)
     p_mark.add_argument("--data-dir", default="data")
 
     p_missing = sub.add_parser("mark-missing")
@@ -603,6 +609,8 @@ def main() -> None:
             args.event,
             session_day=args.session_day,
             checkpoint_at=args.checkpoint_at,
+            reason=args.reason,
+            lateness_minutes=args.lateness_minutes,
         )
         _write_outputs({"marker": str(path)})
 
