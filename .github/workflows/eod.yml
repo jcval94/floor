@@ -63,6 +63,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Export authoritative pre-EOD shadow base
+        if: steps.lock_guard.outputs.run != 'false'
+        run: |
+          PYTHONPATH=src python -m league.live_snapshot export-base \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --output data/metrics/strategy_league/eod_preclose_base.json
+
       - name: Revalidate immutable close context under writer lock
         id: lock_guard
         run: |
@@ -191,25 +200,24 @@ jobs:
         if: steps.lock_guard.outputs.run == 'true'
         run: PYTHONPATH=src python -m floor.main build-site
 
-      - name: Restore intraday shadow base and latest portfolio
+      - name: Restore latest intraday shadow portfolio
         if: steps.lock_guard.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          bash scripts/strategy_live_state.sh restore-base
-          bash scripts/strategy_live_state.sh restore-snapshot
+        run: bash scripts/strategy_live_state.sh restore-snapshot
 
-      - name: Finalize shadow portfolio at close before official EOD mutation
+      - name: Finalize shadow portfolio from authoritative pre-EOD base
         id: shadow_close
         if: steps.lock_guard.outputs.run == 'true'
         env:
           LIVE_TRADING_ENABLED: "false"
         run: |
           set -euo pipefail
-          if [ -s data/metrics/strategy_league/live_base.json ] \
-            && [ "$(python -c 'import json; print(json.load(open("data/metrics/strategy_league/live_base.json")).get("status"))')" = "READY" ]; then
+          base="data/metrics/strategy_league/eod_preclose_base.json"
+          if [ -s "$base" ] \
+            && [ "$(python -c 'import json; print(json.load(open("'"$base"'")).get("status"))')" = "READY" ]; then
             PYTHONPATH=src python -m league.shadow_portfolio \
-              --base data/metrics/strategy_league/live_base.json \
+              --base "$base" \
               --previous-snapshot data/metrics/strategy_league/live_snapshot.json \
               --league-config config/strategy_league.json \
               --output data/metrics/strategy_league/live_snapshot.json \
@@ -218,7 +226,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "No prior official live base exists; this is likely league genesis."
+            echo "No authoritative pre-EOD Strategy League base exists; this is likely league genesis."
           fi
 
       - name: Update prospective Strategy League
