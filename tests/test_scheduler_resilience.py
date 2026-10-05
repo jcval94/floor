@@ -121,6 +121,17 @@ def test_watchdog_circuit_breaks_known_deterministic_eod_failures_without_self_w
     assert 'workflows: ["strategy_live", "intraday_engine", "monitoring"]' in workflow
 
 
+def test_watchdog_requires_eod_guard_to_still_be_due_before_dispatch() -> None:
+    workflow = _text("scheduler_watchdog.yml")
+
+    assert "from utils.workflow_guards import should_run" in workflow
+    assert '"eod_due": str(eod_guard.get("run") == "true").lower()' in workflow
+    assert 'EOD_DUE: ${{ steps.market.outputs.eod_due }}' in workflow
+    assert 'if [ "$EOD_WINDOW" = "true" ] && [ "$EOD_DUE" = "true" ]' in workflow
+    assert 'echo "eod=${EOD_REASON:-not_due}"' in workflow
+    assert "bash scripts/checkpoint_state.sh restore" in workflow
+
+
 def test_watchdog_uses_new_york_market_calendar_not_raw_utc_hour() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
