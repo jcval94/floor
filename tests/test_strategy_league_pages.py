@@ -304,6 +304,13 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "renderIntradayDecisions" in intraday_script
     assert "setInterval(renderIntradayDecisions, 60_000)" in intraday_script
     assert "timingLabel" in intraday_script
+    assert "operationalLabel" in intraday_script
+    assert "ACTIONABLE · motor intradía" in intraday_script
+    assert "HOLD no significa inactividad" in intraday_script
+    assert "CHECKPOINT CATCH-UP" in page
+    assert "SCHEDULER MISSED" in page
+    assert "Estado operativo" in page
+    assert "Estado decisión" in intraday_script
     assert "Score base → intra" in page
     assert "Timing 15m/1h" in page
     assert "sólo ajustan el ranking intradía" in intraday_script
@@ -496,6 +503,129 @@ def test_publish_intraday_decisions_is_safe_and_epoch_scoped(
     assert payload["live_execution_enabled"] is False
     assert payload["orders_emitted"] is False
     assert payload["automatic_promotion"] is False
+
+
+def test_publish_intraday_decisions_separates_decision_and_scheduler_states(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    root = (
+        data_dir
+        / "metrics"
+        / "strategy_decisions"
+        / "intraday"
+        / "2026-10-01"
+    )
+    root.mkdir(parents=True)
+
+    def decision(event: str, actionable: int) -> dict:
+        return {
+            "league_id": "strategy_league_v11_intraday_informed_10k",
+            "mode": "shadow_observation_no_execution",
+            "event": event,
+            "session_day": "2026-10-01",
+            "as_of": {
+                "OPEN": "2026-10-01T09:30:00-04:00",
+                "OPEN_PLUS_2H": "2026-10-01T11:30:00-04:00",
+                "OPEN_PLUS_4H": "2026-10-01T13:30:00-04:00",
+            }[event],
+            "strategies": {},
+            "summary": {
+                "strategies_evaluated": 4,
+                "symbols_evaluated": 50,
+                "decisions_evaluated": 200,
+                "actionable_decisions": actionable,
+                "quote_coverage": 1.0,
+            },
+            "capital_allocation_challenger": {
+                "action": "ALLOCATE" if actionable else "HOLD",
+                "target_count": actionable,
+                "targets": {},
+            },
+        }
+
+    open_payload = decision("OPEN", 0)
+    catchup_payload = decision("OPEN_PLUS_2H", 5)
+    latest_payload = decision("OPEN_PLUS_4H", 7)
+    for event, payload in (
+        ("OPEN", open_payload),
+        ("OPEN_PLUS_2H", catchup_payload),
+        ("OPEN_PLUS_4H", latest_payload),
+    ):
+        (root / f"{event}.json").write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+    (root.parent / "latest.json").write_text(
+        json.dumps(latest_payload),
+        encoding="utf-8",
+    )
+
+    markers = data_dir / "snapshots" / "workflow_runs"
+    markers.mkdir(parents=True)
+    (markers / "intraday_2026-10-01_OPEN.json").write_text(
+        json.dumps(
+            {
+                "kind": "intraday",
+                "day": "2026-10-01",
+                "event": "OPEN",
+                "checkpoint_at": "2026-10-01T09:30:00-04:00",
+                "completed_at": "2026-10-01T09:38:00-04:00",
+                "guard_reason": "checkpoint_due",
+                "lateness_minutes": "8",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (markers / "intraday_2026-10-01_OPEN_PLUS_2H.json").write_text(
+        json.dumps(
+            {
+                "kind": "intraday",
+                "day": "2026-10-01",
+                "event": "OPEN_PLUS_2H",
+                "checkpoint_at": "2026-10-01T11:30:00-04:00",
+                "completed_at": "2026-10-01T13:35:00-04:00",
+                "guard_reason": "checkpoint_catchup",
+                "lateness_minutes": "125",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (markers / "intraday_missing_2026-10-01_OPEN_PLUS_4H.json").write_text(
+        json.dumps(
+            {
+                "kind": "intraday_missing",
+                "day": "2026-10-01",
+                "event": "OPEN_PLUS_4H",
+                "checkpoint_at": "2026-10-01T13:30:00-04:00",
+                "reason": "scheduler_not_woken_within_recovery_budget",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = tmp_path / "strategy_league.json"
+    cfg.write_text(
+        json.dumps({"league_id": "strategy_league_v11_intraday_informed_10k"}),
+        encoding="utf-8",
+    )
+    payload = publish_intraday_decision_payload(
+        data_dir,
+        tmp_path / "site" / "data" / "strategy_decisions_intraday.json",
+        cfg,
+    )
+
+    timeline = {row["event"]: row for row in payload["operational_timeline"]}
+    assert timeline["OPEN"]["operational_state"] == "ON_TIME"
+    assert timeline["OPEN"]["decision_state"] == "HOLD"
+    assert timeline["OPEN_PLUS_2H"]["operational_state"] == "CHECKPOINT_CATCH_UP"
+    assert timeline["OPEN_PLUS_2H"]["decision_state"] == "ACTIONABLE"
+    assert timeline["OPEN_PLUS_4H"]["operational_state"] == "SCHEDULER_MISSED"
+    assert timeline["OPEN_PLUS_4H"]["decision_state"] == "ACTIONABLE"
+    assert payload["operational_state"]["decision_state"] == "ACTIONABLE"
+    assert payload["operational_state"]["scheduler_state"] == "MISSED"
+    assert payload["operational_state"]["checkpoint_catchups"] == 1
+    assert payload["operational_state"]["scheduler_missed_checkpoints"] >= 1
 
 
 def test_publish_intraday_decisions_withholds_previous_epoch(
