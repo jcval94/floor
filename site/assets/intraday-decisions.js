@@ -107,8 +107,13 @@ function statusCard(data) {
     : state === 'HOLD'
       ? 'evaluación completada; decisión explícita de no actuar'
       : 'sin evaluación publicada todavía';
+  const sessionActionable = Number(operational.session_actionable_decisions || 0);
+  const sessionSnapshots = Number(operational.session_snapshots || 0);
+  const sessionActivity = sessionSnapshots > 0
+    ? ' · sesión: ' + sessionActionable + ' accionables en ' + sessionSnapshots + ' snapshots'
+    : '';
   const detail = ready
-    ? String(data.event || '—') + ' · ' + marketTime(data.as_of, true) + ' ET · ' + String(summary.decisions_evaluated || 0) + ' decisiones · ' + actionDetail + ' · ' + operationalLabel(operational.checkpoint_state)
+    ? String(data.event || '—') + ' · ' + marketTime(data.as_of, true) + ' ET · ' + String(summary.decisions_evaluated || 0) + ' decisiones · ' + actionDetail + sessionActivity + ' · ' + operationalLabel(operational.checkpoint_state)
     : (data && data.detail) || 'Esperando el primer checkpoint de decisiones.';
   const title = ready
     ? state + ' · motor intradía'
@@ -125,7 +130,9 @@ function summaryCards(data) {
     ['Estado decisión', state, state === 'HOLD' ? 'motor evaluó y decidió no actuar' : state === 'ACTIONABLE' ? 'existen BUY/SELL válidos' : 'esperando evaluación', state === 'ACTIONABLE' ? 'ok' : ''],
     ['Checkpoint', String((data && data.event) || '—'), operationalLabel(operational.checkpoint_state) + ' · ' + String((data && data.session_day) || '—') + ' · ' + marketTime(data && data.as_of) + ' ET', data && data.status === 'READY' ? 'ok' : ''],
     ['Decisiones', String(summary.decisions_evaluated || 0), String(summary.strategies_evaluated || 0) + ' estrategias × ' + String(summary.symbols_evaluated || 0) + ' tickers', Number(summary.decisions_evaluated) > 0 ? 'ok' : ''],
-    ['Accionables', String(summary.actionable_decisions || 0), 'BUY/SELL que superaron gates y sizing', Number(summary.actionable_decisions) > 0 ? 'ok' : ''],
+    ['Accionables ahora', String(summary.actionable_decisions || 0), 'BUY/SELL del snapshot más reciente', Number(summary.actionable_decisions) > 0 ? 'ok' : ''],
+    ['Actividad sesión', String(operational.session_actionable_decisions || 0), String(operational.session_snapshots || 0) + ' snapshots · ' + String(operational.session_actionable_snapshots || 0) + ' con ACTIONABLE · ' + String(operational.session_hold_decisions || 0) + ' HOLD', Number(operational.session_actionable_decisions) > 0 ? 'ok' : ''],
+    ['Heartbeats decisión', String(operational.session_heartbeat_snapshots || 0), 'evaluaciones ~30 min independientes del mark-to-market', Number(operational.session_heartbeat_snapshots) > 0 ? 'ok' : ''],
     ['Catch-ups', String(operational.checkpoint_catchups || 0), 'checkpoints reconstruidos cronológicamente', ''],
     ['Scheduler missed', String(operational.scheduler_missed_checkpoints || 0), operational.scheduler_state === 'MISSED' ? 'requiere atención operativa' : 'sin misses fuera del recovery budget', operational.scheduler_state === 'MISSED' ? 'warn' : 'ok'],
     ['Timing confirmado', String((((data || {}).intraday_timing_adapter || {}).status_counts || {}).confirmed || 0), '15m/1h sólo reordena señales válidas; nunca crea acciones', ''],
@@ -223,6 +230,22 @@ function checkpointRows(data) {
   }).join('');
 }
 
+function decisionTimelineRows(data) {
+  const rows = Array.isArray(data && data.decision_timeline_30m) ? data.decision_timeline_30m : [];
+  if (!rows.length) return '<tr><td colspan="10"><div class="empty-state"><strong>Sin snapshots de decisión publicados.</strong><p>Los heartbeats aceptados aparecerán aquí aunque no produzcan fills.</p></div></td></tr>';
+  return rows.slice(-40).reverse().map((row) => {
+    const operational = String(row.operational_state || '—');
+    const decision = String(row.decision_state || 'WAITING');
+    const operationalTone = operational === 'SCHEDULER_MISSED' || operational === 'CHECKPOINT_FAILED'
+      ? 'negative'
+      : operational === 'CHECKPOINT_CATCH_UP'
+        ? 'warning'
+        : '';
+    const decisionTone = decision === 'ACTIONABLE' ? 'positive' : '';
+    return '<tr><td>' + marketTime(row.as_of) + '</td><td><strong>' + escapeHTML(String(row.event || '—')) + '</strong></td><td>' + escapeHTML(String(row.event_kind || '—').replaceAll('_', ' ')) + '</td><td class="' + operationalTone + '"><strong>' + escapeHTML(operationalLabel(operational)) + '</strong></td><td class="' + decisionTone + '"><strong>' + escapeHTML(decision) + '</strong></td><td>' + escapeHTML(String(row.evaluations || 0)) + '</td><td>' + escapeHTML(String(row.actionable || 0)) + '</td><td>' + escapeHTML(String(row.holds || 0)) + '</td><td>' + escapeHTML(String(row.challenger_targets || 0)) + '</td><td>' + pct(row.quote_coverage) + '</td></tr>';
+  }).join('');
+}
+
 function observationRows(data) {
   const observations = (data && data.observations_30m) || [];
   const rows = observations.flatMap((snapshot) => (snapshot.rows || []).map((row) => ({ ...row, at: snapshot.at })));
@@ -238,8 +261,9 @@ async function renderIntradayDecisions() {
   const noteRoot = document.getElementById('decisionNote');
   const funnelRoot = document.getElementById('decisionFunnel');
   const checkpointRoot = document.getElementById('decisionCheckpointTimeline');
+  const heartbeatDecisionRoot = document.getElementById('decisionHeartbeatTimeline');
   const observationsRoot = document.getElementById('decisionObservations');
-  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot && !funnelRoot && !checkpointRoot && !observationsRoot) return;
+  if (!statusRoot && !summaryRoot && !tableRoot && !candidateRoot && !funnelRoot && !checkpointRoot && !heartbeatDecisionRoot && !observationsRoot) return;
   const result = await loadJSONState('data/strategy_decisions_intraday.json', { status: 'WAITING_FOR_INTRADAY_DECISIONS', strategies: {}, summary: {}, capital_allocation_challenger: { target_count: 0, targets: {} } });
   const data = result.data || {};
   if (statusRoot) statusRoot.innerHTML = statusCard(data);
@@ -248,6 +272,7 @@ async function renderIntradayDecisions() {
   if (candidateRoot) candidateRoot.innerHTML = candidateRows(data);
   if (funnelRoot) funnelRoot.innerHTML = funnelCards(data);
   if (checkpointRoot) checkpointRoot.innerHTML = checkpointRows(data);
+  if (heartbeatDecisionRoot) heartbeatDecisionRoot.innerHTML = decisionTimelineRows(data);
   if (observationsRoot) observationsRoot.innerHTML = observationRows(data);
   if (noteRoot) {
     const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
