@@ -394,3 +394,118 @@ def test_missing_checkpoint_is_terminal_for_catchup_queue(tmp_path: Path) -> Non
     missing = tmp_path / "snapshots" / "workflow_runs" / "intraday_missing_2026-03-12_OPEN.json"
     assert missing.exists()
     assert "missing_yahoo_data" in missing.read_text(encoding="utf-8")
+
+
+def test_live_session_emits_oldest_missing_half_hour_heartbeat(tmp_path: Path) -> None:
+    _write_marker(tmp_path, "2026-03-12", "OPEN")
+
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 10, 7, tzinfo=ET),
+    )
+
+    assert result["run"] == "true"
+    assert result["kind"] == "intraday_heartbeat"
+    assert result["reason"] == "heartbeat_due"
+    assert result["event"] == "HEARTBEAT_1000"
+    assert result["checkpoint_at"] == "2026-03-12T10:00:00-04:00"
+    assert result["required_market_session"] == "2026-03-11"
+
+
+def test_live_session_drains_missed_heartbeats_chronologically(tmp_path: Path) -> None:
+    _write_marker(tmp_path, "2026-03-12", "OPEN")
+
+    first = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 10, 37, tzinfo=ET),
+    )
+    assert first["event"] == "HEARTBEAT_1000"
+
+    workflow_guards.mark_run(
+        "intraday_heartbeat",
+        tmp_path,
+        "HEARTBEAT_1000",
+        now=datetime(2026, 3, 12, 10, 38, tzinfo=ET),
+        session_day="2026-03-12",
+        checkpoint_at="2026-03-12T10:00:00-04:00",
+    )
+    second = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 10, 39, tzinfo=ET),
+    )
+
+    assert second["run"] == "true"
+    assert second["event"] == "HEARTBEAT_1030"
+    assert second["checkpoint_at"] == "2026-03-12T10:30:00-04:00"
+
+
+def test_intraday_heartbeat_never_backfills_after_market_close(tmp_path: Path) -> None:
+    for event in ("OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"):
+        _write_marker(tmp_path, "2026-03-12", event)
+
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 16, 20, tzinfo=ET),
+    )
+
+    assert result["run"] == "false"
+    assert result["kind"] == "intraday"
+    assert result["reason"] == "already_ran"
+    assert not result["event"].startswith("HEARTBEAT_")
+
+
+def test_valid_heartbeat_context_is_locked_to_market_grid(tmp_path: Path) -> None:
+    result = workflow_guards.validate_accepted_context(
+        kind="intraday_heartbeat",
+        event="HEARTBEAT_1000",
+        session_day="2026-03-12",
+        checkpoint_at="2026-03-12T10:00:00-04:00",
+        data_dir=tmp_path,
+    )
+
+    assert result["run"] == "true"
+    assert result["kind"] == "intraday_heartbeat"
+    assert result["required_market_session"] == "2026-03-11"
+
+
+def test_heartbeat_cannot_duplicate_official_checkpoint(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="must not duplicate"):
+        workflow_guards.validate_accepted_context(
+            kind="intraday_heartbeat",
+            event="HEARTBEAT_1130",
+            session_day="2026-03-12",
+            checkpoint_at="2026-03-12T11:30:00-04:00",
+            data_dir=tmp_path,
+        )
+
+
+def test_early_close_never_emits_post_close_heartbeat(tmp_path: Path) -> None:
+    # Christmas Eve 2026 closes at 13:00 ET.
+    for event in ("OPEN", "OPEN_PLUS_2H"):
+        _write_marker(tmp_path, "2026-12-24", event)
+
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 12, 24, 13, 10, tzinfo=ET),
+    )
+
+    # CLOSE is the only official due checkpoint still missing; no heartbeat is
+    # synthesized after the early close.
+    assert result["kind"] == "intraday"
+    assert result["event"] == "CLOSE"
+    assert result["reason"] in {"checkpoint_due", "checkpoint_catchup"}
