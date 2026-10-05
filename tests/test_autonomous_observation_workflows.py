@@ -16,6 +16,11 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     assert "--tolerance-minutes 180" in intraday
     assert "--decision-only" in intraday
     assert "intraday_heartbeat" in intraday
+    assert "record_missed_checkpoint" in intraday
+    assert "scheduler_missed_after_close" in intraday
+    assert 'gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main' in intraday
+    assert "--decision-path" in intraday
+    assert "Overlay latest lightweight checkpoint state under writer lock" in intraday
     assert "checkpoint_state.sh restore" in intraday
     assert "validate-context" in intraday
     assert "--checkpoint-at" in intraday
