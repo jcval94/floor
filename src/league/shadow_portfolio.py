@@ -449,6 +449,7 @@ def run(
     now: datetime | None = None,
     range_: str = "1d",
     interval: str = "5m",
+    authoritative_eod_replay: bool = False,
 ) -> dict[str, Any]:
     base = _load(base_path)
     if base.get("status") != "READY":
@@ -466,11 +467,13 @@ def run(
         )
     expected_base_session = previous_market_session(current_et.date()).isoformat()
     base_session = str(base.get("last_eod_session") or "")
-    if base_session != expected_base_session:
+    if not authoritative_eod_replay and base_session != expected_base_session:
         raise RuntimeError(
             "Shadow portfolio base is not T-1 authoritative state: "
             f"expected={expected_base_session} actual={base_session or 'missing'}"
         )
+    if authoritative_eod_replay and not base_session:
+        raise RuntimeError("Authoritative EOD replay base lacks last_eod_session")
     if not str(base.get("official_state_hash") or ""):
         raise RuntimeError("Shadow portfolio base lacks authoritative state hash")
     bars, failed = fetch_session_bars(_symbols(base), now=current, range_=range_, interval=interval)
@@ -487,6 +490,14 @@ def main() -> None:
     parser.add_argument("--output", default="data/metrics/strategy_league/live_snapshot.json")
     parser.add_argument("--range", default="1d")
     parser.add_argument("--interval", default="5m")
+    parser.add_argument(
+        "--authoritative-eod-replay",
+        action="store_true",
+        help=(
+            "Replay the exact pre-EOD authoritative state even when its last session "
+            "lags T-1. League identity and authoritative state hash remain mandatory."
+        ),
+    )
     args = parser.parse_args()
     payload = run(
         base_path=Path(args.base),
@@ -495,6 +506,7 @@ def main() -> None:
         output_path=Path(args.output),
         range_=args.range,
         interval=args.interval,
+        authoritative_eod_replay=bool(args.authoritative_eod_replay),
     )
     print(json.dumps({
         "status": payload.get("status"),
