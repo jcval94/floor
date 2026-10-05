@@ -412,7 +412,7 @@ def _intraday_operational_timeline(
                     completed_dt = completed_dt.replace(tzinfo=ET)
                 inferred_late = (
                     completed_dt.astimezone(ET) - checkpoint_at
-                ) > timedelta(minutes=45)
+                ) > timedelta(minutes=180)
             except ValueError:
                 inferred_late = False
 
@@ -424,7 +424,7 @@ def _intraday_operational_timeline(
                     "repair_existing_checkpoint",
                     "manual_repair",
                 }
-                or lateness >= 30
+                or lateness >= 180
                 or inferred_late
             )
             operational_state = (
@@ -476,77 +476,108 @@ def _intraday_operational_timeline(
     return rows
 
 
-OFFICIAL_INTRADAY_EVENTS = [
-    "OPEN",
-    "OPEN_PLUS_2H",
-    "OPEN_PLUS_4H",
-    "OPEN_PLUS_6H",
-    "CLOSE",
-]
-
-
-def _decision_counts(payload: dict[str, Any]) -> tuple[int, int, int]:
-    summary = payload.get("summary") or {}
-    evaluations = int(summary.get("decisions_evaluated", 0) or 0)
-    actionable = int(summary.get("actionable_decisions", 0) or 0)
-    holds = 0
-    for strategy_payload in (payload.get("strategies") or {}).values():
-        if not isinstance(strategy_payload, dict):
-            continue
-        counts = strategy_payload.get("action_counts") or {}
-        holds += int(counts.get("HOLD", 0) or 0)
-    return evaluations, actionable, holds
-
-
-def _workflow_marker(
+def _intraday_decision_timeline(
     data_dir: Path,
-    session_day: str,
-    event: str,
-) -> dict[str, Any]:
-    kind = "intraday_heartbeat" if event.startswith("HEARTBEAT_") else "intraday"
-    return _load_object(
-        data_dir
-        / "snapshots"
-        / "workflow_runs"
-        / f"{kind}_{session_day}_{event}.json"
-    )
-
-
-def _missing_checkpoint_marker(
-    data_dir: Path,
-    session_day: str,
-    event: str,
-) -> dict[str, Any]:
-    return _load_object(
-        data_dir
-        / "snapshots"
-        / "workflow_runs"
-        / f"intraday_missing_{session_day}_{event}.json"
-    )
-
-
-def _checkpoint_state(
     *,
-    event: str,
-    marker: dict[str, Any],
-    missing: dict[str, Any] | None = None,
-) -> str:
-    missing = missing or {}
-    if missing:
-        reason = str(missing.get("reason") or "")
-        return (
-            "SCHEDULER_MISSED"
-            if reason == "scheduler_missed_after_close"
-            else "CHECKPOINT_FAILED"
+    session_day: str,
+    expected_league_id: str,
+) -> list[dict[str, Any]]:
+    """Return every official and 30-minute decision snapshot for the session."""
+
+    if not session_day:
+        return []
+    root = data_dir / "metrics" / "strategy_decisions" / "intraday" / session_day
+    if not root.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for path in root.glob("*.json"):
+        item = _load_object(path)
+        if not item or str(item.get("league_id") or "") != expected_league_id:
+            continue
+        event = str(item.get("event") or path.stem)
+        summary = item.get("summary") or {}
+        evaluations = int(summary.get("decisions_evaluated", 0) or 0)
+        actionable = int(summary.get("actionable_decisions", 0) or 0)
+        holds = 0
+        for strategy_payload in (item.get("strategies") or {}).values():
+            if not isinstance(strategy_payload, dict):
+                continue
+            counts = strategy_payload.get("action_counts") or {}
+            holds += int(counts.get("HOLD", 0) or 0)
+
+        marker_kind = (
+            "intraday_heartbeat"
+            if event.startswith("HEARTBEAT_")
+            else "intraday"
         )
-    reason = str(marker.get("guard_reason") or "")
-    if reason == "checkpoint_catchup":
-        return "CHECKPOINT_CATCH_UP"
-    if event.startswith("HEARTBEAT_"):
-        return "HEARTBEAT"
-    if marker:
-        return "CHECKPOINT_ON_TIME"
-    return "UNMARKED_DECISION"
+        marker = _load_object(
+            data_dir
+            / "snapshots"
+            / "workflow_runs"
+            / f"{marker_kind}_{session_day}_{event}.json"
+        )
+        missing = (
+            _load_object(
+                data_dir
+                / "snapshots"
+                / "workflow_runs"
+                / f"intraday_missing_{session_day}_{event}.json"
+            )
+            if not event.startswith("HEARTBEAT_")
+            else {}
+        )
+        guard_reason = str(marker.get("guard_reason") or "")
+        if missing:
+            operational_state = (
+                "SCHEDULER_MISSED"
+                if str(missing.get("reason") or "") == "scheduler_missed_after_close"
+                else "CHECKPOINT_FAILED"
+            )
+        elif event.startswith("HEARTBEAT_"):
+            operational_state = "HEARTBEAT"
+        elif guard_reason in {
+            "checkpoint_catchup",
+            "repair_existing_checkpoint",
+            "manual_repair",
+        }:
+            operational_state = "CHECKPOINT_CATCH_UP"
+        elif marker:
+            operational_state = "ON_TIME"
+        else:
+            operational_state = "UNMARKED_DECISION"
+
+        challenger = item.get("capital_allocation_challenger") or {}
+        rows.append(
+            {
+                "event": event,
+                "as_of": item.get("as_of"),
+                "event_kind": (
+                    "HEARTBEAT"
+                    if event.startswith("HEARTBEAT_")
+                    else "OFFICIAL_CHECKPOINT"
+                ),
+                "operational_state": operational_state,
+                "decision_state": (
+                    "ACTIONABLE"
+                    if actionable > 0
+                    else "HOLD"
+                    if evaluations > 0
+                    else "WAITING"
+                ),
+                "evaluations": evaluations,
+                "actionable": actionable,
+                "holds": holds,
+                "challenger_targets": int(challenger.get("target_count", 0) or 0),
+                "quote_coverage": summary.get("quote_coverage"),
+                "guard_reason": guard_reason or None,
+                "lateness_minutes": marker.get("lateness_minutes"),
+                "missing_reason": missing.get("reason") if missing else None,
+            }
+        )
+
+    rows.sort(key=lambda row: (str(row.get("as_of") or ""), str(row.get("event") or "")))
+    return rows
 
 
 def publish_intraday_decision_payload(
@@ -636,6 +667,12 @@ def publish_intraday_decision_payload(
         checkpoints=checkpoints,
     )
     payload["operational_timeline"] = operational_timeline
+    decision_timeline = _intraday_decision_timeline(
+        data_dir,
+        session_day=session_day,
+        expected_league_id=expected_league_id,
+    )
+    payload["decision_timeline_30m"] = decision_timeline
 
     live_snapshot = _load_object(
         data_dir / "metrics" / "strategy_league" / "live_snapshot.json"
@@ -680,6 +717,23 @@ def publish_intraday_decision_payload(
         for row in operational_timeline
         if row.get("operational_state") == "CHECKPOINT_CATCH_UP"
     )
+    latest_timeline_row = next(
+        (
+            row
+            for row in reversed(decision_timeline)
+            if str(row.get("event") or "") == latest_event
+        ),
+        None,
+    )
+    session_evaluations = sum(int(row.get("evaluations", 0) or 0) for row in decision_timeline)
+    session_actionable = sum(int(row.get("actionable", 0) or 0) for row in decision_timeline)
+    session_holds = sum(int(row.get("holds", 0) or 0) for row in decision_timeline)
+    actionable_snapshots = sum(
+        1 for row in decision_timeline if row.get("decision_state") == "ACTIONABLE"
+    )
+    heartbeat_snapshots = sum(
+        1 for row in decision_timeline if row.get("event_kind") == "HEARTBEAT"
+    )
     payload["operational_state"] = {
         "decision_state": latest_decision_state,
         "latest_event": latest_event or None,
@@ -691,10 +745,10 @@ def publish_intraday_decision_payload(
             else "WAITING"
         ),
         "checkpoint_state": (
-            latest_checkpoint.get("operational_state")
+            latest_timeline_row.get("operational_state")
+            if latest_timeline_row
+            else latest_checkpoint.get("operational_state")
             if latest_checkpoint
-            else "HEARTBEAT"
-            if latest_event.startswith("HEARTBEAT_")
             else "WAITING"
         ),
         "scheduler_state": "MISSED" if missed_count else "HEALTHY",
@@ -702,6 +756,12 @@ def publish_intraday_decision_payload(
         "checkpoint_catchups": catchup_count,
         "actionable_decisions": latest_actionable,
         "decisions_evaluated": latest_evaluations,
+        "session_snapshots": len(decision_timeline),
+        "session_heartbeat_snapshots": heartbeat_snapshots,
+        "session_actionable_snapshots": actionable_snapshots,
+        "session_evaluations": session_evaluations,
+        "session_actionable_decisions": session_actionable,
+        "session_hold_decisions": session_holds,
     }
     fills = list(live_snapshot.get("shadow_open_fills") or [])
     exits = list(live_snapshot.get("shadow_exits") or [])
@@ -733,6 +793,12 @@ def publish_intraday_decision_payload(
         "gross_pnl": gross_pnl,
         "costs": costs,
         "net_pnl": net_pnl,
+        "session_snapshots": len(decision_timeline),
+        "session_heartbeat_snapshots": heartbeat_snapshots,
+        "session_actionable_snapshots": actionable_snapshots,
+        "session_evaluations": session_evaluations,
+        "session_actionable_decisions": session_actionable,
+        "session_hold_decisions": session_holds,
     }
 
     transitions = {"HOLD→BUY": 0, "BUY→BUY": 0, "BUY→HOLD": 0, "BUY→SELL": 0}
