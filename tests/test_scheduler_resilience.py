@@ -53,7 +53,9 @@ def test_watchdog_retries_transient_api_failures_with_recovery_mesh() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
     assert "workflow_run:" in workflow
-    assert 'workflows: ["strategy_live", "intraday_engine", "monitoring", "eod"]' in workflow
+    assert 'workflows: ["strategy_live", "intraday_engine", "monitoring"]' in workflow
+    assert 'workflows: ["strategy_live", "intraday_engine", "monitoring", "eod"]' not in workflow
+    assert "Do not wake from EOD itself" in workflow
     assert "types: [completed]" in workflow
     assert "branches: [main]" in workflow
     assert "list_runs_with_retry" in workflow
@@ -106,7 +108,7 @@ def test_split_crons_never_contain_literal_newline_escape() -> None:
         assert "\\n    - cron:" not in _text(name)
 
 
-def test_watchdog_circuit_breaks_deterministic_eod_failure_per_head_sha() -> None:
+def test_watchdog_circuit_breaks_known_deterministic_eod_failures_without_self_wake() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
     assert "deterministic_failure_circuit_open" in workflow
@@ -117,6 +119,12 @@ def test_watchdog_circuit_breaks_deterministic_eod_failure_per_head_sha() -> Non
         "instead of rewriting history"
     ) in workflow
     assert "Material shadow/EOD divergence:" in workflow
+    assert "Shadow portfolio base is not T-1 authoritative state:" in workflow
+    assert "Frozen Weekly challenger is missing." in workflow
+    assert "Frozen Weekly challenger is an unresolved LFS pointer:" in workflow
+    assert "Frozen Weekly challenger hash changed; create a new league_id instead of rewriting history" in workflow
+    assert "Frozen Weekly challenger must keep canonical_serving_enabled=false" in workflow
+    assert "Strategy League weekly model contract invalid:" in workflow
     assert "blocked_deterministic_same_sha" in workflow
     assert "failing open to normal recovery" in workflow
 
