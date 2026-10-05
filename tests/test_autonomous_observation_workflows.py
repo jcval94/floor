@@ -94,6 +94,8 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "monitoring",
         "capital_challenger_tournament",
         "walk_forward_oos",
+        "strategy_live",
+        "intraday_engine",
     ):
         assert upstream in workflow_run_header
 
@@ -104,9 +106,14 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "monitoring-health-",
         "capital-tournament-",
         "walk-forward-oos-",
+        "strategy-live-",
+        "intraday-audit-",
     ):
         assert evidence in pages
 
+    assert "checkpoint-state-v1" in pages
+    assert "CHECKPOINT_STATE_PAYLOAD_PIN" in pages
+    assert "scripts/checkpoint_state.sh restore" in pages
     assert "completed_without_publishable_evidence" in pages
     assert "needs.gate.outputs.publish == 'true'" in pages
     assert "actions: read" in pages
