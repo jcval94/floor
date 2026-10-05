@@ -72,15 +72,15 @@ def test_strategy_live_uses_half_hour_cadence_without_embedded_cross_wake() -> N
     assert "gh workflow run scheduler_watchdog.yml" not in workflow
 
 
-def test_intraday_watchdog_budget_is_shorter_than_half_hour_cadence() -> None:
+def test_intraday_watchdog_budget_is_shorter_than_logical_heartbeat_cadence() -> None:
     workflow = _text("scheduler_watchdog.yml")
 
-    # Primary polls are 30 minutes apart. The watchdog must not let a
-    # successful pre-checkpoint poll suppress the :47 recovery after a :30
-    # checkpoint becomes due.
+    # Logical heartbeats are 30 minutes apart while independent wake attempts
+    # occur every 15 minutes. The freshness budget must therefore stay below
+    # one logical heartbeat interval.
     assert "dispatch_if_stale intraday_engine.yml 1200 intraday" in workflow
     assert "dispatch_if_stale strategy_live.yml 2100 strategy_live" in workflow
-    assert "successful pre-checkpoint poll" in workflow
+    assert 'cron: "2,17,32,47 13-23 * * 1-5"' in workflow
 
 
 def test_watchdog_counts_only_recent_active_or_successful_runs() -> None:
