@@ -52,10 +52,14 @@
     </article>
     <article class="panel league-table-panel">
       <div class="section-heading"><div><span class="eyebrow">Ledger oficial</span><h3>OPEN → +2h → +4h → +6h → CLOSE</h3><p>Reconstrucción cronológica de checkpoints point-in-time; un checkpoint faltante queda visible y nunca se rellena con barras futuras.</p></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Checkpoint</th><th>Hora ET</th><th>Evaluaciones</th><th>Accionables</th><th>Targets</th><th>Cobertura</th></tr></thead><tbody id="decisionCheckpointTimeline"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Checkpoint</th><th>Hora ET</th><th>Estado operativo</th><th>Decisión</th><th>Evaluaciones</th><th>Accionables</th><th>Targets</th><th>Cobertura</th></tr></thead><tbody id="decisionCheckpointTimeline"></tbody></table></div>
     </article>
     <article class="panel league-table-panel">
-      <div class="section-heading"><div><span class="eyebrow">Heartbeat ~30 min</span><h3>Observaciones intermedias</h3><p>Mark-to-market del portfolio shadow entre checkpoints oficiales; no infla la evidencia comparable.</p></div></div>
+      <div class="section-heading"><div><span class="eyebrow">Decision heartbeat ~30 min</span><h3>Actividad real del motor</h3><p>Cada snapshot muestra si el motor evaluó y quedó en HOLD o encontró señales ACTIONABLE. Esta actividad es independiente de que después exista target, fill o cambio de posición.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Hora ET</th><th>Evento</th><th>Tipo</th><th>Estado operativo</th><th>Decisión</th><th>Evaluaciones</th><th>Accionables</th><th>HOLD</th><th>Targets</th><th>Cobertura</th></tr></thead><tbody id="decisionHeartbeatTimeline"></tbody></table></div>
+    </article>
+    <article class="panel league-table-panel">
+      <div class="section-heading"><div><span class="eyebrow">Portfolio heartbeat ~30 min</span><h3>Observaciones intermedias</h3><p>Mark-to-market del portfolio shadow entre checkpoints oficiales. Es distinto del heartbeat de decisiones: puede no haber fills aunque sí existan señales ACTIONABLE.</p></div></div>
       <div class="table-wrap"><table><thead><tr><th>Hora ET</th><th>Portfolio</th><th>NAV</th><th>P&amp;L bruto</th><th>Costos</th><th>P&amp;L neto</th><th>Cash</th><th>Exposición</th></tr></thead><tbody id="decisionObservations"></tbody></table></div>
     </article>
     <article class="panel league-table-panel">
