@@ -68,6 +68,41 @@ def _checkpoint_finalized(data_dir: Path, day: str, event: str) -> bool:
     ).exists()
 
 
+def _heartbeat_event(timestamp: datetime) -> str:
+    return f"HEARTBEAT_{timestamp.astimezone(ET).strftime('%H%M')}"
+
+
+def _latest_due_heartbeat(
+    *,
+    now: datetime,
+    market_open: datetime | None,
+    market_close: datetime | None,
+    official_checkpoints: dict[str, datetime],
+) -> datetime | None:
+    """Return the latest nominal 30-minute heartbeat due during the live session.
+
+    Official OPEN/+2h/+4h/+6h/CLOSE timestamps already count as evaluations,
+    so heartbeat slots never duplicate them. Heartbeats are deliberately not
+    backfilled after the market closes: they are real-time observational
+    evidence, unlike reconstructable official checkpoints.
+    """
+
+    if market_open is None or market_close is None:
+        return None
+    if now < market_open or now >= market_close:
+        return None
+
+    elapsed = now - market_open
+    slot_count = int(elapsed.total_seconds() // (30 * 60))
+    slot = market_open + timedelta(minutes=30 * slot_count)
+    official_times = set(official_checkpoints.values())
+    while slot >= market_open:
+        if slot < market_close and slot <= now and slot not in official_times:
+            return slot
+        slot -= timedelta(minutes=30)
+    return None
+
+
 def _required_session(kind: str, checkpoint_at: datetime) -> str:
     if kind == "eod":
         return checkpoint_at.astimezone(ET).date().isoformat()
@@ -104,10 +139,48 @@ def _intraday_decision(
         if not _checkpoint_finalized(data_dir, day, event)
     ]
     if not pending:
+        heartbeat_at = _latest_due_heartbeat(
+            now=now,
+            market_open=info.market_open,
+            market_close=info.market_close,
+            official_checkpoints=checkpoints,
+        )
+        if heartbeat_at is not None:
+            heartbeat_event = _heartbeat_event(heartbeat_at)
+            heartbeat_done = _marker_exists(
+                data_dir,
+                "intraday_heartbeat",
+                day,
+                heartbeat_event,
+            )
+            out.update(
+                {
+                    "kind": "intraday_heartbeat",
+                    "reason": (
+                        "heartbeat_already_ran"
+                        if heartbeat_done
+                        else "heartbeat_due"
+                    ),
+                    "event": heartbeat_event,
+                    "checkpoint_at": heartbeat_at.isoformat(),
+                    "lateness_minutes": str(
+                        max(0, int((now - heartbeat_at).total_seconds() // 60))
+                    ),
+                    "required_market_session": _required_session(
+                        "intraday_heartbeat",
+                        heartbeat_at,
+                    ),
+                }
+            )
+            if not heartbeat_done:
+                out["run"] = "true"
+            return out
+
         event, timestamp = max(due, key=lambda item: item[1])
         lateness = max(0, int((now - timestamp).total_seconds() // 60))
         out.update(
             {
+                "kind": "intraday",
                 "reason": "already_ran",
                 "event": event,
                 "checkpoint_at": timestamp.isoformat(),
@@ -123,6 +196,7 @@ def _intraday_decision(
     out.update(
         {
             "run": "true",
+            "kind": "intraday",
             "reason": reason,
             "event": event,
             "checkpoint_at": timestamp.isoformat(),
@@ -193,6 +267,7 @@ def should_run(
     info = get_session_info(current)
     out = {
         "run": "false",
+        "kind": kind,
         "reason": "market_closed",
         "event": "",
         "session_day": info.session_day.isoformat(),
@@ -293,16 +368,45 @@ def validate_accepted_context(
     info = get_session_info(checkpoint)
     if not info.is_open_day:
         raise RuntimeError(f"Accepted checkpoint is not a market session: {session_day}")
-    expected = checkpoint_times(info).get(event)
-    if expected is None:
-        raise RuntimeError(f"Accepted event is invalid for session {session_day}: {event}")
-    if abs((expected - checkpoint).total_seconds()) > 1:
-        raise RuntimeError(
-            "Accepted checkpoint timestamp changed: "
-            f"event={event} expected={expected.isoformat()} accepted={checkpoint.isoformat()}"
-        )
-    if kind == "eod" and event != "CLOSE":
-        raise RuntimeError("EOD accepted context must use CLOSE")
+
+    if kind == "intraday_heartbeat":
+        if info.market_open is None or info.market_close is None:
+            raise RuntimeError("Heartbeat requires a live market session")
+        if not event.startswith("HEARTBEAT_"):
+            raise RuntimeError(f"Heartbeat accepted context has invalid event: {event}")
+        expected_event = _heartbeat_event(checkpoint)
+        if event != expected_event:
+            raise RuntimeError(
+                "Heartbeat event/timestamp mismatch: "
+                f"event={event} expected={expected_event} checkpoint={checkpoint.isoformat()}"
+            )
+        if not (info.market_open <= checkpoint < info.market_close):
+            raise RuntimeError(
+                f"Heartbeat must be inside market hours: {checkpoint.isoformat()}"
+            )
+        elapsed_seconds = (checkpoint - info.market_open).total_seconds()
+        if abs(elapsed_seconds % (30 * 60)) > 1:
+            raise RuntimeError(
+                f"Heartbeat must align to a 30-minute market grid: {checkpoint.isoformat()}"
+            )
+        if checkpoint in set(checkpoint_times(info).values()):
+            raise RuntimeError(
+                "Heartbeat must not duplicate an official market checkpoint: "
+                f"{checkpoint.isoformat()}"
+            )
+    else:
+        expected = checkpoint_times(info).get(event)
+        if expected is None:
+            raise RuntimeError(
+                f"Accepted event is invalid for session {session_day}: {event}"
+            )
+        if abs((expected - checkpoint).total_seconds()) > 1:
+            raise RuntimeError(
+                "Accepted checkpoint timestamp changed: "
+                f"event={event} expected={expected.isoformat()} accepted={checkpoint.isoformat()}"
+            )
+        if kind == "eod" and event != "CLOSE":
+            raise RuntimeError("EOD accepted context must use CLOSE")
 
     exists = _marker_exists(data_dir, kind, session_day, event)
     if allow_existing_repair:
@@ -406,7 +510,11 @@ def main() -> None:
     p_context.add_argument("--reason", default="resolved_context")
 
     p_validate = sub.add_parser("validate-context")
-    p_validate.add_argument("--kind", required=True, choices=["intraday", "eod"])
+    p_validate.add_argument(
+        "--kind",
+        required=True,
+        choices=["intraday", "intraday_heartbeat", "eod"],
+    )
     p_validate.add_argument("--event", required=True)
     p_validate.add_argument("--session-day", required=True)
     p_validate.add_argument("--checkpoint-at", required=True)
