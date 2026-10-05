@@ -5,6 +5,7 @@ MODE="${1:-restore}"
 TAG="${CHECKPOINT_STATE_TAG:-checkpoint-state-v1}"
 ASSET="${CHECKPOINT_STATE_ASSET:-floor-checkpoint-state.tar.gz}"
 REPO="${GITHUB_REPOSITORY:-}"
+PIN="${CHECKPOINT_STATE_PAYLOAD_PIN:-}"
 DIR="data/snapshots/workflow_runs"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -25,10 +26,14 @@ restore_state() {
   local attempt selected
   for attempt in 1 2 3; do
     rm -f "$TMP/$ASSET" "$TMP/$ASSET.sha256"
-    selected=""
-    if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256")"; then
-      sleep $((attempt * 2))
-      continue
+    selected="$PIN"
+    if [[ "$selected" == "legacy" ]]; then
+      selected=""
+    elif [[ -z "$selected" ]]; then
+      if ! selected="$(state_latest_complete_payload "$REPO" "$TAG" "$ASSET" ".sha256")"; then
+        sleep $((attempt * 2))
+        continue
+      fi
     fi
 
     if [[ -n "$selected" ]]; then
