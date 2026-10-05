@@ -64,14 +64,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
-      - name: Export authoritative pre-EOD shadow base
-        if: steps.lock_guard.outputs.run != 'false'
-        run: |
-          PYTHONPATH=src python -m league.live_snapshot export-base \
-            --data-dir data \
-            --league-config config/strategy_league.json \
-            --output data/metrics/strategy_league/eod_preclose_base.json
-
       - name: Revalidate immutable close context under writer lock
         id: lock_guard
         run: |
@@ -81,6 +73,14 @@ jobs:
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --data-dir data
+
+      - name: Export authoritative pre-EOD shadow base
+        if: steps.lock_guard.outputs.run == 'true'
+        run: |
+          PYTHONPATH=src python -m league.live_snapshot export-base \
+            --data-dir data \
+            --league-config config/strategy_league.json \
+            --output data/metrics/strategy_league/eod_preclose_base.json
 
       - name: Preflight serving-compatible schema-v2 champions
         if: steps.lock_guard.outputs.run == 'true'
