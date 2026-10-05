@@ -88,7 +88,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -117,7 +116,14 @@ jobs:
           else
             echo "Scheduler miss already persisted: $marker"
           fi
-          gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main
+
+      - name: Upload scheduler-missed evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: intraday-scheduler-missed-${{ github.run_id }}-${{ needs.gate.outputs.event }}
+          path: data/snapshots/workflow_runs/intraday_missing_${{ needs.gate.outputs.session_day }}_${{ needs.gate.outputs.event }}.json
+          if-no-files-found: error
+          retention-days: 30
 
   engine_critical:
     needs: gate
