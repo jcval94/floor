@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -235,8 +236,13 @@ def test_mark_run_uses_accepted_session_day_not_wall_clock(tmp_path: Path) -> No
         now=datetime(2026, 3, 13, 0, 5, tzinfo=ET),
         session_day="2026-03-12",
         checkpoint_at="2026-03-12T09:30:00-04:00",
+        reason="checkpoint_catchup",
+        lateness_minutes="140",
     )
     assert marker.name == "intraday_2026-03-12_OPEN.json"
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert payload["guard_reason"] == "checkpoint_catchup"
+    assert payload["lateness_minutes"] == "140"
 
 
 def test_resolve_context_freezes_nominal_checkpoint() -> None:
