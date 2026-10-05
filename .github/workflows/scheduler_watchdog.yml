@@ -9,7 +9,10 @@ on:
     # GitHub-native recovery mesh: any surviving operational workflow can wake
     # the watchdog. This does not eliminate a platform-wide Actions outage, but
     # it removes monitoring as the single internal wake-up dependency.
-    workflows: ["strategy_live", "intraday_engine", "monitoring", "eod"]
+    # Do not wake from EOD itself: a failed EOD used to create a tight
+    # failure -> watchdog -> same EOD loop. Quarter-hour schedule and the
+    # surviving intraday/monitoring mesh remain sufficient for recovery.
+    workflows: ["strategy_live", "intraday_engine", "monitoring"]
     types: [completed]
     branches: [main]
   push:
@@ -241,8 +244,10 @@ jobs:
             return 1
           }
 
-          # Recovery is calendar-aware in America/New_York. Heartbeat and
-          # strategy_live recovery are never launched after their allowed market
+          # Recovery is calendar-aware in America/New_York. EOD failures do not
+          # self-wake this watchdog; deterministic failures are circuit-broken and
+          # transient failures are retried by the independent quarter-hour mesh.
+          # Heartbeat and strategy_live recovery are never launched after their allowed market
           # window, even when this watchdog is awakened by a late workflow_run.
           failures=0
           if [ "$INTRADAY_WINDOW" = "true" ]; then
@@ -258,7 +263,7 @@ jobs:
           fi
 
           if [ "$EOD_WINDOW" = "true" ]; then
-            dispatch_if_stale eod.yml 2100 eod "Strategy League frozen contract changed; create a new league_id instead of rewriting history|Material shadow/EOD divergence:" || failures=$((failures + 1))
+            dispatch_if_stale eod.yml 2100 eod "Strategy League frozen contract changed; create a new league_id instead of rewriting history|Material shadow/EOD divergence:|Shadow portfolio base is not T-1 authoritative state:|Frozen Weekly challenger is missing.|Frozen Weekly challenger is an unresolved LFS pointer:|Frozen Weekly challenger hash changed; create a new league_id instead of rewriting history|Frozen Weekly challenger must keep canonical_serving_enabled=false|Strategy League weekly model contract invalid:|Strategy League refuses Weekly artifact unless canonical_serving_enabled=false" || failures=$((failures + 1))
           else
             echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
@@ -291,6 +296,6 @@ jobs:
             echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"
             echo "- monitoring: ${{ steps.dispatch.outputs.monitoring }}"
-            echo "- policy: dispatch only inside NYSE-aware windows and only when no recent/active run exists; deterministic EOD failures are circuit-broken for the same commit SHA"
+            echo "- policy: dispatch only inside NYSE-aware windows and only when no recent/active run exists; EOD never self-wakes recovery; known deterministic failures are circuit-broken for the same commit SHA"
             echo "- unconditional main-push execution: disabled for intraday/eod"
           } >> "$GITHUB_STEP_SUMMARY"
