@@ -260,7 +260,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: shadow-eod-reconciliation-${{ github.run_id }}
-          path: data/metrics/strategy_league/shadow_eod_reconciliation.json
+          path: |
+            data/metrics/strategy_league/shadow_eod_reconciliation.json
+            data/metrics/strategy_league/state_recovery_latest.json
           if-no-files-found: warn
           retention-days: 30
 
