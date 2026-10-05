@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live"]
+    workflows: ["retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live", "intraday_engine"]
     types: [completed]
     branches: [main]
   push:
@@ -85,6 +85,10 @@ jobs:
               strategy_live)
                 expected="strategy-live-${upstream_run_id}"
                 count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              intraday_engine)
+                prefix="intraday-audit-${upstream_run_id}-"
+                count=$(jq --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | length' <<<"$artifacts")
                 ;;
               strategy_league_bootstrap)
                 suffix="-${upstream_run_id}"
@@ -405,6 +409,13 @@ jobs:
           print('intraday_decision_status=', decisions.get('status'))
           print('intraday_decision_event=', decisions.get('event'))
           print('intraday_actionable=', (decisions.get('summary') or {}).get('actionable_decisions'))
+          operational = decisions.get('operational_state') or {}
+          print('intraday_latest_activity=', decisions.get('latest_activity'))
+          print('intraday_decision_state=', operational.get('decision_state'))
+          print('intraday_checkpoint_state=', operational.get('checkpoint_state'))
+          print('intraday_session_snapshots=', operational.get('session_snapshots'))
+          print('intraday_session_actionable=', operational.get('session_actionable_decisions'))
+          print('intraday_scheduler_state=', operational.get('scheduler_state'))
           print('observation_status=', observation.get('status'))
           print('observation_reconciled=', (observation.get('evidence') or {}).get('reconciled_count_since_genesis'))
           print('blockers=', audit.get('blockers', []))
