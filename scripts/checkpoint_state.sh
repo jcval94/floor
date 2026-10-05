@@ -18,6 +18,10 @@ fi
 
 restore_state() {
   mkdir -p "$DIR"
+  if [[ "$PIN" == "missing" ]]; then
+    echo "Pinned checkpoint state is missing; leaving local checkpoint state unchanged."
+    return 0
+  fi
   if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     echo "No checkpoint-state release exists yet."
     return 0
