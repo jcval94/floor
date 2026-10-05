@@ -544,3 +544,48 @@ def test_missing_intraday_checkpoint_is_not_reconstructed_long_after_close(
     assert result["kind"] == "intraday"
     assert result["reason"] == "checkpoint_missed"
     assert result["event"] == "OPEN"
+
+
+def test_mark_run_embeds_compact_decision_evidence(tmp_path: Path) -> None:
+    decision = tmp_path / "decision.json"
+    decision.write_text(
+        json.dumps(
+            {
+                "as_of": "2026-03-12T10:00:00-04:00",
+                "summary": {
+                    "decisions_evaluated": 200,
+                    "actionable_decisions": 5,
+                    "quote_coverage": 0.98,
+                },
+                "strategies": {
+                    "one": {"action_counts": {"BUY": 2, "SELL": 1, "HOLD": 47}},
+                    "two": {"action_counts": {"BUY": 1, "SELL": 1, "HOLD": 48}},
+                },
+                "capital_allocation_challenger": {"target_count": 4},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    marker = workflow_guards.mark_run(
+        "intraday_heartbeat",
+        tmp_path,
+        "HEARTBEAT_1000",
+        now=datetime(2026, 3, 12, 10, 7, tzinfo=ET),
+        session_day="2026-03-12",
+        checkpoint_at="2026-03-12T10:00:00-04:00",
+        reason="heartbeat_due",
+        lateness_minutes="7",
+        decision_path=decision,
+    )
+
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    evidence = payload["decision_evidence"]
+    assert evidence["decision_state"] == "ACTIONABLE"
+    assert evidence["evaluations"] == 200
+    assert evidence["actionable"] == 5
+    assert evidence["holds"] == 95
+    assert evidence["buys"] == 3
+    assert evidence["sells"] == 2
+    assert evidence["challenger_targets"] == 4
+    assert evidence["quote_coverage"] == pytest.approx(0.98)
