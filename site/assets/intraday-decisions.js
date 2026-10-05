@@ -253,7 +253,7 @@ async function renderIntradayDecisions() {
     const targets = Object.keys((data.capital_allocation_challenger && data.capital_allocation_challenger.targets) || {});
     const targetText = targets.length ? ' Targets shadow del Capital Challenger: ' + targets.join(', ') + '.' : ' El Capital Challenger no encontró targets elegibles en este checkpoint.';
     noteRoot.textContent = data.status === 'READY'
-      ? 'HOLD no significa inactividad: significa que el motor evaluó y decidió no actuar. ACTIONABLE indica que sí existen BUY/SELL válidos, aunque el Capital Challenger todavía puede filtrarlos por riesgo. CHECKPOINT CATCH-UP identifica reconstrucción tardía y SCHEDULER MISSED un checkpoint que agotó su recovery budget.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
+      ? 'HOLD no significa inactividad: significa que el motor evaluó y decidió no actuar. ACTIONABLE indica que sí existen BUY/SELL válidos, aunque el Capital Challenger todavía puede filtrarlos por riesgo. La geometría central decide la oportunidad y los retornos 15m/1h sólo ajustan el ranking intradía entre señales ya válidas. CHECKPOINT CATCH-UP identifica reconstrucción tardía y SCHEDULER MISSED un checkpoint que agotó su recovery budget.' + targetText + ' Ninguna decisión de esta sección ejecuta órdenes.'
       : data.detail || 'Esperando decisiones del checkpoint.';
   }
 }
