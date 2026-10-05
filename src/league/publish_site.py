@@ -36,6 +36,13 @@ def _number(value: Any) -> float | None:
         return None
     return numeric
 
+
+def _integer(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
 def _return_sort_key(row: dict[str, Any]) -> tuple[bool, float]:
     value = _number(row.get("return"))
     return (
@@ -524,17 +531,15 @@ def _intraday_decision_timeline(
         embedded = marker.get("decision_evidence") or {}
         summary = item.get("summary") or {}
 
-        evaluations = int(
+        evaluations = _integer(
             embedded.get("evaluations")
             if embedded.get("evaluations") is not None
             else summary.get("decisions_evaluated", 0)
-            or 0
         )
-        actionable = int(
+        actionable = _integer(
             embedded.get("actionable")
             if embedded.get("actionable") is not None
             else summary.get("actionable_decisions", 0)
-            or 0
         )
         holds = int(embedded.get("holds", 0) or 0)
         if not holds:
@@ -545,11 +550,10 @@ def _intraday_decision_timeline(
                 holds += int(counts.get("HOLD", 0) or 0)
 
         challenger = item.get("capital_allocation_challenger") or {}
-        target_count = int(
+        target_count = _integer(
             embedded.get("challenger_targets")
             if embedded.get("challenger_targets") is not None
             else challenger.get("target_count", 0)
-            or 0
         )
         as_of = embedded.get("as_of") or item.get("as_of") or marker.get("checkpoint_at")
         quote_coverage = (
@@ -735,17 +739,15 @@ def publish_intraday_decision_payload(
     latest_challenger = payload.get("capital_allocation_challenger") or {}
     latest_activity = decision_timeline[-1] if decision_timeline else {}
     payload["latest_activity"] = latest_activity
-    latest_actionable = int(
+    latest_actionable = _integer(
         latest_activity.get("actionable")
         if latest_activity
         else latest_summary.get("actionable_decisions", 0)
-        or 0
     )
-    latest_evaluations = int(
+    latest_evaluations = _integer(
         latest_activity.get("evaluations")
         if latest_activity
         else latest_summary.get("decisions_evaluated", 0)
-        or 0
     )
     latest_decision_state = (
         str(latest_activity.get("decision_state"))
