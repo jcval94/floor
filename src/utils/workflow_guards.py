@@ -72,19 +72,22 @@ def _heartbeat_event(timestamp: datetime) -> str:
     return f"HEARTBEAT_{timestamp.astimezone(ET).strftime('%H%M')}"
 
 
-def _latest_due_heartbeat(
+def _oldest_pending_heartbeat(
     *,
     now: datetime,
     market_open: datetime | None,
     market_close: datetime | None,
     official_checkpoints: dict[str, datetime],
+    data_dir: Path,
+    day: str,
 ) -> datetime | None:
-    """Return the latest nominal 30-minute heartbeat due during the live session.
+    """Return the oldest due 30-minute heartbeat still missing in the live session.
 
-    Official OPEN/+2h/+4h/+6h/CLOSE timestamps already count as evaluations,
-    so heartbeat slots never duplicate them. Heartbeats are deliberately not
-    backfilled after the market closes: they are real-time observational
-    evidence, unlike reconstructable official checkpoints.
+    GitHub schedule delivery is best-effort. If one or more wake opportunities
+    are delayed, the next live-session wake drains missing heartbeat slots
+    chronologically using point-in-time bars. Heartbeats are never backfilled
+    after the market closes; post-close catch-up is reserved for official
+    OPEN/+2h/+4h/+6h/CLOSE checkpoints.
     """
 
     if market_open is None or market_close is None:
@@ -92,16 +95,15 @@ def _latest_due_heartbeat(
     if now < market_open or now >= market_close:
         return None
 
-    elapsed = now - market_open
-    slot_count = int(elapsed.total_seconds() // (30 * 60))
-    slot = market_open + timedelta(minutes=30 * slot_count)
     official_times = set(official_checkpoints.values())
-    while slot >= market_open:
-        if slot < market_close and slot <= now and slot not in official_times:
-            return slot
-        slot -= timedelta(minutes=30)
+    slot = market_open
+    while slot <= now and slot < market_close:
+        if slot not in official_times:
+            event = _heartbeat_event(slot)
+            if not _marker_exists(data_dir, "intraday_heartbeat", day, event):
+                return slot
+        slot += timedelta(minutes=30)
     return None
-
 
 def _required_session(kind: str, checkpoint_at: datetime) -> str:
     if kind == "eod":
@@ -139,11 +141,13 @@ def _intraday_decision(
         if not _checkpoint_finalized(data_dir, day, event)
     ]
     if not pending:
-        heartbeat_at = _latest_due_heartbeat(
+        heartbeat_at = _oldest_pending_heartbeat(
             now=now,
             market_open=info.market_open,
             market_close=info.market_close,
             official_checkpoints=checkpoints,
+            data_dir=data_dir,
+            day=day,
         )
         if heartbeat_at is not None:
             heartbeat_event = _heartbeat_event(heartbeat_at)
