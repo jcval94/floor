@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from floor.calendar import previous_market_session
 from league.engine import _execute_target, _portfolio_nav, _trade
 from storage.yahoo_ingest import fetch_yahoo_chart, parse_daily_bars
 
@@ -136,6 +137,7 @@ def _fresh_shadow(base: dict[str, Any], session: str) -> dict[str, Any]:
         "status": "INITIALIZING",
         "market_session": session,
         "last_eod_session": base.get("last_eod_session"),
+        "source_base_state_hash": str(base.get("official_state_hash") or ""),
         "sessions": int(base.get("sessions", 0) or 0),
         "initial_nav_usd": float(base.get("initial_nav_usd", 10000.0) or 10000.0),
         "shadow_members": members,
@@ -157,11 +159,14 @@ def _fresh_shadow(base: dict[str, Any], session: str) -> dict[str, Any]:
 
 
 def _compatible_previous(base: dict[str, Any], previous: dict[str, Any], session: str) -> bool:
+    base_state_hash = str(base.get("official_state_hash") or "")
     return bool(
-        previous
+        base_state_hash
+        and previous
         and previous.get("league_id") == base.get("league_id")
         and previous.get("market_session") == session
         and previous.get("last_eod_session") == base.get("last_eod_session")
+        and str(previous.get("source_base_state_hash") or "") == base_state_hash
         and isinstance(previous.get("shadow_members"), dict)
     )
 
@@ -451,6 +456,23 @@ def run(
     previous = _load(previous_path)
     league_cfg = _load(config_path)
     current = now or datetime.now(timezone.utc)
+    current_et = current.astimezone(ET)
+    configured_league_id = str(league_cfg.get("league_id") or "")
+    base_league_id = str(base.get("league_id") or "")
+    if not configured_league_id or base_league_id != configured_league_id:
+        raise RuntimeError(
+            "Shadow portfolio base league mismatch: "
+            f"configured={configured_league_id!r} base={base_league_id!r}"
+        )
+    expected_base_session = previous_market_session(current_et.date()).isoformat()
+    base_session = str(base.get("last_eod_session") or "")
+    if base_session != expected_base_session:
+        raise RuntimeError(
+            "Shadow portfolio base is not T-1 authoritative state: "
+            f"expected={expected_base_session} actual={base_session or 'missing'}"
+        )
+    if not str(base.get("official_state_hash") or ""):
+        raise RuntimeError("Shadow portfolio base lacks authoritative state hash")
     bars, failed = fetch_session_bars(_symbols(base), now=current, range_=range_, interval=interval)
     payload = build_shadow_snapshot(base, previous, league_cfg, now=current, session_bars=bars, failed_symbols=failed)
     _write(output_path, payload)

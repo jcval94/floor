@@ -172,6 +172,7 @@ def export_live_base(
         "mode": "shadow_paper_mark_to_market_base",
         "status": "READY",
         "last_eod_session": state.get("last_session"),
+        "official_state_hash": str(state.get("last_hash") or ""),
         "sessions": int(state.get("session_count", 0) or 0),
         "initial_nav_usd": _number(league_cfg.get("initial_nav_usd"), 10000.0),
         "generated_at": datetime.now(timezone.utc).isoformat(),
