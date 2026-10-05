@@ -450,6 +450,7 @@ def validate_accepted_context(
             )
         return {
             "run": "true",
+            "kind": kind,
             "reason": "repair_existing_checkpoint",
             "event": event,
             "session_day": session_day,
@@ -459,6 +460,7 @@ def validate_accepted_context(
         }
     return {
         "run": "false" if exists else "true",
+        "kind": kind,
         "reason": "already_ran" if exists else "accepted_context",
         "event": event,
         "session_day": session_day,
