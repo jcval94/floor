@@ -339,6 +339,7 @@ def resolve_event_context(
         )
     return {
         "run": "true",
+        "kind": "intraday",
         "reason": reason,
         "event": event,
         "session_day": info.session_day.isoformat(),
