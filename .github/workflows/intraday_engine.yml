@@ -328,6 +328,8 @@ jobs:
             --event "${{ needs.gate.outputs.event }}" \
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
+            --reason "${{ needs.gate.outputs.reason }}" \
+            --lateness-minutes "${{ needs.gate.outputs.lateness_minutes }}" \
             --data-dir data
 
       - name: Build compact immutable per-run audit
