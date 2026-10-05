@@ -140,6 +140,32 @@ def _intraday_decision(
         for event, timestamp in due
         if not _checkpoint_finalized(data_dir, day, event)
     ]
+
+    # Intraday evidence must be produced while the session is live. The only
+    # post-close exception is the nominal CLOSE checkpoint, which gets a short
+    # 20-minute completion grace period. If an earlier checkpoint is still
+    # missing at/after close, surface the miss instead of reconstructing a day
+    # later and making the session look healthy.
+    if pending and info.market_close is not None and now >= info.market_close:
+        event, timestamp = min(pending, key=lambda item: item[1])
+        close_grace = info.market_close + timedelta(minutes=20)
+        if event != "CLOSE" or now > close_grace:
+            lateness = max(0, int((now - timestamp).total_seconds() // 60))
+            out.update(
+                {
+                    "kind": "intraday",
+                    "reason": "checkpoint_missed",
+                    "event": event,
+                    "checkpoint_at": timestamp.isoformat(),
+                    "lateness_minutes": str(lateness),
+                    "required_market_session": _required_session(
+                        "intraday",
+                        timestamp,
+                    ),
+                }
+            )
+            return out
+
     if not pending:
         heartbeat_at = _oldest_pending_heartbeat(
             now=now,
