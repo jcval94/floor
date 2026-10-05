@@ -9,6 +9,7 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     eod = _text(".github/workflows/eod.yml")
     intraday = _text(".github/workflows/intraday_engine.yml")
     monitoring = _text(".github/workflows/monitoring.yml")
+    strategy_live = _text(".github/workflows/strategy_live.yml")
 
     assert 'cron: "7,22,37,52 13-22 * * 1-5"' in intraday
     assert 'cron: "22,52 13-22 * * 1-5"' not in intraday
@@ -25,6 +26,13 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     assert "--tolerance-minutes 360" in eod
     assert "checkpoint_state.sh restore" in eod
     assert "validate-context" in eod
+    assert "eod_preclose_base.json" in eod
+    assert "Finalize shadow portfolio from authoritative pre-EOD base" in eod
+
+    assert 'cron: "5,35 13-22 * * 1-5"' in strategy_live
+    assert "previous_market_session" in strategy_live
+    assert "official_state_hash" in strategy_live
+    assert "runtime_state.sh restore" in strategy_live
 
     assert 'cron: "11 14-18 * * 1-5"' in monitoring
     assert 'cron: "11 19-23 * * 1-5"' in monitoring
