@@ -118,6 +118,15 @@ jobs:
             git show "${BASELINE_SHA}:data/training/models/${horizon}_champion.json" \
               > "artifacts/baseline/${horizon}_champion.json"
           done
+
+          mkdir -p artifacts/migration
+          PYTHONPATH=src python -m models.migrate_classic_contracts \
+            --dataset data/training/modelable_dataset.json \
+            --registry-dir artifacts/baseline \
+            --output-dir artifacts/migration \
+            --version "classic-contract-${GITHUB_RUN_ID}" \
+            --tasks d1,w1,q1
+
           PYTHONPATH=src python -m models.train_classic_horizons \
             --dataset data/training/modelable_dataset.json \
             --output-dir artifacts/candidate \
@@ -155,6 +164,7 @@ jobs:
             tests/test_classic_champion_gate.py \
             tests/test_train_classic_horizons.py \
             tests/test_train_serve_parity_and_risk_gateway.py \
+            tests/test_p0_contracts.py \
             tests/test_features.py
 
       - name: Publish model audit summary
@@ -184,6 +194,20 @@ jobs:
           print("")
           print(f"Promotion ready: `{report['promotion_ready']}`")
           print("Test used for selection: `false`")
+          print("")
+          migration = json.loads(
+              Path("artifacts/migration/migration_report.json").read_text()
+          )
+          print("## Existing champion contract migration")
+          print("")
+          print(f"Migration ready: `{migration['ready']}`")
+          for item in migration["reports"]:
+              risk = item["risk_metrics"]
+              print(
+                  f"- {item['horizon']}: {item['status']} "
+                  f"(floor={100*risk['risk_floor_coverage']:.1f}%, "
+                  f"ceiling={100*risk['risk_ceiling_coverage']:.1f}%)"
+              )
           PY
 
       - name: Upload compact champions and audit
@@ -192,6 +216,7 @@ jobs:
           name: robust-range-v3-${{ github.run_id }}
           path: |
             artifacts/candidate
+            artifacts/migration
             artifacts/audit
           if-no-files-found: error
           retention-days: 30

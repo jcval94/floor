@@ -20,6 +20,7 @@ from contracts.trading import (
 )
 from floor.schemas import PredictionRecord
 from league.engine import advance_league, build_leaderboard, initialize_league
+from models.migrate_classic_contracts import migrate_one
 from models.temporal_cv import purged_chronological_calibration_split
 from models.train_classic_horizons import run as run_classic_horizons
 from strategies.common import geometry
@@ -289,6 +290,104 @@ def test_new_classic_training_emits_risk_geometry_and_model_contract(
     assert risk["target_marginal_coverage"] is None
     assert risk["calibration_rows"] > 0
     assert "risk_floor_coverage" in artifact["metrics"]
+
+
+
+
+def _legacy_d1_artifact() -> dict:
+    return {
+        "horizon": "d1",
+        "model_name": "regime_median_d1",
+        "version": "legacy-central-v1",
+        "metrics": {},
+        "params": {
+            "schema_version": 2,
+            "floor": {
+                "global": 0.02,
+                "table": {},
+                "vol_cuts": [0.01, 0.03],
+                "bins": 3,
+            },
+            "ceiling": {
+                "global": 0.03,
+                "table": {},
+                "vol_cuts": [0.01, 0.03],
+                "bins": 3,
+            },
+            "timing": {
+                "schema_version": 2,
+                "horizon": "d1",
+                "status": "unavailable_daily_resolution",
+                "classes": ["OPEN", "OPEN_PLUS_2H", "OPEN_PLUS_4H", "OPEN_PLUS_6H", "CLOSE"],
+                "train_rows": 0,
+                "vol_cuts": [],
+                "floor": {"rows": 0, "global": {}, "table": {}},
+                "ceiling": {"rows": 0, "global": {}, "table": {}},
+            },
+            "confidence_calibration": {
+                "method": "validation_empirical_interval_breach",
+                "breach_probability": 0.20,
+                "evaluation_rows": 100,
+            },
+        },
+    }
+
+
+def _migration_rows(*, evaluation_ceiling_delta: float = 0.03) -> list[dict]:
+    rows: list[dict] = []
+    for idx in range(18):
+        day = idx + 1
+        split = "train" if idx < 8 else "validation"
+        floor_delta = 0.018 if idx < 13 else 0.019
+        ceiling_delta = 0.028 if idx < 13 else evaluation_ceiling_delta
+        rows.append(
+            {
+                "timestamp": f"2026-01-{day:02d}T20:00:00+00:00",
+                "target_end_date_d1": f"2026-01-{min(day + 1, 28):02d}",
+                "symbol": "AAA",
+                "split": split,
+                "split_eligible_d1": True,
+                "close": 100.0,
+                "floor_d1": 100.0 * (1.0 - floor_delta),
+                "ceiling_d1": 100.0 * (1.0 + ceiling_delta),
+                "atr_14": 2.0,
+                "trend_context_m3": 0.1,
+            }
+        )
+    return rows
+
+
+def test_legacy_champion_contract_migration_preserves_central_predictor() -> None:
+    artifact = _legacy_d1_artifact()
+    migrated, report = migrate_one(
+        rows=_migration_rows(),
+        artifact=artifact,
+        horizon="d1",
+        migration_version="migration-v1",
+    )
+
+    assert migrated is not None
+    assert report["status"] == "READY"
+    assert report["central_predictor_changed"] is False
+    assert migrated["version"] == artifact["version"]
+    assert migrated["params"]["floor"] == artifact["params"]["floor"]
+    assert migrated["params"]["ceiling"] == artifact["params"]["ceiling"]
+    assert migrated["model_contract"]["contract_id"] == "classic_range_geometry_v1"
+    assert migrated["contract_migration"]["central_predictor_changed"] is False
+
+
+def test_legacy_champion_contract_migration_blocks_weak_oot_coverage() -> None:
+    migrated, report = migrate_one(
+        rows=_migration_rows(evaluation_ceiling_delta=0.20),
+        artifact=_legacy_d1_artifact(),
+        horizon="d1",
+        migration_version="migration-v1",
+    )
+
+    assert migrated is None
+    assert report["status"] == "BLOCKED_COVERAGE"
+    assert report["risk_metrics"]["risk_ceiling_coverage"] < 0.75
+    assert report["central_predictor_changed"] is False
 
 
 def _league_cfg() -> dict:
