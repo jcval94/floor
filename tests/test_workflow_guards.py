@@ -67,7 +67,7 @@ def test_intraday_duplicate_is_suppressed(tmp_path: Path) -> None:
         tolerance_minutes=90,
         event=None,
         data_dir=tmp_path,
-        now=datetime(2026, 3, 12, 10, 15, tzinfo=ET),
+        now=datetime(2026, 3, 12, 9, 45, tzinfo=ET),
     )
 
     assert result["run"] == "false"
@@ -92,6 +92,18 @@ def test_intraday_delayed_runner_still_runs_due_checkpoint(tmp_path: Path) -> No
 
 def test_intraday_never_runs_future_checkpoint(tmp_path: Path) -> None:
     _write_marker(tmp_path, "2026-03-12", "OPEN")
+    for event, checkpoint_at in (
+        ("HEARTBEAT_1000", "2026-03-12T10:00:00-04:00"),
+        ("HEARTBEAT_1030", "2026-03-12T10:30:00-04:00"),
+    ):
+        workflow_guards.mark_run(
+            "intraday_heartbeat",
+            tmp_path,
+            event,
+            now=datetime(2026, 3, 12, 10, 40, tzinfo=ET),
+            session_day="2026-03-12",
+            checkpoint_at=checkpoint_at,
+        )
 
     result = workflow_guards.should_run(
         kind="intraday",
@@ -509,3 +521,20 @@ def test_early_close_never_emits_post_close_heartbeat(tmp_path: Path) -> None:
     assert result["kind"] == "intraday"
     assert result["event"] == "CLOSE"
     assert result["reason"] in {"checkpoint_due", "checkpoint_catchup"}
+
+
+def test_missing_intraday_checkpoint_is_not_reconstructed_long_after_close(
+    tmp_path: Path,
+) -> None:
+    result = workflow_guards.should_run(
+        kind="intraday",
+        tolerance_minutes=180,
+        event=None,
+        data_dir=tmp_path,
+        now=datetime(2026, 3, 12, 17, 5, tzinfo=ET),
+    )
+
+    assert result["run"] == "false"
+    assert result["kind"] == "intraday"
+    assert result["reason"] == "checkpoint_missed"
+    assert result["event"] == "OPEN"
