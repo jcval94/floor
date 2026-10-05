@@ -114,19 +114,11 @@ def test_watchdog_circuit_breaks_known_deterministic_eod_failures_without_self_w
     assert "deterministic_failure_circuit_open" in workflow
     assert '.headSha == $sha' in workflow
     assert 'gh run view "$run_id" --repo "$repo" --log-failed' in workflow
-    assert (
-        "Strategy League frozen contract changed; create a new league_id "
-        "instead of rewriting history"
-    ) in workflow
-    assert "Material shadow/EOD divergence:" in workflow
-    assert "Shadow portfolio base is not T-1 authoritative state:" in workflow
-    assert "Frozen Weekly challenger is missing." in workflow
-    assert "Frozen Weekly challenger is an unresolved LFS pointer:" in workflow
-    assert "Frozen Weekly challenger hash changed; create a new league_id instead of rewriting history" in workflow
-    assert "Frozen Weekly challenger must keep canonical_serving_enabled=false" in workflow
-    assert "Strategy League weekly model contract invalid:" in workflow
-    assert "blocked_deterministic_same_sha" in workflow
+    assert "utils.recovery_failure_policy classify" in workflow
+    assert "dispatch_if_stale eod.yml 2100 eod true" in workflow
+    assert "blocked_deterministic_" in workflow
     assert "failing open to normal recovery" in workflow
+    assert 'workflows: ["strategy_live", "intraday_engine", "monitoring"]' in workflow
 
 
 def test_watchdog_uses_new_york_market_calendar_not_raw_utc_hour() -> None:
