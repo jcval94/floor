@@ -143,6 +143,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/runtime_state.sh restore
 
+      - name: Overlay latest lightweight checkpoint state under writer lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh restore
+
       - name: Revalidate immutable checkpoint context under writer lock
         id: lock_guard
         run: |
@@ -365,6 +370,7 @@ jobs:
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --reason "${{ needs.gate.outputs.reason }}" \
             --lateness-minutes "${{ needs.gate.outputs.lateness_minutes }}" \
+            --decision-path "data/metrics/strategy_decisions/intraday/${{ needs.gate.outputs.session_day }}/${{ needs.gate.outputs.event }}.json" \
             --data-dir data
 
       - name: Build compact immutable per-run audit
