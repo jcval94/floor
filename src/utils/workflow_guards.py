@@ -105,6 +105,7 @@ def _oldest_pending_heartbeat(
         slot += timedelta(minutes=30)
     return None
 
+
 def _required_session(kind: str, checkpoint_at: datetime) -> str:
     if kind == "eod":
         return checkpoint_at.astimezone(ET).date().isoformat()
