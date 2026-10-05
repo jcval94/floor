@@ -60,10 +60,15 @@ jobs:
             publish=true
             reason=manual_main
           elif [ "$GITHUB_EVENT_NAME" = "workflow_run" ] \
-            && [ "${{ github.event.workflow_run.conclusion }}" = "success" ] \
             && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
             upstream_run_id="${{ github.event.workflow_run.id }}"
             upstream_name="${{ github.event.workflow_run.name }}"
+            upstream_conclusion="${{ github.event.workflow_run.conclusion }}"
+            if [ "$upstream_conclusion" != "success" ] && [ "$upstream_name" != "intraday_engine" ]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "reason=${upstream_name}_not_successful" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             artifacts=$(gh api \
               -H "Accept: application/vnd.github+json" \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100")
@@ -87,7 +92,11 @@ jobs:
                 count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
                 ;;
               intraday_engine)
-                prefix="intraday-audit-${upstream_run_id}-"
+                if [ "$upstream_conclusion" = "success" ]; then
+                  prefix="intraday-audit-${upstream_run_id}-"
+                else
+                  prefix="intraday-scheduler-missed-${upstream_run_id}-"
+                fi
                 count=$(jq --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | length' <<<"$artifacts")
                 ;;
               strategy_league_bootstrap)
