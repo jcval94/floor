@@ -24,26 +24,6 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         "shadow_base_not_t1",
         "Shadow portfolio base is not T-1 authoritative state:",
     ),
-    (
-        "weekly_model_missing",
-        "Frozen Weekly challenger is missing.",
-    ),
-    (
-        "weekly_model_lfs_pointer",
-        "Frozen Weekly challenger is an unresolved LFS pointer:",
-    ),
-    (
-        "weekly_model_serving_mode_invalid",
-        "Frozen Weekly challenger must keep canonical_serving_enabled=false",
-    ),
-    (
-        "weekly_model_contract_invalid",
-        "Strategy League weekly model contract invalid:",
-    ),
-    (
-        "weekly_model_serving_contract_invalid",
-        "Strategy League refuses Weekly artifact unless canonical_serving_enabled=false",
-    ),
 )
 
 
