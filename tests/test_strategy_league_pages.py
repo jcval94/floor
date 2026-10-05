@@ -259,6 +259,9 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert 'id="decisionSummary"' in page
     assert 'id="decisionTable"' in page
     assert 'id="decisionCandidates"' in page
+    assert 'id="decisionHeartbeatTimeline"' in page
+    assert "Actividad real del motor" in page
+    assert "Portfolio heartbeat ~30 min" in page
     assert 'src="assets/intraday-decisions.js"' in page
     assert 'id="strategy-league"' in page
     assert 'id="leagueSummary"' in page
@@ -305,6 +308,8 @@ def test_strategy_league_pages_surface_is_competitive_and_automatic() -> None:
     assert "setInterval(renderIntradayDecisions, 60_000)" in intraday_script
     assert "timingLabel" in intraday_script
     assert "operationalLabel" in intraday_script
+    assert "decisionTimelineRows" in intraday_script
+    assert "session_actionable_decisions" in intraday_script
     assert "ACTIONABLE · motor intradía" in intraday_script
     assert "HOLD no significa inactividad" in intraday_script
     assert "CHECKPOINT CATCH-UP" in page
@@ -546,7 +551,7 @@ def test_publish_intraday_decisions_separates_decision_and_scheduler_states(
 
     open_payload = decision("OPEN", 0)
     catchup_payload = decision("OPEN_PLUS_2H", 5)
-    latest_payload = decision("OPEN_PLUS_4H", 7)
+    latest_payload = decision("OPEN_PLUS_4H", 0)
     for event, payload in (
         ("OPEN", open_payload),
         ("OPEN_PLUS_2H", catchup_payload),
@@ -591,6 +596,31 @@ def test_publish_intraday_decisions_separates_decision_and_scheduler_states(
         ),
         encoding="utf-8",
     )
+    (markers / "intraday_heartbeat_2026-10-01_HEARTBEAT_1300.json").write_text(
+        json.dumps(
+            {
+                "kind": "intraday_heartbeat",
+                "day": "2026-10-01",
+                "event": "HEARTBEAT_1300",
+                "checkpoint_at": "2026-10-01T13:00:00-04:00",
+                "completed_at": "2026-10-01T13:07:00-04:00",
+                "guard_reason": "heartbeat_due",
+                "lateness_minutes": "7",
+                "decision_evidence": {
+                    "decision_state": "ACTIONABLE",
+                    "as_of": "2026-10-01T13:00:00-04:00",
+                    "evaluations": 200,
+                    "actionable": 9,
+                    "holds": 191,
+                    "buys": 6,
+                    "sells": 3,
+                    "challenger_targets": 4,
+                    "quote_coverage": 1.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     (markers / "intraday_missing_2026-10-01_OPEN_PLUS_4H.json").write_text(
         json.dumps(
             {
@@ -598,7 +628,7 @@ def test_publish_intraday_decisions_separates_decision_and_scheduler_states(
                 "day": "2026-10-01",
                 "event": "OPEN_PLUS_4H",
                 "checkpoint_at": "2026-10-01T13:30:00-04:00",
-                "reason": "scheduler_not_woken_within_recovery_budget",
+                "reason": "scheduler_missed_after_close",
             }
         ),
         encoding="utf-8",
@@ -621,8 +651,22 @@ def test_publish_intraday_decisions_separates_decision_and_scheduler_states(
     assert timeline["OPEN_PLUS_2H"]["operational_state"] == "CHECKPOINT_CATCH_UP"
     assert timeline["OPEN_PLUS_2H"]["decision_state"] == "ACTIONABLE"
     assert timeline["OPEN_PLUS_4H"]["operational_state"] == "SCHEDULER_MISSED"
-    assert timeline["OPEN_PLUS_4H"]["decision_state"] == "ACTIONABLE"
-    assert payload["operational_state"]["decision_state"] == "ACTIONABLE"
+    assert timeline["OPEN_PLUS_4H"]["decision_state"] == "HOLD"
+
+    activity = {row["event"]: row for row in payload["decision_timeline_30m"]}
+    assert activity["HEARTBEAT_1300"]["operational_state"] == "HEARTBEAT"
+    assert activity["HEARTBEAT_1300"]["decision_state"] == "ACTIONABLE"
+    assert activity["HEARTBEAT_1300"]["actionable"] == 9
+    assert activity["HEARTBEAT_1300"]["holds"] == 191
+
+    # Latest state can truthfully be HOLD while the session still had substantial
+    # actionable activity underneath it.
+    assert payload["latest_activity"]["event"] == "OPEN_PLUS_4H"
+    assert payload["operational_state"]["decision_state"] == "HOLD"
+    assert payload["operational_state"]["session_actionable_decisions"] == 14
+    assert payload["operational_state"]["session_actionable_snapshots"] == 2
+    assert payload["operational_state"]["session_heartbeat_snapshots"] == 1
+    assert payload["operational_state"]["session_snapshots"] == 4
     assert payload["operational_state"]["scheduler_state"] == "MISSED"
     assert payload["operational_state"]["checkpoint_catchups"] == 1
     assert payload["operational_state"]["scheduler_missed_checkpoints"] >= 1
