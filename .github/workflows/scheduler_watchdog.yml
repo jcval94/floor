@@ -9,7 +9,10 @@ on:
     # GitHub-native recovery mesh: any surviving operational workflow can wake
     # the watchdog. This does not eliminate a platform-wide Actions outage, but
     # it removes monitoring as the single internal wake-up dependency.
-    workflows: ["strategy_live", "intraday_engine", "monitoring", "eod"]
+    # Do not wake from EOD itself: a failed EOD used to create a tight
+    # failure -> watchdog -> same EOD loop. Quarter-hour schedule and the
+    # surviving intraday/monitoring mesh remain sufficient for recovery.
+    workflows: ["strategy_live", "intraday_engine", "monitoring"]
     types: [completed]
     branches: [main]
   push:
@@ -44,14 +47,21 @@ jobs:
       - name: Checkout market calendar
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Restore lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh restore
+
       - name: Resolve NYSE recovery windows
         id: market
         run: |
           PYTHONPATH=src python - <<'PY'
           import os
           from datetime import datetime, timedelta
+          from pathlib import Path
 
           from utils.market_session import ET, get_session_info
+          from utils.workflow_guards import should_run
 
           now = datetime.now(ET)
           info = get_session_info(now)
@@ -65,12 +75,21 @@ jobs:
               eod_window = info.market_close + timedelta(minutes=20) <= now <= info.market_close + timedelta(hours=6)
               monitoring_window = info.market_open <= now <= info.market_close + timedelta(hours=1)
 
+          eod_guard = should_run(
+              "eod",
+              360,
+              None,
+              Path("data"),
+              now=now,
+          )
           values = {
               "now_et": now.isoformat(),
               "market_live": str(market_live).lower(),
               "intraday_window": str(intraday_window).lower(),
               "eod_window": str(eod_window).lower(),
               "monitoring_window": str(monitoring_window).lower(),
+              "eod_due": str(eod_guard.get("run") == "true").lower(),
+              "eod_reason": str(eod_guard.get("reason") or "unknown"),
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               for key, value in values.items():
@@ -85,6 +104,8 @@ jobs:
           MARKET_LIVE: ${{ steps.market.outputs.market_live }}
           INTRADAY_WINDOW: ${{ steps.market.outputs.intraday_window }}
           EOD_WINDOW: ${{ steps.market.outputs.eod_window }}
+          EOD_DUE: ${{ steps.market.outputs.eod_due }}
+          EOD_REASON: ${{ steps.market.outputs.eod_reason }}
           MONITORING_WINDOW: ${{ steps.market.outputs.monitoring_window }}
         run: |
           set -euo pipefail
@@ -139,13 +160,10 @@ jobs:
 
           deterministic_failure_circuit_open() {
             local workflow="$1"
-            local signatures="$2"
-            local runs run_id logs attempt pattern
-            local -a deterministic_patterns
+            local runs run_id logs attempt classification deterministic code
 
-            # A frozen-contract mismatch cannot self-heal by retrying the same
-            # commit. Scope the breaker to HEAD so the next corrective commit
-            # immediately restores normal recovery.
+            # Deterministic failures are classified centrally and scoped to the
+            # current HEAD. A corrective commit immediately re-enables recovery.
             if ! runs="$(list_runs_with_retry "$workflow")"; then
               return 2
             fi
@@ -177,13 +195,15 @@ jobs:
               echo "::warning::Unable to classify deterministic failure; recovery remains enabled." >&2
               return 2
             fi
-            IFS='|' read -r -a deterministic_patterns <<<"$signatures"
-            for pattern in "${deterministic_patterns[@]}"; do
-              if [ -n "$pattern" ] && grep -Fq "$pattern" <<<"$logs"; then
-                echo "::warning::$workflow deterministic failure remains open on current SHA=$GITHUB_SHA run=$run_id signature=$pattern; suppressing recovery dispatch until a corrective commit lands."
-                return 0
-              fi
-            done
+
+            classification="$(printf '%s' "$logs" | PYTHONPATH=src python -m utils.recovery_failure_policy classify --workflow "$workflow")"
+            deterministic="$(jq -r '.deterministic' <<<"$classification")"
+            code="$(jq -r '.code // empty' <<<"$classification")"
+            if [ "$deterministic" = "true" ]; then
+              DETERMINISTIC_CODE="$code"
+              echo "::warning::$workflow deterministic failure remains open on current SHA=$GITHUB_SHA run=$run_id code=$code; suppressing recovery dispatch until a corrective commit lands."
+              return 0
+            fi
             return 1
           }
 
@@ -204,8 +224,9 @@ jobs:
             local workflow="$1"
             local max_age_seconds="$2"
             local output_name="$3"
-            local deterministic_signature="${4:-}"
+            local deterministic_policy="${4:-false}"
             local rc circuit_rc
+            DETERMINISTIC_CODE=""
             if has_recent_or_active_run "$workflow" "$max_age_seconds"; then
               echo "$output_name=skipped_recent_or_active" >> "$GITHUB_OUTPUT"
               echo "$workflow: recent/active run exists; no duplicate dispatch."
@@ -219,9 +240,9 @@ jobs:
               return 1
             fi
 
-            if [ -n "$deterministic_signature" ]; then
-              if deterministic_failure_circuit_open "$workflow" "$deterministic_signature"; then
-                echo "$output_name=blocked_deterministic_same_sha" >> "$GITHUB_OUTPUT"
+            if [ "$deterministic_policy" = "true" ]; then
+              if deterministic_failure_circuit_open "$workflow"; then
+                echo "$output_name=blocked_deterministic_${DETERMINISTIC_CODE:-unknown}" >> "$GITHUB_OUTPUT"
                 return 0
               else
                 circuit_rc=$?
@@ -241,8 +262,10 @@ jobs:
             return 1
           }
 
-          # Recovery is calendar-aware in America/New_York. Heartbeat and
-          # strategy_live recovery are never launched after their allowed market
+          # Recovery is calendar-aware in America/New_York. EOD failures do not
+          # self-wake this watchdog; deterministic failures are circuit-broken and
+          # transient failures are retried by the independent quarter-hour mesh.
+          # Heartbeat and strategy_live recovery are never launched after their allowed market
           # window, even when this watchdog is awakened by a late workflow_run.
           failures=0
           if [ "$INTRADAY_WINDOW" = "true" ]; then
@@ -257,8 +280,10 @@ jobs:
             echo "strategy_live=outside_market_window" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ "$EOD_WINDOW" = "true" ]; then
-            dispatch_if_stale eod.yml 2100 eod "Strategy League frozen contract changed; create a new league_id instead of rewriting history|Material shadow/EOD divergence:" || failures=$((failures + 1))
+          if [ "$EOD_WINDOW" = "true" ] && [ "$EOD_DUE" = "true" ]; then
+            dispatch_if_stale eod.yml 2100 eod true || failures=$((failures + 1))
+          elif [ "$EOD_WINDOW" = "true" ]; then
+            echo "eod=${EOD_REASON:-not_due}" >> "$GITHUB_OUTPUT"
           else
             echo "eod=outside_close_window" >> "$GITHUB_OUTPUT"
           fi
@@ -287,10 +312,11 @@ jobs:
             echo "- market live: ${{ steps.market.outputs.market_live }}"
             echo "- intraday window: ${{ steps.market.outputs.intraday_window }}"
             echo "- EOD window: ${{ steps.market.outputs.eod_window }}"
+            echo "- EOD due: ${{ steps.market.outputs.eod_due }} (${{ steps.market.outputs.eod_reason }})"
             echo "- intraday: ${{ steps.dispatch.outputs.intraday }}"
             echo "- strategy live: ${{ steps.dispatch.outputs.strategy_live }}"
             echo "- eod: ${{ steps.dispatch.outputs.eod }}"
             echo "- monitoring: ${{ steps.dispatch.outputs.monitoring }}"
-            echo "- policy: dispatch only inside NYSE-aware windows and only when no recent/active run exists; deterministic EOD failures are circuit-broken for the same commit SHA"
+            echo "- policy: dispatch only inside NYSE-aware windows and only when the checkpoint guard says work is still due; EOD never self-wakes recovery; deterministic failures are centrally classified and circuit-broken for the same commit SHA"
             echo "- unconditional main-push execution: disabled for intraday/eod"
           } >> "$GITHUB_STEP_SUMMARY"

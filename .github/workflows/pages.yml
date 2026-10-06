@@ -2,7 +2,7 @@ name: pages
 
 on:
   workflow_run:
-    workflows: ["retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live"]
+    workflows: ["retrain_execute", "retrain_assessment", "strategy_league_bootstrap", "monitoring", "capital_challenger_tournament", "walk_forward_oos", "strategy_live", "intraday_engine"]
     types: [completed]
     branches: [main]
   push:
@@ -11,6 +11,7 @@ on:
       - '.github/workflows/pages.yml'
       - '.github/workflows/strategy_live.yml'
       - 'scripts/runtime_state.sh'
+      - 'scripts/checkpoint_state.sh'
       - 'scripts/strategy_live_state.sh'
       - 'scripts/monitoring_state.sh'
       - 'scripts/research_state.sh'
@@ -59,10 +60,15 @@ jobs:
             publish=true
             reason=manual_main
           elif [ "$GITHUB_EVENT_NAME" = "workflow_run" ] \
-            && [ "${{ github.event.workflow_run.conclusion }}" = "success" ] \
             && [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
             upstream_run_id="${{ github.event.workflow_run.id }}"
             upstream_name="${{ github.event.workflow_run.name }}"
+            upstream_conclusion="${{ github.event.workflow_run.conclusion }}"
+            if [ "$upstream_conclusion" != "success" ] && [ "$upstream_name" != "intraday_engine" ]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "reason=${upstream_name}_not_successful" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             artifacts=$(gh api \
               -H "Accept: application/vnd.github+json" \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${upstream_run_id}/artifacts?per_page=100")
@@ -84,6 +90,14 @@ jobs:
               strategy_live)
                 expected="strategy-live-${upstream_run_id}"
                 count=$(jq --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")
+                ;;
+              intraday_engine)
+                if [ "$upstream_conclusion" = "success" ]; then
+                  prefix="intraday-audit-${upstream_run_id}-"
+                else
+                  prefix="intraday-scheduler-missed-${upstream_run_id}-"
+                fi
+                count=$(jq --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | length' <<<"$artifacts")
                 ;;
               strategy_league_bootstrap)
                 suffix="-${upstream_run_id}"
@@ -184,10 +198,11 @@ jobs:
           research_payload="$(resolve_payload research-state-v1 floor-research-state.tar.gz .sha256)"
           monitoring_payload="$(resolve_payload monitoring-state-v1 public_metrics.json .sha256)"
           strategy_live_payload="$(resolve_payload strategy-live-v1 strategy-live.json .sha256)"
+          checkpoint_payload="$(resolve_payload checkpoint-state-v1 floor-checkpoint-state.tar.gz .sha256)"
           publication_head="$(git rev-parse HEAD)"
           manifest="$RUNNER_TEMP/pages-state-manifest.json"
 
-          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" "$strategy_live_payload" <<'PY'
+          python - "$manifest" "$publication_head" "$runtime_payload" "$research_payload" "$monitoring_payload" "$strategy_live_payload" "$checkpoint_payload" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
@@ -200,6 +215,7 @@ jobs:
               "research": ("research-state-v1", "floor-research-state.tar.gz", sys.argv[4]),
               "monitoring": ("monitoring-state-v1", "public_metrics.json", sys.argv[5]),
               "strategy_live": ("strategy-live-v1", "strategy-live.json", sys.argv[6]),
+              "checkpoint": ("checkpoint-state-v1", "floor-checkpoint-state.tar.gz", sys.argv[7]),
           }
           sources = {}
           for name, (tag, base_asset, payload) in values.items():
@@ -235,6 +251,7 @@ jobs:
             echo "research_payload=$research_payload"
             echo "monitoring_payload=$monitoring_payload"
             echo "strategy_live_payload=$strategy_live_payload"
+            echo "checkpoint_payload=$checkpoint_payload"
             echo "manifest=$manifest"
           } >> "$GITHUB_OUTPUT"
 
@@ -245,6 +262,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.runtime_payload }}
         run: bash scripts/runtime_state.sh restore
+
+      - name: Overlay latest lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_STATE_PAYLOAD_PIN: ${{ steps.state_snapshot.outputs.checkpoint_payload }}
+        run: bash scripts/checkpoint_state.sh restore
 
       - name: Overlay durable research evidence
         env:
@@ -395,6 +418,13 @@ jobs:
           print('intraday_decision_status=', decisions.get('status'))
           print('intraday_decision_event=', decisions.get('event'))
           print('intraday_actionable=', (decisions.get('summary') or {}).get('actionable_decisions'))
+          operational = decisions.get('operational_state') or {}
+          print('intraday_latest_activity=', decisions.get('latest_activity'))
+          print('intraday_decision_state=', operational.get('decision_state'))
+          print('intraday_checkpoint_state=', operational.get('checkpoint_state'))
+          print('intraday_session_snapshots=', operational.get('session_snapshots'))
+          print('intraday_session_actionable=', operational.get('session_actionable_decisions'))
+          print('intraday_scheduler_state=', operational.get('scheduler_state'))
           print('observation_status=', observation.get('status'))
           print('observation_reconciled=', (observation.get('evidence') or {}).get('reconciled_count_since_genesis'))
           print('blockers=', audit.get('blockers', []))
@@ -470,6 +500,7 @@ jobs:
               'runtime_state_source': 'github_release:runtime-state-v1',
               'monitoring_state_source': 'github_release:monitoring-state-v1',
               'strategy_live_state_source': 'github_release:strategy-live-v1',
+              'checkpoint_state_source': 'github_release:checkpoint-state-v1',
               'files': entries,
           }
           (root / 'publication_manifest.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')

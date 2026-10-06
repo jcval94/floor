@@ -16,6 +16,12 @@ def test_scheduled_workflows_use_lightweight_resilient_polling() -> None:
     assert "--tolerance-minutes 180" in intraday
     assert "--decision-only" in intraday
     assert "intraday_heartbeat" in intraday
+    assert "record_missed_checkpoint" in intraday
+    assert "scheduler_missed_after_close" in intraday
+    assert "intraday-scheduler-missed-" in intraday
+    assert "Upload scheduler-missed evidence" in intraday
+    assert "--decision-path" in intraday
+    assert "Overlay latest lightweight checkpoint state under writer lock" in intraday
     assert "checkpoint_state.sh restore" in intraday
     assert "validate-context" in intraday
     assert "--checkpoint-at" in intraday
@@ -94,6 +100,8 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "monitoring",
         "capital_challenger_tournament",
         "walk_forward_oos",
+        "strategy_live",
+        "intraday_engine",
     ):
         assert upstream in workflow_run_header
 
@@ -104,9 +112,14 @@ def test_pages_publish_only_after_authorized_upstream_evidence() -> None:
         "monitoring-health-",
         "capital-tournament-",
         "walk-forward-oos-",
+        "strategy-live-",
+        "intraday-audit-",
     ):
         assert evidence in pages
 
+    assert "checkpoint-state-v1" in pages
+    assert "CHECKPOINT_STATE_PAYLOAD_PIN" in pages
+    assert "scripts/checkpoint_state.sh restore" in pages
     assert "completed_without_publishable_evidence" in pages
     assert "needs.gate.outputs.publish == 'true'" in pages
     assert "actions: read" in pages
