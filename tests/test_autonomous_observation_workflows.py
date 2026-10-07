@@ -133,3 +133,23 @@ def test_retrain_assessment_invalidates_on_model_code_changes() -> None:
 
     assert "- 'src/models/**'" in workflow
     assert "retrain_assessment_request.json" in workflow
+
+
+def test_pages_waits_for_uploaded_artifact_index_before_deploying() -> None:
+    pages = _text(".github/workflows/pages.yml")
+    upload = pages.index("      - name: Upload static site artifact")
+    wait = pages.index("      - name: Wait for Pages artifact visibility")
+    deploy = pages.index("      - name: Deploy to GitHub Pages")
+
+    assert upload < wait < deploy
+    assert "actions/upload-pages-artifact@v5" in pages
+    assert "actions/deploy-pages@v5" in pages
+    assert "GH_TOKEN: ${{ github.token }}" in pages
+    assert (
+        "actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100"
+        in pages
+    )
+    assert 'select(.name == "github-pages" and .expired == false)' in pages
+    assert '"$count" -eq 1' in pages
+    assert '"$count" -gt 1' in pages
+    assert "Uploaded github-pages artifact not visible after 90 seconds" in pages
