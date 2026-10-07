@@ -537,6 +537,35 @@ jobs:
         with:
           path: site
 
+      # upload-pages-artifact can finalize before the Actions REST artifact
+      # index is ready. deploy-pages consults that index and would see 0.
+      - name: Wait for Pages artifact visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if artifacts="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100")"; then
+              count="$(jq '[.artifacts[] | select(.name == "github-pages" and .expired == false)] | length' <<<"$artifacts")"
+              if [ "$count" -eq 1 ]; then
+                echo "Pages artifact is visible on attempt $attempt."
+                exit 0
+              fi
+              if [ "$count" -gt 1 ]; then
+                echo "::error::Duplicate github-pages artifacts in run ${GITHUB_RUN_ID}."
+                exit 1
+              fi
+            else
+              echo "::warning::Artifact index request failed on attempt $attempt."
+            fi
+            echo "Waiting for uploaded github-pages artifact ($attempt/30)."
+            sleep 3
+          done
+          echo "::error::Uploaded github-pages artifact not visible after 90 seconds."
+          exit 1
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
