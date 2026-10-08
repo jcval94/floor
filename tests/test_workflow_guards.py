@@ -589,3 +589,40 @@ def test_mark_run_embeds_compact_decision_evidence(tmp_path: Path) -> None:
     assert evidence["sells"] == 2
     assert evidence["challenger_targets"] == 4
     assert evidence["quote_coverage"] == pytest.approx(0.98)
+
+
+def test_explicit_eod_recovery_accepts_prior_session_before_next_open(
+    tmp_path: Path,
+) -> None:
+    result = workflow_guards.resolve_eod_recovery_context(
+        "2026-10-07",
+        tmp_path,
+        now=datetime(2026, 10, 8, 1, 5, tzinfo=ET),
+    )
+    assert result["run"] == "true"
+    assert result["reason"] == "explicit_missing_eod_recovery"
+    assert result["required_market_session"] == "2026-10-07"
+    assert result["checkpoint_at"] == "2026-10-07T16:00:00-04:00"
+    _write_marker(tmp_path, "2026-10-07", "CLOSE", kind="eod")
+    duplicate = workflow_guards.resolve_eod_recovery_context(
+        "2026-10-07",
+        tmp_path,
+        now=datetime(2026, 10, 8, 1, 8, tzinfo=ET),
+    )
+    assert duplicate["run"] == "false"
+    assert duplicate["reason"] == "already_ran"
+
+
+def test_eod_recovery_rejects_unsafe_session_or_time(tmp_path: Path) -> None:
+    cases = [
+        ("2026-10-10", datetime(2026, 10, 11, 1, tzinfo=ET)),
+        ("2026-10-07", datetime(2026, 10, 7, 16, 5, tzinfo=ET)),
+        ("2026-10-07", datetime(2026, 10, 8, 9, 35, tzinfo=ET)),
+        ("2026-09-28", datetime(2026, 10, 8, 1, tzinfo=ET)),
+        ("2026-10-08", datetime(2026, 10, 7, 20, tzinfo=ET)),
+    ]
+    for target, current in cases:
+        with pytest.raises(RuntimeError):
+            workflow_guards.resolve_eod_recovery_context(
+                target, tmp_path, now=current
+            )
