@@ -491,6 +491,11 @@ def main() -> None:
     parser.add_argument("--range", default="1d")
     parser.add_argument("--interval", default="5m")
     parser.add_argument(
+        "--checkpoint-at",
+        default="",
+        help="Only for EOD replay: immutable close timestamp of the target session",
+    )
+    parser.add_argument(
         "--authoritative-eod-replay",
         action="store_true",
         help=(
@@ -499,6 +504,15 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    if args.checkpoint_at and not args.authoritative_eod_replay:
+        parser.error("--checkpoint-at is only valid for authoritative EOD replay")
+    replay_now = (
+        _as_dt(args.checkpoint_at) + timedelta(minutes=20)
+        if args.checkpoint_at
+        else None
+    )
+    if args.checkpoint_at and replay_now is None:
+        parser.error("Invalid EOD replay checkpoint timestamp")
     payload = run(
         base_path=Path(args.base),
         previous_path=Path(args.previous_snapshot),
@@ -506,6 +520,7 @@ def main() -> None:
         output_path=Path(args.output),
         range_=args.range,
         interval=args.interval,
+        now=replay_now,
         authoritative_eod_replay=bool(args.authoritative_eod_replay),
     )
     print(json.dumps({
