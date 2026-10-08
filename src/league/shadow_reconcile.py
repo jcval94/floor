@@ -83,6 +83,48 @@ def _price_and_cost_delta(
     return price_bps, cost_delta
 
 
+def _documented_open_quote_variance(
+    shadow_trade: dict[str, Any],
+    official_trade: dict[str, Any],
+    shadow_snapshot: dict[str, Any],
+    *,
+    price_bps: float,
+    cost_delta: float,
+    base_price_tolerance_bps: float,
+    max_source_variance_bps: float = 25.0,
+    cost_tolerance_usd: float = 0.05,
+) -> bool:
+    """Bound a verified Yahoo 5m-vs-daily OPEN quote disagreement.
+
+    Identity, size, costs, execution slippage and the source contract remain
+    independently checked. Never extend the entry execution tolerance itself.
+    """
+    feed = shadow_snapshot.get("quote_source") or {}
+    if (
+        str(shadow_trade.get("shadow_event") or "") != "OPEN_FILL"
+        or str(feed.get("provider") or "") != "Yahoo Finance chart"
+        or str(feed.get("interval") or "") != "5m"
+        or str(shadow_trade.get("reason") or "") not in {
+            "signal_t_to_open_t_plus_1", "rebalance_at_next_open"
+        }
+        or not base_price_tolerance_bps < price_bps <= max_source_variance_bps
+        or cost_delta > cost_tolerance_usd
+    ):
+        return False
+    raw_shadow = float(shadow_trade.get("raw_price", 0.0) or 0.0)
+    raw_official = float(official_trade.get("raw_price", 0.0) or 0.0)
+    fill_shadow = float(shadow_trade.get("fill_price", 0.0) or 0.0)
+    fill_official = float(official_trade.get("fill_price", 0.0) or 0.0)
+    if min(raw_shadow, raw_official, fill_shadow, fill_official) <= 0:
+        return False
+    # Both simulated trades must apply the same execution contract to their
+    # independently observed opening quotes (rounding tolerance 0.1 bps).
+    return (
+        abs(fill_shadow / raw_shadow - fill_official / raw_official) * 10000 < 0.1
+        and abs(raw_shadow / raw_official - 1.0) * 10000 <= max_source_variance_bps
+    )
+
+
 def reconcile(
     *,
     shadow_path: Path,
@@ -246,6 +288,36 @@ def reconcile(
                             "The same exit exists in both paths but 5m and daily OHLC "
                             "produce different executable-path prices. Official EOD owns "
                             "the accounting value."
+                        ),
+                    }
+                )
+            elif _documented_open_quote_variance(
+                row,
+                peer,
+                shadow,
+                price_bps=price_bps,
+                cost_delta=cost_delta,
+                base_price_tolerance_bps=price_tolerance_bps,
+                cost_tolerance_usd=cost_tolerance_usd,
+            ):
+                explained_differences.append(
+                    {
+                        "kind": "verified_5m_vs_daily_open_source_variance",
+                        "member": row.get("member"),
+                        "symbol": row.get("symbol"),
+                        "side": row.get("side"),
+                        "qty": row.get("qty"),
+                        "shadow_raw_price": row.get("raw_price"),
+                        "official_raw_price": peer.get("raw_price"),
+                        "shadow_fill_price": row.get("fill_price"),
+                        "official_fill_price": peer.get("fill_price"),
+                        "price_bps": price_bps,
+                        "cost_delta_usd": cost_delta,
+                        "max_source_variance_bps": 25.0,
+                        "explanation": (
+                            "Matched OPEN trade and execution contract from independently "
+                            "observed Yahoo 5m vs daily bar quotes. The official daily-open "
+                            "fill owns accounting; the intraday quote variance remains audited."
                         ),
                     }
                 )
