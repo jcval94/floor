@@ -153,3 +153,21 @@ def test_pages_waits_for_uploaded_artifact_index_before_deploying() -> None:
     assert '"$count" -eq 1' in pages
     assert '"$count" -gt 1' in pages
     assert "Uploaded github-pages artifact not visible after 90 seconds" in pages
+
+
+def test_eod_recovery_is_explicit_and_keeps_freshness_fail_closed() -> None:
+    eod = _text(".github/workflows/eod.yml")
+    shadow = _text("src/league/shadow_portfolio.py")
+    assert "eod_recovery_request.json" in eod
+    assert "recovery-eod-context" in eod
+    assert "Prevent out-of-order recovery of official league history" in eod
+    assert "Refusing nonsequential recovery" in eod
+    assert "last_session" in eod
+    assert "--range 1mo" in eod
+    assert "max-stale-sessions 0" in eod
+    assert "--required-session" in eod
+    assert "--checkpoint-at" in eod
+    assert "authoritative-eod-replay" in eod
+    assert "args.checkpoint_at and not args.authoritative_eod_replay" in shadow
+    assert "replay_now" in shadow
+    assert "timedelta(minutes=20)" in shadow
