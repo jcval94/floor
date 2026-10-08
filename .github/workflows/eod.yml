@@ -5,7 +5,16 @@ on:
     # Two close backstops/hour are sufficient with the guarded six-hour catch-up
     # window and reduce dependence on a high-frequency GitHub scheduler.
     - cron: "7,37 20-23 * * 1-5"
+  push:
+    branches: [main]
+    paths:
+      - 'eod_recovery_request.json'
   workflow_dispatch:
+    inputs:
+      recovery_session:
+        description: 'Explicit YYYY-MM-DD missing close; only before next market open'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -38,7 +47,21 @@ jobs:
         run: bash scripts/checkpoint_state.sh restore
       - name: Detect due close
         id: guard
-        run: PYTHONPATH=src python -m utils.workflow_guards check --kind eod --tolerance-minutes 360 --data-dir data
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RECOVERY_SESSION: ${{ inputs.recovery_session }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            PYTHONPATH=src python -m utils.workflow_guards recovery-eod-context \
+              --request eod_recovery_request.json --data-dir data
+          elif [ -n "$RECOVERY_SESSION" ]; then
+            PYTHONPATH=src python -m utils.workflow_guards recovery-eod-context \
+              --target-session "$RECOVERY_SESSION" --data-dir data
+          else
+            PYTHONPATH=src python -m utils.workflow_guards check \
+              --kind eod --tolerance-minutes 360 --data-dir data
+          fi
 
   eod_critical:
     needs: gate
@@ -73,6 +96,32 @@ jobs:
             --session-day "${{ needs.gate.outputs.session_day }}" \
             --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
             --data-dir data
+
+      - name: Prevent out-of-order recovery of official league history
+        if: steps.lock_guard.outputs.run == 'true' && needs.gate.outputs.reason == 'explicit_missing_eod_recovery'
+        env:
+          TARGET_SESSION: ${{ needs.gate.outputs.required_market_session }}
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import json
+          import os
+          from datetime import date
+          from pathlib import Path
+          from floor.calendar import previous_market_session
+
+          target = date.fromisoformat(os.environ["TARGET_SESSION"])
+          expected = previous_market_session(target).isoformat()
+          league_id = json.loads(Path("config/strategy_league.json").read_text())["league_id"]
+          state_path = Path("data/metrics/strategy_league/runs") / league_id / "state.json"
+          state = json.loads(state_path.read_text()) if state_path.exists() else {}
+          previous = str(state.get("last_session") or "")
+          if previous != expected:
+              raise SystemExit(
+                  f"Refusing nonsequential recovery: previous={previous or 'missing'} "
+                  f"expected={expected} target={target}"
+              )
+          print(f"Sequential EOD recovery accepted: {previous} -> {target}")
+          PY
 
       - name: Export authoritative pre-EOD shadow base
         if: steps.lock_guard.outputs.run == 'true'
@@ -121,11 +170,28 @@ jobs:
         run: |
           set -euo pipefail
           symbols=$(PYTHONPATH=src python -c "from pathlib import Path; from floor.universe import parse_universe_yaml; print(','.join(sorted(set(parse_universe_yaml(Path('config/universe.yaml')) + ['SPY']))))")
-          PYTHONPATH=src python -m utils.market_data_guard \
+          # Yahoo can temporarily omit the just-finished session from a
+          # short-range response around its nightly rollover. Re-fetch a wider
+          # interval once; NEVER accept a stale or incomplete latest session.
+          if ! PYTHONPATH=src python -m utils.market_data_guard \
             --db data/market/market_data.sqlite \
             --symbols "$symbols" \
             --max-stale-sessions 0 \
-            --required-session "${{ needs.gate.outputs.required_market_session }}"
+            --required-session "${{ needs.gate.outputs.required_market_session }}"; then
+            echo "::warning::Short-range Yahoo feed omitted the required session; retrying 1mo."
+            PYTHONPATH=src python -m storage.yahoo_ingest \
+              --db data/market/market_data.sqlite \
+              --universe config/universe.yaml \
+              --benchmark SPY \
+              --range 1mo \
+              --interval 1d \
+              --sleep-seconds 0.15
+            PYTHONPATH=src python -m utils.market_data_guard \
+              --db data/market/market_data.sqlite \
+              --symbols "$symbols" \
+              --max-stale-sessions 0 \
+              --required-session "${{ needs.gate.outputs.required_market_session }}"
+          fi
 
       - name: Validate frozen Weekly challenger
         if: steps.lock_guard.outputs.run == 'true'
@@ -221,8 +287,9 @@ jobs:
               --previous-snapshot data/metrics/strategy_league/live_snapshot.json \
               --league-config config/strategy_league.json \
               --output data/metrics/strategy_league/live_snapshot.json \
-              --range 1d \
+              --range 5d \
               --interval 5m \
+              --checkpoint-at "${{ needs.gate.outputs.checkpoint_at }}" \
               --authoritative-eod-replay
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
