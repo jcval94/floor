@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -12,6 +12,7 @@ from utils.market_session import (
     detect_event,
     get_session_info,
     required_market_session_at,
+    session_info_for_day,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -285,6 +286,58 @@ def _eod_decision(
 
     out.update({"run": "true", "reason": "close_due"})
     return out
+
+
+
+def resolve_eod_recovery_context(
+    target_session: str,
+    data_dir: Path,
+    *,
+    now: datetime | None = None,
+) -> dict[str, str]:
+    """Explicit, single-session, pre-next-open recovery; never a cron fallback."""
+    current = _as_et(now)
+    try:
+        target = date.fromisoformat(target_session)
+    except ValueError as exc:
+        raise RuntimeError("Recovery target must be a valid YYYY-MM-DD date") from exc
+    info = session_info_for_day(target)
+    if not info.is_open_day or info.market_close is None:
+        raise RuntimeError(f"Recovery target is not a market session: {target_session}")
+    if current < info.market_close + timedelta(minutes=20):
+        raise RuntimeError("Cannot recover an EOD before its daily bars are due")
+    today = get_session_info(current)
+    if current.date() > target and today.is_open_day and today.market_open is not None:
+        if current >= today.market_open:
+            raise RuntimeError(
+                "Historical EOD recovery after the next market open is unsafe; "
+                "requires a separately audited full-session backfill"
+            )
+    if (current.date() - target).days > 4:
+        raise RuntimeError("Recovery target exceeds four-calendar-day safety window")
+    if current.date() < target:
+        raise RuntimeError("Recovery target cannot be in the future")
+    if _marker_exists(data_dir, "eod", target_session, "CLOSE") or _marker_path(
+        data_dir, f"eod_{target_session}"
+    ).exists():
+        reason = "already_ran"
+        run = "false"
+    else:
+        reason = "explicit_missing_eod_recovery"
+        run = "true"
+    return {
+        "run": run,
+        "kind": "eod",
+        "reason": reason,
+        "event": "CLOSE",
+        "session_day": target_session,
+        "checkpoint_at": info.market_close.isoformat(),
+        "lateness_minutes": str(
+            int((current - info.market_close).total_seconds() // 60)
+        ),
+        "required_market_session": target_session,
+    }
+
 
 
 def should_run(
@@ -584,6 +637,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
 
+    p_recovery = sub.add_parser("recovery-eod-context")
+    p_recovery.add_argument("--target-session", default="")
+    p_recovery.add_argument("--request", default="")
+    p_recovery.add_argument("--data-dir", default="data")
+
     p_check = sub.add_parser("check")
     p_check.add_argument("--kind", required=True)
     p_check.add_argument("--event", default=None)
@@ -625,7 +683,21 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.cmd == "check":
+    if args.cmd == "recovery-eod-context":
+        if bool(args.target_session) == bool(args.request):
+            raise RuntimeError("Specify exactly one recovery target or request file")
+        target = args.target_session
+        if args.request:
+            request = json.loads(Path(args.request).read_text(encoding="utf-8"))
+            if (
+                not isinstance(request, dict)
+                or request.get("mode") != "recover_missing_eod"
+                or request.get("authorization") != "CONFIRM_RECOVER_ONLY"
+            ):
+                raise RuntimeError("Audited EOD recovery request lacks explicit approval")
+            target = str(request.get("target_session") or "")
+        _write_outputs(resolve_eod_recovery_context(target, Path(args.data_dir)))
+    elif args.cmd == "check":
         result = should_run(args.kind, args.tolerance_minutes, args.event, Path(args.data_dir))
         _write_outputs(result)
     elif args.cmd == "resolve-context":
