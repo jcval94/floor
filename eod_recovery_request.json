@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "mode": "recover_missing_eod",
+  "authorization": "CONFIRM_RECOVER_ONLY",
+  "target_session": "2026-10-07",
+  "reason": "Recover failed 2026-10-07 CLOSE after WFC Yahoo 5m/daily price-source audit; restore a fresh 200-row batch only upon successful reconciliation."
+}
