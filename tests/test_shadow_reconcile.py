@@ -211,3 +211,99 @@ def test_duplicate_trade_keys_are_matched_as_a_multiset(tmp_path: Path) -> None:
 
     assert payload["status"] == "RECONCILED"
     assert payload["matched_trade_count"] == 2
+
+
+def test_recorded_wfc_yahoo_open_variance_is_explained_but_audited(
+    tmp_path: Path,
+) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "output.json"
+    shadow_fill = {
+        "member": "capital_allocation_challenger",
+        "symbol": "WFC",
+        "side": "BUY",
+        "qty": 5,
+        "reason": "signal_t_to_open_t_plus_1",
+        "raw_price": 80.635002,
+        "fill_price": 80.659193,
+        "costs": 1.169522,
+        "shadow_event": "OPEN_FILL",
+    }
+    official_fill = {
+        **shadow_fill,
+        "raw_price": 80.474998,
+        "fill_price": 80.499141,
+        "costs": 1.167201,
+    }
+    official_fill.pop("shadow_event")
+    _write(
+        shadow,
+        {
+            "market_session": "2026-10-07",
+            "quote_source": {"provider": "Yahoo Finance chart", "interval": "5m"},
+            "shadow_open_fills": [shadow_fill],
+            "shadow_exits": [],
+        },
+    )
+    _write(history, {"session": "2026-10-07", "trades": [official_fill]})
+    result = reconcile(shadow_path=shadow, history_path=history, output_path=output)
+    assert result["status"] == "RECONCILED"
+    assert result["matched_trade_count"] == 1
+    assert result["explained_difference_counts"] == {
+        "verified_5m_vs_daily_open_source_variance": 1
+    }
+    assert result["explained_differences"][0]["price_bps"] > 19
+    assert result["divergences"] == []
+
+
+@pytest.mark.parametrize(
+    ("mutation", "value"),
+    [
+        ("source", "unverified"),
+        ("interval", "15m"),
+        ("shadow_event", "INTRADAY_EXIT"),
+        ("shadow_fill", 81.5),
+        ("qty", 6),
+    ],
+)
+def test_unverified_open_price_difference_remains_fail_closed(
+    tmp_path: Path, mutation: str, value: object
+) -> None:
+    shadow = tmp_path / "shadow.json"
+    history = tmp_path / "history.jsonl"
+    output = tmp_path / "output.json"
+    original = {
+        "member": "capital_allocation_challenger",
+        "symbol": "WFC",
+        "side": "BUY",
+        "qty": 5,
+        "reason": "signal_t_to_open_t_plus_1",
+        "raw_price": 80.635002,
+        "fill_price": 80.659193,
+        "costs": 1.169522,
+        "shadow_event": "OPEN_FILL",
+    }
+    official = {**original, "raw_price": 80.474998, "fill_price": 80.499141, "costs": 1.167201}
+    official.pop("shadow_event")
+    feed = {"provider": "Yahoo Finance chart", "interval": "5m"}
+    if mutation == "source":
+        feed["provider"] = str(value)
+    elif mutation == "interval":
+        feed["interval"] = str(value)
+    elif mutation == "shadow_event":
+        original["shadow_event"] = str(value)
+    elif mutation == "shadow_fill":
+        original["fill_price"] = float(value)
+    elif mutation == "qty":
+        original["qty"] = int(value)
+    _write(shadow, {
+        "market_session": "2026-10-07",
+        "quote_source": feed,
+        "shadow_open_fills": [original],
+        "shadow_exits": [],
+    })
+    _write(history, {"session": "2026-10-07", "trades": [official]})
+    with pytest.raises(RuntimeError, match="Material shadow/EOD divergence"):
+        reconcile(shadow_path=shadow, history_path=history, output_path=output)
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "DIVERGED"
