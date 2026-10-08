@@ -26,7 +26,13 @@ def test_market_crons_avoid_top_of_hour_without_main_push_fanout() -> None:
     assert 'cron: "11 14-18 * * 1-5"' in monitoring
     assert 'cron: "11 19-23 * * 1-5"' in monitoring
     assert "push:\n    branches: [main]" not in intraday
-    assert "push:\n    branches: [main]" not in eod
+    # EOD has no unconditional main-push fanout. Its sole push hook is an
+    # explicitly approved and date-scoped missing-session recovery request.
+    assert (
+        "push:\n    branches: [main]\n    paths:\n      - 'eod_recovery_request.json'"
+        in eod
+    )
+    assert "push:\n    branches: [main]\n  workflow_dispatch:" not in eod
 
 
 def test_scheduler_watchdog_only_dispatches_missing_guarded_workflows() -> None:
