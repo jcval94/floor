@@ -506,13 +506,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.checkpoint_at and not args.authoritative_eod_replay:
         parser.error("--checkpoint-at is only valid for authoritative EOD replay")
-    replay_now = (
-        _as_dt(args.checkpoint_at) + timedelta(minutes=20)
-        if args.checkpoint_at
-        else None
-    )
-    if args.checkpoint_at and replay_now is None:
+    replay_at = _as_dt(args.checkpoint_at) if args.checkpoint_at else None
+    if args.checkpoint_at and replay_at is None:
         parser.error("Invalid EOD replay checkpoint timestamp")
+    replay_now = replay_at + timedelta(minutes=20) if replay_at is not None else None
     payload = run(
         base_path=Path(args.base),
         previous_path=Path(args.previous_snapshot),
