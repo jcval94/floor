@@ -2,12 +2,13 @@
   "schema_version": 1,
   "resources": {
     "runtime_state_release": {
-      "description": "Authoritative operational runtime snapshot in runtime-state-v1.",
+      "description": "Authoritative operational runtime snapshot in runtime-state-v1. Audited two-session recovery is an explicitly authorized, one-shot exception and must hold the runtime writer lock.",
       "markers": [
         "runtime_state.sh publish"
       ],
       "allowed_workflows": [
         "eod.yml",
+        "historical_eod_backfill.yml",
         "ingest.yml",
         "intraday_engine.yml",
         "manual_compact_git_history.yml",
@@ -17,12 +18,13 @@
       ]
     },
     "checkpoint_state_release": {
-      "description": "Lightweight checkpoint frontier in checkpoint-state-v1.",
+      "description": "Lightweight checkpoint frontier in checkpoint-state-v1. Audited two-session recovery publishes only after both sessions reconcile.",
       "markers": [
         "checkpoint_state.sh publish"
       ],
       "allowed_workflows": [
         "eod.yml",
+        "historical_eod_backfill.yml",
         "intraday_engine.yml"
       ]
     },
@@ -65,12 +67,13 @@
       ]
     },
     "workflow_dispatch": {
-      "description": "Workflows allowed to dispatch other workflows. EOD may dispatch Pages only after durable runtime/checkpoint publication; scheduler_watchdog owns operational recovery dispatches.",
+      "description": "Workflows allowed to dispatch other workflows. EOD may dispatch Pages only after durable runtime/checkpoint publication; scheduler_watchdog owns operational recovery dispatches. Audited backfill dispatches Pages only after full sequential recovery.",
       "markers": [
         "gh workflow run"
       ],
       "allowed_workflows": [
         "eod.yml",
+        "historical_eod_backfill.yml",
         "pages_source_guard.yml",
         "runtime_checkpoint_repair.yml",
         "scheduler_watchdog.yml"
