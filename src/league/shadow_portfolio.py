@@ -171,16 +171,55 @@ def _compatible_previous(base: dict[str, Any], previous: dict[str, Any], session
     )
 
 
-def _open_fill_bars(session_bars: dict[str, list[dict[str, Any]]]) -> dict[str, dict[str, float]]:
-    return {
-        symbol: {
-            "open": float(rows[0].get("open", 0.0) or 0.0),
-            "high": float(rows[0].get("high", 0.0) or 0.0),
-            "low": float(rows[0].get("low", 0.0) or 0.0),
-            "close": float(rows[0].get("close", 0.0) or 0.0),
+def _opening_candle_evidence(
+    session_bars: dict[str, list[dict[str, Any]]],
+    market_session: str,
+) -> dict[str, dict[str, Any]]:
+    """Only a complete regular-session 09:30 ET 5m candle proves an OPEN quote.
+
+    A delayed first bar must never silently become an opening fill. Preserve the
+    observed OHLC envelope for later Yahoo daily-vs-5m reconciliation.
+    """
+    market_open = datetime.fromisoformat(
+        f"{market_session}T09:30:00"
+    ).replace(tzinfo=ET).astimezone(timezone.utc)
+    evidence: dict[str, dict[str, Any]] = {}
+    for symbol, rows in session_bars.items():
+        if not rows:
+            continue
+        first = rows[0]
+        candle_at = _as_dt(first.get("ts"))
+        if candle_at != market_open:
+            continue
+        try:
+            o = float(first["open"])
+            h = float(first["high"])
+            low = float(first["low"])
+            c = float(first["close"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if not (0 < low <= min(o, c) <= max(o, c) <= h):
+            continue
+        evidence[symbol] = {
+            "market_session": market_session,
+            "timestamp": candle_at.isoformat(),
+            "interval": "5m",
+            "open": o,
+            "high": h,
+            "low": low,
+            "close": c,
         }
-        for symbol, rows in session_bars.items()
-        if rows and float(rows[0].get("open", 0.0) or 0.0) > 0
+    return evidence
+
+
+def _open_fill_bars(
+    session_bars: dict[str, list[dict[str, Any]]],
+    market_session: str,
+) -> dict[str, dict[str, float]]:
+    evidence = _opening_candle_evidence(session_bars, market_session)
+    return {
+        symbol: {field: float(bar[field]) for field in ("open", "high", "low", "close")}
+        for symbol, bar in evidence.items()
     }
 
 
@@ -192,7 +231,7 @@ def _apply_open_fills(
 ) -> None:
     if shadow.get("open_fills_applied"):
         return
-    open_bars = _open_fill_bars(session_bars)
+    open_bars = _open_fill_bars(session_bars, str(shadow["market_session"]))
     target_symbols = {
         str(symbol).upper()
         for member in (shadow.get("shadow_members") or {}).values()
@@ -396,6 +435,7 @@ def build_shadow_snapshot(
     session = now_et.date().isoformat()
     shadow = copy.deepcopy(previous) if _compatible_previous(base, previous, session) else _fresh_shadow(base, session)
     execution_cfg = dict(league_cfg.get("execution") or {})
+    shadow["open_quote_evidence"] = _opening_candle_evidence(session_bars, session)
     _apply_open_fills(shadow, base, execution_cfg, session_bars)
     if shadow.get("open_fills_applied"):
         _apply_intraday_exits(shadow, execution_cfg, session_bars)
