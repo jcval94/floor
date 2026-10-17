@@ -626,3 +626,26 @@ def test_eod_recovery_rejects_unsafe_session_or_time(tmp_path: Path) -> None:
             workflow_guards.resolve_eod_recovery_context(
                 target, tmp_path, now=current
             )
+
+
+def test_eod_recovery_rejects_thursday_even_during_weekend(tmp_path: Path) -> None:
+    # The old guard accidentally allowed a Thursday replay on Saturday because
+    # Saturday is not an open day. Friday already traded: never rewrite history.
+    with pytest.raises(RuntimeError, match="after the next market open"):
+        workflow_guards.resolve_eod_recovery_context(
+            "2026-10-15", tmp_path,
+            now=datetime(2026, 10, 17, 10, 13, tzinfo=ET),
+        )
+
+
+def test_friday_recovery_is_safe_until_monday_market_open(tmp_path: Path) -> None:
+    accepted = workflow_guards.resolve_eod_recovery_context(
+        "2026-10-16", tmp_path,
+        now=datetime(2026, 10, 17, 12, 0, tzinfo=ET),
+    )
+    assert accepted["run"] == "true"
+    with pytest.raises(RuntimeError, match="after the next market open"):
+        workflow_guards.resolve_eod_recovery_context(
+            "2026-10-16", tmp_path,
+            now=datetime(2026, 10, 19, 9, 31, tzinfo=ET),
+        )
