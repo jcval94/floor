@@ -55,7 +55,8 @@ def test_historical_market_snapshot_does_not_read_future_daily_bars(
     assert snap["session"] == "2026-10-15"
     assert snap["status"] == "INCOMPLETE_FORECAST_INPUT"
     assert kwargs == [{"as_of_through_session": "2026-10-15"}]
-    assert snap["bars"] == {}
+    assert set(snap["bars"]) == {"SPY"}
+    assert snap["bars"]["SPY"]["timestamp"].startswith("2026-10-15")
     normal = market_features.build_league_market_snapshot(
         tmp_path / "market.db", tmp_path / "predictions.db", ["AAA"],
     )
