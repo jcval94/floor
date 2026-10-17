@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import sys
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from scripts.audited_eod_backfill import validate_request
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from audited_eod_backfill import validate_request  # noqa: E402
 
 
 ET = ZoneInfo("America/New_York")
