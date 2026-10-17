@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +125,80 @@ def _documented_open_quote_variance(
         abs(fill_shadow / raw_shadow - fill_official / raw_official) * 10000 < 0.1
         and abs(raw_shadow / raw_official - 1.0) * 10000 <= max_source_variance_bps
     )
+
+
+
+def _verified_open_candle_envelope_variance(
+    shadow_trade: dict[str, Any],
+    official_trade: dict[str, Any],
+    shadow_snapshot: dict[str, Any],
+    *,
+    price_bps: float,
+    cost_delta: float,
+    base_price_tolerance_bps: float,
+    cost_tolerance_usd: float,
+) -> dict[str, Any] | None:
+    """Prove a >25bps discrepancy is a Yahoo 09:30 5m-vs-daily price-source difference.
+
+    Both simulated executions must share a contract, the daily OPEN must lie
+    inside the *observed* opening five-minute candle, and the discrepancy must
+    remain under an independent 100bps risk ceiling. Never infer a candle from
+    a missing or delayed quote; the official EOD price owns accounting.
+    """
+    if not 25.0 < price_bps <= 100.0:
+        return None
+    if not _documented_open_quote_variance(
+        shadow_trade,
+        official_trade,
+        shadow_snapshot,
+        price_bps=price_bps,
+        cost_delta=cost_delta,
+        base_price_tolerance_bps=base_price_tolerance_bps,
+        max_source_variance_bps=100.0,
+        cost_tolerance_usd=cost_tolerance_usd,
+    ):
+        return None
+    bars = shadow_snapshot.get("open_quote_evidence")
+    evidence = bars.get(str(shadow_trade.get("symbol") or "")) if isinstance(bars, dict) else None
+    if not isinstance(evidence, dict):
+        return None
+    market_session = str(shadow_snapshot.get("market_session") or "")
+    if not market_session or evidence.get("market_session") != market_session:
+        return None
+    if evidence.get("interval") != "5m":
+        return None
+    try:
+        at = datetime.fromisoformat(str(evidence["timestamp"]).replace("Z", "+00:00"))
+        if at.tzinfo is None:
+            return None
+        local = at.astimezone(ZoneInfo("America/New_York"))
+        if local.date().isoformat() != market_session or (local.hour, local.minute) != (9, 30):
+            return None
+        candle_open = float(evidence["open"])
+        high = float(evidence["high"])
+        low = float(evidence["low"])
+        candle_close = float(evidence["close"])
+        shadow_raw = float(shadow_trade["raw_price"])
+        official_raw = float(official_trade["raw_price"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    if not (0 < low <= min(candle_open, candle_close) <= max(candle_open, candle_close) <= high):
+        return None
+    # Rounding only (0.1bp), never permit an unproven price outside the candle.
+    rounding = candle_open * 0.00001
+    if abs(shadow_raw - candle_open) > rounding:
+        return None
+    if not low - rounding <= official_raw <= high + rounding:
+        return None
+    return {
+        "market_session": market_session,
+        "first_candle_at": evidence["timestamp"],
+        "candle_open": candle_open,
+        "candle_high": high,
+        "candle_low": low,
+        "candle_close": candle_close,
+        "independent_risk_ceiling_bps": 100.0,
+    }
 
 
 def reconcile(
@@ -318,6 +394,37 @@ def reconcile(
                             "Matched OPEN trade and execution contract from independently "
                             "observed Yahoo 5m vs daily bar quotes. The official daily-open "
                             "fill owns accounting; the intraday quote variance remains audited."
+                        ),
+                    }
+                )
+            elif (opening_proof := _verified_open_candle_envelope_variance(
+                row,
+                peer,
+                shadow,
+                price_bps=price_bps,
+                cost_delta=cost_delta,
+                base_price_tolerance_bps=price_tolerance_bps,
+                cost_tolerance_usd=cost_tolerance_usd,
+            )) is not None:
+                explained_differences.append(
+                    {
+                        "kind": "verified_5m_open_candle_daily_open_envelope",
+                        "member": row.get("member"),
+                        "symbol": row.get("symbol"),
+                        "side": row.get("side"),
+                        "qty": row.get("qty"),
+                        "shadow_raw_price": row.get("raw_price"),
+                        "official_raw_price": peer.get("raw_price"),
+                        "shadow_fill_price": row.get("fill_price"),
+                        "official_fill_price": peer.get("fill_price"),
+                        "price_bps": price_bps,
+                        "cost_delta_usd": cost_delta,
+                        "opening_bar_provenance": opening_proof,
+                        "explanation": (
+                            "Same OPEN execution identity and cost contract; the daily "
+                            "OPEN is contained in the observed 09:30 ET five-minute OHLC "
+                            "envelope. Official daily data owns accounting; the distinct "
+                            "intraday opening quote is retained for audit."
                         ),
                     }
                 )

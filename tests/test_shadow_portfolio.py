@@ -250,3 +250,43 @@ def test_eod_replay_can_use_hash_bound_authoritative_state_older_than_t1(
 
     assert payload["source_base_state_hash"] == base["official_state_hash"]
     assert payload["open_fills_applied"] is True
+
+
+def test_open_quote_evidence_captures_0930_ohlc_envelope() -> None:
+    now = datetime(2026, 10, 2, 10, 5, tzinfo=ET)
+    bars = {"AAA": [_bar(
+        "2026-10-02T13:30:00+00:00", 100., 103., 99., 101.
+    )]}
+    result = build_shadow_snapshot(_base(), {}, _cfg(), now=now, session_bars=bars)
+    proof = result["open_quote_evidence"]["AAA"]
+    assert proof["market_session"] == "2026-10-02"
+    assert proof["timestamp"] == "2026-10-02T13:30:00+00:00"
+    assert (proof["open"], proof["high"], proof["low"], proof["close"]) == (
+        100., 103., 99., 101.
+    )
+
+
+def test_delayed_first_candle_never_executes_fictitious_open() -> None:
+    result = build_shadow_snapshot(
+        _base(), {}, _cfg(),
+        now=datetime(2026, 10, 2, 10, 5, tzinfo=ET),
+        session_bars={"AAA": [_bar(
+            "2026-10-02T13:35:00+00:00", 100., 101., 99., 100.5
+        )]},
+    )
+    assert result["open_fills_applied"] is False
+    assert result["shadow_open_fills"] == []
+    assert result["open_fill_status"] == "MISSING_OPEN_DATA"
+    assert result["open_quote_evidence"] == {}
+
+
+def test_open_candle_proof_requires_valid_ohlc() -> None:
+    result = build_shadow_snapshot(
+        _base(), {}, _cfg(),
+        now=datetime(2026, 10, 2, 10, 5, tzinfo=ET),
+        session_bars={"AAA": [_bar(
+            "2026-10-02T13:30:00+00:00", 100., 99., 98., 100.5
+        )]},
+    )
+    assert result["open_fills_applied"] is False
+    assert result["open_quote_evidence"] == {}
