@@ -434,3 +434,106 @@ def test_large_open_discrepancies_without_full_provenance_fail_closed(
     with pytest.raises(RuntimeError, match="Material shadow/EOD divergence"):
         reconcile(shadow_path=sh, history_path=h, output_path=out)
     assert json.loads(out.read_text())["status"] == "DIVERGED"
+
+
+def test_one_share_daily_vs_5m_rebalance_is_proven_by_two_execution_replays(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from league import shadow_reconcile
+    from league.engine import _execute_target
+    import copy
+
+    session = "2026-10-16"
+    member = {
+        "id": "weekly_opportunity_ridge",
+        "cash": 200.,
+        "positions": {"AMAT": {"qty": 3, "last_price": 420.26}},
+        "pending_targets": {"AMAT": {"weight": 0.8632}},
+    }
+    cfg = {"execution": {
+        "commission_bps": 26, "slippage_bps": 3, "sell_fee_bps": 3,
+        "min_rebalance_weight_delta": 0.02,
+        "min_rebalance_notional_usd": 100.,
+    }}
+    five_bars = {"AMAT": {"open": 421.16}}
+    official_bars = {"AMAT": {"open": 420.26}}
+    def simulate(bars):
+        rows = []
+        _execute_target(
+            copy.deepcopy(member), member["pending_targets"],
+            bars, cfg["execution"], rows, session=session, session_number=10,
+        )
+        return rows
+    shadow_fill = {**simulate(five_bars)[0], "shadow_event": "OPEN_FILL"}
+    assert simulate(official_bars) == []
+
+    base = {
+        "official_state_hash": "original-2026-10-15",
+        "league_id": "test-league", "last_eod_session": "2026-10-15",
+        "sessions": 9, "members": {"weekly_opportunity_ridge": member},
+    }
+    sh = tmp_path / "sh.json"
+    h = tmp_path / "history.jsonl"
+    out = tmp_path / "out.json"
+    b = tmp_path / "base.json"
+    c = tmp_path / "cfg.json"
+    db = tmp_path / "market.sqlite"
+    db.touch()
+    _write(b, base)
+    _write(c, cfg)
+    _write(sh, {
+        "market_session": session, "league_id": "test-league",
+        "source_base_state_hash": base["official_state_hash"],
+        "quote_source": {"provider": "Yahoo Finance chart", "interval": "5m"},
+        "open_quote_evidence": {"AMAT": {
+            "interval": "5m", "market_session": session,
+            "timestamp": "2026-10-16T13:30:00+00:00",
+            "open": 421.16, "high": 422., "low": 420., "close": 420.5,
+        }},
+        "shadow_open_fills": [shadow_fill], "shadow_exits": [],
+    })
+    official_exit = {
+        "member": "weekly_opportunity_ridge", "symbol": "AMAT",
+        "side": "SELL", "qty": 3,
+        "reason": "max_holding_sessions_10", "fill_price": 409.0,
+    }
+    _write(h, {"session": session, "trades": [official_exit]})
+    monkeypatch.setattr(shadow_reconcile, "load_daily_bars", lambda *args: [{
+        "symbol": "AMAT", "timestamp": "2026-10-16T13:30:00+00:00",
+        "open": 420.26, "high": 423., "low": 419.,
+        "close": 420.5, "volume": 1000.,
+    }])
+    def reconcile_case():
+        return reconcile(
+            shadow_path=sh, history_path=h, output_path=out,
+            base_path=b, league_config_path=c, market_db=db,
+        )
+
+    first = reconcile_case()
+    assert first["status"] == "RECONCILED"
+    assert first["matched_trade_count"] == 0
+    assert first["explained_difference_counts"] == {
+        "eod_only_holding_exit": 1,
+        "verified_one_share_open_rebalance_quantization": 1,
+    }
+    assert first["divergences"] == []
+    assert first["explained_differences"][0]["shadow_open_replay_verified"]
+    assert first["explained_differences"][0]["official_open_replay_verified"]
+
+    # All missing/contradictory proof must remain material.
+    data = json.loads(sh.read_text())
+    data["open_quote_evidence"] = {}
+    _write(sh, data)
+    with pytest.raises(RuntimeError, match="missing_official_trade"):
+        reconcile_case()
+    data["open_quote_evidence"]["AMAT"] = {
+        "interval": "5m", "market_session": session,
+        "timestamp": "2026-10-16T13:30:00+00:00",
+        "open": 421.16, "high": 422., "low": 420., "close": 420.5,
+    }
+    _write(sh, data)
+    baseline = json.loads(b.read_text())
+    baseline["official_state_hash"] = "unrelated-hash"
+    _write(b, baseline)
+    with pytest.raises(RuntimeError, match="missing_official_trade"):
+        reconcile_case()
