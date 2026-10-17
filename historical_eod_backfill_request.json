@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "mode": "historical_eod_backfill",
+  "authorization": "CONFIRM_TWO_SESSION_AUDITED_BACKFILL",
+  "source_last_session": "2026-10-14",
+  "target_sessions": [
+    "2026-10-15",
+    "2026-10-16"
+  ],
+  "reason": "Restore two missing Strategy League CLOSE sessions sequentially after observed Yahoo 5m vs daily OPEN provenance was reconciled; promote only after two fully validated EOD closes. Never enable live trading."
+}
