@@ -169,6 +169,9 @@ def replay(request_path: Path, *, data_dir: Path = Path("data")) -> dict:
             "--history", str(
                 data_dir / "metrics" / "strategy_league" / "runs" / league_id / "history.jsonl"
             ),
+            "--base", str(data_dir / "metrics" / "strategy_league" / "eod_preclose_base.json"),
+            "--market-db", str(data_dir / "market" / "market_data.sqlite"),
+            "--league-config", "config/strategy_league.json",
             "--output", str(result_path),
         )
         recon = _read(result_path)
