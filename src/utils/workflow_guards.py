@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from floor.calendar import is_market_session
 
 from utils.market_session import (
     checkpoint_times,
@@ -306,13 +308,18 @@ def resolve_eod_recovery_context(
         raise RuntimeError(f"Recovery target is not a market session: {target_session}")
     if current < info.market_close + timedelta(minutes=20):
         raise RuntimeError("Cannot recover an EOD before its daily bars are due")
-    today = get_session_info(current)
-    if current.date() > target and today.is_open_day and today.market_open is not None:
-        if current >= today.market_open:
-            raise RuntimeError(
-                "Historical EOD recovery after the next market open is unsafe; "
-                "requires a separately audited full-session backfill"
-            )
+    # The next market OPEN, not today's date, is the historical replay
+    # boundary. A weekend after Friday cannot make Thursday safe again.
+    next_session = target + timedelta(days=1)
+    while not is_market_session(next_session):
+        next_session += timedelta(days=1)
+    next_open = datetime.combine(next_session, time(9, 30), tzinfo=ET)
+    if current >= next_open:
+        raise RuntimeError(
+            "Historical EOD recovery after the next market open is unsafe; "
+            f"target={target} next_open={next_open.isoformat()}; "
+            "requires separately audited full-session backfill"
+        )
     if (current.date() - target).days > 4:
         raise RuntimeError("Recovery target exceeds four-calendar-day safety window")
     if current.date() < target:
