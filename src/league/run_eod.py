@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from contracts.trading import (
     shadow_execution_contract,
     validate_shadow_execution_contract,
 )
+from floor.calendar import is_market_session
 from floor.universe import parse_universe_yaml
 from league.capital_challenger import build_capital_challenger_targets
 from league.engine import (
@@ -409,6 +411,40 @@ def _champion_suite_contract(repo_root: Path) -> dict[str, str]:
     }
 
 
+
+def validate_sequential_eod_session(previous: str, target: str) -> None:
+    """Never silently skip an uncommitted NYSE session in official live P&L.
+
+    A daily CLOSE after one or more missing sessions requires an audited,
+    chronological replay. Replaying only the latest date misstates holdings,
+    cost basis, holding periods, P&L and fills.
+    """
+    try:
+        previous_day = date.fromisoformat(previous)
+        target_day = date.fromisoformat(target)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid official league session date: previous={previous} target={target}"
+        ) from exc
+    if not is_market_session(previous_day) or not is_market_session(target_day):
+        raise RuntimeError(
+            f"Official league state contains a non-market session: "
+            f"previous={previous} target={target}"
+        )
+    if target_day <= previous_day:
+        return  # Idempotent already-seen CLOSE; engine owns duplicate suppression.
+    expected = previous_day + timedelta(days=1)
+    while not is_market_session(expected):
+        expected += timedelta(days=1)
+    if target_day != expected:
+        raise RuntimeError(
+            "Strategy League historical EOD gap: "
+            f"last_authoritative={previous} expected_next={expected.isoformat()} "
+            f"requested={target}. Refusing to jump over an uncommitted trading "
+            "session; use an audited sequential historical backfill."
+        )
+
+
 def _uses_model_suite_contract(state: dict | None) -> bool:
     if not isinstance(state, dict):
         return False
@@ -535,6 +571,10 @@ def run_league_eod(
     league_id = str(league_cfg["league_id"])
     run_dir = root / "runs" / league_id
     state = load_state(run_dir)
+    if state is not None and session:
+        validate_sequential_eod_session(
+            str(state.get("last_session") or ""), session,
+        )
 
     if state is None or _uses_model_suite_contract(state):
         # v2 epochs use one cost profile for signal gating and execution.
