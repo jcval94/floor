@@ -320,6 +320,9 @@ jobs:
           PYTHONPATH=src python -m league.shadow_reconcile \
             --shadow data/metrics/strategy_league/live_snapshot.json \
             --history "data/metrics/strategy_league/runs/${league_id}/history.jsonl" \
+            --base data/metrics/strategy_league/eod_preclose_base.json \
+            --market-db data/market/market_data.sqlite \
+            --league-config config/strategy_league.json \
             --output data/metrics/strategy_league/shadow_eod_reconciliation.json
 
       - name: Upload shadow/EOD reconciliation audit
