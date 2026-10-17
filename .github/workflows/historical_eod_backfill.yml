@@ -1,0 +1,106 @@
+name: historical-eod-backfill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'historical_eod_backfill_request.json'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  audited_backfill:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install runtime dependencies
+        run: python -m pip install -e . "numpy>=2.0,<3"
+      - name: Confirm explicit bounded historical request
+        run: |
+          PYTHONPATH=src:scripts python - <<'PY'
+          import json
+          from pathlib import Path
+          from audited_eod_backfill import validate_request
+          request = json.loads(Path('historical_eod_backfill_request.json').read_text())
+          print('Accepted audited historical sessions:', validate_request(request))
+          PY
+      - name: Acquire runtime writer lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh acquire
+      - name: Restore immutable-pinned rolling runtime state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_state.sh restore
+      - name: Restore lightweight checkpoint state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh restore
+      - name: Restore last authentic intraday shadow snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh restore-snapshot
+      - name: Validate frozen model suite
+        run: PYTHONPATH=src python -m utils.model_artifact_guard --registry data/training/models
+      - name: Refresh real recent NYSE daily bars
+        run: |
+          PYTHONPATH=src python -m storage.yahoo_ingest \
+            --db data/market/market_data.sqlite \
+            --universe config/universe.yaml \
+            --benchmark SPY \
+            --range 1mo \
+            --interval 1d \
+            --sleep-seconds 0.15
+      - name: Reconstruct and audit both historical EOD sessions locally
+        id: backfill
+        env:
+          PYTHONPATH: src
+          LIVE_TRADING_ENABLED: "false"
+        run: |
+          python scripts/audited_eod_backfill.py \
+            --request historical_eod_backfill_request.json \
+            --data-dir data
+      - name: Publish reconciled rolling runtime state atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_STATE_CHECKPOINT_AT: ${{ steps.backfill.outputs.final_checkpoint_at }}
+          RUNTIME_STATE_CHECKPOINT_EVENT: CLOSE
+        run: bash scripts/runtime_state.sh publish
+      - name: Publish verified lightweight EOD checkpoint index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/checkpoint_state.sh publish
+      - name: Publish compact official base for next market OPEN
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/strategy_live_state.sh publish-base
+      - name: Dispatch Pages from durable recovered CLOSE
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Audited historical EOD backfill completed; Pages requested."
+      - name: Release runtime writer lock
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/runtime_writer_lock.sh release
+      - name: Upload immutable historical reconciliation audits
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-eod-backfill-${{ github.run_id }}
+          path: |
+            data/metrics/strategy_league/recovery_audits
+            data/metrics/strategy_league/shadow_eod_reconciliation.json
+          if-no-files-found: warn
+          retention-days: 90
