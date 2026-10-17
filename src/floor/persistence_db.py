@@ -533,15 +533,30 @@ def stream_count(db_path: Path, stream: str) -> int:
     return int(row[0]) if row else 0
 
 
-def latest_predictions(db_path: Path) -> list[dict]:
+def latest_predictions(
+    db_path: Path,
+    *,
+    as_of_through_session: str | None = None,
+) -> list[dict]:
+    """Latest per symbol/horizon, optionally with a historical NYSE date ceiling.
+
+    Required by audited EOD backfill so newer intraday records cannot become
+    a future-looking input for a replayed prior CLOSE. Default is unchanged.
+    """
     if not db_path.exists():
         return []
-    query = """
+    if as_of_through_session is not None:
+        from datetime import date
+
+        date.fromisoformat(as_of_through_session)
+    condition = "WHERE SUBSTR(as_of, 1, 10) <= ?" if as_of_through_session else ""
+    query = f"""
       SELECT p.payload_json
       FROM predictions p
       JOIN (
         SELECT symbol, horizon, MAX(id) AS max_id
         FROM predictions
+        {condition}
         GROUP BY symbol, horizon
       ) x ON p.id = x.max_id
       ORDER BY p.symbol, p.horizon
@@ -549,5 +564,6 @@ def latest_predictions(db_path: Path) -> list[dict]:
     with _connect(db_path) as conn:
         if not _table_exists(conn, "predictions"):
             return []
-        rows = conn.execute(query).fetchall()
+        params = (as_of_through_session,) if as_of_through_session else ()
+        rows = conn.execute(query, params).fetchall()
     return [json.loads(row[0]) for row in rows]

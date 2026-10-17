@@ -151,13 +151,27 @@ def build_league_market_snapshot(
     symbols: list[str],
     *,
     benchmark_symbol: str = "SPY",
+    required_market_session: str | None = None,
 ) -> dict[str, Any]:
-    """Build the current league input with one local SQLite scan and no network calls."""
+    """Build league input from SQLite, optionally pinned to an audited CLOSE.
+
+    Historical recovery must not borrow future daily bars or forecasts from
+    a later heartbeat already stored in the same rolling runtime archive.
+    """
+    if required_market_session is not None:
+        from datetime import date
+
+        date.fromisoformat(required_market_session)
     benchmark_symbol = benchmark_symbol.upper()
     requested = sorted(set([*(symbol.upper() for symbol in symbols), benchmark_symbol]))
     bars = load_daily_bars(market_db, requested)
     by_symbol: dict[str, list[dict]] = defaultdict(list)
     for row in bars:
+        if (
+            required_market_session is not None
+            and _session_date(row.get("timestamp")) > required_market_session
+        ):
+            continue
         by_symbol[str(row.get("symbol") or "").upper()].append(row)
     for values in by_symbol.values():
         values.sort(key=lambda row: str(row.get("timestamp") or ""))
@@ -167,7 +181,9 @@ def build_league_market_snapshot(
 
     benchmark_bars = by_symbol[benchmark_symbol]
     session = _session_date(benchmark_bars[-1].get("timestamp"))
-    predictions = latest_predictions(persistence_db)
+    predictions = latest_predictions(
+        persistence_db, as_of_through_session=required_market_session,
+    )
     pred_by_key = {
         (str(row.get("symbol") or "").upper(), str(row.get("horizon") or "").lower()): row
         for row in predictions

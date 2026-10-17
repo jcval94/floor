@@ -304,7 +304,8 @@ jobs:
             --data-dir data \
             --league-config config/strategy_league.json \
             --strategies-config config/strategies.yaml \
-            --universe config/universe.yaml
+            --universe config/universe.yaml \
+            --required-market-session "${{ needs.gate.outputs.required_market_session }}"
 
       - name: Reconcile intraday shadow against official EOD
         if: steps.lock_guard.outputs.run == 'true' && steps.shadow_close.outputs.ready == 'true'

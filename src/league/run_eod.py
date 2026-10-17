@@ -470,6 +470,8 @@ def run_league_eod(
     league_config_path: Path,
     strategies_config_path: Path,
     universe_path: Path,
+    *,
+    required_market_session: str | None = None,
 ) -> dict:
     league_cfg = _load_json(league_config_path)
     if league_cfg.get("enabled") is not True:
@@ -566,8 +568,14 @@ def run_league_eod(
         data_dir / "persistence" / "app.sqlite",
         symbols,
         benchmark_symbol=spy,
+        required_market_session=required_market_session,
     )
     session = str(snapshot.get("session") or "")
+    if required_market_session is not None and session != required_market_session:
+        raise RuntimeError(
+            "EOD input session mismatch: "
+            f"expected={required_market_session} actual={session or 'missing'}"
+        )
     league_id = str(league_cfg["league_id"])
     run_dir = root / "runs" / league_id
     state = load_state(run_dir)
@@ -700,12 +708,18 @@ def main() -> None:
     parser.add_argument("--league-config", default="config/strategy_league.json")
     parser.add_argument("--strategies-config", default="config/strategies.yaml")
     parser.add_argument("--universe", default="config/universe.yaml")
+    parser.add_argument(
+        "--required-market-session",
+        default=None,
+        help="Lock market bars and predictions to the accepted historical EOD",
+    )
     args = parser.parse_args()
     payload = run_league_eod(
         Path(args.data_dir),
         Path(args.league_config),
         Path(args.strategies_config),
         Path(args.universe),
+        required_market_session=args.required_market_session,
     )
     print(
         json.dumps(
