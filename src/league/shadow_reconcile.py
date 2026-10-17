@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from collections import Counter
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+from floor.calendar import previous_market_session
+from league.engine import _execute_target
+from storage.market_db import load_daily_bars
 from pathlib import Path
 from typing import Any
 
@@ -201,6 +206,180 @@ def _verified_open_candle_envelope_variance(
     }
 
 
+
+def _verified_open_rounding_path_difference(
+    row: dict[str, Any],
+    official: dict[str, Any],
+    shadow: dict[str, Any],
+    *,
+    base: dict[str, Any],
+    market_db: Path | None,
+    execution_cfg: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Prove a one-share rounding difference by independently replaying OPEN twice.
+
+    Source granularity can change floor(nav * weight / open) by exactly one
+    share. Do not relax unmatched-trade rules unless each feed's complete
+    OPEN execution ledger reproduces its actual observed ledger, the original
+    authoritative T-1 hash matches, and official EOD records the held exit.
+    """
+    if (
+        market_db is None
+        or row.get("shadow_event") != "OPEN_FILL"
+        or row.get("side") != "SELL"
+        or row.get("reason") != "rebalance_at_next_open"
+        or int(row.get("qty", 0)) != 1
+        or not base
+        or shadow.get("source_base_state_hash") != base.get("official_state_hash")
+        or shadow.get("league_id") != base.get("league_id")
+        or str(shadow.get("market_session") or "") != str(official.get("session") or "")
+        or not str(base.get("official_state_hash") or "")
+    ):
+        return None
+    session = str(shadow["market_session"])
+    if str(base.get("last_eod_session") or "") != previous_market_session(
+        datetime.fromisoformat(session).date()
+    ).isoformat():
+        return None
+    member_id = str(row.get("member") or "")
+    symbol = str(row.get("symbol") or "")
+    member = (base.get("members") or {}).get(member_id)
+    if not isinstance(member, dict) or not isinstance(member.get("pending_targets"), dict):
+        return None
+    initial_owned = int((member.get("positions") or {}).get(symbol, {}).get("qty", 0) or 0)
+    if initial_owned < 2 or symbol not in member["pending_targets"]:
+        return None
+    # A matching EOD holding exit proves the divergent path was fully
+    # accounted for by the official ledger, not an unrecorded real fill.
+    exit_trades = [
+        t for t in official.get("trades", [])
+        if t.get("member") == member_id
+        and t.get("symbol") == symbol
+        and t.get("side") == "SELL"
+        and (
+            str(t.get("reason") or "").startswith("max_holding_sessions_")
+            or t.get("reason") == "strategy_session_timeout"
+        )
+    ]
+    if len(exit_trades) != 1:
+        return None
+    needed = set(member.get("positions") or {}) | set(member["pending_targets"])
+    evidence = shadow.get("open_quote_evidence") or {}
+    if not isinstance(evidence, dict) or any(
+        not isinstance(evidence.get(sym), dict) for sym in needed
+    ):
+        return None
+    daily_rows = load_daily_bars(market_db, sorted(needed))
+    daily = {}
+    for bar in daily_rows:
+        date_at = datetime.fromisoformat(str(bar.get("timestamp") or "").replace("Z", "+00:00"))
+        if date_at.astimezone(ZoneInfo("America/New_York")).date().isoformat() == session:
+            daily[str(bar["symbol"])] = bar
+    if set(daily) != needed:
+        return None
+    five_min = {}
+    for sym in needed:
+        proof = evidence[sym]
+        try:
+            at = datetime.fromisoformat(str(proof["timestamp"]).replace("Z", "+00:00"))
+            raw = float(proof["open"])
+            high = float(proof["high"])
+            low = float(proof["low"])
+            close = float(proof["close"])
+            official_open = float(daily[sym]["open"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        local = at.astimezone(ZoneInfo("America/New_York"))
+        if (
+            proof.get("market_session") != session
+            or proof.get("interval") != "5m"
+            or local.date().isoformat() != session
+            or (local.hour, local.minute) != (9, 30)
+            or not (0 < low <= min(raw, close) <= max(raw, close) <= high)
+            or not low <= official_open <= high
+        ):
+            return None
+        five_min[sym] = {"open": raw}
+
+    def simulate(bars: dict[str, dict]) -> list[dict[str, Any]]:
+        clone = copy.deepcopy(member)
+        clone["id"] = member_id
+        trades: list[dict[str, Any]] = []
+        _execute_target(
+            clone, clone["pending_targets"], bars, execution_cfg, trades,
+            session=session,
+            session_number=int(base.get("sessions", 0) or 0) + 1,
+        )
+        return trades
+
+    def signatures(trades: list[dict[str, Any]]) -> Counter:
+        return Counter((
+            str(t.get("member") or ""),
+            str(t.get("symbol") or ""),
+            str(t.get("side") or ""),
+            int(t.get("qty", 0) or 0),
+            str(t.get("reason") or ""),
+            round(float(t.get("raw_price", 0.0) or 0.0), 5),
+            round(float(t.get("fill_price", 0.0) or 0.0), 5),
+            round(float(t.get("costs", 0.0) or 0.0), 5),
+        ) for t in trades)
+
+    observed_shadow_open = [
+        t for t in shadow.get("shadow_open_fills", [])
+        if t.get("member") == member_id
+    ]
+    observed_official_open = [
+        t for t in official.get("trades", [])
+        if t.get("member") == member_id and t.get("reason") in {
+            "rebalance_at_next_open", "signal_t_to_open_t_plus_1"
+        }
+    ]
+    expected_shadow = simulate(five_min)
+    expected_official = simulate(daily)
+    if (
+        signatures(expected_shadow) != signatures(observed_shadow_open)
+        or signatures(expected_official) != signatures(observed_official_open)
+        or signatures([row]) != signatures([
+            t for t in expected_shadow
+            if t.get("member") == member_id and t.get("symbol") == symbol
+            and t.get("side") == "SELL"
+            and t.get("reason") == "rebalance_at_next_open"
+        ])
+        or any(
+            t.get("symbol") == symbol and t.get("side") == "SELL"
+            and t.get("reason") == "rebalance_at_next_open"
+            for t in expected_official
+        )
+    ):
+        return None
+    price_bps = abs(float(five_min[symbol]["open"]) / float(daily[symbol]["open"]) - 1) * 10000
+    if not 0 < price_bps <= 100:
+        return None
+    return {
+        "kind": "verified_one_share_open_rebalance_quantization",
+        "member": member_id,
+        "symbol": symbol,
+        "side": "SELL",
+        "shadow_qty": 1,
+        "original_owned_qty": initial_owned,
+        "official_open": daily[symbol]["open"],
+        "shadow_open": five_min[symbol]["open"],
+        "opening_price_difference_bps": price_bps,
+        "shadow_open_replay_verified": True,
+        "official_open_replay_verified": True,
+        "official_same_symbol_holding_exit": exit_trades[0],
+        "source_state_hash": str(base["official_state_hash"]),
+        "explanation": (
+            "Different independently observed Yahoo daily/5m opening prices moved "
+            "the integer share-sizing threshold by exactly one. Replay of the "
+            "full member OPEN execution under both feeds matches both ledgers. "
+            "The official held position exits at EOD; no shadow fill is "
+            "promoted to official accounting."
+        ),
+    }
+
+
+
 def reconcile(
     *,
     shadow_path: Path,
@@ -208,9 +387,14 @@ def reconcile(
     output_path: Path,
     price_tolerance_bps: float = 8.0,
     cost_tolerance_usd: float = 0.05,
+    base_path: Path | None = None,
+    market_db: Path | None = None,
+    league_config_path: Path | None = None,
 ) -> dict[str, Any]:
     shadow = _load(shadow_path)
     official = _latest_history(history_path)
+    baseline = _load(base_path) if base_path is not None else {}
+    execution_cfg = _load(league_config_path).get("execution", {}) if league_config_path else {}
     official_trades = [
         row for row in official.get("trades", []) if isinstance(row, dict)
     ]
@@ -317,6 +501,13 @@ def reconcile(
                         ),
                     }
                 )
+                continue
+            verified = _verified_open_rounding_path_difference(
+                row, official, shadow,
+                base=baseline, market_db=market_db, execution_cfg=execution_cfg,
+            )
+            if verified is not None:
+                explained_differences.append(verified)
                 continue
             divergences.append({"kind": "missing_official_trade", "shadow": row})
             continue
@@ -538,6 +729,9 @@ def main() -> None:
     )
     parser.add_argument("--price-tolerance-bps", type=float, default=8.0)
     parser.add_argument("--cost-tolerance-usd", type=float, default=0.05)
+    parser.add_argument("--base", default=None)
+    parser.add_argument("--market-db", default=None)
+    parser.add_argument("--league-config", default=None)
     args = parser.parse_args()
     payload = reconcile(
         shadow_path=Path(args.shadow),
@@ -545,6 +739,9 @@ def main() -> None:
         output_path=Path(args.output),
         price_tolerance_bps=args.price_tolerance_bps,
         cost_tolerance_usd=args.cost_tolerance_usd,
+        base_path=Path(args.base) if args.base else None,
+        market_db=Path(args.market_db) if args.market_db else None,
+        league_config_path=Path(args.league_config) if args.league_config else None,
     )
     print(json.dumps(payload, sort_keys=True))
 
