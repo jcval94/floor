@@ -182,6 +182,11 @@ def replay(request_path: Path, *, data_dir: Path = Path("data")) -> dict:
             or not str(after.get("last_hash") or "")
         ):
             raise RuntimeError(f"Historical close {session} did not reconcile or advance sequentially")
+        # Expose the final accepted audit at the same canonical path as daily
+        # EOD, while retaining immutable per-session recovery copies.
+        (data_dir / "metrics" / "strategy_league" / "shadow_eod_reconciliation.json").write_text(
+            result_path.read_text(encoding="utf-8"), encoding="utf-8"
+        )
         record = {
             "session": session,
             "reconstructed": True,
@@ -238,7 +243,11 @@ def replay(request_path: Path, *, data_dir: Path = Path("data")) -> dict:
             f.write(f"final_session={sessions[-1]}\n")
             f.write(
                 "final_checkpoint_at="
-                + datetime.combine(date.fromisoformat(sessions[-1]), time(16), tzinfo=ET).isoformat()
+                + datetime.combine(
+                    date.fromisoformat(sessions[-1]),
+                    time(13) if is_early_close(date.fromisoformat(sessions[-1])) else time(16),
+                    tzinfo=ET,
+                ).isoformat()
                 + "\n"
             )
     return summary
