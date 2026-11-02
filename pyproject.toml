@@ -13,9 +13,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
   "numpy>=2.2.6,<3",
-  "pytest>=9.1.1",
+  "pytest>=9.2.0",
   "pytest-cov>=7.1.0",
-  "ruff==0.16.8",
+  "ruff==0.17.3",
   "scikit-learn==1.8.0",
 ]
 modeling = ["numpy>=2.2.6,<3", "scikit-learn==1.8.0"]
