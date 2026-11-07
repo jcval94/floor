@@ -41,6 +41,19 @@ Never label the central classic boundaries as q10/q90 unless a future model
 actually trains and validates those quantiles. `PredictionRecord` therefore
 leaves `floor_quantile` and `ceiling_quantile` unset by default.
 
+### Migrating a pre-contract classic champion
+
+Existing D1/W1/Q1 champions are never relabeled as risk quantiles by metadata
+alone. `models.migrate_classic_contracts` replays the unchanged champion on a
+purged chronological validation split, fits only a conservative residual risk
+layer, and verifies that the central predictor hash is unchanged.
+
+The migration is fail-closed. It emits a migrated artifact only when both
+out-of-time marginal floor and ceiling coverage are at least 75% against an
+80% target. If the gate fails, the champion remains `legacy_compatible` and
+strategies keep the explicit central-only fallback until a new model or a
+better-calibrated risk layer proves adequate evidence.
+
 ### Adding a future model
 
 1. Add or extend its task in `config/model_contracts.json`.
