@@ -1,0 +1,8 @@
+# Research extras only; does not alter FLOOR operational dependencies.
+mcp==1.30.0
+mlflow-skinny==3.10.1
+SQLAlchemy==2.0.48
+alembic==1.18.4
+numpy==2.3.5
+scikit-learn==1.8.0
+exchange-calendars==4.13.2
