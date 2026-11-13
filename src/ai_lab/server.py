@@ -11,7 +11,7 @@ import time
 from typing import Literal
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from ai_lab.contracts import Plan, Result, RECIPES, MODELS
+from ai_lab.contracts import Plan, Result, RECIPES, MODELS, CONTRACT_VERSION
 from ai_lab.store import Store, TERMINAL
 
 principal = ContextVar("principal", default=None)
@@ -103,7 +103,7 @@ def build_server(store):
             lambda: {
                 "recipes": list(RECIPES),
                 "models": list(MODELS),
-                "contracts": "1.0",
+                "contracts": CONTRACT_VERSION,
                 "unavailable": [
                     "official_forecasts",
                     "opportunity_finder",
@@ -149,7 +149,7 @@ def build_server(store):
 
     @mcp.tool()
     def floor_list_models() -> Result:
-        """Registered research estimators; these IDs are not production champions."""
+        """Discover research estimators and separately versioned frozen FLOOR W1 artifacts."""
         return guarded(
             lambda: {
                 "models": [
@@ -163,7 +163,11 @@ def build_server(store):
                         }[m],
                     }
                     for m in MODELS
-                ]
+                ],
+                "frozen_models": __import__(
+                    "ai_lab.frozen_models", fromlist=["catalog"]
+                ).catalog(),
+                "warning": "Stored metrics are historical; use frozen_model_comparison for shared-window measured results. Training cutoff remains unverified.",
             }
         )
 
@@ -193,9 +197,13 @@ def build_server(store):
         question: str,
         dataset_id: str,
         recipe: Literal[
-            "model_comparison", "feature_audit", "feature_ablation"
+            "model_comparison",
+            "feature_audit",
+            "feature_ablation",
+            "frozen_model_comparison",
         ] = "model_comparison",
         drop_features: list[str] | None = None,
+        frozen_model_ids: list[str] | None = None,
     ) -> Result:
         """Resolve a natural-language intent to an allowlisted plan. Unknown code/data requires review."""
 
@@ -221,7 +229,6 @@ def build_server(store):
                     "vix",
                     "xgboost",
                     "lightgbm",
-                    "champion",
                     "backtest",
                     "estrategia",
                 )
@@ -238,10 +245,24 @@ def build_server(store):
                     ],
                     "reason": "Novel hypothesis is a proposal, never converted to arbitrary executable code.",
                 }
+            selected_recipe = (
+                "frozen_model_comparison"
+                if any(
+                    w in question.lower()
+                    for w in ("champion", "campeón", "campeon", "congelad")
+                )
+                else recipe
+            )
+            optional = (
+                {"frozen_model_ids": frozen_model_ids}
+                if frozen_model_ids is not None
+                else {}
+            )
             plan = Plan(
                 question=question,
                 dataset_id=dataset_id,
-                recipe=recipe,
+                recipe=selected_recipe,
+                **optional,
                 features=manifest["features"],
                 drop_features=drop_features or [],
             )
@@ -310,7 +331,23 @@ def build_server(store):
     @mcp.tool()
     def floor_get_experiment_status(run_id: str) -> Result:
         """Read authoritative research job state and provenance/configuration."""
-        return guarded(lambda: owned(run_id))
+        return guarded(
+            lambda: {
+                k: v
+                for k, v in owned(run_id).items()
+                if k
+                in (
+                    "run_id",
+                    "experiment_id",
+                    "state",
+                    "created",
+                    "started",
+                    "finished",
+                    "cancel",
+                    "error",
+                )
+            }
+        )
 
     @mcp.tool()
     def floor_get_experiment_results(run_id: str) -> Result:
@@ -410,12 +447,29 @@ def build_server(store):
                 "drop_features",
                 "recipe",
             )
-            first = {k: runs[0]["plan"][k] for k in keys}
+            if runs[0]["plan"]["recipe"] == "frozen_model_comparison":
+                keys = (*keys, "frozen_model_ids")
+            first = {k: runs[0]["plan"].get(k) for k in keys}
             differences = [
-                r["run_id"] for r in runs if {k: r["plan"][k] for k in keys} != first
+                r["run_id"]
+                for r in runs
+                if {k: r["plan"].get(k) for k in keys} != first
             ]
             if differences:
                 raise ValueError("NOT_COMPARABLE")
+            evidence = [r.get("acceptance_provenance") or {} for r in runs]
+            if any(
+                e.get("source_hashes") != evidence[0].get("source_hashes")
+                or e.get("asset_hashes") != evidence[0].get("asset_hashes")
+                for e in evidence[1:]
+            ):
+                raise ValueError("SOURCE_OR_MODEL_ASSETS_NOT_COMPARABLE")
+            if any(
+                r["result"].get("comparability")
+                != runs[0]["result"].get("comparability")
+                for r in runs[1:]
+            ):
+                raise ValueError("EVALUATION_WINDOWS_NOT_COMPARABLE")
             return {
                 "comparable": True,
                 "conditions": first,

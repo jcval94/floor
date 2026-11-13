@@ -97,6 +97,10 @@ class Store:
 
         rows, manifest = self.dataset(plan.dataset_id)
         validate_rows(rows, manifest, plan)
+        if plan.recipe == "frozen_model_comparison":
+            from ai_lab.frozen_models import validate_frozen_inputs
+
+            validate_frozen_inputs(rows, manifest, plan)
         if len(set(plan.models)) != len(plan.models) or len(set(plan.features)) != len(
             plan.features
         ):

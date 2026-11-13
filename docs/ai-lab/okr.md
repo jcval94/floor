@@ -24,3 +24,7 @@ This checkpoint does not close #261 or authorize integration under #253. PRs are
 Phase 2 candidates: distributed workers/paid compute, online feature store, persistent remote MLflow service, broad model tuning, arbitrary new-code sandbox, GPU workloads, production promotion. They require evidence of value and explicit budgets/permissions. Novel hypothesis specification and isolated PR review can proceed before runtime support; new untrusted code cannot inherit production credentials.
 
 The Dec 31 target is feasible only if account/hosting/Slack permissions are resolved promptly. This conversation does not schedule future work or promise a Work session will keep running. Only an installed worker system is responsible for autonomous jobs.
+
+## Later extension: frozen artifacts
+
+The frozen W1 adapter now exists as an isolated follow-up: it compares actual serialized FLOOR heads and frozen risk geometry on a common reconstructed post-artifact window, includes baselines and preserves model/configuration hashes. This advances KR2, but does **not** resolve missing exact training cutoffs, genuine vintage PIT, remote deployment or Slack. The three original estimator recipes and their earlier evidence remain separate.

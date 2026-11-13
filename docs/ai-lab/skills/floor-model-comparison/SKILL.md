@@ -14,3 +14,5 @@ description: Comparar modelos bajo condiciones equivalentes y evitar rankings de
 7. Comprobar `floor_get_notification_status`: exigir DELIVERED y ts real de Slack. WAITING_CONFIG/PENDING/FAILED/UNKNOWN no son entregas. Reintentar solo fallos conocidos mediante `floor_resend_experiment_report`; conciliar UNKNOWN con el operador para no duplicar. No inventar enlaces públicos a reportes locales.
 
 Esta guía no contiene lógica de negocio. La autoridad está en los contratos, servicios y pruebas de `src/ai_lab` y los módulos de dominio reutilizados. Es documentación versionada del repositorio; no instala una skill personal ni concede permisos.
+
+Para modelos existentes congelados, usar recipe=frozen_model_comparison y frozen_model_ids obtenidos de floor_list_models. Requiere materialización completa `--full-features` por el operador. Revisar hashes/ventanas y out_of_sample_verified; si es false, describir únicamente un holdout reconstruido posterior al artefacto. No presentar los resultados como OOS verificado ni comparar automáticamente con ejecuciones sobre otra materialización.

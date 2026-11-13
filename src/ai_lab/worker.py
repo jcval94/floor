@@ -54,8 +54,14 @@ def tick(store):
     accepted = store.get(run["run_id"])["acceptance_provenance"]
     current = code_identity()
     if not accepted or any(
-        accepted[k] != current[k]
-        for k in ("git_commit", "source_hashes", "dependencies", "python")
+        accepted.get(k) != current[k]
+        for k in (
+            "git_commit",
+            "source_hashes",
+            "asset_hashes",
+            "dependencies",
+            "python",
+        )
     ):
         store.finish(
             run["run_id"],

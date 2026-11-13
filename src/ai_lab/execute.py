@@ -35,7 +35,10 @@ def execute(root, run_id):
         "snapshot_hash": manifest.get("archive_sha256"),
         "data_status": "EXPERIMENTAL",
         "currency": "USD",
-        "model_version": "registered-estimators-v1",
+        "model_version": "frozen-FLOOR-heads"
+        if plan.recipe == "frozen_model_comparison"
+        else "registered-estimators-v1",
+        "model_assets": result.get("model_assets", []),
     }
     result["cloud_cost_usd"] = 0
     result["cost_scope"] = (
@@ -53,6 +56,7 @@ def execute(root, run_id):
         "git_commit": code_sha,
         "dirty_tree": dirty,
         "source_hashes": source_hashes,
+        "acceptance_provenance": run.get("acceptance_provenance"),
         "python": platform.python_version(),
         "dependencies": {
             n: version(n) for n in ["numpy", "scikit-learn", "mcp", "mlflow-skinny"]
@@ -107,6 +111,7 @@ def execute(root, run_id):
     return {
         "metrics": result["metrics"],
         "ranking_leader": result["ranking_leader"],
+        "comparability": result["comparability"],
         "dataset_id": plan.dataset_id,
         "mlflow_run_id": result["mlflow_run_id"],
         "duration_seconds": result["duration_seconds"],
@@ -142,6 +147,13 @@ def report(plan, manifest, result):
         + "</tr>"
         for m in result["metrics"]
     )
+    extended = ""
+    if plan.recipe == "frozen_model_comparison":
+        extended = (
+            "<h2>Geometría y cobertura congeladas</h2><pre>"
+            + esc(canonical(result["metrics"]))
+            + "</pre>"
+        )
     bars = "".join(
         f'<p>{esc(m["model"] + " / " + m["variant"])} <meter min="0" max="{max(x["mae_floor_pct"] for x in result["metrics"]) * 1.1}" value="{m["mae_floor_pct"]}"></meter> {m["mae_floor_pct"]:.6f}</p>'
         for m in result["metrics"]
@@ -155,6 +167,7 @@ def report(plan, manifest, result):
         "<table><tr><th>Modelo</th><th>Variante</th><th>MAE relativo</th><th>RMSE</th><th>Desv. folds</th></tr>"
         + rows
         + "</table>"
+        + extended
         + bars
         + "<h2>Auditoría de features</h2><pre>"
         + esc(canonical(result["feature_audit"]))
