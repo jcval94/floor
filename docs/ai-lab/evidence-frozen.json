@@ -1,17 +1,17 @@
 {
-  "implementation_commit": "5454a522dc735ecf593a98a7953c61e898653766",
+  "implementation_commit": "b7f11b1ce3ca1fdec249eb3afd7e2d7557e97d59",
   "dirty_tree": false,
   "client": "official Python SDK 1.30.0",
   "protocol": "2025-11-25",
-  "experiment_id": "0455d6ce-ec79-44fa-baca-557b90ba0e0c",
-  "run_id": "68f15285-cd80-4180-8efd-80c72f13fea0",
+  "experiment_id": "f517c6d4-1bef-47b5-adc3-f701b210b7d9",
+  "run_id": "2c0b74b9-ed08-4d12-bc14-5ce279234c66",
   "state": "SUCCEEDED",
   "dataset_id": "a6439b85b2dca58914a6c2d5ed52f300eb605e4fe9a57b27ba79c684fbebea45",
-  "disconnected_at": 1794604523.9123945,
-  "finished": 1794604527.72594,
+  "disconnected_at": 1794605302.749033,
+  "finished": 1794605306.3782158,
   "finished_after_disconnect": true,
-  "mlflow_run_id": "195886cfb2c2464ba1e5b9577c88b178",
-  "worker_duration_seconds": 4.049875593000024,
+  "mlflow_run_id": "22a223c428104748ab69b6b0613c36d6",
+  "worker_duration_seconds": 3.9440187010000045,
   "comparability": {
     "cutoff": "2026-09-26T02:38:28+00:00",
     "cutoff_basis": "latest parsed artifact version timestamp, not verified training boundary",
@@ -195,9 +195,9 @@
   ],
   "artifact_hashes": {
     "predictions.json": "78f9d57d0abe00ee9a0d8590ce3cbc234214d50b15fe06200f379e25f664cf0e",
-    "provenance.json": "f60dcaaad0b1d003f4886796897edc471581844f3e5ed2576556f22962f67240",
-    "report.html": "d79c0576be914366c7569e0f075f7fc4b92638dcf367167edbac9e8fec58f690",
-    "result.json": "af8b25b04b62e2a176c94cdf2e145965ac65b6ff901e10642cbe037e88479259"
+    "provenance.json": "ea6be99db0a8898bda0950e06accbd2e59c217355375e05816cd446c317d25a0",
+    "report.html": "637c837d2cc3c08f9ff80f5a21c1b1d2ced78229efd7b110baabba2cc0a06215",
+    "result.json": "4c63781a30064f4aca480338723b973a19929c99f25bf70586d28d37e3445b4c"
   },
   "acceptance_asset_hashes_preserved": true,
   "slack_real_deliveries": 0,
@@ -222,5 +222,7 @@
     "mypy_source_files": 191,
     "mypy": "PASS",
     "ci_scope": "local with installed research extras; no GitHub CI success inferred"
-  }
+  },
+  "state_at_disconnect": "RUNNING",
+  "earlier_checkpoint_run_id": "68f15285-cd80-4180-8efd-80c72f13fea0"
 }

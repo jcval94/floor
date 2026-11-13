@@ -19,7 +19,7 @@ This is `post_artifact_reconstructed_holdout`, **out_of_sample_verified=false**.
 
 No models are fitted or calibrated on this holdout. The train-mean baseline uses only labels completed before the common cutoff; ATR×sqrt(5) is a fixed trivial scale benchmark. Existing `build_runtime_features`, `predict_family_delta` and serialized risk add-ons are reused. Metrics include floor/ceiling relative MAE, floor RMSE, central joint coverage, frozen risk joint coverage/width, shared-date temporal-block dispersion, per-symbol errors, inference duration and artifact size. Timing is not compared.
 
-Measured values and accepted run/experiment/MLflow IDs with artifact hashes are recorded in [evidence-frozen.json](evidence-frozen.json). The real MCP request completed in an independent worker after client disconnection (4.05s worker wall time), generated MLflow + HTML/JSON, and results were read through MCP after reconnection. No Slack delivery is claimed until a real acknowledgement is recorded. A lower observed error here is not a statistically established winner or production recommendation.
+Measured values and accepted run/experiment/MLflow IDs with artifact hashes are recorded in [evidence-frozen.json](evidence-frozen.json). The real MCP request completed in an independent worker after client disconnection from confirmed RUNNING state (3.94s worker wall time), generated MLflow + HTML/JSON, and results were read through MCP after reconnection. No Slack delivery is claimed until a real acknowledgement is recorded. A lower observed error here is not a statistically established winner or production recommendation.
 
 ## Added guards
 
