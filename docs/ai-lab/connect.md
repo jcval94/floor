@@ -22,6 +22,7 @@ RestartSec=5
 KillMode=control-group
 NoNewPrivileges=true
 PrivateTmp=true
+ReadOnlyPaths=/opt/floor
 UMask=0077
 MemoryMax=5G
 CPUQuota=100%
@@ -98,3 +99,5 @@ PYTHONPATH=src .venv/bin/python -m ai_lab.backup restore /absolute/backup/floor-
 ```
 
 Restore verifies every manifest hash and rebases only local MLflow artifact URI prefixes. It never points at official state. Queued jobs accepted by older v1 code without acceptance provenance fail closed after upgrade; resubmit explicitly after review. Git source commit and observed environment/source hashes are captured before acceptance, including jobs that later fail or are cancelled. Workers reject changed code/environment rather than silently execute a different experiment.
+
+Install each worker release in an immutable commit-specific checkout; do not edit/switch the live checkout while jobs run. The sample read-only source mount complements provenance gates and prevents the research process from modifying its code/configuration/model assets. Deploy a new source release only after draining or explicitly failing incompatible queued jobs.

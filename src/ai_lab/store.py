@@ -136,7 +136,7 @@ class Store:
                 "SELECT * FROM runs WHERE actor=? AND idem=?", (actor, idem)
             ).fetchone()
         if old:
-            if old["plan"] != encoded:
+            if Plan.model_validate_json(old["plan"]).model_dump() != plan.model_dump():
                 raise ValueError("IDEMPOTENCY_CONFLICT")
             return dict(old)
         validation = self.validate(plan)
@@ -148,7 +148,10 @@ class Store:
                 "SELECT * FROM runs WHERE actor=? AND idem=?", (actor, idem)
             ).fetchone()
             if old:
-                if old["plan"] != encoded:
+                if (
+                    Plan.model_validate_json(old["plan"]).model_dump()
+                    != plan.model_dump()
+                ):
                     raise ValueError("IDEMPOTENCY_CONFLICT")
                 return dict(old)
             now = time.time()

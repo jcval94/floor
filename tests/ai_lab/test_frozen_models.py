@@ -123,3 +123,33 @@ def test_model_and_config_assets_are_part_of_acceptance(tmp_path):
         s.get(run["run_id"])["acceptance_provenance"]["asset_hashes"]
         == identity["asset_hashes"]
     )
+
+
+def test_idempotence_survives_added_optional_contract_fields(tmp_path):
+    import json
+
+    rows, manifest, _ = fixture()
+    store = Store(tmp_path)
+    dataset = store.register(rows, manifest)
+    plan = Plan(
+        question="Compara los modelos registrados",
+        recipe="model_comparison",
+        dataset_id=dataset,
+        features=["atr_14"],
+    )
+    old = store.submit(plan, "operator", "upgrade-retry")
+    with store.transaction() as c:
+        payload = json.loads(
+            c.execute(
+                "SELECT plan FROM runs WHERE run_id=?", (old["run_id"],)
+            ).fetchone()[0]
+        )
+        payload.pop("frozen_model_ids")  # optional field did not exist in contract 1.0
+        c.execute(
+            "UPDATE runs SET plan=? WHERE run_id=?",
+            (json.dumps(payload), old["run_id"]),
+        )
+    retried = store.submit(plan, "operator", "upgrade-retry")
+    assert retried["run_id"] == old["run_id"]
+    with store.connect() as c:
+        assert c.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
