@@ -433,7 +433,10 @@ def build_server(store):
             owned(run_id)
             path = store.root / "runs" / run_id / "provenance.json"
             if not path.exists():
-                raise ValueError("PROVENANCE_NOT_AVAILABLE")
+                accepted = owned(run_id).get("acceptance_provenance")
+                if not accepted:
+                    raise ValueError("PROVENANCE_NOT_AVAILABLE")
+                return accepted
             return json.loads(path.read_text())
 
         return guarded(read)

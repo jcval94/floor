@@ -41,6 +41,9 @@ class Store:
              kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT DEFAULT 'PENDING',
              attempts INTEGER DEFAULT 0, next_at REAL DEFAULT 0,
              slack_ts TEXT, error TEXT, UNIQUE(run_id,kind));
+            CREATE TABLE IF NOT EXISTS run_provenance(
+             run_id TEXT PRIMARY KEY REFERENCES runs(run_id), payload TEXT NOT NULL);
+            INSERT OR IGNORE INTO schema_version VALUES(2);
             CREATE TABLE IF NOT EXISTS audit(
              id INTEGER PRIMARY KEY, at REAL NOT NULL, actor TEXT NOT NULL,
              action TEXT NOT NULL, subject TEXT NOT NULL);
@@ -132,7 +135,10 @@ class Store:
             if old["plan"] != encoded:
                 raise ValueError("IDEMPOTENCY_CONFLICT")
             return dict(old)
-        self.validate(plan)
+        validation = self.validate(plan)
+        from ai_lab.provenance import acceptance
+
+        provenance = acceptance(plan, actor, validation["dataset"])
         with self.transaction() as c:
             old = c.execute(
                 "SELECT * FROM runs WHERE actor=? AND idem=?", (actor, idem)
@@ -173,6 +179,12 @@ class Store:
                 "INSERT INTO runs(run_id,experiment_id,actor,idem,plan,state,created) VALUES(?,?,?,?,?,?,?)",
                 (run_id, experiment_id, actor, idem, encoded, "QUEUED", now),
             )
+            provenance["run_id"] = run_id
+            provenance["experiment_id"] = experiment_id
+            c.execute(
+                "INSERT INTO run_provenance(run_id,payload) VALUES(?,?)",
+                (run_id, canonical(provenance)),
+            )
             c.execute(
                 "INSERT INTO audit(at,actor,action,subject) VALUES(?,?,?,?)",
                 (now, actor, "submit", run_id),
@@ -191,6 +203,11 @@ class Store:
         if not row:
             raise ValueError("RUN_NOT_FOUND")
         out = dict(row)
+        with self.connect() as c:
+            evidence = c.execute(
+                "SELECT payload FROM run_provenance WHERE run_id=?", (run_id,)
+            ).fetchone()
+        out["acceptance_provenance"] = json.loads(evidence[0]) if evidence else None
         for k in ("plan", "result", "error"):
             out[k] = json.loads(out[k]) if out[k] else None
         return out

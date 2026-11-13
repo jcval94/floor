@@ -49,6 +49,24 @@ def tick(store):
             (time.time(), run["run_id"]),
         )
         store.event(c, run["run_id"], "RUNNING", {"state": "RUNNING"})
+    from ai_lab.provenance import code_identity
+
+    accepted = store.get(run["run_id"])["acceptance_provenance"]
+    current = code_identity()
+    if not accepted or any(
+        accepted[k] != current[k]
+        for k in ("git_commit", "source_hashes", "dependencies", "python")
+    ):
+        store.finish(
+            run["run_id"],
+            "FAILED",
+            error={
+                "code": "CODE_OR_ENV_CHANGED_AFTER_ACCEPTANCE",
+                "stage": "provenance_gate",
+                "recoverable": False,
+            },
+        )
+        return True
     plan = Plan.model_validate_json(run["plan"])
     out = store.root / "runs" / run["run_id"]
     out.mkdir(parents=True, exist_ok=True)

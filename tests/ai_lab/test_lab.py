@@ -267,7 +267,11 @@ def test_runtime_timeout_and_cancellation(registered, monkeypatch):
     original = subprocess.Popen
 
     def sleeping_child(command, **kwargs):
-        return original([sys.executable, "-c", "import time; time.sleep(30)"], **kwargs)
+        if "ai_lab.execute" in command:
+            return original(
+                [sys.executable, "-c", "import time; time.sleep(30)"], **kwargs
+            )
+        return original(command, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", sleeping_child)
     spec = p.model_copy(update={"max_seconds": 5})
@@ -451,3 +455,36 @@ def test_two_research_restores_and_tamper_detection(registered, tmp_path):
     (destination / "datasets" / p.dataset_id / "rows.json").write_text("[]")
     with pytest.raises(ValueError, match="BACKUP_HASH_MISMATCH"):
         restore(destination, tmp_path.parent / (tmp_path.name + "-tampered-restore"))
+
+
+def test_failed_run_retains_acceptance_provenance(registered):
+    from ai_lab.worker import tick
+
+    s, _, _, p = registered
+    run = s.submit(p, "alice", "failure-provenance")
+    accepted = s.get(run["run_id"])["acceptance_provenance"]
+    assert accepted["git_commit"]
+    assert accepted["dataset_manifest"]["rows_hash"]
+    (s.root / "datasets" / p.dataset_id / "rows.json").write_text("[]")
+    tick(s)
+    assert s.get(run["run_id"])["state"] == "FAILED"
+    assert s.get(run["run_id"])["acceptance_provenance"] == accepted
+
+
+def test_worker_blocks_code_change_after_acceptance(registered, monkeypatch):
+    import ai_lab.provenance as provenance
+    from ai_lab.worker import tick
+
+    s, _, _, p = registered
+    run = s.submit(p, "alice", "changed-code")
+    observed = provenance.code_identity()
+    monkeypatch.setattr(
+        provenance,
+        "code_identity",
+        lambda: {**observed, "git_commit": "changed-after-acceptance"},
+    )
+    tick(s)
+    result = s.get(run["run_id"])
+    assert result["state"] == "FAILED"
+    assert result["error"]["code"] == "CODE_OR_ENV_CHANGED_AFTER_ACCEPTANCE"
+    assert not (s.root / "runs" / run["run_id"] / "completion.json").exists()
