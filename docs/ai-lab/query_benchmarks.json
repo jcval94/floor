@@ -1,0 +1,118 @@
+{
+  "scope": "five read-only snapshot queries, warm local cache; not dashboard/league/Finder E2E benchmark",
+  "source_run_id": "43303225713",
+  "results": [
+    {
+      "query": "market_history",
+      "sql": "SELECT ts_utc,close FROM daily_bars WHERE symbol=? ORDER BY ts_utc DESC LIMIT 60",
+      "params": [
+        "SPY"
+      ],
+      "repetitions": 30,
+      "p95_seconds": 2.767100022538216e-05,
+      "row_count": 60,
+      "explain": [
+        [
+          5,
+          0,
+          62,
+          "SEARCH daily_bars USING INDEX idx_daily_bars_symbol_ts (symbol=?)"
+        ]
+      ]
+    },
+    {
+      "query": "forecasts",
+      "sql": "SELECT symbol,horizon,as_of,floor_value,ceiling_value FROM predictions WHERE symbol=? AND horizon=? ORDER BY as_of DESC LIMIT 20",
+      "params": [
+        "GOOGL",
+        "w1"
+      ],
+      "repetitions": 30,
+      "p95_seconds": 0.052969710000070336,
+      "row_count": 20,
+      "explain": [
+        [
+          4,
+          0,
+          216,
+          "SCAN predictions"
+        ],
+        [
+          25,
+          0,
+          0,
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      ]
+    },
+    {
+      "query": "reconciliation",
+      "sql": "SELECT symbol,horizon,abs_error_floor FROM prediction_reconciliations WHERE symbol=? AND horizon=? ORDER BY resolved_at DESC LIMIT 20",
+      "params": [
+        "GOOGL",
+        "w1"
+      ],
+      "repetitions": 30,
+      "p95_seconds": 0.050019258000247646,
+      "row_count": 20,
+      "explain": [
+        [
+          4,
+          0,
+          216,
+          "SCAN prediction_reconciliations"
+        ],
+        [
+          23,
+          0,
+          0,
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      ]
+    },
+    {
+      "query": "training_cycles",
+      "sql": "SELECT as_of,model_name,model_version FROM model_training_cycles ORDER BY as_of DESC LIMIT 20",
+      "params": [],
+      "repetitions": 30,
+      "p95_seconds": 2.5368000024172943e-05,
+      "row_count": 20,
+      "explain": [
+        [
+          4,
+          0,
+          216,
+          "SCAN model_training_cycles"
+        ],
+        [
+          17,
+          0,
+          0,
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      ]
+    },
+    {
+      "query": "training_reviews",
+      "sql": "SELECT as_of,model_name,action FROM training_reviews ORDER BY as_of DESC LIMIT 20",
+      "params": [],
+      "repetitions": 30,
+      "p95_seconds": 3.083599995079567e-05,
+      "row_count": 20,
+      "explain": [
+        [
+          4,
+          0,
+          216,
+          "SCAN training_reviews"
+        ],
+        [
+          17,
+          0,
+          0,
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      ]
+    }
+  ]
+}
