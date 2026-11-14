@@ -4,6 +4,8 @@ Related: [OKR #261](https://github.com/jcval94/floor/issues/261), [FLOOR 2.0 #25
 
 **Local research prototype; not deployed, not integrated into official operation, no Slack delivery yet.** It includes an actual MCP server, separately supervised durable SQLite queue, registered Python computations, MLflow SQLite tracking and HTML/JSON artifacts. A configured Slack Web API adapter/outbox is included; mocks are not counted as live deliveries. No cloud resources/billing/credentials were created.
 
+Frozen-model extension (contract 1.1): [design](ADR-002-frozen-models.md) and [measured comparison](frozen-models.md). The original 1.0 evidence remains a separate checkpoint.
+
 Read [audit](audit.md), [ADR](ADR-001.md), [contracts](tool_contracts.md), [connection/runbook](connect.md), [Slack](slack.md), [security](security.md), [E2E evidence](e2e_results.md), [KR/roadmap](okr.md), [snapshot catalog](catalog.md).
 
 ```mermaid
@@ -25,7 +27,7 @@ MCP is control plane. `worker.py` is execution plane; it must stay running indep
 
 - Three research recipes: same-fold W1 model comparison (Dummy, Ridge, ExtraTrees), feature audit (missingness/constants/redundancy, training-derived outlier fences, distribution distance and OOS permutation importance by fold), and controlled feature ablation. Fixed hyperparameters, baseline always included, train-fitted imputation/scaling.
 - Purged expanding whole-date evaluation reuses `models.temporal_cv`. No random train/test split, test-set hyperparameter selection, automatic production promotion or trading.
-- These research estimators are **not the three existing production champions**, and do not yet evaluate floor/ceiling joint coverage, timing or risk geometry. Existing serialized champion inference adapters need a separate reviewed contract and known training cutoffs. XGBoost/LightGBM and VIX requests are not silently substituted.
+- These research estimators are **not the three existing production champions**. The new `frozen_model_comparison` recipe separately reuses exact FLOOR serialized floor/ceiling heads and frozen risk geometry. Its shared post-artifact window is explicitly **not verified OOS** because exact training/selection cutoffs are absent. Timing is not yet compared. XGBoost/LightGBM and VIX requests are not silently substituted.
 - Dataset imports are operator-only. MCP accepts registered dataset IDs, never paths/URLs/SQL/shell/code. `available_at` is checked per feature and observation. Reconstructed provider history is labeled retrospective, never vintage PIT evidence.
 - IDs, deduplication, actor quotas, resource/time limits, cancel requests, structured failure, outbox delivery states and checksummed artifacts are implemented. Single worker/FIFO; priority scheduling, checkpoints for long training and paid compute are deferred.
 - MLflow owns tracking metadata. The small control DB owns queue/permissions/outbox; it is not a replacement tracking platform. No persistent MLflow server and no online feature-store service.
@@ -103,5 +105,5 @@ For an assistant already connected to the tools. Dataset must first be registere
 | 19. Reenvía el reporte cuya entrega falló sin reentrenar. | Known-failed notification retry; UNKNOWN requires review |
 | 20. Prueba si agregar VIX mejora el forecast. | Proposal AWAITING_APPROVAL, no generated code execution |
 | 21. Compara mean reversion y breakout con costos de FLOOR. | Not available yet; reviewed existing-backtest adapter required |
-| 22. Compara los champions actuales y sus predecesores OOS. | Not available yet; frozen inference/cutoff adapter required |
+| 22. Compara los champions actuales y sus predecesores OOS. | Frozen-head comparison available; exact training boundary absent, so reports post-artifact reconstructed holdout and OOS unverified |
 | 23. Dame las mejores oportunidades de esta semana. | Not available; does not fabricate #258 results |

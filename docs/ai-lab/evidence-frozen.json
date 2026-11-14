@@ -1,0 +1,228 @@
+{
+  "implementation_commit": "b7f11b1ce3ca1fdec249eb3afd7e2d7557e97d59",
+  "dirty_tree": false,
+  "client": "official Python SDK 1.30.0",
+  "protocol": "2025-11-25",
+  "experiment_id": "f517c6d4-1bef-47b5-adc3-f701b210b7d9",
+  "run_id": "2c0b74b9-ed08-4d12-bc14-5ce279234c66",
+  "state": "SUCCEEDED",
+  "dataset_id": "a6439b85b2dca58914a6c2d5ed52f300eb605e4fe9a57b27ba79c684fbebea45",
+  "disconnected_at": 1794605302.749033,
+  "finished": 1794605306.3782158,
+  "finished_after_disconnect": true,
+  "mlflow_run_id": "22a223c428104748ab69b6b0613c36d6",
+  "worker_duration_seconds": 3.9440187010000045,
+  "comparability": {
+    "cutoff": "2026-09-26T02:38:28+00:00",
+    "cutoff_basis": "latest parsed artifact version timestamp, not verified training boundary",
+    "end": "2026-11-04T23:59:00+00:00",
+    "evidence_type": "post_artifact_reconstructed_holdout",
+    "native_model_feature_contracts_may_differ": true,
+    "observation_dates": 28,
+    "out_of_sample_verified": false,
+    "same_evaluation_window": true,
+    "same_input_materialization": true,
+    "same_rows": true,
+    "same_target": true,
+    "start": "2026-09-28T23:59:00+00:00"
+  },
+  "metrics": [
+    {
+      "by_symbol": {
+        "GOOGL": {
+          "mae_floor_pct": 0.03672473090566129,
+          "rmse_floor_pct": 0.050760143932273225
+        },
+        "MSFT": {
+          "mae_floor_pct": 0.016789597618789898,
+          "rmse_floor_pct": 0.02015877950633064
+        },
+        "SPY": {
+          "mae_floor_pct": 0.009937297891826766,
+          "rmse_floor_pct": 0.01339066292920288
+        }
+      },
+      "central_joint_coverage": 0.09523809523809523,
+      "fold_mae_std": 0.008791007027413911,
+      "mae_ceiling_pct": 0.015349013173969245,
+      "mae_floor_pct": 0.02115054213875932,
+      "model": "w1_champion",
+      "risk_joint_coverage": 0.9285714285714286,
+      "risk_mean_width_pct": 0.15060357855426706,
+      "rmse_floor_pct": 0.032466795637458475,
+      "sample_size": 84,
+      "variant": "frozen"
+    },
+    {
+      "by_symbol": {
+        "GOOGL": {
+          "mae_floor_pct": 0.036958845056336474,
+          "rmse_floor_pct": 0.048417681056470444
+        },
+        "MSFT": {
+          "mae_floor_pct": 0.017941146854295133,
+          "rmse_floor_pct": 0.0215921151277359
+        },
+        "SPY": {
+          "mae_floor_pct": 0.009958875335901365,
+          "rmse_floor_pct": 0.012081261259651354
+        }
+      },
+      "central_joint_coverage": 0.2976190476190476,
+      "fold_mae_std": 0.006555616265485498,
+      "mae_ceiling_pct": 0.018284772598361934,
+      "mae_floor_pct": 0.021619622415510995,
+      "model": "w1_challenger_20260925T214133Z",
+      "risk_joint_coverage": 0.9285714285714286,
+      "risk_mean_width_pct": 0.15663215463206162,
+      "rmse_floor_pct": 0.03139239901738132,
+      "sample_size": 84,
+      "variant": "frozen"
+    },
+    {
+      "by_symbol": {
+        "GOOGL": {
+          "mae_floor_pct": 0.03695808940838633,
+          "rmse_floor_pct": 0.04841241393929847
+        },
+        "MSFT": {
+          "mae_floor_pct": 0.01794150563276192,
+          "rmse_floor_pct": 0.021593215128160134
+        },
+        "SPY": {
+          "mae_floor_pct": 0.009966260385719447,
+          "rmse_floor_pct": 0.01208843812033014
+        }
+      },
+      "central_joint_coverage": 0.2976190476190476,
+      "fold_mae_std": 0.006545242141314504,
+      "mae_ceiling_pct": 0.018294591666403865,
+      "mae_floor_pct": 0.021621951808955903,
+      "model": "w1_challenger_20260924T192816Z",
+      "risk_joint_coverage": 0.6547619047619048,
+      "risk_mean_width_pct": 0.0863433042590476,
+      "rmse_floor_pct": 0.03139086437797911,
+      "sample_size": 84,
+      "variant": "frozen"
+    },
+    {
+      "by_symbol": {
+        "GOOGL": {
+          "mae_floor_pct": 0.037249458339100025,
+          "rmse_floor_pct": 0.054365567165255826
+        },
+        "MSFT": {
+          "mae_floor_pct": 0.0160470740275346,
+          "rmse_floor_pct": 0.019612574501732847
+        },
+        "SPY": {
+          "mae_floor_pct": 0.010402029403781113,
+          "rmse_floor_pct": 0.012522725623349865
+        }
+      },
+      "central_joint_coverage": 0.23809523809523808,
+      "fold_mae_std": 0.007750378420105315,
+      "mae_ceiling_pct": 0.018136319386766804,
+      "mae_floor_pct": 0.021232853923471913,
+      "model": "dummy_pre_cutoff",
+      "risk_joint_coverage": null,
+      "risk_mean_width_pct": null,
+      "rmse_floor_pct": 0.03414228379797143,
+      "sample_size": 84,
+      "variant": "frozen"
+    },
+    {
+      "by_symbol": {
+        "GOOGL": {
+          "mae_floor_pct": 0.043878826453129925,
+          "rmse_floor_pct": 0.051844233274454615
+        },
+        "MSFT": {
+          "mae_floor_pct": 0.029185070372030646,
+          "rmse_floor_pct": 0.03481068840850869
+        },
+        "SPY": {
+          "mae_floor_pct": 0.009784192910394233,
+          "rmse_floor_pct": 0.011863488341380422
+        }
+      },
+      "central_joint_coverage": 0.6071428571428571,
+      "fold_mae_std": 0.008576140646426585,
+      "mae_ceiling_pct": 0.024784324374737203,
+      "mae_floor_pct": 0.027616029911851605,
+      "model": "atr_sqrt5",
+      "risk_joint_coverage": null,
+      "risk_mean_width_pct": null,
+      "rmse_floor_pct": 0.036698550865651436,
+      "sample_size": 84,
+      "variant": "frozen"
+    }
+  ],
+  "model_assets": [
+    {
+      "artifact_sha256": "e7861da4bcfbdb531d8d2d1cc01b1db8ab603827388f98c870eb2088c32ff4c9",
+      "artifact_timestamp": "2026-09-26T02:38:28+00:00",
+      "bytes": 485398,
+      "id": "w1_champion",
+      "model_name": "central_skill_ensemble_v1_w1",
+      "status": "EXPERIMENTAL_REPLAY_ONLY",
+      "stored_metrics_scope": "historical, not comparable without re-evaluation",
+      "training_cutoff_verified": false,
+      "version": "20260926T023828Z"
+    },
+    {
+      "artifact_sha256": "a97026d236513516c384a0a587bdf237cb2480e7043a0d8a6211472cd6f5caae",
+      "artifact_timestamp": "2026-09-25T21:41:33+00:00",
+      "bytes": 180764,
+      "id": "w1_challenger_20260925T214133Z",
+      "model_name": "robust_range_v3_w1",
+      "status": "EXPERIMENTAL_REPLAY_ONLY",
+      "stored_metrics_scope": "historical, not comparable without re-evaluation",
+      "training_cutoff_verified": false,
+      "version": "20260925T214133Z"
+    },
+    {
+      "artifact_sha256": "9001da370537a258f78046a8a88b826b1943fc918a2dd5ad353c3e9ffe25f71c",
+      "artifact_timestamp": "2026-09-24T19:28:16+00:00",
+      "bytes": 179170,
+      "id": "w1_challenger_20260924T192816Z",
+      "model_name": "robust_range_v3_w1",
+      "status": "EXPERIMENTAL_REPLAY_ONLY",
+      "stored_metrics_scope": "historical, not comparable without re-evaluation",
+      "training_cutoff_verified": false,
+      "version": "20260924T192816Z"
+    }
+  ],
+  "artifact_hashes": {
+    "predictions.json": "78f9d57d0abe00ee9a0d8590ce3cbc234214d50b15fe06200f379e25f664cf0e",
+    "provenance.json": "ea6be99db0a8898bda0950e06accbd2e59c217355375e05816cd446c317d25a0",
+    "report.html": "637c837d2cc3c08f9ff80f5a21c1b1d2ced78229efd7b110baabba2cc0a06215",
+    "result.json": "4c63781a30064f4aca480338723b973a19929c99f25bf70586d28d37e3445b4c"
+  },
+  "acceptance_asset_hashes_preserved": true,
+  "slack_real_deliveries": 0,
+  "remote_deployed": false,
+  "second_client": {
+    "name": "MCP Inspector CLI",
+    "version": "2.15.0",
+    "operations": [
+      "idempotent submit",
+      "read measured results"
+    ],
+    "same_run_returned": true,
+    "total_runs_after_duplicate": 1,
+    "protocol_revision": "not separately captured"
+  },
+  "validation": {
+    "full_suite_passed": 712,
+    "coverage_percent": 73.66,
+    "required_coverage_percent": 60,
+    "ruff_scope": "src tests scripts",
+    "ruff": "PASS",
+    "mypy_source_files": 191,
+    "mypy": "PASS",
+    "ci_scope": "local with installed research extras; no GitHub CI success inferred"
+  },
+  "state_at_disconnect": "RUNNING",
+  "earlier_checkpoint_run_id": "68f15285-cd80-4180-8efd-80c72f13fea0"
+}

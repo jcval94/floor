@@ -1,4 +1,4 @@
-# MCP tool contracts v1.0
+# MCP tool contracts v1.1
 
 Authoritative machine-readable schemas: [tool_schemas.json](tool_schemas.json). Output envelope: contract_version, ok, data_status, source, data, warnings, error. Validation/auth failures return ok=false and safe error code; SDK schema failures may use standard MCP isError. No free-form shell/SQL tool.
 
@@ -28,6 +28,6 @@ Authoritative machine-readable schemas: [tool_schemas.json](tool_schemas.json). 
 
 All run reads/cancellation are owner-scoped; administrator can inspect cross-owner evidence. Catalog entries are shared approved research inputs. Paginators cap limit=50, offset=10000. Artifact references are relative to the protected research root, not invented public URLs.
 
-Plan fields: schema_version, question, recipe, dataset_id, models, features, drop_features, folds, seed, objective, max_seconds, max_memory_mb, max_cost_usd, notification. Three registered recipes only. Unknown models/novel VIX/backtest/champion intents require reviewed adapters. Planner is deterministic routing, not a general language-to-code compiler. Client reviews exact parameters before submit.
+Plan fields: schema_version, question, recipe, dataset_id, models, frozen_model_ids, features, drop_features, folds, seed, objective, max_seconds, max_memory_mb, max_cost_usd, notification. Four registered recipes; frozen_model_comparison uses frozen_model_ids from the discovered artifact catalog and requires full feature materialization. Its post-artifact window is not verified OOS. Unknown models/novel VIX/backtest/champion intents require reviewed adapters. Planner is deterministic routing, not a general language-to-code compiler. Client reviews exact parameters before submit.
 
-No API compatibility is claimed beyond contract 1.0. Protocol version negotiation and domain contract version are separate. New optional fields can be additive; removing/renaming required inputs requires a new major contract and client harness.
+No API compatibility is claimed beyond contract 1.1. Protocol version negotiation and domain contract version are separate. New optional fields can be additive; removing/renaming required inputs requires a new major contract and client harness.

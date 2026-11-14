@@ -97,6 +97,10 @@ class Store:
 
         rows, manifest = self.dataset(plan.dataset_id)
         validate_rows(rows, manifest, plan)
+        if plan.recipe == "frozen_model_comparison":
+            from ai_lab.frozen_models import validate_frozen_inputs
+
+            validate_frozen_inputs(rows, manifest, plan)
         if len(set(plan.models)) != len(plan.models) or len(set(plan.features)) != len(
             plan.features
         ):
@@ -132,7 +136,7 @@ class Store:
                 "SELECT * FROM runs WHERE actor=? AND idem=?", (actor, idem)
             ).fetchone()
         if old:
-            if old["plan"] != encoded:
+            if Plan.model_validate_json(old["plan"]).model_dump() != plan.model_dump():
                 raise ValueError("IDEMPOTENCY_CONFLICT")
             return dict(old)
         validation = self.validate(plan)
@@ -144,7 +148,10 @@ class Store:
                 "SELECT * FROM runs WHERE actor=? AND idem=?", (actor, idem)
             ).fetchone()
             if old:
-                if old["plan"] != encoded:
+                if (
+                    Plan.model_validate_json(old["plan"]).model_dump()
+                    != plan.model_dump()
+                ):
                     raise ValueError("IDEMPOTENCY_CONFLICT")
                 return dict(old)
             now = time.time()

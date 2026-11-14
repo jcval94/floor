@@ -101,6 +101,10 @@ def metrics(y, p):
 
 def evaluate(rows, manifest, plan):
     validate_rows(rows, manifest, plan)
+    if plan.recipe == "frozen_model_comparison":
+        from ai_lab.frozen_models import evaluate_frozen
+
+        return evaluate_frozen(rows, manifest, plan)
     folds = purged_expanding_folds(
         rows, target_end_field="target_end_date_w1", folds=plan.folds
     )

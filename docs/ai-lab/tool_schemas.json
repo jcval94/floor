@@ -10,7 +10,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -75,7 +75,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -151,7 +151,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -229,7 +229,8 @@
               "enum": [
                 "model_comparison",
                 "feature_audit",
-                "feature_ablation"
+                "feature_ablation",
+                "frozen_model_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -251,6 +252,15 @@
               "maxItems": 3,
               "minItems": 1,
               "title": "Models",
+              "type": "array"
+            },
+            "frozen_model_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "title": "Frozen Model Ids",
               "type": "array"
             },
             "features": {
@@ -342,7 +352,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -398,7 +408,7 @@
   },
   {
     "name": "floor_list_models",
-    "description": "Registered research estimators; these IDs are not production champions.",
+    "description": "Discover research estimators and separately versioned frozen FLOOR W1 artifacts.",
     "inputSchema": {
       "properties": {},
       "title": "floor_list_modelsArguments",
@@ -407,7 +417,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -483,7 +493,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -555,7 +565,8 @@
           "enum": [
             "model_comparison",
             "feature_audit",
-            "feature_ablation"
+            "feature_ablation",
+            "frozen_model_comparison"
           ],
           "title": "Recipe",
           "type": "string"
@@ -574,6 +585,21 @@
           ],
           "default": null,
           "title": "Drop Features"
+        },
+        "frozen_model_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frozen Model Ids"
         }
       },
       "required": [
@@ -586,7 +612,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -664,7 +690,8 @@
               "enum": [
                 "model_comparison",
                 "feature_audit",
-                "feature_ablation"
+                "feature_ablation",
+                "frozen_model_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -686,6 +713,15 @@
               "maxItems": 3,
               "minItems": 1,
               "title": "Models",
+              "type": "array"
+            },
+            "frozen_model_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "title": "Frozen Model Ids",
               "type": "array"
             },
             "features": {
@@ -777,7 +813,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -855,7 +891,8 @@
               "enum": [
                 "model_comparison",
                 "feature_audit",
-                "feature_ablation"
+                "feature_ablation",
+                "frozen_model_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -877,6 +914,15 @@
               "maxItems": 3,
               "minItems": 1,
               "title": "Models",
+              "type": "array"
+            },
+            "frozen_model_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "title": "Frozen Model Ids",
               "type": "array"
             },
             "features": {
@@ -968,7 +1014,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1046,7 +1092,8 @@
               "enum": [
                 "model_comparison",
                 "feature_audit",
-                "feature_ablation"
+                "feature_ablation",
+                "frozen_model_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -1068,6 +1115,15 @@
               "maxItems": 3,
               "minItems": 1,
               "title": "Models",
+              "type": "array"
+            },
+            "frozen_model_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 2,
+              "title": "Frozen Model Ids",
               "type": "array"
             },
             "features": {
@@ -1164,7 +1220,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1240,7 +1296,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1313,7 +1369,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1386,7 +1442,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1459,7 +1515,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1532,7 +1588,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1605,7 +1661,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1678,7 +1734,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1743,7 +1799,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1819,7 +1875,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1892,7 +1948,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1957,7 +2013,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },

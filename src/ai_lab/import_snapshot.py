@@ -15,6 +15,8 @@ from datetime import datetime
 from ai_lab.store import Store
 from features.feature_builder import build_features
 from features.labels import build_labels
+from models.robust_range_v3 import ROBUST_RANGE_FEATURES
+from models.central_skill_ensemble import CENTRAL_SKILL_FEATURES
 
 FEATURES = [
     "ret_lag_1",
@@ -26,7 +28,12 @@ FEATURES = [
 
 
 def import_market(
-    root, db, archive_hash, source_run_id, symbols=("SPY", "GOOGL", "MSFT")
+    root,
+    db,
+    archive_hash,
+    source_run_id,
+    symbols=("SPY", "GOOGL", "MSFT"),
+    full_features=False,
 ):
     with sqlite3.connect("file:" + str(db.resolve()) + "?mode=ro", uri=True) as c:
         c.row_factory = sqlite3.Row
@@ -70,10 +77,25 @@ def import_market(
         ]
         if days != expected:
             raise ValueError("MISSING_OR_DUPLICATE_MARKET_SESSIONS")
+    benchmark = {r["timestamp"]: r["close"] for r in rows if r["symbol"] == "SPY"}
+    if full_features and (
+        not benchmark or any(r["timestamp"] not in benchmark for r in rows)
+    ):
+        raise ValueError("BENCHMARK_SESSION_MISSING")
+    for r in rows:
+        if r["timestamp"] in benchmark:
+            r["benchmark_close"] = benchmark[r["timestamp"]]
+    materialized = (
+        sorted(set(ROBUST_RANGE_FEATURES) | set(CENTRAL_SKILL_FEATURES))
+        if full_features
+        else FEATURES
+    )
     rows = build_labels(build_features(rows))
     prepared = []
     for r in rows:
-        if not r.get("horizon_complete_w1") or any(r.get(f) is None for f in FEATURES):
+        if not r.get("horizon_complete_w1") or any(
+            r.get(f) is None for f in materialized
+        ):
             continue
         ts = r["timestamp"]
         prepared.append(
@@ -87,12 +109,17 @@ def import_market(
                     "floor_w1",
                     "horizon_complete_w1",
                 ]
-                + FEATURES
+                + (
+                    ["open", "high", "low", "volume", "ceiling_w1"]
+                    if full_features
+                    else []
+                )
+                + materialized
             }
             | {
                 "target_end_date_w1": str(r["target_end_date_w1"])[:10]
                 + "T23:59:00+00:00",
-                "feature_available_at": {f: ts for f in FEATURES},
+                "feature_available_at": {f: ts for f in materialized},
             }
         )
     manifest = {
@@ -102,6 +129,10 @@ def import_market(
         "target": "floor_w1",
         "horizon_sessions": 5,
         "features": FEATURES,
+        "materialized_features": materialized,
+        "feature_definition_version": "floor-feature-builder/"
+        + ("full-v2-benchmark-joined" if full_features else "compact-v1"),
+        "historical_ai_inputs": "NOT_AVAILABLE; serving defaults only when a frozen model explicitly supports them",
         "temporal_evidence": "retrospective_reconstructed",
         "calendar": "XNYS/exchange-calendars-4.13.2",
         "excluded_incomplete_bars": excluded,
@@ -124,6 +155,7 @@ if __name__ == "__main__":
     p.add_argument("--archive-hash", required=True)
     p.add_argument("--source-run-id", required=True)
     p.add_argument("--archive", required=True, type=Path)
+    p.add_argument("--full-features", action="store_true")
     a = p.parse_args()
     actual = hashlib.file_digest(a.archive.open("rb"), "sha256").hexdigest()
     if actual != a.archive_hash:
@@ -147,6 +179,14 @@ if __name__ == "__main__":
         raise SystemExit("DATABASE_NOT_FROM_ARCHIVE")
     print(
         json.dumps(
-            {"dataset_id": import_market(a.root, a.db, a.archive_hash, a.source_run_id)}
+            {
+                "dataset_id": import_market(
+                    a.root,
+                    a.db,
+                    a.archive_hash,
+                    a.source_run_id,
+                    full_features=a.full_features,
+                )
+            }
         )
     )

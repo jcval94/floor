@@ -8,8 +8,13 @@ def default_models() -> list[Literal["dummy", "ridge", "extra_trees"]]:
     return ["dummy", "ridge", "extra_trees"]
 
 
-CONTRACT_VERSION = "1.0"
-RECIPES = ("model_comparison", "feature_audit", "feature_ablation")
+CONTRACT_VERSION = "1.1"
+RECIPES = (
+    "model_comparison",
+    "feature_audit",
+    "feature_ablation",
+    "frozen_model_comparison",
+)
 MODELS = ("dummy", "ridge", "extra_trees")
 
 
@@ -17,11 +22,25 @@ class Plan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal["1.0"] = "1.0"
     question: str = Field(min_length=5, max_length=2000)
-    recipe: Literal["model_comparison", "feature_audit", "feature_ablation"]
+    recipe: Literal[
+        "model_comparison",
+        "feature_audit",
+        "feature_ablation",
+        "frozen_model_comparison",
+    ]
     dataset_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     models: list[Literal["dummy", "ridge", "extra_trees"]] = Field(
         default_factory=default_models,
         min_length=1,
+        max_length=3,
+    )
+    frozen_model_ids: list[str] = Field(
+        default_factory=lambda: [
+            "w1_champion",
+            "w1_challenger_20260925T214133Z",
+            "w1_challenger_20260924T192816Z",
+        ],
+        min_length=2,
         max_length=3,
     )
     features: list[str] = Field(min_length=1, max_length=16)

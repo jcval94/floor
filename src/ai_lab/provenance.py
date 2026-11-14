@@ -19,6 +19,12 @@ def code_identity():
         str(p.relative_to(root)): digest(p.read_bytes())
         for p in sorted((root / "src").rglob("*.py"))
     }
+    assets = (
+        sorted((root / "data/training/models").glob("*.json"))
+        + sorted((root / "config").rglob("*.yaml"))
+        + sorted((root / "config").rglob("*.json"))
+    )
+    asset_hashes = {str(p.relative_to(root)): digest(p.read_bytes()) for p in assets}
     packages = {}
     for name in ("numpy", "scikit-learn", "mcp", "mlflow-skinny", "exchange-calendars"):
         try:
@@ -28,6 +34,7 @@ def code_identity():
     return {
         "git_commit": commit,
         "source_hashes": hashes,
+        "asset_hashes": asset_hashes,
         "dependencies": packages,
         "python": platform.python_version(),
     }
