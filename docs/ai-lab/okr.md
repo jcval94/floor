@@ -1,6 +1,6 @@
 # OKR #261 — status and path to 2026-12-31
 
-This checkpoint does not close #261 or authorize integration under #253. PRs are stacked drafts: [#262 audit/ADR](https://github.com/jcval94/floor/pull/262) → [#263 core](https://github.com/jcval94/floor/pull/263) → evidence/manuals follow-up. No merge, deployment, official workflow or production-state modification.
+This checkpoint does not close #261 or authorize integration under #253. Initial PRs (subsequently merged with user authorization) were stacked drafts: [#262 audit/ADR](https://github.com/jcval94/floor/pull/262) → [#263 core](https://github.com/jcval94/floor/pull/263) → evidence/manuals follow-up. Authorized merges #262–#265 are now in main. No MCP deployment, official workflow/configuration or financial-state modification was made.
 
 | KR | Goal | Evidence achieved | Status | Risks / remaining |
 |---|---|---|---|---|
@@ -28,3 +28,9 @@ The Dec 31 target is feasible only if account/hosting/Slack permissions are reso
 ## Later extension: frozen artifacts
 
 The frozen W1 adapter now exists as an isolated follow-up: it compares actual serialized FLOOR heads and frozen risk geometry on a common reconstructed post-artifact window, includes baselines and preserves model/configuration hashes. This advances KR2, but does **not** resolve missing exact training cutoffs, genuine vintage PIT, remote deployment or Slack. The three original estimator recipes and their earlier evidence remain separate.
+
+Integration checkpoint: #262–#265 merged in dependency order on user instruction; main SHA cdeea810ce9ed0a090a2e7413389e4b8c5cbd8c6, main CI success run 43539256409. The new strategy adapter remains a separate research increment and does not close remote/Slack or prospective KRs.
+
+## Subsequent isolated strategy adapter
+
+A new `strategy_comparison` recipe now reuses the league engine, canonical strategy generators, next-open fills, risk exits and authoritative costs. It adds measured net return/drawdown/turnover/fees/trades/NAV with recursive research-ledger artifacts and label-exclusion checks. This advances research coverage; it does not close official parity, full-universe risk orchestration, OOS/vintage, remote hosting or real Slack KRs. Evidence and its 720-test validation are in [strategy-replay.md](strategy-replay.md).

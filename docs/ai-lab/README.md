@@ -2,6 +2,8 @@
 
 Related: [OKR #261](https://github.com/jcval94/floor/issues/261), [FLOOR 2.0 #253](https://github.com/jcval94/floor/issues/253).
 
+**Integration status:** PRs #262–#265 were merged to main with explicit user authorization on 2026-11-13 (`cdeea810ce9ed0a090a2e7413389e4b8c5cbd8c6`). Main CI succeeded: https://github.com/jcval94/floor/actions/runs/43539256409 . This subsequent branch adds strategy replay; its code is separate from the merged checkpoint.
+
 **Local research prototype; not deployed, not integrated into official operation, no Slack delivery yet.** It includes an actual MCP server, separately supervised durable SQLite queue, registered Python computations, MLflow SQLite tracking and HTML/JSON artifacts. A configured Slack Web API adapter/outbox is included; mocks are not counted as live deliveries. No cloud resources/billing/credentials were created.
 
 Frozen-model extension (contract 1.1): [design](ADR-002-frozen-models.md) and [measured comparison](frozen-models.md). The original 1.0 evidence remains a separate checkpoint.
@@ -104,6 +106,8 @@ For an assistant already connected to the tools. Dataset must first be registere
 | 18. ¿Se entregó realmente el informe a Slack? | Outbox state and real ts if delivered |
 | 19. Reenvía el reporte cuya entrega falló sin reentrenar. | Known-failed notification retry; UNKNOWN requires review |
 | 20. Prueba si agregar VIX mejora el forecast. | Proposal AWAITING_APPROVAL, no generated code execution |
-| 21. Compara mean reversion y breakout con costos de FLOOR. | Not available yet; reviewed existing-backtest adapter required |
+| 21. Compara mean reversion y breakout con costos de FLOOR. | New strategy_comparison adapter on this branch; existing league engine, authoritative costs, next-open fills and risk exits; retrospective only |
 | 22. Compara los champions actuales y sus predecesores OOS. | Frozen-head comparison available; exact training boundary absent, so reports post-artifact reconstructed holdout and OOS unverified |
 | 23. Dame las mejores oportunidades de esta semana. | Not available; does not fabricate #258 results |
+
+Next research increment: [strategy replay](strategy-replay.md) using the existing engine, not a second backtester. See [ADR-003](ADR-003-strategy-replay.md).

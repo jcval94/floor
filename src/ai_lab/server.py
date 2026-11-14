@@ -107,7 +107,6 @@ def build_server(store):
                 "unavailable": [
                     "official_forecasts",
                     "opportunity_finder",
-                    "strategy_backtest",
                     "arbitrary_code",
                     "automatic_promotion",
                     "public_remote_deployment",
@@ -172,6 +171,17 @@ def build_server(store):
         )
 
     @mcp.tool()
+    def floor_list_strategies() -> Result:
+        """Read the registered strategy replay catalog and authoritative costs; no broker orders."""
+
+        def read():
+            from ai_lab.strategy_replay import strategy_catalog
+
+            return strategy_catalog()
+
+        return guarded(read)
+
+    @mcp.tool()
     def floor_list_features(limit: int = 20, offset: int = 0) -> Result:
         """Read FLOOR's existing registry. leakage_safe is a claim, not PIT proof."""
 
@@ -201,9 +211,14 @@ def build_server(store):
             "feature_audit",
             "feature_ablation",
             "frozen_model_comparison",
+            "strategy_comparison",
         ] = "model_comparison",
         drop_features: list[str] | None = None,
         frozen_model_ids: list[str] | None = None,
+        strategies: list[
+            Literal["mean_reversion_floor_w1", "breakout_protected_by_floor"]
+        ]
+        | None = None,
     ) -> Result:
         """Resolve a natural-language intent to an allowlisted plan. Unknown code/data requires review."""
 
@@ -223,16 +238,29 @@ def build_server(store):
                 "elimina",
                 "ablation",
             )
-            if any(
-                w in question.lower()
-                for w in (
-                    "vix",
-                    "xgboost",
-                    "lightgbm",
-                    "backtest",
-                    "estrategia",
+            strategy_intent = (
+                recipe == "strategy_comparison"
+                or strategies is not None
+                or any(
+                    w in question.lower()
+                    for w in ("mean reversion", "mean_reversion", "breakout")
                 )
-            ) or not any(w in question.lower() for w in supported_words):
+            )
+            if (
+                (
+                    any(w in question.lower() for w in ("estrategia", "backtest"))
+                    and not strategy_intent
+                )
+                or any(
+                    w in question.lower()
+                    for w in (
+                        "vix",
+                        "xgboost",
+                        "lightgbm",
+                    )
+                )
+                or not any(w in question.lower() for w in supported_words)
+            ):
                 return {
                     "state": "AWAITING_APPROVAL",
                     "executable": False,
@@ -253,11 +281,17 @@ def build_server(store):
                 )
                 else recipe
             )
+            if strategy_intent:
+                selected_recipe = "strategy_comparison"
+            elif recipe != "model_comparison":
+                selected_recipe = recipe
             optional = (
                 {"frozen_model_ids": frozen_model_ids}
                 if frozen_model_ids is not None
                 else {}
             )
+            if strategies is not None:
+                optional["strategies"] = strategies
             plan = Plan(
                 question=question,
                 dataset_id=dataset_id,
@@ -265,6 +299,9 @@ def build_server(store):
                 **optional,
                 features=manifest["features"],
                 drop_features=drop_features or [],
+                objective="net_return"
+                if selected_recipe == "strategy_comparison"
+                else "mae_floor_pct",
             )
             validation = store.validate(plan)
             return {
@@ -447,6 +484,8 @@ def build_server(store):
                 "drop_features",
                 "recipe",
             )
+            if runs[0]["plan"]["recipe"] == "strategy_comparison":
+                keys = (*keys, "strategies")
             if runs[0]["plan"]["recipe"] == "frozen_model_comparison":
                 keys = (*keys, "frozen_model_ids")
             first = {k: runs[0]["plan"].get(k) for k in keys}
