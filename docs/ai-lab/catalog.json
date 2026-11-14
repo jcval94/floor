@@ -1,0 +1,959 @@
+[
+  {
+    "database": "market_data.sqlite",
+    "bytes": 9981952,
+    "sha256": "7273c735ebfe521dad2b1a11d3a6774218b2beec5e706e8d70bc0ae7df1bbbd9",
+    "integrity_check": "ok",
+    "tables": [
+      {
+        "table": "daily_bars",
+        "ddl": "CREATE TABLE daily_bars (\n                symbol TEXT NOT NULL,\n                ts_utc TEXT NOT NULL,\n                open REAL NOT NULL,\n                high REAL NOT NULL,\n                low REAL NOT NULL,\n                close REAL NOT NULL,\n                volume REAL NOT NULL,\n                source TEXT NOT NULL DEFAULT 'yahoo',\n                fetched_at_utc TEXT NOT NULL,\n                raw_payload TEXT,\n                PRIMARY KEY (symbol, ts_utc)\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "symbol",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "ts_utc",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 2
+          },
+          {
+            "cid": 2,
+            "name": "open",
+            "type": "REAL",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "high",
+            "type": "REAL",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "low",
+            "type": "REAL",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "close",
+            "type": "REAL",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "volume",
+            "type": "REAL",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "source",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": "'yahoo'",
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "fetched_at_utc",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "raw_payload",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [
+          {
+            "seq": 0,
+            "name": "idx_daily_bars_symbol_ts",
+            "unique": 0,
+            "origin": "c",
+            "partial": 0
+          },
+          {
+            "seq": 1,
+            "name": "sqlite_autoindex_daily_bars_1",
+            "unique": 1,
+            "origin": "pk",
+            "partial": 0
+          }
+        ],
+        "row_count": 51153
+      }
+    ]
+  },
+  {
+    "database": "app.sqlite",
+    "bytes": 855199744,
+    "sha256": "62a40d7bbb771d5bee84c97339ac9259481e2de9f9d799386505cb442ddf22fa",
+    "integrity_check": "ok",
+    "tables": [
+      {
+        "table": "model_competition_results",
+        "ddl": "CREATE TABLE model_competition_results (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                as_of TEXT,\n                version TEXT,\n                horizon TEXT,\n                model_id TEXT,\n                model_family TEXT,\n                is_champion INTEGER,\n                mae_floor REAL,\n                mae_ceiling REAL,\n                mae_spread REAL,\n                test_floor_coverage REAL,\n                test_ceiling_coverage REAL,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "version",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "horizon",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "model_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "model_family",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "is_champion",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "mae_floor",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "mae_ceiling",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "mae_spread",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 10,
+            "name": "test_floor_coverage",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 11,
+            "name": "test_ceiling_coverage",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 12,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [],
+        "row_count": 0
+      },
+      {
+        "table": "model_training_cycles",
+        "ddl": "CREATE TABLE model_training_cycles (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                as_of TEXT NOT NULL,\n                task TEXT NOT NULL,\n                training_mode TEXT NOT NULL,\n                action TEXT NOT NULL,\n                champion_decision TEXT,\n                model_name TEXT,\n                model_version TEXT,\n                retrained INTEGER NOT NULL,\n                previous_champion_path TEXT,\n                previous_champion_version TEXT,\n                new_champion_path TEXT,\n                challenger_path TEXT,\n                metrics_path TEXT,\n                dataset_path TEXT,\n                output_dir TEXT,\n                cv_enabled INTEGER NOT NULL,\n                cv_folds INTEGER,\n                hyperparameter_grid_json TEXT,\n                tuning_summary_json TEXT,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "task",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "training_mode",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "action",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "champion_decision",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "model_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "model_version",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "retrained",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "previous_champion_path",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 10,
+            "name": "previous_champion_version",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 11,
+            "name": "new_champion_path",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 12,
+            "name": "challenger_path",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 13,
+            "name": "metrics_path",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 14,
+            "name": "dataset_path",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 15,
+            "name": "output_dir",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 16,
+            "name": "cv_enabled",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 17,
+            "name": "cv_folds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 18,
+            "name": "hyperparameter_grid_json",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 19,
+            "name": "tuning_summary_json",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 20,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [],
+        "row_count": 30
+      },
+      {
+        "table": "orders",
+        "ddl": "CREATE TABLE orders (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                symbol TEXT,\n                as_of TEXT,\n                action TEXT,\n                qty INTEGER,\n                order_type TEXT,\n                mode TEXT,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "symbol",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "action",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "qty",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "order_type",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "mode",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [],
+        "row_count": 0
+      },
+      {
+        "table": "prediction_reconciliations",
+        "ddl": "CREATE TABLE prediction_reconciliations (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                prediction_id INTEGER NOT NULL,\n                prediction_key TEXT,\n                symbol TEXT NOT NULL,\n                horizon TEXT NOT NULL,\n                predicted_as_of TEXT NOT NULL,\n                resolved_at TEXT NOT NULL,\n                model_version TEXT,\n                window_start TEXT,\n                window_end TEXT,\n                window_sessions INTEGER,\n                predicted_floor REAL,\n                predicted_ceiling REAL,\n                realized_floor REAL,\n                realized_ceiling REAL,\n                abs_error_floor REAL,\n                abs_error_ceiling REAL,\n                m3_predicted_week INTEGER,\n                m3_realized_week INTEGER,\n                m3_week_hit INTEGER,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "prediction_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "prediction_key",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "symbol",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "horizon",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "predicted_as_of",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "resolved_at",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "model_version",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "window_start",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "window_end",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 10,
+            "name": "window_sessions",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 11,
+            "name": "predicted_floor",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 12,
+            "name": "predicted_ceiling",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 13,
+            "name": "realized_floor",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 14,
+            "name": "realized_ceiling",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 15,
+            "name": "abs_error_floor",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 16,
+            "name": "abs_error_ceiling",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 17,
+            "name": "m3_predicted_week",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 18,
+            "name": "m3_realized_week",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 19,
+            "name": "m3_week_hit",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 20,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [
+          {
+            "seq": 0,
+            "name": "uq_prediction_reconciliation_id",
+            "unique": 1,
+            "origin": "c",
+            "partial": 0
+          },
+          {
+            "seq": 1,
+            "name": "uq_prediction_reconciliation_key",
+            "unique": 1,
+            "origin": "c",
+            "partial": 1
+          }
+        ],
+        "row_count": 335934
+      },
+      {
+        "table": "predictions",
+        "ddl": "CREATE TABLE predictions (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                batch_id TEXT NOT NULL DEFAULT '',\n                symbol TEXT,\n                as_of TEXT,\n                event_type TEXT,\n                horizon TEXT,\n                floor_value REAL,\n                ceiling_value REAL,\n                model_version TEXT,\n                payload_json TEXT NOT NULL\n            , prediction_key TEXT)",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "batch_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": "''",
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "symbol",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "event_type",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "horizon",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "floor_value",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "ceiling_value",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "model_version",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 10,
+            "name": "prediction_key",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [
+          {
+            "seq": 0,
+            "name": "idx_predictions_prediction_key",
+            "unique": 0,
+            "origin": "c",
+            "partial": 0
+          },
+          {
+            "seq": 1,
+            "name": "uq_predictions_batch_symbol_horizon",
+            "unique": 1,
+            "origin": "c",
+            "partial": 1
+          }
+        ],
+        "row_count": 120000
+      },
+      {
+        "table": "signals",
+        "ddl": "CREATE TABLE signals (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                batch_id TEXT NOT NULL DEFAULT '',\n                symbol TEXT,\n                as_of TEXT,\n                horizon TEXT,\n                action TEXT,\n                confidence REAL,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "batch_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": "''",
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "symbol",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "horizon",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "action",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "confidence",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [
+          {
+            "seq": 0,
+            "name": "uq_signals_batch_symbol_horizon",
+            "unique": 1,
+            "origin": "c",
+            "partial": 1
+          }
+        ],
+        "row_count": 153456
+      },
+      {
+        "table": "training_reviews",
+        "ddl": "CREATE TABLE training_reviews (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                as_of TEXT,\n                model_name TEXT,\n                action TEXT,\n                reason TEXT,\n                data_drift REAL,\n                concept_drift REAL,\n                calibration_drift REAL,\n                performance_decay REAL,\n                payload_json TEXT NOT NULL\n            )",
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "as_of",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "model_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "action",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "reason",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "data_drift",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "concept_drift",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "calibration_drift",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "performance_decay",
+            "type": "REAL",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "payload_json",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "foreign_keys": [],
+        "indexes": [],
+        "row_count": 58
+      }
+    ]
+  }
+]
