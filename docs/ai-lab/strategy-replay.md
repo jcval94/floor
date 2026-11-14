@@ -31,4 +31,17 @@ The first direct replay uses GOOGL/MSFT/SPY over Sep 28–Nov 4, 2026: 28 signal
 
 The window is reconstructed provider history after the newest artifact version timestamp, not a verified training/selection cutoff. `out_of_sample_verified=false`; no prospective, independent-statistical-winner or promotion claim. Unit fixtures force known BUY/HOLD/stop cases solely to verify the reused execution mechanics; those are not market-performance evidence.
 
-Actual MCP/worker execution IDs, metrics and artifacts will be added after executing a clean committed source version. Remote deployment and real Slack delivery are still pending administrator configuration/authorization.
+Actual clean-source MCP run `826cdc1b-f747-473c-a5b7-be824ab3fde7` (commit `103ee68806b096742d36559b7238ef55f6f33bd3`) succeeded after client disconnect from confirmed RUNNING state in 6.17s. A second MCP client read results and repeated the same plan/key without adding another job. Evidence: [evidence-strategies.json](evidence-strategies.json). Remote deployment and real Slack delivery are still pending administrator configuration/authorization.
+
+## Verified results and checks
+
+The complete repository suite passed: **720 tests**, **73.95% coverage** (60% gate), Ruff across src/tests/scripts and mypy across 192 source files. HTML structure and all relative artifact links were checked; the SVG contains exactly one measured NAV curve per participant. Pixel/responsive review remains pending under the previously documented browser limitation. Slack formatting was tested with an injected fake HTTP response; no fixture acknowledgement is counted as live delivery.
+
+| Participant | Net return | Max drawdown | Turnover | Executed simulated trades | Measured costs USD |
+|---|---:|---:|---:|---:|---:|
+| mean_reversion_floor_w1 | 0.00000000 | 0.00000000 | 0.00000000 | 0 | 0.000000 |
+| breakout_protected_by_floor | 0.00000000 | 0.00000000 | 0.00000000 | 0 | 0.000000 |
+| benchmark_spy | -0.00610681 | -0.03463521 | 1.99594150 | 2 | 60.807891 |
+| benchmark_equal_weight | -0.03709710 | -0.13142676 | 1.84580325 | 4 | 56.100596 |
+
+Returns and drawdowns above are fractions, not percentage-point values. The six simulated trades are all benchmark entry/liquidation fills; the strategies made zero trades. This is an observed lack of entries in a small reconstructed window, not a winner or validated market edge. Main financial state, broker flags, official league and champions are unchanged.
