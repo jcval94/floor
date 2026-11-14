@@ -10,7 +10,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -75,7 +75,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -151,7 +151,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -230,7 +230,8 @@
                 "model_comparison",
                 "feature_audit",
                 "feature_ablation",
-                "frozen_model_comparison"
+                "frozen_model_comparison",
+                "strategy_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -261,6 +262,19 @@
               "maxItems": 3,
               "minItems": 2,
               "title": "Frozen Model Ids",
+              "type": "array"
+            },
+            "strategies": {
+              "items": {
+                "enum": [
+                  "mean_reversion_floor_w1",
+                  "breakout_protected_by_floor"
+                ],
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Strategies",
               "type": "array"
             },
             "features": {
@@ -295,8 +309,11 @@
               "type": "integer"
             },
             "objective": {
-              "const": "mae_floor_pct",
               "default": "mae_floor_pct",
+              "enum": [
+                "mae_floor_pct",
+                "net_return"
+              ],
               "title": "Objective",
               "type": "string"
             },
@@ -352,7 +369,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -417,7 +434,72 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_list_strategies",
+    "description": "Read the registered strategy replay catalog and authoritative costs; no broker orders.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_list_strategiesArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -493,7 +575,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -566,7 +648,8 @@
             "model_comparison",
             "feature_audit",
             "feature_ablation",
-            "frozen_model_comparison"
+            "frozen_model_comparison",
+            "strategy_comparison"
           ],
           "title": "Recipe",
           "type": "string"
@@ -600,6 +683,25 @@
           ],
           "default": null,
           "title": "Frozen Model Ids"
+        },
+        "strategies": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "mean_reversion_floor_w1",
+                  "breakout_protected_by_floor"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strategies"
         }
       },
       "required": [
@@ -612,7 +714,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -691,7 +793,8 @@
                 "model_comparison",
                 "feature_audit",
                 "feature_ablation",
-                "frozen_model_comparison"
+                "frozen_model_comparison",
+                "strategy_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -722,6 +825,19 @@
               "maxItems": 3,
               "minItems": 2,
               "title": "Frozen Model Ids",
+              "type": "array"
+            },
+            "strategies": {
+              "items": {
+                "enum": [
+                  "mean_reversion_floor_w1",
+                  "breakout_protected_by_floor"
+                ],
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Strategies",
               "type": "array"
             },
             "features": {
@@ -756,8 +872,11 @@
               "type": "integer"
             },
             "objective": {
-              "const": "mae_floor_pct",
               "default": "mae_floor_pct",
+              "enum": [
+                "mae_floor_pct",
+                "net_return"
+              ],
               "title": "Objective",
               "type": "string"
             },
@@ -813,7 +932,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -892,7 +1011,8 @@
                 "model_comparison",
                 "feature_audit",
                 "feature_ablation",
-                "frozen_model_comparison"
+                "frozen_model_comparison",
+                "strategy_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -923,6 +1043,19 @@
               "maxItems": 3,
               "minItems": 2,
               "title": "Frozen Model Ids",
+              "type": "array"
+            },
+            "strategies": {
+              "items": {
+                "enum": [
+                  "mean_reversion_floor_w1",
+                  "breakout_protected_by_floor"
+                ],
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Strategies",
               "type": "array"
             },
             "features": {
@@ -957,8 +1090,11 @@
               "type": "integer"
             },
             "objective": {
-              "const": "mae_floor_pct",
               "default": "mae_floor_pct",
+              "enum": [
+                "mae_floor_pct",
+                "net_return"
+              ],
               "title": "Objective",
               "type": "string"
             },
@@ -1014,7 +1150,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1093,7 +1229,8 @@
                 "model_comparison",
                 "feature_audit",
                 "feature_ablation",
-                "frozen_model_comparison"
+                "frozen_model_comparison",
+                "strategy_comparison"
               ],
               "title": "Recipe",
               "type": "string"
@@ -1124,6 +1261,19 @@
               "maxItems": 3,
               "minItems": 2,
               "title": "Frozen Model Ids",
+              "type": "array"
+            },
+            "strategies": {
+              "items": {
+                "enum": [
+                  "mean_reversion_floor_w1",
+                  "breakout_protected_by_floor"
+                ],
+                "type": "string"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Strategies",
               "type": "array"
             },
             "features": {
@@ -1158,8 +1308,11 @@
               "type": "integer"
             },
             "objective": {
-              "const": "mae_floor_pct",
               "default": "mae_floor_pct",
+              "enum": [
+                "mae_floor_pct",
+                "net_return"
+              ],
               "title": "Objective",
               "type": "string"
             },
@@ -1220,7 +1373,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1296,7 +1449,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1369,7 +1522,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1442,7 +1595,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1515,7 +1668,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1588,7 +1741,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1661,7 +1814,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1734,7 +1887,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1799,7 +1952,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1875,7 +2028,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1948,7 +2101,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
@@ -2013,7 +2166,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.1",
+          "default": "1.2",
           "title": "Contract Version",
           "type": "string"
         },
