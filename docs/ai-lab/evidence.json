@@ -1,0 +1,634 @@
+{
+  "base_main": "ad985366b0cf65084523d876f66ca5dedcb68941",
+  "implementation_commit": "ef95293dd4523c3ac202086206ffc38a91f09f68",
+  "environment": "local isolated; no hosting deployment",
+  "tests": {
+    "selected_passed": 42,
+    "ruff": "PASS",
+    "mypy": "PASS"
+  },
+  "dataset_id": "3d3b10127ce9b1d70b2220ef25c58b3c723441e4e350fd5d76629a61881e3077",
+  "dataset_manifest": {
+    "archive_sha256": "ec1c4dcfe2dd51180d60ec2fc060dd91a1efeda2aef90498f2907b97e724d370",
+    "as_of": "2026-11-04T23:59:00+00:00",
+    "calendar": "XNYS/exchange-calendars-4.13.2",
+    "excluded_incomplete_bars": [
+      {
+        "reason": "fetched_before_close",
+        "session": "2026-11-12",
+        "symbol": "GOOGL"
+      },
+      {
+        "reason": "fetched_before_close",
+        "session": "2026-11-12",
+        "symbol": "MSFT"
+      },
+      {
+        "reason": "fetched_before_close",
+        "session": "2026-11-12",
+        "symbol": "SPY"
+      }
+    ],
+    "features": [
+      "ret_lag_1",
+      "momentum_20",
+      "rolling_vol_20",
+      "relative_volume_20",
+      "atr_14"
+    ],
+    "horizon_sessions": 5,
+    "rows": 2931,
+    "rows_hash": "4266a4f9554535a4ac0833a3135e3f31781634a5a8f92b2bac45cadbf3409005",
+    "source": "FLOOR runtime-state-v1/market_data.sqlite",
+    "source_db_sha256": "7273c735ebfe521dad2b1a11d3a6774218b2beec5e706e8d70bc0ae7df1bbbd9",
+    "source_run_id": "43303225713",
+    "target": "floor_w1",
+    "temporal_evidence": "retrospective_reconstructed",
+    "warnings": [
+      "Daily close known after session, never at stored session open.",
+      "Fetched/revised Yahoo history is not point-in-time vintage.",
+      "Current survivor universe only, not unbiased market sampling.",
+      "Imported Release is historical, not current EOD authority."
+    ]
+  },
+  "slack_real_deliveries": 0,
+  "notifier_states": [
+    {
+      "kind": "ACCEPTED",
+      "state": "PENDING",
+      "n": 4
+    },
+    {
+      "kind": "RUNNING",
+      "state": "PENDING",
+      "n": 4
+    },
+    {
+      "kind": "SUCCEEDED",
+      "state": "PENDING",
+      "n": 4
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "06eb5af2-ae8a-4253-b2ff-5a5ac651179e",
+      "experiment_id": "79eecb70-dbd7-4607-85e5-381a38ac2d4e",
+      "requester": "python-sdk-smoke",
+      "recipe": "model_comparison",
+      "state": "SUCCEEDED",
+      "mlflow_run_id": "ead6b4ceac724d3e8c0a3431748178af",
+      "metrics": [
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02166296303760195,
+              "rmse_floor_pct": 0.029606102144747667
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017838709147219765,
+              "rmse_floor_pct": 0.024500957087921323
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011271946708123886,
+              "rmse_floor_pct": 0.015975617704563714
+            }
+          },
+          "fold_mae_std": 0.0017456299348602097,
+          "mae_floor_pct": 0.016924539630981866,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.024028029073506107,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.022097255318629296,
+              "rmse_floor_pct": 0.02996763034369927
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017825961296462526,
+              "rmse_floor_pct": 0.02480413355172526
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011156117223698313,
+              "rmse_floor_pct": 0.015976496398734028
+            }
+          },
+          "fold_mae_std": 0.0017934560620083899,
+          "mae_floor_pct": 0.017026444612930045,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024279980414923383,
+          "sample_size": 2199,
+          "variant": "full"
+        }
+      ],
+      "worker_duration_seconds": 2.9289603950001037,
+      "git_commit": "ef95293dd4523c3ac202086206ffc38a91f09f68",
+      "dirty_tree": true,
+      "acceptance_provenance_preserved": true,
+      "acceptance_provenance_sha256": "3b6a6787cdeebc0d6778f04bf648fd2108272b29ef87609e1bda7a61f994fcf3",
+      "artifact_hashes": {
+        "predictions.json": "43ab37da3701129bbe46f1e62b3e230dbcd8225ea012a562951953cfb1232621",
+        "provenance.json": "dd6e81cbff8faa9a8d60bfb264dcbb66f593df0e26dd79c451bf95715fe51867",
+        "report.html": "90530603ad21636d98b0382684bf66293d77c62f08483c8063d10e4a15fd4dcf",
+        "result.json": "c636c70c9f46fd0e9c6fad2dfdb9e28e06946f0fdff92f3185a28322bf336769"
+      }
+    },
+    {
+      "run_id": "1a6a7e0c-ad70-4c29-ba43-f6cab378d430",
+      "experiment_id": "b648ef85-8050-4b41-8136-0b085f0689a6",
+      "requester": "inspector-final",
+      "recipe": "model_comparison",
+      "state": "SUCCEEDED",
+      "mlflow_run_id": "29e579ec0bd241798903b3626f84a700",
+      "metrics": [
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02166296303760195,
+              "rmse_floor_pct": 0.029606102144747667
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017838709147219765,
+              "rmse_floor_pct": 0.024500957087921323
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011271946708123886,
+              "rmse_floor_pct": 0.015975617704563714
+            }
+          },
+          "fold_mae_std": 0.0017456299348602097,
+          "mae_floor_pct": 0.016924539630981866,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.024028029073506107,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.022097255318629296,
+              "rmse_floor_pct": 0.02996763034369927
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017825961296462526,
+              "rmse_floor_pct": 0.02480413355172526
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011156117223698313,
+              "rmse_floor_pct": 0.015976496398734028
+            }
+          },
+          "fold_mae_std": 0.0017934560620083899,
+          "mae_floor_pct": 0.017026444612930045,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024279980414923383,
+          "sample_size": 2199,
+          "variant": "full"
+        }
+      ],
+      "worker_duration_seconds": 2.533451724000315,
+      "git_commit": "ef95293dd4523c3ac202086206ffc38a91f09f68",
+      "dirty_tree": true,
+      "acceptance_provenance_preserved": true,
+      "acceptance_provenance_sha256": "eff7d9d1e1754e5eb2d928bc5c10e2d0a8f527e91ff2eb5773564dd056d974bb",
+      "artifact_hashes": {
+        "predictions.json": "43ab37da3701129bbe46f1e62b3e230dbcd8225ea012a562951953cfb1232621",
+        "provenance.json": "a7844694e96ea1793e6e8f3a45495a081698004c840b78850a8fe941ef3b4650",
+        "report.html": "164268d7372bf0c5e3795909676a4e9c8518a3347dcd558a54bf006a6e801db0",
+        "result.json": "06ed818a210b7799b4832c8c069e8124b452a565ecc0a9e8a2347acb87878fd8"
+      }
+    },
+    {
+      "run_id": "799bf7b9-06d1-41a0-8691-8956476b3930",
+      "experiment_id": "3d181c83-a82e-464c-be7f-ccbd19bb42ac",
+      "requester": "research-final",
+      "recipe": "feature_audit",
+      "state": "SUCCEEDED",
+      "mlflow_run_id": "1279a07a5d7547769e004a57b7754b90",
+      "metrics": [
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02166296303760195,
+              "rmse_floor_pct": 0.029606102144747667
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017838709147219765,
+              "rmse_floor_pct": 0.024500957087921323
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011271946708123886,
+              "rmse_floor_pct": 0.015975617704563714
+            }
+          },
+          "fold_mae_std": 0.0017456299348602097,
+          "mae_floor_pct": 0.016924539630981866,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.024028029073506107,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.022097255318629296,
+              "rmse_floor_pct": 0.02996763034369927
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017825961296462526,
+              "rmse_floor_pct": 0.02480413355172526
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011156117223698313,
+              "rmse_floor_pct": 0.015976496398734028
+            }
+          },
+          "fold_mae_std": 0.0017934560620083899,
+          "mae_floor_pct": 0.017026444612930045,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024279980414923383,
+          "sample_size": 2199,
+          "variant": "full"
+        }
+      ],
+      "worker_duration_seconds": 2.736196826000196,
+      "git_commit": "ef95293dd4523c3ac202086206ffc38a91f09f68",
+      "dirty_tree": true,
+      "acceptance_provenance_preserved": true,
+      "acceptance_provenance_sha256": "72e0e211bfe3602e425b014d278f7b102b9ae8f38ce3e43edd50e318f935f41c",
+      "artifact_hashes": {
+        "predictions.json": "43ab37da3701129bbe46f1e62b3e230dbcd8225ea012a562951953cfb1232621",
+        "provenance.json": "f90bbc46913a54619084c695a20ebf9831968573687e4e65c0e7e268ffa8fc44",
+        "report.html": "424669a98daa552409053f8800a05f5a6ae2d2cf1149a24b74e11bec6113cbb3",
+        "result.json": "6af95869db91be1a618102257df09facdc047b201fcb48172e5765a61af91bed"
+      }
+    },
+    {
+      "run_id": "172afab1-ccfe-439e-a710-8ae69cff0071",
+      "experiment_id": "40c51af7-08ce-4910-bf78-e72bb25cef82",
+      "requester": "research-final",
+      "recipe": "feature_ablation",
+      "state": "SUCCEEDED",
+      "mlflow_run_id": "a0e170220c4b49c18dc3015f66952d25",
+      "metrics": [
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02166296303760195,
+              "rmse_floor_pct": 0.029606102144747667
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017838709147219765,
+              "rmse_floor_pct": 0.024500957087921323
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011271946708123886,
+              "rmse_floor_pct": 0.015975617704563714
+            }
+          },
+          "fold_mae_std": 0.0017456299348602097,
+          "mae_floor_pct": 0.016924539630981866,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.024028029073506107,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.022097255318629296,
+              "rmse_floor_pct": 0.02996763034369927
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017825961296462526,
+              "rmse_floor_pct": 0.02480413355172526
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011156117223698313,
+              "rmse_floor_pct": 0.015976496398734028
+            }
+          },
+          "fold_mae_std": 0.0017934560620083899,
+          "mae_floor_pct": 0.017026444612930045,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024279980414923383,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "ablated"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.021664743364812927,
+              "rmse_floor_pct": 0.029515994574216747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017827998709294822,
+              "rmse_floor_pct": 0.024439714022869343
+            },
+            "SPY": {
+              "mae_floor_pct": 0.01130730211638317,
+              "rmse_floor_pct": 0.01602453704554707
+            }
+          },
+          "fold_mae_std": 0.0017407752706110028,
+          "mae_floor_pct": 0.016933348063496976,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.02398109911818708,
+          "sample_size": 2199,
+          "variant": "ablated"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02207902047087903,
+              "rmse_floor_pct": 0.02995061239066778
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017805582543206765,
+              "rmse_floor_pct": 0.024786183142642613
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011154150138279308,
+              "rmse_floor_pct": 0.01598361919632165
+            }
+          },
+          "fold_mae_std": 0.0017865325494358895,
+          "mae_floor_pct": 0.017012917717455032,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024268430384415507,
+          "sample_size": 2199,
+          "variant": "ablated"
+        }
+      ],
+      "worker_duration_seconds": 2.4368854549998105,
+      "git_commit": "ef95293dd4523c3ac202086206ffc38a91f09f68",
+      "dirty_tree": true,
+      "acceptance_provenance_preserved": true,
+      "acceptance_provenance_sha256": "8ee3164ac3e1f065180ded2a562499d08abcb12706ffecdee6aa250bfca8ff2a",
+      "artifact_hashes": {
+        "predictions.json": "f19e338eaaf630c4fba65601c5657c8f11ed350b2a92af493c889e8398ea5220",
+        "provenance.json": "3a47810f94e832bb3ce1c6145a383196dcaf1e63a4573d731699b2504b2a0b84",
+        "report.html": "77d66c5b9d81710fd7a1e4cc648e74e60d09cfc36a5822d520535a3da5a5463d",
+        "result.json": "b29a07545e76a31ef3085281319c65629abc4a0f4e5614df747dd8f267ea449d"
+      }
+    }
+  ],
+  "sdk_smoke": {
+    "client": "official Python SDK 1.30.0",
+    "protocol": "2025-11-25",
+    "tool_count": 21,
+    "accepted": {
+      "experiment_id": "79eecb70-dbd7-4607-85e5-381a38ac2d4e",
+      "run_id": "06eb5af2-ae8a-4253-b2ff-5a5ac651179e",
+      "state": "QUEUED"
+    },
+    "disconnected_at": 1794580906.108939,
+    "terminal_state": "SUCCEEDED",
+    "finished": 1794580909.9012582,
+    "finished_after_client_disconnect": true,
+    "result": {
+      "cloud_cost_usd": 0,
+      "conclusion": "Exploratory ranking only; no statistically established winner or production recommendation.",
+      "dataset_id": "3d3b10127ce9b1d70b2220ef25c58b3c723441e4e350fd5d76629a61881e3077",
+      "duration_scope": "worker wall time including child imports, evaluation and tracking",
+      "duration_seconds": 2.9289603950001037,
+      "evaluation_seconds": 0.09360824800023693,
+      "metrics": [
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02191270600010555,
+              "rmse_floor_pct": 0.030398818453116747
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.01769808708059546,
+              "rmse_floor_pct": 0.02446753772456514
+            },
+            "SPY": {
+              "mae_floor_pct": 0.013093440486865063,
+              "rmse_floor_pct": 0.0171950074845364
+            }
+          },
+          "fold_mae_std": 0.0014847957876299375,
+          "mae_floor_pct": 0.017568077855855357,
+          "model": "dummy",
+          "rmse_floor_pct": 0.02461988930412315,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.02166296303760195,
+              "rmse_floor_pct": 0.029606102144747667
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017838709147219765,
+              "rmse_floor_pct": 0.024500957087921323
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011271946708123886,
+              "rmse_floor_pct": 0.015975617704563714
+            }
+          },
+          "fold_mae_std": 0.0017456299348602097,
+          "mae_floor_pct": 0.016924539630981866,
+          "model": "extra_trees",
+          "rmse_floor_pct": 0.024028029073506107,
+          "sample_size": 2199,
+          "variant": "full"
+        },
+        {
+          "by_symbol": {
+            "GOOGL": {
+              "mae_floor_pct": 0.022097255318629296,
+              "rmse_floor_pct": 0.02996763034369927
+            },
+            "MSFT": {
+              "mae_floor_pct": 0.017825961296462526,
+              "rmse_floor_pct": 0.02480413355172526
+            },
+            "SPY": {
+              "mae_floor_pct": 0.011156117223698313,
+              "rmse_floor_pct": 0.015976496398734028
+            }
+          },
+          "fold_mae_std": 0.0017934560620083899,
+          "mae_floor_pct": 0.017026444612930045,
+          "model": "ridge",
+          "rmse_floor_pct": 0.024279980414923383,
+          "sample_size": 2199,
+          "variant": "full"
+        }
+      ],
+      "mlflow_run_id": "ead6b4ceac724d3e8c0a3431748178af",
+      "provenance": {
+        "as_of": "2026-11-04T23:59:00+00:00",
+        "currency": "USD",
+        "data_status": "EXPERIMENTAL",
+        "model_version": "registered-estimators-v1",
+        "snapshot_hash": "ec1c4dcfe2dd51180d60ec2fc060dd91a1efeda2aef90498f2907b97e724d370",
+        "source": "FLOOR runtime-state-v1/market_data.sqlite",
+        "source_run_id": "43303225713"
+      },
+      "ranking_leader": {
+        "model": "extra_trees",
+        "objective": "mae_floor_pct",
+        "variant": "full"
+      },
+      "report": "runs/06eb5af2-ae8a-4253-b2ff-5a5ac651179e/report.html"
+    },
+    "slack_real_delivery_verified": false,
+    "hosting_scope": "local harness only; not deployed"
+  },
+  "reconstruction": {
+    "backup": {
+      "files": 44,
+      "manifest_sha256": "ef5c5b0f2d54210ba9401f1e2a6064d26b1d32894f0509d643c30f03135df140"
+    },
+    "checks": [
+      {
+        "recipe": "model_comparison",
+        "original_run_id": "06eb5af2-ae8a-4253-b2ff-5a5ac651179e",
+        "reconstructed_run_id": "cb58d131-8aa1-48b5-8705-230be7ae992a",
+        "metrics_identical": true,
+        "feature_audit_identical": true,
+        "predictions_identical": true,
+        "permitted_differences": [
+          "run IDs",
+          "MLflow IDs",
+          "wall time",
+          "local artifact root",
+          "creation timestamps"
+        ]
+      },
+      {
+        "recipe": "feature_audit",
+        "original_run_id": "799bf7b9-06d1-41a0-8691-8956476b3930",
+        "reconstructed_run_id": "5c866830-653b-41ab-b450-065b64d96d21",
+        "metrics_identical": true,
+        "feature_audit_identical": true,
+        "predictions_identical": true,
+        "permitted_differences": [
+          "run IDs",
+          "MLflow IDs",
+          "wall time",
+          "local artifact root",
+          "creation timestamps"
+        ]
+      }
+    ]
+  }
+}

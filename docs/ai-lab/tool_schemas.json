@@ -1,0 +1,2014 @@
+[
+  {
+    "name": "floor_get_status",
+    "description": "Read lab state only. Official league/EOD freshness is not inferred.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_get_statusArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_capabilities",
+    "description": "Discover implemented recipes and explicit unavailable capabilities.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_get_capabilitiesArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_data_catalog",
+    "description": "Page registered dataset manifests; content-addressed research inputs only.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "title": "floor_get_data_catalogArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_data_quality",
+    "description": "Verify checksums, temporal availability, uniqueness and target completeness.",
+    "inputSchema": {
+      "$defs": {
+        "Plan": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "question": {
+              "maxLength": 2000,
+              "minLength": 5,
+              "title": "Question",
+              "type": "string"
+            },
+            "recipe": {
+              "enum": [
+                "model_comparison",
+                "feature_audit",
+                "feature_ablation"
+              ],
+              "title": "Recipe",
+              "type": "string"
+            },
+            "dataset_id": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "models": {
+              "items": {
+                "enum": [
+                  "dummy",
+                  "ridge",
+                  "extra_trees"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "title": "Models",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "title": "Features",
+              "type": "array"
+            },
+            "drop_features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 15,
+              "title": "Drop Features",
+              "type": "array"
+            },
+            "folds": {
+              "default": 3,
+              "maximum": 5,
+              "minimum": 2,
+              "title": "Folds",
+              "type": "integer"
+            },
+            "seed": {
+              "default": 42,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "title": "Seed",
+              "type": "integer"
+            },
+            "objective": {
+              "const": "mae_floor_pct",
+              "default": "mae_floor_pct",
+              "title": "Objective",
+              "type": "string"
+            },
+            "max_seconds": {
+              "default": 60,
+              "maximum": 120,
+              "minimum": 5,
+              "title": "Max Seconds",
+              "type": "integer"
+            },
+            "max_memory_mb": {
+              "default": 3072,
+              "maximum": 4096,
+              "minimum": 1024,
+              "title": "Max Memory Mb",
+              "type": "integer"
+            },
+            "max_cost_usd": {
+              "default": 0,
+              "maximum": 0,
+              "minimum": 0,
+              "title": "Max Cost Usd",
+              "type": "number"
+            },
+            "notification": {
+              "const": "slack",
+              "default": "slack",
+              "title": "Notification",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "recipe",
+            "dataset_id",
+            "features"
+          ],
+          "title": "Plan",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/Plan"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "title": "floor_get_data_qualityArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_list_models",
+    "description": "Registered research estimators; these IDs are not production champions.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_list_modelsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_list_features",
+    "description": "Read FLOOR's existing registry. leakage_safe is a claim, not PIT proof.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "title": "floor_list_featuresArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_plan_experiment",
+    "description": "Resolve a natural-language intent to an allowlisted plan. Unknown code/data requires review.",
+    "inputSchema": {
+      "properties": {
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "recipe": {
+          "default": "model_comparison",
+          "enum": [
+            "model_comparison",
+            "feature_audit",
+            "feature_ablation"
+          ],
+          "title": "Recipe",
+          "type": "string"
+        },
+        "drop_features": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drop Features"
+        }
+      },
+      "required": [
+        "question",
+        "dataset_id"
+      ],
+      "title": "floor_plan_experimentArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_validate_experiment",
+    "description": "Validate registered data and fixed resource policy without launching compute.",
+    "inputSchema": {
+      "$defs": {
+        "Plan": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "question": {
+              "maxLength": 2000,
+              "minLength": 5,
+              "title": "Question",
+              "type": "string"
+            },
+            "recipe": {
+              "enum": [
+                "model_comparison",
+                "feature_audit",
+                "feature_ablation"
+              ],
+              "title": "Recipe",
+              "type": "string"
+            },
+            "dataset_id": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "models": {
+              "items": {
+                "enum": [
+                  "dummy",
+                  "ridge",
+                  "extra_trees"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "title": "Models",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "title": "Features",
+              "type": "array"
+            },
+            "drop_features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 15,
+              "title": "Drop Features",
+              "type": "array"
+            },
+            "folds": {
+              "default": 3,
+              "maximum": 5,
+              "minimum": 2,
+              "title": "Folds",
+              "type": "integer"
+            },
+            "seed": {
+              "default": 42,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "title": "Seed",
+              "type": "integer"
+            },
+            "objective": {
+              "const": "mae_floor_pct",
+              "default": "mae_floor_pct",
+              "title": "Objective",
+              "type": "string"
+            },
+            "max_seconds": {
+              "default": 60,
+              "maximum": 120,
+              "minimum": 5,
+              "title": "Max Seconds",
+              "type": "integer"
+            },
+            "max_memory_mb": {
+              "default": 3072,
+              "maximum": 4096,
+              "minimum": 1024,
+              "title": "Max Memory Mb",
+              "type": "integer"
+            },
+            "max_cost_usd": {
+              "default": 0,
+              "maximum": 0,
+              "minimum": 0,
+              "title": "Max Cost Usd",
+              "type": "number"
+            },
+            "notification": {
+              "const": "slack",
+              "default": "slack",
+              "title": "Notification",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "recipe",
+            "dataset_id",
+            "features"
+          ],
+          "title": "Plan",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/Plan"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "title": "floor_validate_experimentArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_estimate_experiment_cost",
+    "description": "Local cloud budget is exactly zero; electricity and maintenance excluded.",
+    "inputSchema": {
+      "$defs": {
+        "Plan": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "question": {
+              "maxLength": 2000,
+              "minLength": 5,
+              "title": "Question",
+              "type": "string"
+            },
+            "recipe": {
+              "enum": [
+                "model_comparison",
+                "feature_audit",
+                "feature_ablation"
+              ],
+              "title": "Recipe",
+              "type": "string"
+            },
+            "dataset_id": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "models": {
+              "items": {
+                "enum": [
+                  "dummy",
+                  "ridge",
+                  "extra_trees"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "title": "Models",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "title": "Features",
+              "type": "array"
+            },
+            "drop_features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 15,
+              "title": "Drop Features",
+              "type": "array"
+            },
+            "folds": {
+              "default": 3,
+              "maximum": 5,
+              "minimum": 2,
+              "title": "Folds",
+              "type": "integer"
+            },
+            "seed": {
+              "default": 42,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "title": "Seed",
+              "type": "integer"
+            },
+            "objective": {
+              "const": "mae_floor_pct",
+              "default": "mae_floor_pct",
+              "title": "Objective",
+              "type": "string"
+            },
+            "max_seconds": {
+              "default": 60,
+              "maximum": 120,
+              "minimum": 5,
+              "title": "Max Seconds",
+              "type": "integer"
+            },
+            "max_memory_mb": {
+              "default": 3072,
+              "maximum": 4096,
+              "minimum": 1024,
+              "title": "Max Memory Mb",
+              "type": "integer"
+            },
+            "max_cost_usd": {
+              "default": 0,
+              "maximum": 0,
+              "minimum": 0,
+              "title": "Max Cost Usd",
+              "type": "number"
+            },
+            "notification": {
+              "const": "slack",
+              "default": "slack",
+              "title": "Notification",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "recipe",
+            "dataset_id",
+            "features"
+          ],
+          "title": "Plan",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/Plan"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "title": "floor_estimate_experiment_costArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_submit_experiment",
+    "description": "Durably queue an approved registered recipe. Heavy evaluation occurs in a separate worker.",
+    "inputSchema": {
+      "$defs": {
+        "Plan": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "question": {
+              "maxLength": 2000,
+              "minLength": 5,
+              "title": "Question",
+              "type": "string"
+            },
+            "recipe": {
+              "enum": [
+                "model_comparison",
+                "feature_audit",
+                "feature_ablation"
+              ],
+              "title": "Recipe",
+              "type": "string"
+            },
+            "dataset_id": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Dataset Id",
+              "type": "string"
+            },
+            "models": {
+              "items": {
+                "enum": [
+                  "dummy",
+                  "ridge",
+                  "extra_trees"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "title": "Models",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "title": "Features",
+              "type": "array"
+            },
+            "drop_features": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 15,
+              "title": "Drop Features",
+              "type": "array"
+            },
+            "folds": {
+              "default": 3,
+              "maximum": 5,
+              "minimum": 2,
+              "title": "Folds",
+              "type": "integer"
+            },
+            "seed": {
+              "default": 42,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "title": "Seed",
+              "type": "integer"
+            },
+            "objective": {
+              "const": "mae_floor_pct",
+              "default": "mae_floor_pct",
+              "title": "Objective",
+              "type": "string"
+            },
+            "max_seconds": {
+              "default": 60,
+              "maximum": 120,
+              "minimum": 5,
+              "title": "Max Seconds",
+              "type": "integer"
+            },
+            "max_memory_mb": {
+              "default": 3072,
+              "maximum": 4096,
+              "minimum": 1024,
+              "title": "Max Memory Mb",
+              "type": "integer"
+            },
+            "max_cost_usd": {
+              "default": 0,
+              "maximum": 0,
+              "minimum": 0,
+              "title": "Max Cost Usd",
+              "type": "number"
+            },
+            "notification": {
+              "const": "slack",
+              "default": "slack",
+              "title": "Notification",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "recipe",
+            "dataset_id",
+            "features"
+          ],
+          "title": "Plan",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/Plan"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "idempotency_key"
+      ],
+      "title": "floor_submit_experimentArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_list_experiments",
+    "description": "Page the authenticated actor's jobs; no global private run enumeration.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "title": "floor_list_experimentsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_experiment_status",
+    "description": "Read authoritative research job state and provenance/configuration.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_get_experiment_statusArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_experiment_results",
+    "description": "Fetch measured metrics or structured error; never infer success from notification state.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_get_experiment_resultsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_cancel_experiment",
+    "description": "Request process termination; RUNNING stays active until the worker confirms cancellation.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_cancel_experimentArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_list_experiment_artifacts",
+    "description": "List files/checksums relative to an operator-protected artifact volume; no public links.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_list_experiment_artifactsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_notification_status",
+    "description": "A Slack message is delivered only with a real API acknowledgement and ts.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_get_notification_statusArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_resend_experiment_report",
+    "description": "Requeue only known failed terminal reports; ambiguous deliveries require operator reconciliation.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_resend_experiment_reportArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_test_slack_connection",
+    "description": "Check configured Slack token via auth.test; does not prove channel delivery.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_test_slack_connectionArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_compare_experiments",
+    "description": "Compare only completed runs with identical datasets, features, folds and targets.",
+    "inputSchema": {
+      "properties": {
+        "run_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Run Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_ids"
+      ],
+      "title": "floor_compare_experimentsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_run_provenance",
+    "description": "Read recorded dataset, exact code fingerprints and environment versions.",
+    "inputSchema": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "floor_get_run_provenanceArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_retention_plan",
+    "description": "Administrator dry-run only; never deletes datasets, snapshots or artifacts.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_get_retention_planArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  }
+]
