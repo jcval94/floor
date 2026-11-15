@@ -39,7 +39,7 @@ CREATE TABLE daily_bars (
             )
 ```
 
-Indexes: `[{"seq": 0, "name": "idx_daily_bars_symbol_ts", "unique": 0, "origin": "c", "partial": 0}, {"seq": 1, "name": "sqlite_autoindex_daily_bars_1", "unique": 1, "origin": "pk", "partial": 0}]`
+Indexes: `[{"seq": 0, "name": "idx_daily_bars_symbol_ts", "unique": 0, "origin": "c", "partial": 0, "columns": [{"seqno": 0, "cid": 0, "name": "symbol", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": 1, "name": "ts_utc", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 2, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE INDEX idx_daily_bars_symbol_ts\n        ON daily_bars(symbol, ts_utc)\n        "}, {"seq": 1, "name": "sqlite_autoindex_daily_bars_1", "unique": 1, "origin": "pk", "partial": 0, "columns": [{"seqno": 0, "cid": 0, "name": "symbol", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": 1, "name": "ts_utc", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 2, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": null}]`
 
 ## app.sqlite
 
@@ -225,7 +225,7 @@ CREATE TABLE prediction_reconciliations (
             )
 ```
 
-Indexes: `[{"seq": 0, "name": "uq_prediction_reconciliation_id", "unique": 1, "origin": "c", "partial": 0}, {"seq": 1, "name": "uq_prediction_reconciliation_key", "unique": 1, "origin": "c", "partial": 1}]`
+Indexes: `[{"seq": 0, "name": "uq_prediction_reconciliation_id", "unique": 1, "origin": "c", "partial": 0, "columns": [{"seqno": 0, "cid": 1, "name": "prediction_id", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE UNIQUE INDEX uq_prediction_reconciliation_id\n            ON prediction_reconciliations(prediction_id)\n            "}, {"seq": 1, "name": "uq_prediction_reconciliation_key", "unique": 1, "origin": "c", "partial": 1, "columns": [{"seqno": 0, "cid": 2, "name": "prediction_key", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE UNIQUE INDEX uq_prediction_reconciliation_key\n            ON prediction_reconciliations(prediction_key)\n            WHERE prediction_key IS NOT NULL AND prediction_key <> ''\n            "}]`
 
 ### predictions
 
@@ -260,7 +260,7 @@ CREATE TABLE predictions (
             , prediction_key TEXT)
 ```
 
-Indexes: `[{"seq": 0, "name": "idx_predictions_prediction_key", "unique": 0, "origin": "c", "partial": 0}, {"seq": 1, "name": "uq_predictions_batch_symbol_horizon", "unique": 1, "origin": "c", "partial": 1}]`
+Indexes: `[{"seq": 0, "name": "idx_predictions_prediction_key", "unique": 0, "origin": "c", "partial": 0, "columns": [{"seqno": 0, "cid": 10, "name": "prediction_key", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE INDEX idx_predictions_prediction_key\n        ON predictions(prediction_key)\n        "}, {"seq": 1, "name": "uq_predictions_batch_symbol_horizon", "unique": 1, "origin": "c", "partial": 1, "columns": [{"seqno": 0, "cid": 1, "name": "batch_id", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": 2, "name": "symbol", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 2, "cid": 5, "name": "horizon", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 3, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE UNIQUE INDEX uq_predictions_batch_symbol_horizon\n            ON predictions(batch_id, symbol, horizon)\n            WHERE batch_id <> ''\n            "}]`
 
 ### signals
 
@@ -290,7 +290,7 @@ CREATE TABLE signals (
             )
 ```
 
-Indexes: `[{"seq": 0, "name": "uq_signals_batch_symbol_horizon", "unique": 1, "origin": "c", "partial": 1}]`
+Indexes: `[{"seq": 0, "name": "uq_signals_batch_symbol_horizon", "unique": 1, "origin": "c", "partial": 1, "columns": [{"seqno": 0, "cid": 1, "name": "batch_id", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 1, "cid": 2, "name": "symbol", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 2, "cid": 4, "name": "horizon", "desc": 0, "coll": "BINARY", "key": 1}, {"seqno": 3, "cid": -1, "name": null, "desc": 0, "coll": "BINARY", "key": 0}], "ddl": "CREATE UNIQUE INDEX uq_signals_batch_symbol_horizon\n            ON signals(batch_id, symbol, horizon)\n            WHERE batch_id <> ''\n            "}]`
 
 ### training_reviews
 

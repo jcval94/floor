@@ -1,0 +1,17 @@
+{
+  "display_information": {
+    "name": "FLOOR AI Lab",
+    "description": "Reports from isolated reproducible FLOOR research experiments"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "FLOOR AI Lab",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["chat:write"]
+    }
+  }
+}
