@@ -65,3 +65,5 @@ Only isolated `src/ai_lab`, `tests/ai_lab` and `docs/ai-lab` change. No official
 ## Validation of this increment
 
 742 full-repository tests pass with74.14% source coverage; Ruff src/tests/scripts and mypy194 source files pass. Nine new SQLite tests exercise row-only changes, added columns/tables, table removal, changed same-name index key, view/trigger drift, absent/incomplete/duplicate/empty inventories and read-only missing-file behavior. A stdlib-only import with Python `-S` verifies the guard does not require optional MCP/Pydantic extras. Both audited source-copy hashes were checked against the prior catalog before enriching metadata; the real check reports two matching DB schemas and SQLite integrity OK. No official/runtime DB or existing research artifact was deleted or rewritten. Manifest syntax/scope and local documentation links were checked; no manifest validation call or install was made to Slack.
+
+Clean committed-source check and unchanged-copy hashes: [evidence-acceptance.json](evidence-acceptance.json). The evidence follow-up commit changes documentation only.

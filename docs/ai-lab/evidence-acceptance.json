@@ -1,0 +1,88 @@
+{
+  "implementation_commit": "493861c3b4ca45ac0f35f92fd74925a5246922d8",
+  "dirty_tree_at_check": false,
+  "schema_guard": {
+    "ok": true,
+    "scope": "read_only_copies",
+    "databases": [
+      {
+        "database": "market_data.sqlite",
+        "schema_matches": true,
+        "integrity_ok": true,
+        "expected_schema_sha256": "3831c1b9e3677acfb0d65db3e89b7cd0e3a8810fdd576b0428369906a9fbeb94",
+        "observed_schema_sha256": "3831c1b9e3677acfb0d65db3e89b7cd0e3a8810fdd576b0428369906a9fbeb94",
+        "changes": {
+          "added_tables": [],
+          "removed_tables": [],
+          "changed_tables": [],
+          "views_or_triggers_changed": false
+        },
+        "row_counts": {
+          "daily_bars": 51153
+        },
+        "observed_database_sha256": "7273c735ebfe521dad2b1a11d3a6774218b2beec5e706e8d70bc0ae7df1bbbd9",
+        "mutation_performed": false,
+        "limitations": [
+          "Schema equality does not prove freshness, logical join integrity, data vintage or multi-session operational correctness."
+        ]
+      },
+      {
+        "database": "app.sqlite",
+        "schema_matches": true,
+        "integrity_ok": true,
+        "expected_schema_sha256": "b2fffb4ca24d1775b5dfc284519f68c2c5437ccc75f2312d016a8a8ff9fd8958",
+        "observed_schema_sha256": "b2fffb4ca24d1775b5dfc284519f68c2c5437ccc75f2312d016a8a8ff9fd8958",
+        "changes": {
+          "added_tables": [],
+          "removed_tables": [],
+          "changed_tables": [],
+          "views_or_triggers_changed": false
+        },
+        "row_counts": {
+          "model_competition_results": 0,
+          "model_training_cycles": 30,
+          "orders": 0,
+          "prediction_reconciliations": 335934,
+          "predictions": 120000,
+          "signals": 153456,
+          "training_reviews": 58
+        },
+        "observed_database_sha256": "62a40d7bbb771d5bee84c97339ac9259481e2de9f9d799386505cb442ddf22fa",
+        "mutation_performed": false,
+        "limitations": [
+          "Schema equality does not prove freshness, logical join integrity, data vintage or multi-session operational correctness."
+        ]
+      }
+    ]
+  },
+  "source_copy_hashes_before": {
+    "market_data.sqlite": "7273c735ebfe521dad2b1a11d3a6774218b2beec5e706e8d70bc0ae7df1bbbd9",
+    "app.sqlite": "62a40d7bbb771d5bee84c97339ac9259481e2de9f9d799386505cb442ddf22fa"
+  },
+  "source_copy_hashes_after": {
+    "market_data.sqlite": "7273c735ebfe521dad2b1a11d3a6774218b2beec5e706e8d70bc0ae7df1bbbd9",
+    "app.sqlite": "62a40d7bbb771d5bee84c97339ac9259481e2de9f9d799386505cb442ddf22fa"
+  },
+  "source_copy_bytes_unchanged": true,
+  "source_snapshot": "immutable run-43303225713-a1; not current official state",
+  "validation": {
+    "full_repository_tests_passed": 742,
+    "new_sqlite_tests": 9,
+    "source_coverage_percent": 74.14,
+    "ruff": "passed src/tests/scripts",
+    "mypy": "passed 194 source files",
+    "stdlib_only_guard_import": "passed python -S",
+    "slack_manifest_local_json_and_scope": "valid locally; only chat:write; not submitted to Slack"
+  },
+  "slack_real_deliveries": 0,
+  "slack_app_created": false,
+  "remote_deployed": false,
+  "okr_complete": false,
+  "main_merge": {
+    "pr": 267,
+    "sha": "f7975f96792b2e721083d102c76538cce1fa2e23",
+    "ci_run_id": 43735894149,
+    "ci_conclusion": "success"
+  },
+  "remaining_gate_reference": "acceptance.md"
+}
