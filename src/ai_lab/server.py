@@ -97,6 +97,31 @@ def build_server(store):
         return guarded(read)
 
     @mcp.tool()
+    def floor_get_usage(days: int = 7) -> Result:
+        """Read accepted job counts, failures, timings and notification retries; no invented billing."""
+
+        def read():
+            from ai_lab.operations import usage
+
+            user = identity()
+            return usage(
+                store, None if user["role"] == "administrator" else user["actor"], days
+            )
+
+        return guarded(read)
+
+    @mcp.tool()
+    def floor_get_operational_readiness() -> Result:
+        """Administrator offline preflight: integrity, storage and explicit unverified deployment gates."""
+
+        def read():
+            from ai_lab.operations import readiness
+
+            return readiness(store)
+
+        return guarded(read, 3)
+
+    @mcp.tool()
     def floor_get_capabilities() -> Result:
         """Discover implemented recipes and explicit unavailable capabilities."""
         return guarded(
@@ -418,13 +443,16 @@ def build_server(store):
 
     @mcp.tool()
     def floor_get_notification_status(run_id: str) -> Result:
-        """A Slack message is delivered only with a real API acknowledgement and ts."""
+        """Read outbox state and channel receipts; injected/legacy evidence is not live proof."""
 
         def read():
             owned(run_id)
             with store.connect() as c:
                 rows = c.execute(
-                    "SELECT event_id,kind,state,attempts,slack_ts,error FROM outbox WHERE run_id=? ORDER BY rowid",
+                    "SELECT o.event_id,o.kind,o.state,o.attempts,o.slack_ts,o.error,"
+                    "n.channel_id,n.acknowledged_at,n.transport,n.payload_sha256 "
+                    "FROM outbox o LEFT JOIN notification_receipts n USING(event_id) "
+                    "WHERE o.run_id=? ORDER BY o.rowid",
                     (run_id,),
                 ).fetchall()
             return {

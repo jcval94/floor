@@ -2,10 +2,20 @@
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
-from ai_lab.store import canonical
+from ai_lab.store import canonical, digest
+
+
+class SlackAcknowledgement(str):
+    """Validated API acknowledgement, not independent workspace verification."""
+
+    def __new__(cls, ts, channel):
+        obj = super().__new__(cls, ts)
+        obj.channel = channel
+        return obj
 
 
 class SlackDeliveryError(Exception):
@@ -62,20 +72,33 @@ def post_message(token, channel, event, thread_ts=None):
             result = json.load(response)
     except urllib.error.HTTPError as e:
         if e.code == 429:
+            try:
+                retry_after = min(3600, max(1, int(e.headers.get("Retry-After", "60"))))
+            except (TypeError, ValueError):
+                retry_after = 60
             raise SlackDeliveryError(
                 "rate_limited",
-                min(3600, max(1, int(e.headers.get("Retry-After", "60")))),
+                retry_after,
             ) from None
         raise SlackDeliveryError(
             "http_" + str(e.code), 60 if e.code >= 500 else 0, ambiguous=e.code >= 500
         ) from None
     except (OSError, ValueError):
         raise SlackDeliveryError("delivery_unknown", ambiguous=True) from None
-    if not result.get("ok") or not result.get("ts"):
+    if not isinstance(result, dict) or "ok" not in result:
+        raise SlackDeliveryError("acknowledgement_mismatch", ambiguous=True)
+    if result.get("ok") is False:
         raise SlackDeliveryError(
             "slack_rejected", 0
         )  # never log untrusted response containing secrets
-    return result["ts"]
+    if (
+        result.get("ok") is not True
+        or result.get("channel") != channel
+        or not re.fullmatch(r"[0-9]{1,20}\.[0-9]{6}", str(result.get("ts", "")))
+    ):
+        # An accepted but malformed/wrong-destination response is ambiguous.
+        raise SlackDeliveryError("acknowledgement_mismatch", ambiguous=True)
+    return SlackAcknowledgement(result["ts"], channel)
 
 
 def drain(store, sender=post_message):
@@ -102,8 +125,16 @@ def drain(store, sender=post_message):
             (event["event_id"],),
         )
         parent = c.execute(
-            "SELECT slack_ts FROM outbox WHERE run_id=? AND kind='ACCEPTED' AND state='DELIVERED'",
-            (event["run_id"],),
+            "SELECT o.slack_ts FROM outbox o JOIN notification_receipts n USING(event_id) "
+            "WHERE o.run_id=? AND o.kind='ACCEPTED' AND o.state='DELIVERED' "
+            "AND n.channel_id=? AND n.transport=?",
+            (
+                event["run_id"],
+                channel,
+                "slack_web_api_ack"
+                if sender is post_message
+                else "injected_unverified",
+            ),
         ).fetchone()
     try:
         ts = sender(token, channel, event, parent[0] if parent else None)
@@ -125,6 +156,19 @@ def drain(store, sender=post_message):
             )
         return {"state": state, "delivered": 0}
     with store.transaction() as c:
+        c.execute(
+            "INSERT INTO notification_receipts VALUES(?,?,?,?,?,?)",
+            (
+                event["event_id"],
+                channel,
+                str(ts),
+                time.time(),
+                "slack_web_api_ack"
+                if sender is post_message and isinstance(ts, SlackAcknowledgement)
+                else "injected_unverified",
+                digest(event["payload"].encode()),
+            ),
+        )
         c.execute(
             "UPDATE outbox SET state='DELIVERED',slack_ts=?,error=NULL WHERE event_id=?",
             (ts, event["event_id"]),
