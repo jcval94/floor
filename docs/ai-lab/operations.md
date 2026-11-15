@@ -47,3 +47,11 @@ Research control schema marker 3 adds `notification_receipts` with an event FK; 
 4. Verify two actual assistant accounts/clients, secure artifact hosting, full transitive environment lock, cost/quota/retention acceptance. Inspector plus Python protocol clients do not substitute for actual Codex/Claude account evidence.
 
 Official contracts rechecked for this increment: [chat.postMessage](https://docs.slack.dev/reference/methods/chat.postMessage/) and [rate limits](https://docs.slack.dev/apis/web-api/rate-limits/).
+
+## Verified increment checkpoint
+
+Clean source `c648f18ac11c4767f42838866de743a43a89441f`: actual Python MCP reads over the persisted #266 strategy run. 24 tools discovered; owner sees one successful job, another actor sees zero and cannot read the private notification rows, non-admin preflight is denied, invalid usage window is blocked. Ten warm local usage calls have p95 23.64ms (nearest-rank, one-job fixture; not a remote SLA). Global preflight confirms schema1–3/control integrity and lists remote, live Slack and actual assistant-account blockers. Job count remains one; zero Slack sends. Evidence: [evidence-operations.json](evidence-operations.json).
+
+Full repository: **733 tests pass, source coverage74.06%**, Ruff across src/tests/scripts passes and mypy193 source files passes. These are local research-extras checks; do not substitute them for the new PR CI status. The evidence commit changes documentation only after tested source.
+
+Independent MCP Inspector CLI2.15.0 also called the new usage tool and read the same one successful job under contract1.3. Neither protocol client is an actual Codex/Claude assistant-account test.

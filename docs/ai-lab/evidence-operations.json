@@ -1,0 +1,191 @@
+{
+  "implementation_commit": "c648f18ac11c4767f42838866de743a43a89441f",
+  "dirty_tree": false,
+  "scope": "real MCP read queries over persisted strategy run; no new experiment or Slack send",
+  "client": "official Python MCP SDK 1.30.0",
+  "owner": {
+    "usage": {
+      "as_of": 1794719010.2346404,
+      "scope": "authenticated_actor",
+      "window_days": 90,
+      "window_basis": "jobs accepted in this interval; notification rows for those jobs",
+      "accepted_runs": 1,
+      "states": {
+        "SUCCEEDED": 1
+      },
+      "terminal_runs": 1,
+      "errors_by_code": {},
+      "queue_time": {
+        "samples": 1,
+        "total_seconds": 0.8456952571868896,
+        "mean_seconds": 0.8456952571868896,
+        "p95_seconds": 0.8456952571868896,
+        "p95_method": "nearest_rank"
+      },
+      "execution_time": {
+        "samples": 1,
+        "total_seconds": 6.216964960098267,
+        "mean_seconds": 6.216964960098267,
+        "p95_seconds": 6.216964960098267,
+        "p95_method": "nearest_rank"
+      },
+      "recipes": {
+        "strategy_comparison": {
+          "runs": 1,
+          "runtime_seconds": 6.216964960098267
+        }
+      },
+      "notifications": {
+        "states": {
+          "PENDING": 3
+        },
+        "retry_attempts": 0,
+        "api_acknowledgements": 0,
+        "injected_receipts": 0,
+        "legacy_delivered_without_receipt": 0,
+        "independently_verified_live_deliveries": null
+      },
+      "cost": {
+        "estimated_incremental_cloud_usd": 0,
+        "profile": "local_only_no_cloud_provisioning",
+        "provider_invoice_verified": false,
+        "measured_monetary_cost_usd": null,
+        "excluded": [
+          "electricity",
+          "hardware",
+          "internet",
+          "AI_client_plan",
+          "maintenance"
+        ]
+      },
+      "limitations": [
+        "Not a provider billing record or official FLOOR operational health check.",
+        "A receipt records a response, not independent workspace confirmation; fixtures must never count as live evidence.",
+        "Job acceptance counts exclude rejected requests; active-job runtime is not included in completed timing samples."
+      ]
+    },
+    "notifications": {
+      "configured": false,
+      "events": [
+        {
+          "event_id": "e2a9d546-e9ce-44d8-a0cb-58be5516b548",
+          "kind": "ACCEPTED",
+          "state": "PENDING",
+          "attempts": 0,
+          "slack_ts": null,
+          "error": null,
+          "channel_id": null,
+          "acknowledged_at": null,
+          "transport": null,
+          "payload_sha256": null
+        },
+        {
+          "event_id": "888ef5ee-b7c0-4d1e-8af7-b35683ce8156",
+          "kind": "RUNNING",
+          "state": "PENDING",
+          "attempts": 0,
+          "slack_ts": null,
+          "error": null,
+          "channel_id": null,
+          "acknowledged_at": null,
+          "transport": null,
+          "payload_sha256": null
+        },
+        {
+          "event_id": "b80b7529-f207-4fed-af62-602d2d8d80fe",
+          "kind": "SUCCEEDED",
+          "state": "PENDING",
+          "attempts": 0,
+          "slack_ts": null,
+          "error": null,
+          "channel_id": null,
+          "acknowledged_at": null,
+          "transport": null,
+          "payload_sha256": null
+        }
+      ]
+    },
+    "latency": {
+      "samples": 10,
+      "p95_seconds": 0.023639650999939477,
+      "method": "nearest_rank",
+      "scope": "warm local stdio single research job; not remote SLA"
+    },
+    "admin_tool_denied": true,
+    "invalid_window_blocked": true
+  },
+  "isolation": {
+    "other_actor_usage_empty": true,
+    "private_run_denied": true
+  },
+  "administrator": {
+    "preflight": {
+      "as_of": 1794719011.767794,
+      "mode": "offline_read_only_preflight",
+      "platform_complete": false,
+      "control_db_integrity_ok": true,
+      "schema_versions": [
+        1,
+        2,
+        3
+      ],
+      "slack_configuration_present": false,
+      "network_requests": 0,
+      "messages_sent": 0,
+      "storage": {
+        "bytes": 14606911,
+        "limit_bytes": 536870912,
+        "by_category": {
+          "metadata": 753664,
+          "mlflow_artifacts": 842671,
+          "datasets": 12163684,
+          "runs": 846892
+        },
+        "symlinks_skipped": 0
+      },
+      "blockers": [
+        "REMOTE_HOST_NOT_VERIFIED",
+        "LIVE_SLACK_E2E_NOT_VERIFIED",
+        "ASSISTANT_ACCOUNT_CONNECTIONS_NOT_VERIFIED",
+        "SLACK_NOT_CONFIGURED"
+      ],
+      "next_steps": [
+        "Operator installs an independent supervised worker on an authorized persistent host.",
+        "Authorized Slack administrator installs App with chat:write and invites bot to selected private channel; inject secrets outside Git.",
+        "Use floor_test_slack_connection for auth only, then reconcile at least ten distinct terminal experiment receipts against actual messages.",
+        "Verify private HTTPS/auth and two actual assistant clients; retain version/config/evidence."
+      ],
+      "warnings": [
+        "No deletion, credential validation, worker liveness or deployment is inferred by this offline command."
+      ]
+    },
+    "tool_count": 24
+  },
+  "jobs_before": 1,
+  "jobs_after": 1,
+  "real_slack_deliveries": 0,
+  "remote_deployed": false,
+  "validation": {
+    "full_repository_tests_passed": 733,
+    "source_coverage_percent": 74.06,
+    "ruff": "passed src/tests/scripts",
+    "mypy": "passed 193 source files"
+  },
+  "main_merge": {
+    "pr": 266,
+    "sha": "d3fa8f1a32e2fb3cde94bae45bde106dc3c30dbd",
+    "ci_run_id": 43678719112,
+    "ci_conclusion": "success"
+  },
+  "second_client": {
+    "client": "MCP Inspector CLI 2.15.0",
+    "method": "floor_get_usage(days=90)",
+    "contract_version": "1.3",
+    "accepted_runs": 1,
+    "states": {
+      "SUCCEEDED": 1
+    },
+    "api_acknowledgements": 0,
+    "is_real_assistant_account": false
+  }
+}
