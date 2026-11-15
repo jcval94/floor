@@ -18,3 +18,5 @@ Timeout/connection loss/5xx can mean Slack accepted a message but acknowledgemen
 Reports are local/protected references until an approved artifact host exists. No invalid public link is fabricated. Publishing a durable secure artifact URL is part of remote staging acceptance. No Slack file-upload API is used; if uploads are later added, use `files.getUploadURLExternal` + `files.completeUploadExternal`, not obsolete `files.upload`.
 
 Official sources checked 2026-11-13: https://docs.slack.dev/reference/methods/chat.postMessage/ ; https://docs.slack.dev/apis/web-api/rate-limits ; https://docs.slack.dev/reference/methods/auth.test/ ; https://docs.slack.dev/reference/methods/files.getUploadURLExternal/ .
+
+Contract 1.3 additionally stores channel-scoped, payload-hashed acknowledgement receipts and blocks malformed/wrong-channel responses as UNKNOWN. Injected senders and legacy DELIVERED rows never automatically count as API/live evidence. See [operations](operations.md) for additive schema-v3 migration, role-scoped usage queries and the required independent verification of ten distinct terminal runs. Preflight and tests send zero real messages.

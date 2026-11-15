@@ -14,7 +14,7 @@ def default_strategies() -> list[
     return ["mean_reversion_floor_w1", "breakout_protected_by_floor"]
 
 
-CONTRACT_VERSION = "1.2"
+CONTRACT_VERSION = "1.3"
 RECIPES = (
     "model_comparison",
     "feature_audit",

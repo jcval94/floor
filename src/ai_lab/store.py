@@ -44,6 +44,12 @@ class Store:
             CREATE TABLE IF NOT EXISTS run_provenance(
              run_id TEXT PRIMARY KEY REFERENCES runs(run_id), payload TEXT NOT NULL);
             INSERT OR IGNORE INTO schema_version VALUES(2);
+            CREATE TABLE IF NOT EXISTS notification_receipts(
+             event_id TEXT PRIMARY KEY REFERENCES outbox(event_id),
+             channel_id TEXT NOT NULL, slack_ts TEXT NOT NULL,
+             acknowledged_at REAL NOT NULL, transport TEXT NOT NULL,
+             payload_sha256 TEXT NOT NULL);
+            INSERT OR IGNORE INTO schema_version VALUES(3);
             CREATE TABLE IF NOT EXISTS audit(
              id INTEGER PRIMARY KEY, at REAL NOT NULL, actor TEXT NOT NULL,
              action TEXT NOT NULL, subject TEXT NOT NULL);

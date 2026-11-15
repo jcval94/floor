@@ -10,7 +10,143 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_usage",
+    "description": "Read accepted job counts, failures, timings and notification retries; no invented billing.",
+    "inputSchema": {
+      "properties": {
+        "days": {
+          "default": 7,
+          "title": "Days",
+          "type": "integer"
+        }
+      },
+      "title": "floor_get_usageArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.3",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "data_status": {
+          "default": "EXPERIMENTAL",
+          "enum": [
+            "EXPERIMENTAL",
+            "BLOCKED",
+            "NOT_AVAILABLE"
+          ],
+          "title": "Data Status",
+          "type": "string"
+        },
+        "source": {
+          "default": "isolated-ai-lab",
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "title": "Result",
+      "type": "object"
+    }
+  },
+  {
+    "name": "floor_get_operational_readiness",
+    "description": "Administrator offline preflight: integrity, storage and explicit unverified deployment gates.",
+    "inputSchema": {
+      "properties": {},
+      "title": "floor_get_operational_readinessArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "properties": {
+        "contract_version": {
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -75,7 +211,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -151,7 +287,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -369,7 +505,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -434,7 +570,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -499,7 +635,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -575,7 +711,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -714,7 +850,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -932,7 +1068,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1150,7 +1286,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1373,7 +1509,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1449,7 +1585,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1522,7 +1658,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1595,7 +1731,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1668,7 +1804,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1741,7 +1877,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1797,7 +1933,7 @@
   },
   {
     "name": "floor_get_notification_status",
-    "description": "A Slack message is delivered only with a real API acknowledgement and ts.",
+    "description": "Read outbox state and channel receipts; injected/legacy evidence is not live proof.",
     "inputSchema": {
       "properties": {
         "run_id": {
@@ -1814,7 +1950,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1887,7 +2023,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -1952,7 +2088,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -2028,7 +2164,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -2101,7 +2237,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },
@@ -2166,7 +2302,7 @@
     "outputSchema": {
       "properties": {
         "contract_version": {
-          "default": "1.2",
+          "default": "1.3",
           "title": "Contract Version",
           "type": "string"
         },

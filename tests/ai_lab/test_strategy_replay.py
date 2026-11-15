@@ -247,7 +247,7 @@ def test_strategy_report_and_slack_format_are_measured_and_safe(
             return False
 
         def read(self, *args):
-            return b'{"ok":true,"ts":"fixture-ts"}'
+            return b'{"ok":true,"ts":"1700000000.000001","channel":"fixture-channel"}'
 
     def fake_open(request, timeout):
         captured.append(json.loads(request.data))
@@ -271,7 +271,7 @@ def test_strategy_report_and_slack_format_are_measured_and_safe(
         "run_id": "fixture",
         "event_id": "fixture-event",
     }
-    assert post_message("fixture-token", "fixture-channel", event) == "fixture-ts"
+    assert post_message("fixture-token", "fixture-channel", event) == "1700000000.000001"
     assert "turnover=" in captured[0]["text"] and "drawdown=" in captured[0]["text"]
     assert "fixture-token" not in captured[0]["text"]
 
