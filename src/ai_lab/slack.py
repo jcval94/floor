@@ -20,9 +20,14 @@ def post_message(token, channel, event, thread_ts=None):
     if data.get("objective"):
         lines.append(data["objective"])
     for m in result.get("metrics", []):
-        lines.append(
-            f"{m['model']} / {m['variant']}: MAE={m['mae_floor_pct']:.6f}; RMSE={m['rmse_floor_pct']:.6f}; fold std={m['fold_mae_std']:.6f}"
-        )
+        if "strategy" in m:
+            lines.append(
+                f"{m['strategy']}: net={m['net_return']:.4%}; drawdown={m['max_drawdown']:.4%}; turnover={m['turnover']:.4f}; trades={m['trades']}; costs USD={m['costs_paid']:.4f}"
+            )
+        else:
+            lines.append(
+                f"{m['model']} / {m['variant']}: MAE={m['mae_floor_pct']:.6f}; RMSE={m['rmse_floor_pct']:.6f}; fold std={m['fold_mae_std']:.6f}"
+            )
     if result:
         lines.extend(
             [

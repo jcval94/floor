@@ -19,9 +19,14 @@ def execute(root, run_id):
     from ai_lab.recipes import evaluate
 
     start = time.monotonic()
-    result = evaluate(rows, manifest, plan)
     out = store.root / "runs" / run_id
     out.mkdir(parents=True, exist_ok=True)
+    if plan.recipe == "strategy_comparison":
+        from ai_lab.strategy_replay import replay_strategy
+
+        result = replay_strategy(rows, manifest, plan, out / "backtest_ledger")
+    else:
+        result = evaluate(rows, manifest, plan)
     predictions = result.pop("predictions")
     (out / "predictions.json").write_text(canonical(predictions))
     result["duration_seconds"] = time.monotonic() - start
@@ -36,7 +41,7 @@ def execute(root, run_id):
         "data_status": "EXPERIMENTAL",
         "currency": "USD",
         "model_version": "frozen-FLOOR-heads"
-        if plan.recipe == "frozen_model_comparison"
+        if plan.recipe in ("frozen_model_comparison", "strategy_comparison")
         else "registered-estimators-v1",
         "model_assets": result.get("model_assets", []),
     }
@@ -94,18 +99,24 @@ def execute(root, run_id):
                 "recipe": plan.recipe,
                 "seed": plan.seed,
                 "folds": plan.folds,
-                "target": "floor_w1",
+                "target": "portfolio_net_return"
+                if plan.recipe == "strategy_comparison"
+                else "floor_w1",
             }
         )
         for m in result["metrics"]:
-            for key in ("mae_floor_pct", "rmse_floor_pct", "fold_mae_std"):
-                mlflow.log_metric(f"{m['variant']}.{m['model']}.{key}", m[key])
+            candidate = m.get("model", m.get("strategy"))
+            for key, value in m.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    mlflow.log_metric(f"{m['variant']}.{candidate}.{key}", value)
         result["mlflow_run_id"] = tracked.info.run_id
         (out / "result.json").write_text(canonical(result))
         (out / "report.html").write_text(report(plan, manifest, result))
         mlflow.log_artifacts(str(out))
     artifact_manifest = {
-        p.name: digest(p.read_bytes()) for p in out.iterdir() if p.is_file()
+        str(p.relative_to(out)): digest(p.read_bytes())
+        for p in out.rglob("*")
+        if p.is_file() and p.name != "artifacts.json"
     }
     (out / "artifacts.json").write_text(canonical(artifact_manifest))
     return {
@@ -124,6 +135,8 @@ def execute(root, run_id):
 
 def report(plan, manifest, result):
     esc = html.escape
+    if plan.recipe == "strategy_comparison":
+        return strategy_report(plan, manifest, result)
     headings = [
         ("Pregunta original", plan.question),
         ("Hipótesis", "Comparación exploratoria preregistrada en el plan."),
@@ -179,8 +192,79 @@ def report(plan, manifest, result):
         + " s.</p>"
         "<h2>Conclusiones e interpretación</h2><p>" + esc(result["conclusion"]) + "</p>"
         "<h2>Recomendación</h2><p>Validar estabilidad en un holdout futuro antes de seleccionar o promover. No operar capital real.</p>"
-        '<h2>Referencias y artefactos</h2><p><a href="result.json">JSON</a> · <a href="predictions.json">Predicciones OOS</a> · <a href="provenance.json">Código y fuentes</a></p>'
+        '<h2>Referencias y artefactos</h2><p><a href="result.json">JSON</a> · <a href="predictions.json">Predicciones de evaluación</a> · <a href="provenance.json">Código y fuentes</a></p>'
         "<p>No contiene explicación generada por IA ni hipótesis validada causalmente.</p></html>"
+    )
+
+
+def equity_svg(curves):
+    """Exact static NAV chart, generated solely from measured engine points."""
+    esc = html.escape
+    values = [float(p["nav"]) for points in curves.values() for p in points]
+    if not values:
+        return ""
+    low, high = min(values), max(values)
+    padding = max((high - low) * 0.05, 1.0)
+    low, high = low - padding, high + padding
+    colors = ("#1d4ed8", "#b45309", "#15803d", "#7e22ce")
+    body = '<svg role="img" aria-label="NAV medido en USD por sesión" viewBox="0 0 1000 420" style="width:100%;height:auto">'
+    body += '<line x1="60" x2="940" y1="330" y2="330" stroke="#555"/>'
+    body += f'<text x="5" y="35">{high:.2f}</text><text x="5" y="330">{low:.2f}</text>'
+    for i, (name, points) in enumerate(curves.items()):
+        color = colors[i % len(colors)]
+        coords = " ".join(
+            f"{60 + 880 * j / max(len(points) - 1, 1):.3f},{330 - 300 * (float(p['nav']) - low) / (high - low):.3f}"
+            for j, p in enumerate(points)
+        )
+        body += f'<polyline fill="none" stroke="{color}" stroke-width="2" points="{coords}"/>'
+        body += f'<text x="{60 + (i % 2) * 440}" y="{365 + (i // 2) * 25}" fill="{color}">{esc(name)}</text>'
+    return body + "</svg>"
+
+
+def strategy_report(plan, manifest, result):
+    esc = html.escape
+    columns = (
+        "strategy",
+        "net_return",
+        "max_drawdown",
+        "turnover",
+        "trades",
+        "costs_paid",
+        "vs_spy",
+    )
+    rows = "".join(
+        "<tr>"
+        + "".join("<td>" + esc(str(m.get(k))) + "</td>" for k in columns)
+        + "</tr>"
+        for m in result["metrics"]
+    )
+    sections = [
+        ("Pregunta", plan.question),
+        ("Diseño", canonical(plan.model_dump())),
+        ("Dataset", canonical(manifest)),
+        ("Comparabilidad", canonical(result["comparability"])),
+        ("Costos autoritativos", canonical(result["cost_contract"])),
+        ("Curvas NAV medidas", canonical(result["equity_curves"])),
+        ("Motivos de decisión", canonical(result.get("decision_reason_counts", {}))),
+        ("Limitaciones", canonical(result["limitations"])),
+        ("Conclusión", result["conclusion"]),
+    ]
+    body = "".join(
+        "<h2>" + esc(k) + "</h2><pre>" + esc(v) + "</pre>" for k, v in sections
+    )
+    return (
+        '<!doctype html><html lang="es"><meta charset="utf-8"><title>FLOOR Strategy Research</title>'
+        "<style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px}pre{white-space:pre-wrap;overflow-wrap:anywhere}td,th{border:1px solid #ccc;padding:8px}</style>"
+        "<h1>Comparación retrospectiva de estrategias — simulación aislada</h1>"
+        "<p>Retornos y drawdown son fracciones; costos monetarios en USD. OOS no verificado. Sin broker PAPER/LIVE.</p>"
+        "<table><tr>"
+        + "".join("<th>" + esc(k) + "</th>" for k in columns)
+        + "</tr>"
+        + rows
+        + "</table><h2>NAV medido (USD)</h2>"
+        + equity_svg(result["equity_curves"])
+        + body
+        + '<h2>Evidencia</h2><a href="result.json">JSON completo</a> · <a href="provenance.json">Provenance</a> · <a href="backtest_ledger/history.jsonl">Ledger hash-chain</a> · <a href="backtest_ledger/decisions.json">Decisiones</a></html>'
     )
 
 

@@ -95,8 +95,30 @@ class Store:
     def validate(self, plan: Plan):
         from ai_lab.recipes import validate_rows
 
+        if plan.recipe != "strategy_comparison" and plan.objective != "mae_floor_pct":
+            raise ValueError("OBJECTIVE_NOT_VALID_FOR_RECIPE")
         rows, manifest = self.dataset(plan.dataset_id)
         validate_rows(rows, manifest, plan)
+        recipe_details = {}
+        if plan.recipe == "strategy_comparison":
+            from ai_lab.strategy_replay import validate_strategy_inputs
+
+            cfg, _, assets, cutoff, dates, symbols = validate_strategy_inputs(
+                rows, manifest, plan
+            )
+            from contracts.trading import round_trip_cost_bps_from_contract
+
+            recipe_details = {
+                "evidence_type": "post_artifact_retrospective_replay",
+                "out_of_sample_verified": False,
+                "round_trip_cost_bps": round_trip_cost_bps_from_contract(cfg["costs"]),
+                "strategies": plan.strategies,
+                "model_assets": assets,
+                "common_cutoff": cutoff.isoformat(),
+                "start": dates[0],
+                "end": dates[-1],
+                "universe_including_benchmark": symbols,
+            }
         if plan.recipe == "frozen_model_comparison":
             from ai_lab.frozen_models import validate_frozen_inputs
 
@@ -111,6 +133,7 @@ class Store:
             raise ValueError("ABLATION_REQUIRES_PROPER_SUBSET")
         return {
             "valid": True,
+            "recipe_details": recipe_details,
             "rows": len(rows),
             "dataset": manifest,
             "cost_usd": 0,

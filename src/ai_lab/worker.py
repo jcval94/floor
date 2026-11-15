@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from ai_lab.contracts import Plan
-from ai_lab.store import Store
+from ai_lab.store import Store, canonical, digest
 from ai_lab.slack import drain
 
 
@@ -145,6 +145,13 @@ def tick(store):
         if child.poll() is None:
             os.killpg(child.pid, signal.SIGKILL)
             child.wait()
+        # Preserve partial research artifacts for failed/cancelled/timed-out jobs too.
+        files = {
+            str(p.relative_to(out)): digest(p.read_bytes())
+            for p in out.rglob("*")
+            if p.is_file() and not p.is_symlink() and p.name != "artifacts.json"
+        }
+        (out / "artifacts.json").write_text(canonical(files))
     return True
 
 

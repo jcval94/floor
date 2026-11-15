@@ -101,6 +101,8 @@ def metrics(y, p):
 
 def evaluate(rows, manifest, plan):
     validate_rows(rows, manifest, plan)
+    if plan.recipe == "strategy_comparison":
+        raise ValueError("STRATEGY_REQUIRES_ISOLATED_ARTIFACT_DIRECTORY")
     if plan.recipe == "frozen_model_comparison":
         from ai_lab.frozen_models import evaluate_frozen
 

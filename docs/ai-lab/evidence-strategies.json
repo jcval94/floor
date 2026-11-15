@@ -1,0 +1,139 @@
+{
+  "implementation_commit": "103ee68806b096742d36559b7238ef55f6f33bd3",
+  "dirty_tree": false,
+  "client": "official Python SDK 1.30.0",
+  "protocol": "2025-11-25",
+  "experiment_id": "7b8522ab-575d-4314-a100-bd230ae2ffc0",
+  "run_id": "826cdc1b-f747-473c-a5b7-be824ab3fde7",
+  "state_at_disconnect": "RUNNING",
+  "state": "SUCCEEDED",
+  "finished_after_disconnect": true,
+  "mlflow_run_id": "d11c7e7f31c749198bc3da13f69a2bb9",
+  "worker_duration_seconds": 6.17240875199991,
+  "dataset_id": "a6439b85b2dca58914a6c2d5ed52f300eb605e4fe9a57b27ba79c684fbebea45",
+  "comparability": {
+    "benchmarks": [
+      "SPY",
+      "initial_equal_weight"
+    ],
+    "cutoff": "2026-09-26T02:38:28+00:00",
+    "end": "2026-11-04",
+    "end_liquidation": "last close, same costs",
+    "evidence_type": "post_artifact_retrospective_replay",
+    "execution_sessions": 27,
+    "out_of_sample_verified": false,
+    "same_execution_and_costs": true,
+    "same_initial_nav": true,
+    "same_sessions": true,
+    "signal_sessions": 28,
+    "start": "2026-09-28",
+    "universe": [
+      "GOOGL",
+      "MSFT"
+    ]
+  },
+  "cost_contract": {
+    "execution": {
+      "broker_commission_bps": 2,
+      "commission_bps": 26,
+      "min_rebalance_notional_usd": 100,
+      "min_rebalance_weight_delta": 0.02,
+      "platform_fee_bps_per_side": 24,
+      "sell_fee_bps": 3,
+      "slippage_bps": 3
+    },
+    "round_trip_cost_bps": 61.0
+  },
+  "metrics": [
+    {
+      "costs_paid": 0.0,
+      "max_drawdown": 0.0,
+      "nav": 10000.0,
+      "net_return": 0.0,
+      "promotion_eligible": false,
+      "sample_sessions": 28,
+      "sharpe": null,
+      "strategy": "mean_reversion_floor_w1",
+      "trades": 0,
+      "turnover": 0.0,
+      "variant": "retrospective_long_only",
+      "vs_spy": 0.006106814400000049
+    },
+    {
+      "costs_paid": 0.0,
+      "max_drawdown": 0.0,
+      "nav": 10000.0,
+      "net_return": 0.0,
+      "promotion_eligible": false,
+      "sample_sessions": 28,
+      "sharpe": null,
+      "strategy": "breakout_protected_by_floor",
+      "trades": 0,
+      "turnover": 0.0,
+      "variant": "retrospective_long_only",
+      "vs_spy": 0.006106814400000049
+    },
+    {
+      "costs_paid": 60.80789057802488,
+      "max_drawdown": -0.03463520589818336,
+      "nav": 9938.931856,
+      "net_return": -0.006106814400000049,
+      "promotion_eligible": false,
+      "sample_sessions": 28,
+      "sharpe": -0.4471288203970705,
+      "strategy": "benchmark_spy",
+      "trades": 2,
+      "turnover": 1.9959414984118735,
+      "variant": "retrospective_long_only",
+      "vs_spy": 0.0
+    },
+    {
+      "costs_paid": 56.10059610129828,
+      "max_drawdown": -0.13142675594554132,
+      "nav": 9629.029043,
+      "net_return": -0.03709709569999997,
+      "promotion_eligible": false,
+      "sample_sessions": 28,
+      "sharpe": -1.0887080135341844,
+      "strategy": "benchmark_equal_weight",
+      "trades": 4,
+      "turnover": 1.8458032469351926,
+      "variant": "retrospective_long_only",
+      "vs_spy": -0.030990281299999922
+    }
+  ],
+  "ranking_leader": {
+    "objective": "net_return",
+    "reason": "insufficient independent evidence; descriptive returns are not a validated winner",
+    "strategy": null,
+    "variant": "retrospective_long_only"
+  },
+  "simulated_trade_count": 6,
+  "audit_hash": "7de0b3c7b97049931e9790e392c8fa100b4f1b0134f59db468d0480ba37edcb8",
+  "artifact_hashes": {
+    "backtest_ledger/decisions.json": "bcfbb41abb8735efa253c33c04ce9ddad44fe55ca35ddd1b9b23442f2bf89130",
+    "backtest_ledger/history.jsonl": "ec9117ebfd4d34ff056920dc926bb4afb3d694e8518810b6a08e4fbb49e4312b",
+    "backtest_ledger/leaderboard.json": "7026a23d2ecae3179a72ad806f90a6a1a4f8aa716893e6332f4403c7e9625e79",
+    "backtest_ledger/state.json": "903287854c10c98effb97f5aa11ce6280b86b5a91dc33739e4abca0603ad797a",
+    "completion.json": "366bb34225ddfbf39d6fc00ebd433fcd2a0209a2e7fb6319cc1f7d1bdd683d2d",
+    "predictions.json": "78987e96f863a9a95235434139f45e7e4d3fb586b8caf47ed9c9ef65da354b68",
+    "provenance.json": "0fdd3f00146489b8c960996d385e0e03f0b9aad5a0efb56598bfa2e9afd0e506",
+    "report.html": "9a3f627c0b46e42875feca95724f9208d79f59142730a4f028049d6c61b7a2be",
+    "result.json": "4f34650a0514179124147b681ef766ac6af4ac0a784a696012463e09e983496d"
+  },
+  "second_client": {
+    "name": "MCP Inspector CLI",
+    "version": "2.15.0",
+    "same_run_returned": true,
+    "total_jobs_after_duplicate": 1
+  },
+  "slack_real_deliveries": 0,
+  "remote_deployed": false,
+  "validation": {
+    "full_suite_passed": 720,
+    "coverage_percent": 73.95,
+    "ruff": "PASS",
+    "mypy_source_files": 192,
+    "mypy": "PASS"
+  }
+}
