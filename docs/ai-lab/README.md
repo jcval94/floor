@@ -2,7 +2,7 @@
 
 Related: [OKR #261](https://github.com/jcval94/floor/issues/261), [FLOOR 2.0 #253](https://github.com/jcval94/floor/issues/253).
 
-**Integration status:** PRs #262–#265 were merged with user authorization (`cdeea810ce9ed0a090a2e7413389e4b8c5cbd8c6`), followed by #266 on the next explicit merge instruction (`d3fa8f1a32e2fb3cde94bae45bde106dc3c30dbd`). #266's PR CI succeeded: https://github.com/jcval94/floor/actions/runs/43542100993 . The subsequent operational increment adds usage/readiness and stronger Slack acknowledgement evidence; it remains separate from this main checkpoint.
+**Integration status:** PRs #262–#267 were merged in successive explicitly authorized checkpoints. Latest merge: `f7975f96792b2e721083d102c76538cce1fa2e23`; main CI passed: https://github.com/jcval94/floor/actions/runs/43735894149 . Source integration does not establish remote hosting, Slack delivery or official financial-operation readiness. The next isolated increment adds a schema-drift guard and concrete [acceptance gates](acceptance.md).
 
 **Local research prototype; not deployed, not integrated into official operation, no Slack delivery yet.** It includes an actual MCP server, separately supervised durable SQLite queue, registered Python computations, MLflow SQLite tracking and HTML/JSON artifacts. A configured Slack Web API adapter/outbox is included; mocks are not counted as live deliveries. No cloud resources/billing/credentials were created.
 

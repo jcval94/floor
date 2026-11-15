@@ -1,6 +1,6 @@
 # Connections, supervision and runbook
 
-Versioned implementation: Python SDK `mcp==1.30.0`, contract `1.0`. Installed SDK advertises protocol revisions 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25. Streamable HTTP was introduced after 2024; do not assume HTTP support for every legacy revision. Real tests negotiate 2025-11-25; compatibility with the four revisions is not established merely by the SDK's constant. The v2 SDK/protocol upgrade is deliberately deferred until separately tested.
+Versioned implementation: Python SDK `mcp==1.30.0`, contract `1.3`. Installed SDK advertises protocol revisions 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25. Streamable HTTP was introduced after 2024; do not assume HTTP support for every legacy revision. Real tests negotiate 2025-11-25; compatibility with the four revisions is not established merely by the SDK's constant. The v2 SDK/protocol upgrade is deliberately deferred until separately tested.
 
 ## Persistent worker
 
@@ -88,7 +88,7 @@ ChatGPT requires an eligible product/workspace integration path and remote/tunne
 - Client disconnected: reconnect as the same server-configured actor; list jobs and inspect ID. Never resubmit without the original idempotency key. Cross-client actors are isolated unless deliberately configured as the same user.
 - Slack outage: inspect notification states independently. Restore configuration/retry known failures; reconcile UNKNOWN manually. Never reexecute a successful experiment to resend a message.
 - Volume nearing 512MB: new acceptance blocks. Stop worker/client writes; take a consistent SQLite backup using ai_lab.backup CLI (SQLite backup API plus immutable dataset/artifact copies), checksum the entire backup manifest, restore into an empty research directory, and validate selected historical runs. No official-release restore is performed by the lab.
-- Schema evolution: new research schema has versioned initialization markers v1/v2 (v2 adds acceptance provenance). Future upgrades need versioned forward-only scripts and a copy/restore rollback. Never downgrade MLflow DB in place or migrate operational SQLite through lab code.
+- Schema evolution: new research schema has versioned initialization markers v1/v2/v3 (v2 adds acceptance provenance; v3 adds notification receipts). Future upgrades need versioned forward-only scripts and a copy/restore rollback. Never downgrade MLflow DB in place or migrate operational SQLite through lab code.
 - Worker crash: supervisor kills its process group. Linux parent-death signal also terminates child; orphaned job is marked failed on restart. Review partial artifacts before an explicitly new run. The run is never silently relabeled successful.
 
 Research backup commands (stop MCP/import writes and worker first; destinations must not exist):

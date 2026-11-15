@@ -28,18 +28,42 @@ def inspect_db(path):
                     for x in c.execute("PRAGMA foreign_key_list(" + quoted + ")")
                 ],
                 "indexes": [
-                    dict(x) for x in c.execute("PRAGMA index_list(" + quoted + ")")
+                    {
+                        **dict(x),
+                        "columns": [
+                            dict(col)
+                            for col in c.execute(
+                                'PRAGMA index_xinfo("'
+                                + x["name"].replace('"', '""')
+                                + '")'
+                            )
+                        ],
+                        "ddl": c.execute(
+                            "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                            (x["name"],),
+                        ).fetchone()[0],
+                    }
+                    for x in c.execute("PRAGMA index_list(" + quoted + ")")
                 ],
                 "row_count": c.execute("SELECT count(*) FROM " + quoted).fetchone()[0],
             }
         )
-    return {
+    result = {
         "database": path.name,
         "bytes": path.stat().st_size,
         "sha256": hashlib.file_digest(path.open("rb"), "sha256").hexdigest(),
         "integrity_check": c.execute("PRAGMA integrity_check").fetchone()[0],
         "tables": tables,
+        "schema_objects": [
+            dict(row)
+            for row in c.execute(
+                "SELECT type,name,tbl_name,sql FROM sqlite_master "
+                "WHERE type IN ('view','trigger') ORDER BY type,name"
+            )
+        ],
     }
+    c.close()
+    return result
 
 
 def render(catalog):
